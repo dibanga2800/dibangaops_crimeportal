@@ -1,0 +1,49 @@
+[33me655f99[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m Fix vite config
+[33m678539c[m Fix vite config
+[33m84720f3[m Fix display errors2
+[33ma61aa81[m fix: update deployment configuration for Vercel - Fix module resolution and SPA routing
+[33m0e51967[m Merge pull request #15 from dibanga2800/master
+[33m86e4ed9[m Fix display errors
+[33m797daa2[m Merge pull request #14 from dibanga2800/main
+[33mfe1c5bc[m Merge master into main and resolve README conflict
+[33mf473c2c[m[33m ([m[1;31morigin/master[m[33m, [m[1;32mmaster[m[33m)[m Merge master and resolve README conflict
+[33m781a2a7[m Update README with comprehensive AIP project description
+[33m94e74f4[m Update README.md with Employee Diary Application content
+[33m6d27cae[m Fix build errors
+[33mf42bc8b[m Fix vite.config.ts module resolution by reinstalling @vitejs/plugin-react
+[33m519ac93[m Update .gitignore
+[33mc087c6a[m Fix: Update vite.config.ts to use @vitejs/plugin-react and remove lovable-tagger
+[33m9143159[m Merge pull request #13 from dibanga2800/main
+[33m387ae2c[m Refactor: Update service and components for API integration
+[33ma39a210[m Merge pull request #11 from dibanga2800/main
+[33me51fe19[m Creating Report analysis and bug fixing
+[33m2088870[m Update README.md
+[33m5f9ae31[m Update README.md
+[33mb9744b7[m Update README.md
+[33m8a0e2b4[m Update README.md
+[33m3c1ad46[m Merge pull request #10 from dibanga2800/main
+[33mbb7f7eb[m Creating CBT and fixing page responsiveness
+[33mbd3f717[m Merge pull request #9 from dibanga2800/main
+[33m2593831[m fixing responsive issues on management pages
+[33m3972c82[m Merge pull request #8 from dibanga2800/main
+[33m3cf89a9[m fixing responsive issues on mobile
+[33madea621[m fixing bugs
+[33m104c7f7[m Mobile responsiveness for dashboard and user setup updates
+[33m60ebd11[m Merge pull request #7 from dibanga2800/main
+[33mc86b8cd[m Mobile responsiveness for dashboard and user setup page
+[33m5544626[m Merge pull request #6 from dibanga2800/main
+[33m94b9d7b[m built header and footer and many update across pages
+[33m1205855[m Merge pull request #5 from dibanga2800/main
+[33ma834f78[m Initial commit: modifying UI designs
+[33m71f5f99[m Merge pull request #4 from dibanga2800/main
+[33m93807cf[m Built incident graph and corrected incident form
+[33m49e2eb2[m Merge pull request #3 from dibanga2800/main
+[33me2ea978[m Built incident graph page
+[33m63aa1a2[m Merge pull request #2 from dibanga2800/main
+[33m3af9eb5[m Built employee files
+[33m1afdecd[m Merge pull request #1 from dibanga2800/main
+[33m3a32af9[m AIP Files
+[33mdc178c9[m Adding AIP customer files
+[33m844ded6[m Initial commit: Adding AIP project files
+[33me599cd8[m incident-bankholiday
+[33mdf86e2d[m Initial commit: Project setup
