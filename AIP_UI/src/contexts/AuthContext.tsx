@@ -28,6 +28,7 @@ interface AuthContextType {
   error: string | null;
   login: (username: string, password: string) => Promise<User>;
   logout: () => void;
+  clearError: () => void;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -43,6 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!token) {
       setUser(null);
       sessionStore.setUser(null);
+      setError(null); // Clear any stale errors when there's no token
       setIsLoading(false);
       return;
     }
@@ -70,16 +72,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Only clear token if it's a 401 (unauthorized) - token is invalid
       // For other errors (network, 500, etc.), keep the cached user
       const isUnauthorized = err?.response?.status === 401;
+      const isTimeout = err?.code === 'ECONNABORTED' || err?.message?.includes('timeout');
       
       if (isUnauthorized) {
         console.error('Failed to fetch current user - unauthorized:', err);
         sessionStore.clearToken();
         setUser(null);
         sessionStore.setUser(null);
+        setError(null); // Clear error on unauthorized
+      } else if (isTimeout) {
+        // For timeout errors, don't set error state - just log and keep cached user
+        console.warn('Failed to fetch current user - timeout (keeping cached user):', err);
+        setError(null); // Clear any stale timeout errors
       } else {
         // For other errors, keep the cached user and just log the error
         console.warn('Failed to fetch current user (keeping cached user):', err);
-        // Keep the cached user, don't clear it
+        setError(null); // Don't persist errors from fetchCurrentUser
       }
     } finally {
       setIsLoading(false);
@@ -119,6 +127,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           password
         });
       } catch (axiosError: any) {
+        // Check if it's a timeout error
+        const isTimeout = axiosError?.code === 'ECONNABORTED' || axiosError?.message?.includes('timeout');
+        
+        if (isTimeout) {
+          const timeoutMessage = 'Connection timeout. Please check your internet connection and try again.';
+          setError(timeoutMessage);
+          console.error('❌ [AuthContext] Login failed - timeout:', {
+            message: axiosError.message,
+            code: axiosError.code
+          });
+          throw new Error(timeoutMessage);
+        }
+        
         // Axios throws errors for non-2xx responses, but we might have error data
         const errorResponse = axiosError?.response;
         if (errorResponse?.data) {
@@ -198,19 +219,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       return user;
     } catch (err: any) {
-      // If error is already an Error with a message, use it
-      if (err instanceof Error && err.message && !err.message.includes('Invalid response from server')) {
-        const errorMessage = err.message;
-        setError(errorMessage);
+      // Check if error was already handled (timeout or HTTP error)
+      if (err instanceof Error && err.message) {
+        // Error message was already set in the inner catch block
         console.error('❌ [AuthContext] Login error:', err);
         throw err;
       }
       
       // Otherwise, try to extract error message from response
-      const errorMessage = err?.response?.data?.Message 
-        ?? err?.response?.data?.message 
-        ?? err?.message 
-        ?? 'An error occurred during login';
+      const isTimeout = err?.code === 'ECONNABORTED' || err?.message?.includes('timeout');
+      const errorMessage = isTimeout
+        ? 'Connection timeout. Please check your internet connection and try again.'
+        : err?.response?.data?.Message 
+          ?? err?.response?.data?.message 
+          ?? err?.message 
+          ?? 'An error occurred during login';
       
       setError(errorMessage);
       
@@ -232,10 +255,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     sessionStore.clearAll();
     setUser(null);
+    setError(null); // Clear error on logout
+  };
+
+  const clearError = () => {
+    setError(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, error, login, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, error, login, logout, clearError }}>
       {children}
     </AuthContext.Provider>
   );

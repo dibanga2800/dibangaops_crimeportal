@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -44,7 +44,13 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
   const { setCurrentRole } = usePageAccess()
-  const { login } = useAuth()
+  const { login, clearError } = useAuth()
+
+  // Clear any stale errors from AuthContext when component mounts
+  useEffect(() => {
+    clearError()
+    setError(null) // Also clear local error state
+  }, [clearError])
 
   const validateForm = (): boolean => {
     if (!username.trim()) {
