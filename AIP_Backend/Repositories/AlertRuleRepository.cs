@@ -4,6 +4,7 @@ using AIPBackend.Data;
 using AIPBackend.Models;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
+	using System.Text.Json.Serialization;
 
 namespace AIPBackend.Repositories
 {
@@ -11,6 +12,11 @@ namespace AIPBackend.Repositories
 	{
 		private readonly ApplicationDbContext _context;
 		private readonly ILogger<AlertRuleRepository> _logger;
+			private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
+			{
+				PropertyNameCaseInsensitive = true,
+				NumberHandling = JsonNumberHandling.AllowReadingFromString
+			};
 
 		public AlertRuleRepository(
 			ApplicationDbContext context,
@@ -116,6 +122,10 @@ namespace AIPBackend.Repositories
 			string incidentType, 
 			string description)
 		{
+			// Normalize inputs early so all downstream checks are consistent
+			var normalizedIncidentType = (incidentType ?? string.Empty).Trim();
+			var normalizedDescription = description ?? string.Empty;
+
 			// Get all active rules
 			var activeRules = await GetActiveRulesAsync();
 			
@@ -123,9 +133,9 @@ namespace AIPBackend.Repositories
 			_logger.LogInformation("🚨 ALERT RULE CHECK STARTING");
 			_logger.LogInformation("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 			_logger.LogInformation("📌 Incident ID: {IncidentId}", incidentId);
-			_logger.LogInformation("📌 Incident Type: '{IncidentType}'", incidentType);
+			_logger.LogInformation("📌 Incident Type (normalized): '{IncidentType}'", normalizedIncidentType);
 			_logger.LogInformation("📌 Description (first 100 chars): '{Description}'", 
-				description.Length > 100 ? description.Substring(0, 100) + "..." : description);
+				normalizedDescription.Length > 100 ? normalizedDescription.Substring(0, 100) + "..." : normalizedDescription);
 			_logger.LogInformation("📌 Total Active Rules to Check: {Count}", activeRules.Count);
 			_logger.LogInformation("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
@@ -142,28 +152,57 @@ namespace AIPBackend.Repositories
 				bool keywordMatches = false;
 				
 				// Check if incident type matches
-				var ruleIncidentTypes = string.IsNullOrEmpty(rule.IncidentTypes)
-					? new List<string>()
-					: JsonSerializer.Deserialize<List<string>>(rule.IncidentTypes) ?? new List<string>();
+				var ruleIncidentTypes = DeserializeStringList(rule.IncidentTypes, "IncidentTypes", rule.AlertRuleId);
+
+				// Work with a normalized view (trim + case-insensitive)
+				var normalizedRuleIncidentTypes = ruleIncidentTypes
+					.Where(t => !string.IsNullOrWhiteSpace(t))
+					.Select(t => t.Trim())
+					.ToList();
 
 				_logger.LogInformation("📋 INCIDENT TYPE CHECK:");
 				_logger.LogInformation("   - Rule has {Count} incident type(s): [{Types}]", 
-					ruleIncidentTypes.Count, 
-					ruleIncidentTypes.Count > 0 ? string.Join(", ", ruleIncidentTypes) : "NONE (matches all types)");
-				_logger.LogInformation("   - Incident type to match: '{IncidentType}'", incidentType);
+					normalizedRuleIncidentTypes.Count, 
+					normalizedRuleIncidentTypes.Count > 0 ? string.Join(", ", normalizedRuleIncidentTypes) : "NONE (matches all types)");
+				_logger.LogInformation("   - Incident type to match: '{IncidentType}'", normalizedIncidentType);
 
-				if (ruleIncidentTypes.Count > 0)
+				if (normalizedRuleIncidentTypes.Count > 0)
 				{
 					// Rule has specific incident types - must match one of them
-					if (ruleIncidentTypes.Contains(incidentType, StringComparer.OrdinalIgnoreCase))
+					// Use flexible matching similar to keyword "any" condition:
+					// 1. Try exact match first (most specific)
+					// 2. Try "starts with" match (handles suffixes like " - Saved", " - Pending")
+					// 3. Try "contains" match (handles cases where incident type contains rule type anywhere)
+					// This makes incident type matching robust like keyword matching
+					bool matches = normalizedRuleIncidentTypes.Contains(normalizedIncidentType, StringComparer.OrdinalIgnoreCase);
+					
+					if (!matches)
+					{
+						// Try bidirectional "starts with" - handles "Arrest" matching "Arrest - Saved"
+						matches = normalizedRuleIncidentTypes.Any(ruleType => 
+							normalizedIncidentType.StartsWith(ruleType, StringComparison.OrdinalIgnoreCase) ||
+							ruleType.StartsWith(normalizedIncidentType, StringComparison.OrdinalIgnoreCase));
+					}
+					
+					if (!matches)
+					{
+						// Try "contains" match (like keyword "any" condition) - most flexible
+						// Handles cases where rule type appears anywhere in incident type
+						matches = normalizedRuleIncidentTypes.Any(ruleType => 
+							normalizedIncidentType.Contains(ruleType, StringComparison.OrdinalIgnoreCase) ||
+							ruleType.Contains(normalizedIncidentType, StringComparison.OrdinalIgnoreCase));
+					}
+					
+					if (matches)
 					{
 						incidentTypeMatches = true;
-						_logger.LogInformation("   ✅ MATCH: Incident type '{IncidentType}' found in rule's incident types", incidentType);
+						_logger.LogInformation("   ✅ MATCH: Incident type '{IncidentType}' matched rule's incident types [{RuleTypes}]", 
+							normalizedIncidentType, string.Join(", ", normalizedRuleIncidentTypes));
 					}
 					else
 					{
 						_logger.LogWarning("   ❌ NO MATCH: Incident type '{IncidentType}' NOT in rule types [{RuleTypes}] - SKIPPING RULE",
-							incidentType, string.Join(", ", ruleIncidentTypes));
+							normalizedIncidentType, string.Join(", ", normalizedRuleIncidentTypes));
 						continue;
 					}
 				}
@@ -175,9 +214,7 @@ namespace AIPBackend.Repositories
 				}
 
 				// Check if keywords match based on trigger condition
-				var ruleKeywords = string.IsNullOrEmpty(rule.Keywords)
-					? new List<string>()
-					: JsonSerializer.Deserialize<List<string>>(rule.Keywords) ?? new List<string>();
+				var ruleKeywords = DeserializeStringList(rule.Keywords, "Keywords", rule.AlertRuleId);
 
 				_logger.LogInformation("🔑 KEYWORD CHECK:");
 				_logger.LogInformation("   - Rule has {Count} keyword(s): [{Keywords}]", 
@@ -187,17 +224,31 @@ namespace AIPBackend.Repositories
 
 				if (ruleKeywords.Count > 0)
 				{
-					// Skip if description is empty or null
-					if (string.IsNullOrWhiteSpace(description))
+					// For "any" condition, don't skip if description is empty - incident type might still match
+					// For "all" or "exact-match", keywords are required
+					if (string.IsNullOrWhiteSpace(normalizedDescription))
 					{
-						_logger.LogWarning("   ❌ NO MATCH: Description is empty but keywords are required - SKIPPING RULE");
-						continue;
+						if (!string.Equals(rule.TriggerCondition, "any", StringComparison.OrdinalIgnoreCase))
+						{
+							_logger.LogWarning("   ❌ NO MATCH: Description is empty but keywords are required for trigger condition '{Condition}' - SKIPPING RULE",
+								rule.TriggerCondition);
+							continue;
+						}
+						else
+						{
+							_logger.LogInformation("   ⚠️ Description is empty, but trigger condition is 'any' - will check if incident type matches");
+						}
 					}
 
-					_logger.LogInformation("   - Searching in: '{Description}'", 
-						description.Length > 100 ? description.Substring(0, 100) + "..." : description);
+					if (!string.IsNullOrWhiteSpace(normalizedDescription))
+					{
+						_logger.LogInformation("   - Searching in: '{Description}'", 
+							normalizedDescription.Length > 100 ? normalizedDescription.Substring(0, 100) + "..." : normalizedDescription);
+					}
 
-					var descriptionLower = description.ToLower().Trim();
+					var descriptionLower = string.IsNullOrWhiteSpace(normalizedDescription) 
+						? string.Empty 
+						: normalizedDescription.ToLower().Trim();
 					var matchedKeywords = ruleKeywords
 						.Where(k => !string.IsNullOrWhiteSpace(k) && descriptionLower.Contains(k.ToLower().Trim()))
 						.ToList();
@@ -214,23 +265,33 @@ namespace AIPBackend.Repositories
 						_ => matchedKeywords.Count > 0 // Default to "any" if trigger condition is not recognized
 					};
 
-					if (!shouldTrigger)
+					if (shouldTrigger)
 					{
-						var reason = rule.TriggerCondition?.ToLower() switch
-						{
-							"any" => $"Need at least 1 keyword, found {matchedKeywords.Count}",
-							"all" => $"Need all {ruleKeywords.Count} keywords, found {matchedKeywords.Count}",
-							"exact-match" => "Need exact phrase match",
-							_ => $"Need at least 1 keyword, found {matchedKeywords.Count}"
-						};
-						_logger.LogWarning("   ❌ NO MATCH: Trigger condition '{Condition}' not satisfied. {Reason} - SKIPPING RULE",
-							rule.TriggerCondition, reason);
-						continue;
+						keywordMatches = true;
+						_logger.LogInformation("   ✅ MATCH: Trigger condition '{Condition}' satisfied with {MatchedCount} matching keyword(s)",
+							rule.TriggerCondition, matchedKeywords.Count);
 					}
-
-					keywordMatches = true;
-					_logger.LogInformation("   ✅ MATCH: Trigger condition '{Condition}' satisfied with {MatchedCount} matching keyword(s)",
-						rule.TriggerCondition, matchedKeywords.Count);
+					else
+					{
+						// For "any" condition, don't skip yet - let OR logic handle it (incident type might still match)
+						// For "all" or "exact-match", we need keywords to match (AND logic)
+						if (!string.Equals(rule.TriggerCondition, "any", StringComparison.OrdinalIgnoreCase))
+						{
+							var reason = rule.TriggerCondition?.ToLower() switch
+							{
+								"all" => $"Need all {ruleKeywords.Count} keywords, found {matchedKeywords.Count}",
+								"exact-match" => "Need exact phrase match",
+								_ => $"Need at least 1 keyword, found {matchedKeywords.Count}"
+							};
+							_logger.LogWarning("   ❌ NO MATCH: Trigger condition '{Condition}' not satisfied. {Reason} - SKIPPING RULE",
+								rule.TriggerCondition, reason);
+							continue;
+						}
+						else
+						{
+							_logger.LogInformation("   ⚠️ No keywords matched, but trigger condition is 'any' - will check if incident type matches");
+						}
+					}
 				}
 				else
 				{
@@ -239,11 +300,49 @@ namespace AIPBackend.Repositories
 					_logger.LogInformation("   ✅ MATCH: Rule has no keywords configured, matches ALL incidents");
 				}
 
-				// If we reached here, all conditions are satisfied
+				// Determine if rule should trigger based on trigger condition
+				// For "any" condition: match if EITHER incident type OR keywords match (OR logic)
+				// For "all" or "exact-match": BOTH incident type AND keywords must match (AND logic)
+				bool shouldTriggerRule = false;
+				string triggerReason = string.Empty;
+				
+				if (string.Equals(rule.TriggerCondition, "any", StringComparison.OrdinalIgnoreCase))
+				{
+					// OR logic: match if incident type OR keywords match
+					shouldTriggerRule = incidentTypeMatches || keywordMatches;
+					if (shouldTriggerRule)
+					{
+						if (incidentTypeMatches && keywordMatches)
+							triggerReason = "Incident type AND keywords matched";
+						else if (incidentTypeMatches)
+							triggerReason = "Incident type matched (keywords not required or not configured)";
+						else
+							triggerReason = "Keywords matched (incident type not required or matched all)";
+					}
+				}
+				else
+				{
+					// AND logic: both must match (for "all" and "exact-match")
+					shouldTriggerRule = incidentTypeMatches && keywordMatches;
+					if (shouldTriggerRule)
+						triggerReason = "Incident type AND keywords both matched";
+				}
+				
+				if (!shouldTriggerRule)
+				{
+					var missingConditions = new List<string>();
+					if (!incidentTypeMatches) missingConditions.Add("incident type");
+					if (!keywordMatches) missingConditions.Add("keywords");
+					_logger.LogWarning("   ❌ NO MATCH: Rule '{RuleName}' did not satisfy trigger condition '{Condition}'. Missing: {Missing}",
+						rule.Name, rule.TriggerCondition ?? "any", string.Join(" and ", missingConditions));
+					continue;
+				}
+				
+				// If we reached here, conditions are satisfied
 				_logger.LogInformation("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 				_logger.LogInformation("🎯 RESULT: Rule '{RuleName}' (ID: {RuleId}) FULLY MATCHED!", rule.Name, rule.AlertRuleId);
-				_logger.LogInformation("   ✅ Incident Type: MATCHED");
-				_logger.LogInformation("   ✅ Keywords: MATCHED");
+				_logger.LogInformation("   ✅ Trigger Condition: {Condition}", rule.TriggerCondition ?? "any");
+				_logger.LogInformation("   ✅ Reason: {Reason}", triggerReason);
 				_logger.LogInformation("   🚨 ACTION: Alert will be triggered for incident {IncidentId}", incidentId);
 				_logger.LogInformation("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 				
@@ -273,6 +372,41 @@ namespace AIPBackend.Repositories
 			_logger.LogInformation("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
 			return matchingRules;
+		}
+
+		/// <summary>
+		/// Safely deserialize a JSON string representing a list of strings.
+		/// Returns an empty list on null/empty/invalid JSON and logs any issues
+		/// without breaking alert evaluation for other rules.
+		/// </summary>
+		private List<string> DeserializeStringList(string? json, string propertyName, int ruleId)
+		{
+			if (string.IsNullOrWhiteSpace(json))
+			{
+				return new List<string>();
+			}
+
+			try
+			{
+				var result = JsonSerializer.Deserialize<List<string>>(json, _jsonOptions);
+				if (result == null)
+				{
+					_logger.LogWarning("AlertRuleRepository: {Property} JSON was null after deserialization for rule {RuleId}. Raw: {Json}", propertyName, ruleId, json);
+					return new List<string>();
+				}
+
+				return result;
+			}
+			catch (JsonException ex)
+			{
+				_logger.LogError(ex, "AlertRuleRepository: Failed to deserialize {Property} for rule {RuleId}. Raw JSON: {Json}", propertyName, ruleId, json);
+				return new List<string>();
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "AlertRuleRepository: Unexpected error deserializing {Property} for rule {RuleId}. Raw JSON: {Json}", propertyName, ruleId, json);
+				return new List<string>();
+			}
 		}
 	}
 }
