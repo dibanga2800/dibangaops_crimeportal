@@ -41,19 +41,21 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<LoginError | null>(null)
-  const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
   const { setCurrentRole } = usePageAccess()
-  const { login, clearError } = useAuth()
+  const { login, clearError, error: authError, isLoading: authLoading } = useAuth()
 
-  // Clear any stale errors from AuthContext when component mounts
+  // Clear any stale errors only when the login page first mounts (not on every auth re-render)
   useEffect(() => {
     clearError()
-    setError(null) // Also clear local error state
-  }, [clearError])
+    setError(null)
+    // Intentionally run only on mount so we don't clear the error right after a failed login
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const validateForm = (): boolean => {
     if (!username.trim()) {
+      clearError()
       setError({
         type: 'validation',
         message: 'Username is required'
@@ -61,6 +63,7 @@ export default function LoginPage() {
       return false;
     }
     if (!password.trim()) {
+      clearError()
       setError({
         type: 'validation',
         message: 'Password is required'
@@ -72,6 +75,12 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    // Prevent multiple concurrent submissions while auth is in progress
+    if (authLoading) {
+      return
+    }
+
     setError(null)
     console.log('🔒 Starting login process...', { username })
 
@@ -80,7 +89,6 @@ export default function LoginPage() {
       return
     }
 
-    setLoading(true)
     try {
       const loggedInUser = await login(username, password)
       
@@ -112,10 +120,15 @@ export default function LoginPage() {
         type: 'credentials',
         message: err instanceof Error ? err.message : 'An error occurred during login'
       })
-    } finally {
-      setLoading(false)
     }
   }
+
+  const effectiveError = error ?? (authError
+    ? {
+        type: 'credentials',
+        message: authError,
+      }
+    : null)
 
   return (
     <>
@@ -156,10 +169,10 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
           <form className="space-y-4 sm:space-y-6" onSubmit={handleSubmit}>
-            {error && (
+            {effectiveError && (
               <Alert variant="destructive" className="mb-3 sm:mb-4">
-                <h3 className="font-medium text-sm sm:text-base">{getErrorMessage(error).title}</h3>
-                <p className="text-xs sm:text-sm mt-1">{getErrorMessage(error).message}</p>
+                <h3 className="font-medium text-sm sm:text-base">{getErrorMessage(effectiveError).title}</h3>
+                <p className="text-xs sm:text-sm mt-1">{getErrorMessage(effectiveError).message}</p>
               </Alert>
             )}
             <div>
@@ -172,7 +185,7 @@ export default function LoginPage() {
                 onChange={e => setUsername(e.target.value)}
                 className="w-full text-sm sm:text-base h-10 sm:h-11"
                 placeholder="Enter your username"
-                disabled={loading}
+                disabled={authLoading}
               />
             </div>
             <div>
@@ -187,13 +200,13 @@ export default function LoginPage() {
                   onChange={e => setPassword(e.target.value)}
                   className="w-full pr-10 text-sm sm:text-base h-10 sm:h-11"
                   placeholder="Enter your password"
-                  disabled={loading}
+                  disabled={authLoading}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 touch-manipulation"
-                  disabled={loading}
+                  disabled={authLoading}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? (
@@ -207,9 +220,9 @@ export default function LoginPage() {
             <Button
               type="submit"
               className="w-full bg-brand hover:bg-brand-600 text-white h-10 sm:h-11 text-sm sm:text-base font-medium mt-2"
-              disabled={loading}
+              disabled={authLoading}
             >
-              {loading ? (
+              {authLoading ? (
                 <div className="flex items-center justify-center gap-2">
                   <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                   <span>Signing in...</span>
