@@ -75,7 +75,7 @@ namespace AIPBackend.Controllers
         }
 
         [HttpGet("active")]
-        [Authorize(Policy = "AdvantageOneOnly")]
+        [Authorize(Policy = "ManagerAndAbove")]
         public async Task<ActionResult<List<ApplicationUser>>> GetActiveUsers()
         {
             try

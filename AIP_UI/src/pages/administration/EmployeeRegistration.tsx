@@ -75,9 +75,13 @@ export default function EmployeeRegistration() {
     try {
       if (selectedEmployee) {
         // Update
-        const updated = await employeeService.updateEmployee(Number(selectedEmployee.id), data)
-        const updatedEmployee = await employeeService.getEmployeeByIdAsFrontendInterface(Number(selectedEmployee.id))
-        setEmployees(employees.map(e => e.id === selectedEmployee.id ? updatedEmployee : e))
+        await employeeService.updateEmployee(Number(selectedEmployee.id), data)
+        const updatedEmployee = await employeeService.getEmployeeByIdAsFrontendInterface(
+          Number(selectedEmployee.id)
+        )
+        setEmployees(prev =>
+          prev.map(e => (e.id === selectedEmployee.id ? updatedEmployee : e))
+        )
         toast({
           title: "Success",
           description: `${updatedEmployee.firstName} ${updatedEmployee.surname} has been updated`,
@@ -85,8 +89,7 @@ export default function EmployeeRegistration() {
       } else {
         // Create
         const created = await employeeService.registerEmployeeFromFrontend(data)
-        // Refresh the list to get the new employee with full details
-        await fetchEmployees()
+        setEmployees(prev => [...prev, created])
         toast({
           title: "Success",
           description: `${created.firstName} ${created.surname} has been created`,

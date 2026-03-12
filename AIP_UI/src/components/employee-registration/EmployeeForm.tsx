@@ -15,18 +15,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { useState, useEffect } from "react"
 import { Employee } from "@/types/employee"
-import { UserRole } from "@/types/user"
 import { lookupTableService, LookupTableItem } from "@/services/lookupTableService"
-import { employeeService, EmployeeRegistrationRequest } from "@/services/employeeService"
-import { mapToBackendUpdateRequest } from "@/utils/employeeMapper"
-import { Upload, User, FileText, Shield, MapPin, Briefcase, CreditCard, Camera, Calendar, Mail } from "lucide-react"
+import { employeeService } from "@/services/employeeService"
+import { User, Shield, MapPin, Briefcase, Mail } from "lucide-react"
+
+const ROLE_DISPLAY_NAMES: Record<string, string> = {
+  'administrator': 'Admin',
+  'manager': 'Manager',
+  'store': 'Store User',
+}
+
+const formatRoleDisplay = (value: string): string =>
+  ROLE_DISPLAY_NAMES[value.toLowerCase()] || value
 
 const formSchema = z.object({
   // Basic Information - Backend Required Fields
@@ -62,85 +68,11 @@ const formSchema = z.object({
   postCode: z.string().optional(),
   region: z.string().optional(),
   
-  // SIA Information - Conditional based on AIP Access Level
-  siaLicenceType: z.string().optional(),
-  siaLicenceExpiry: z.string().optional().refine((date) => {
-    if (!date) return true // Optional field
-    const selectedDate = new Date(date)
-    const today = new Date()
-    today.setHours(0, 0, 0, 0) // Reset time to start of day
-    return selectedDate >= today
-  }, {
-    message: "SIA licence expiry date cannot be in the past"
-  }),
-  
   // Personal Information
   nationality: z.string().optional(),
   rightToWorkCondition: z.string().optional(),
   
-  // Driving License Information
-  drivingLicenceType: z.string().optional(),
-  dateDLChecked: z.string().optional(),
-  drivingLicenceCopyTaken: z.boolean().optional(),
-  sixMonthlyCheck: z.boolean().optional(),
-  
-  // Checks and References
-  graydonCheckAuthorised: z.boolean().optional(),
-  graydonCheckDetails: z.string().optional(),
-  initialOralReferencesComplete: z.boolean().optional(),
-  initialOralReferencesDate: z.string().optional(),
-  writtenRefsComplete: z.boolean().optional(),
-  writtenRefsCompleteDate: z.string().optional(),
-  quickStarterFormCompleted: z.boolean().optional(),
-  
-  // Employment Documentation
-  workingTimeDirective: z.string().optional(),
-  workingTimeDirectiveComplete: z.boolean().optional(),
-  contractOfEmploymentSigned: z.boolean().optional(),
-  photoTaken: z.boolean().optional(),
-  photoFile: z.string().optional(),
-  idCardIssued: z.boolean().optional(),
-  equipmentIssued: z.boolean().optional(),
-  uniformIssued: z.boolean().optional(),
-  nextOfKinDetailsComplete: z.boolean().optional(),
-  
-  // Training and Induction
-  peopleHoursPin: z.string().optional(),
-  fullRotasIssued: z.string().optional().refine((date) => {
-    if (!date) return true // Optional field
-    const selectedDate = new Date(date)
-    return !isNaN(selectedDate.getTime())
-  }, {
-    message: "Please enter a valid date"
-  }),
-  inductionAndTrainingBooked: z.string().optional().refine((date) => {
-    if (!date) return true // Optional field
-    const selectedDate = new Date(date)
-    return !isNaN(selectedDate.getTime())
-  }, {
-    message: "Please enter a valid date"
-  }),
-  location: z.string().optional(),
-  trainer: z.string().optional(),
-  
   status: z.enum(["active", "inactive"]).optional(),
-}).refine((data) => {
-  // SIA fields are required only for Advantageoneofficer and AdvantageoneHOofficer (case-insensitive)
-  const requiresSIA = data.aipAccessLevel?.toLowerCase() === 'advantageoneofficer' || data.aipAccessLevel?.toLowerCase() === 'advantageonehoofficer'
-  
-  if (requiresSIA) {
-    if (!data.siaLicenceType || data.siaLicenceType.trim() === '') {
-      return false
-    }
-    if (!data.siaLicenceExpiry || data.siaLicenceExpiry.trim() === '') {
-      return false
-    }
-  }
-  
-  return true
-}, {
-  message: "SIA Licence Type and Expiry are required for Advantageoneofficer and AdvantageoneHOofficer roles",
-  path: ["siaLicenceType"] // This will show the error on the siaLicenceType field
 })
 
 type FormData = z.infer<typeof formSchema>
@@ -157,26 +89,12 @@ interface EmployeeFormProps {
 export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: EmployeeFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const [photoPreview, setPhotoPreview] = useState<string | null>(initialData?.photoFile || null)
-  const [trainers, setTrainers] = useState<LookupTableItem[]>([])
-  const [isLoadingTrainers, setIsLoadingTrainers] = useState(false)
   const [counties, setCounties] = useState<LookupTableItem[]>([])
   const [regions, setRegions] = useState<LookupTableItem[]>([])
-  const [isLoadingCounties, setIsLoadingCounties] = useState(false)
-  const [isLoadingRegions, setIsLoadingRegions] = useState(false)
   const [userRoles, setUserRoles] = useState<LookupTableItem[]>([])
   const [positions, setPositions] = useState<LookupTableItem[]>([])
-  const [siaLicenceTypes, setSiaLicenceTypes] = useState<LookupTableItem[]>([])
-  const [drivingLicenceTypes, setDrivingLicenceTypes] = useState<LookupTableItem[]>([])
   const [rightToWorkConditions, setRightToWorkConditions] = useState<LookupTableItem[]>([])
-  const [isLoadingUserRoles, setIsLoadingUserRoles] = useState(false)
-  const [isLoadingPositions, setIsLoadingPositions] = useState(false)
-  const [isLoadingSiaLicenceTypes, setIsLoadingSiaLicenceTypes] = useState(false)
-  const [isLoadingDrivingLicenceTypes, setIsLoadingDrivingLicenceTypes] = useState(false)
-  const [isLoadingRightToWorkConditions, setIsLoadingRightToWorkConditions] = useState(false)
-  const [workingTimeDirectives, setWorkingTimeDirectives] = useState<LookupTableItem[]>([])
   const [isLoadingLookupData, setIsLoadingLookupData] = useState(false)
-  const [isLoadingWorkingTimeDirectives, setIsLoadingWorkingTimeDirectives] = useState(false)
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -198,147 +116,22 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
       employeeNumber: initialData?.employeeNumber || "",
       employeeStatus: initialData?.employeeStatus || "Active",
       employmentType: initialData?.employmentType || "Full-time",
-      siaLicenceType: initialData?.siaLicenceType || "",
-      siaLicenceExpiry: initialData?.siaLicenceExpiry ? new Date(initialData.siaLicenceExpiry).toISOString().split('T')[0] : "",
       nationality: initialData?.nationality || "",
       rightToWorkCondition: initialData?.rightToWorkCondition || "",
-      drivingLicenceType: initialData?.drivingLicenceType || "",
-      dateDLChecked: initialData?.dateDLChecked ? new Date(initialData.dateDLChecked).toISOString().split('T')[0] : "",
-      drivingLicenceCopyTaken: initialData?.drivingLicenceCopyTaken || false,
-      sixMonthlyCheck: initialData?.sixMonthlyCheck || false,
-      graydonCheckAuthorised: initialData?.graydonCheckAuthorised || false,
-      graydonCheckDetails: initialData?.graydonCheckDetails || "",
-      initialOralReferencesComplete: initialData?.initialOralReferencesComplete || false,
-      initialOralReferencesDate: initialData?.initialOralReferencesDate ? new Date(initialData.initialOralReferencesDate).toISOString().split('T')[0] : "",
-      writtenRefsComplete: initialData?.writtenRefsComplete || false,
-      writtenRefsCompleteDate: initialData?.writtenRefsCompleteDate ? new Date(initialData.writtenRefsCompleteDate).toISOString().split('T')[0] : "",
-      quickStarterFormCompleted: initialData?.quickStarterFormCompleted || false,
-      workingTimeDirective: initialData?.workingTimeDirective || "",
-      workingTimeDirectiveComplete: initialData?.workingTimeDirectiveComplete || false,
-      contractOfEmploymentSigned: initialData?.contractOfEmploymentSigned || false,
-      photoTaken: initialData?.photoTaken || false,
-      photoFile: initialData?.photoFile || "",
-      idCardIssued: initialData?.idCardIssued || false,
-      equipmentIssued: initialData?.equipmentIssued || false,
-      uniformIssued: initialData?.uniformIssued || false,
-      nextOfKinDetailsComplete: initialData?.nextOfKinDetailsComplete || false,
-             peopleHoursPin: initialData?.peopleHoursPin || "",
-      fullRotasIssued: initialData?.fullRotasIssued ? new Date(initialData.fullRotasIssued).toISOString().split('T')[0] : "",
-      inductionAndTrainingBooked: initialData?.inductionAndTrainingBooked ? new Date(initialData.inductionAndTrainingBooked).toISOString().split('T')[0] : "",
-      location: initialData?.location || "",
-      trainer: initialData?.trainer || "",
       status: "active",
     },
   })
 
-  // Watch AIP Access Level to conditionally show SIA fields
-  const aipAccessLevel = form.watch('aipAccessLevel')
-  const requiresSIA = aipAccessLevel?.toLowerCase() === 'advantageoneofficer' || aipAccessLevel?.toLowerCase() === 'advantageonehoofficer'
-
-  const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file) {
-      // Validate file size (5MB limit)
-      if (file.size > 5 * 1024 * 1024) {
-        alert('File size must be less than 5MB')
-        event.target.value = '' // Clear the input
-        return
-      }
-
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        alert('Please select a valid image file (JPEG, PNG, GIF)')
-        event.target.value = '' // Clear the input
-        return
-      }
-
-      // Show loading state
-      setPhotoPreview('loading...')
-
-              const reader = new FileReader()
-        reader.onloadend = () => {
-          // Create a canvas to resize and compress the image
-          const img = new Image()
-          img.onload = () => {
-            try {
-              const canvas = document.createElement('canvas')
-              const ctx = canvas.getContext('2d')
-              
-              if (!ctx) {
-                throw new Error('Could not get canvas context')
-              }
-              
-              // Set canvas size for optimal display (256x256 for good quality)
-              const maxSize = 256
-              let { width, height } = img
-              
-              // Calculate new dimensions maintaining aspect ratio
-              if (width > height) {
-                if (width > maxSize) {
-                  height = (height * maxSize) / width
-                  width = maxSize
-                }
-              } else {
-                if (height > maxSize) {
-                  width = (width * maxSize) / height
-                  height = maxSize
-                }
-              }
-              
-              canvas.width = width
-              canvas.height = height
-              
-              // Draw and compress the image
-              ctx.drawImage(img, 0, 0, width, height)
-              
-              // Convert to base64 with better quality
-              const compressedImage = canvas.toDataURL('image/jpeg', 0.8)
-              
-              setPhotoPreview(compressedImage)
-              form.setValue('photoFile', compressedImage)
-              form.setValue('photoTaken', true)
-            } catch (error) {
-              console.error('Error processing image:', error)
-              alert('Error processing image. Please try again.')
-              setPhotoPreview(null)
-              form.setValue('photoFile', '')
-              form.setValue('photoTaken', false)
-            }
-          }
-          img.onerror = () => {
-            console.error('Error loading image')
-            alert('Error loading image. Please try again.')
-            setPhotoPreview(null)
-            form.setValue('photoFile', '')
-            form.setValue('photoTaken', false)
-          }
-          img.src = reader.result as string
-        }
-        reader.onerror = () => {
-          console.error('Error reading file')
-          alert('Error reading file. Please try again.')
-          setPhotoPreview(null)
-          form.setValue('photoFile', '')
-          form.setValue('photoTaken', false)
-        }
-        reader.readAsDataURL(file)
-     }
-   }
-
-     // Load lookup data and employee data on component mount
+  // Load lookup data and employee data on component mount
   useEffect(() => {
     const loadData = async () => {
       // Load all lookup table data first
       const requiredCategories = [
-        'Trainers',
         'UK_Counties', 
         'UK_Regions',
         'User_Roles',
         'Positions',
-        'SIA_Licence_Types',
-        'Driving_Licence_Types',
-        'Right_To_Work_Conditions',
-        'Working_Time_Directive'
+        'Right_To_Work_Conditions'
       ]
 
       console.log('Loading lookup table data in parallel...')
@@ -348,15 +141,11 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
         const lookupData = await lookupTableService.getByCategories(requiredCategories)
         
         // Set all the data at once
-        setTrainers(lookupData['Trainers'] || [])
         setCounties(lookupData['UK_Counties'] || [])
         setRegions(lookupData['UK_Regions'] || [])
         setUserRoles(lookupData['User_Roles'] || [])
         setPositions(lookupData['Positions'] || [])
-        setSiaLicenceTypes(lookupData['SIA_Licence_Types'] || [])
-        setDrivingLicenceTypes(lookupData['Driving_Licence_Types'] || [])
         setRightToWorkConditions(lookupData['Right_To_Work_Conditions'] || [])
-        setWorkingTimeDirectives(lookupData['Working_Time_Directive'] || [])
         
         console.log('All lookup table data loaded successfully')
         
@@ -394,42 +183,11 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
               employeeNumber: employeeData.employeeNumber || "",
               employeeStatus: employeeData.employeeStatus || "",
               employmentType: employeeData.employmentType || "",
-              siaLicenceType: findLookupValue(employeeData.siaLicenceType, lookupData['SIA_Licence_Types'] || []),
-              siaLicenceExpiry: employeeData.siaLicenceExpiry ? new Date(employeeData.siaLicenceExpiry).toISOString().split('T')[0] : "",
               nationality: employeeData.nationality || "",
               rightToWorkCondition: findLookupValue(employeeData.rightToWorkCondition, lookupData['Right_To_Work_Conditions'] || []),
-              drivingLicenceType: findLookupValue(employeeData.drivingLicenceType, lookupData['Driving_Licence_Types'] || []),
-              dateDLChecked: employeeData.dateDLChecked ? new Date(employeeData.dateDLChecked).toISOString().split('T')[0] : "",
-              drivingLicenceCopyTaken: employeeData.drivingLicenceCopyTaken || false,
-              sixMonthlyCheck: employeeData.sixMonthlyCheck || false,
-              graydonCheckAuthorised: employeeData.graydonCheckAuthorised || false,
-              graydonCheckDetails: employeeData.graydonCheckDetails || "",
-              initialOralReferencesComplete: employeeData.initialOralReferencesComplete || false,
-              initialOralReferencesDate: employeeData.initialOralReferencesDate ? new Date(employeeData.initialOralReferencesDate).toISOString().split('T')[0] : "",
-              writtenRefsComplete: employeeData.writtenRefsComplete || false,
-              writtenRefsCompleteDate: employeeData.writtenRefsCompleteDate ? new Date(employeeData.writtenRefsCompleteDate).toISOString().split('T')[0] : "",
-              quickStarterFormCompleted: employeeData.quickStarterFormCompleted || false,
-              workingTimeDirective: findLookupValue(employeeData.workingTimeDirective, lookupData['Working_Time_Directive'] || []),
-              workingTimeDirectiveComplete: employeeData.workingTimeDirectiveComplete || false,
-              contractOfEmploymentSigned: employeeData.contractOfEmploymentSigned || false,
-              photoTaken: employeeData.photoTaken || false,
-              photoFile: employeeData.photoFile || "",
-              idCardIssued: employeeData.idCardIssued || false,
-              equipmentIssued: employeeData.equipmentIssued || false,
-              uniformIssued: employeeData.uniformIssued || false,
-              nextOfKinDetailsComplete: employeeData.nextOfKinDetailsComplete || false,
-              peopleHoursPin: employeeData.peopleHoursPin || "",
-              fullRotasIssued: employeeData.fullRotasIssued ? new Date(employeeData.fullRotasIssued).toISOString().split('T')[0] : "",
-              inductionAndTrainingBooked: employeeData.inductionAndTrainingBooked ? new Date(employeeData.inductionAndTrainingBooked).toISOString().split('T')[0] : "",
-              location: employeeData.location || "",
-              trainer: findLookupValue(employeeData.trainer, lookupData['Trainers'] || []),
               status: employeeData.employeeStatus === "Active" ? "active" : "inactive",
             })
             
-            // Update photo preview
-            if (employeeData.photoFile) {
-              setPhotoPreview(employeeData.photoFile)
-            }
           } catch (error) {
             console.error('Failed to load employee data:', error)
           }
@@ -449,7 +207,6 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
     if (!initialData) {
       form.reset()
       form.clearErrors()
-      setPhotoPreview(null)
     }
   }, [initialData, form])
 
@@ -461,7 +218,6 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
       console.log('🔄 [EmployeeForm] Resetting form for employee ID:', initialData.id)
       form.reset()
       form.clearErrors()
-      setPhotoPreview(null)
       setSubmitError(null)
     }
   }, [initialData?.id, form])
@@ -471,7 +227,6 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
     return () => {
       form.reset()
       form.clearErrors()
-      setPhotoPreview(null)
     }
   }, [form])
 
@@ -514,12 +269,6 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
           const employeeData: Partial<Employee> = {
             ...data,
             startDate: data.startDate ? new Date(data.startDate) : undefined,
-            siaLicenceExpiry: data.siaLicenceExpiry ? new Date(data.siaLicenceExpiry) : undefined,
-            dateDLChecked: data.dateDLChecked ? new Date(data.dateDLChecked) : undefined,
-            initialOralReferencesDate: data.initialOralReferencesDate ? new Date(data.initialOralReferencesDate) : undefined,
-            writtenRefsCompleteDate: data.writtenRefsCompleteDate ? new Date(data.writtenRefsCompleteDate) : undefined,
-            fullRotasIssued: data.fullRotasIssued ? new Date(data.fullRotasIssued) : undefined,
-            inductionAndTrainingBooked: data.inductionAndTrainingBooked ? new Date(data.inductionAndTrainingBooked) : undefined,
           }
           const result = await employeeService.updateEmployee(Number(initialData.id), employeeData)
           console.log('✅ [EmployeeForm] Employee update successful:', result)
@@ -529,12 +278,6 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
           const employeeData: Partial<Employee> = {
             ...data,
             startDate: data.startDate ? new Date(data.startDate) : new Date(),
-            siaLicenceExpiry: data.siaLicenceExpiry ? new Date(data.siaLicenceExpiry) : undefined,
-            dateDLChecked: data.dateDLChecked ? new Date(data.dateDLChecked) : undefined,
-            initialOralReferencesDate: data.initialOralReferencesDate ? new Date(data.initialOralReferencesDate) : undefined,
-            writtenRefsCompleteDate: data.writtenRefsCompleteDate ? new Date(data.writtenRefsCompleteDate) : undefined,
-            fullRotasIssued: data.fullRotasIssued ? new Date(data.fullRotasIssued) : undefined,
-            inductionAndTrainingBooked: data.inductionAndTrainingBooked ? new Date(data.inductionAndTrainingBooked) : undefined,
           }
           console.log('📤 [EmployeeForm] About to send employee data:', JSON.stringify(employeeData, null, 2))
           const result = await employeeService.registerEmployeeFromFrontend(employeeData)
@@ -614,7 +357,7 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
                     <SelectContent>
                       {userRoles.map((role) => (
                         <SelectItem key={role.lookupId} value={role.value}>
-                          {role.value}
+                          {formatRoleDisplay(role.value)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -962,7 +705,7 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder={isLoadingRightToWorkConditions ? "Loading conditions..." : "Select condition"} />
+                        <SelectValue placeholder={isLoadingLookupData ? "Loading conditions..." : "Select condition"} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -977,595 +720,6 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
                 </FormItem>
               )}
             />
-          </CardContent>
-        </Card>
-
-        {/* SIA Information Section - Only show for Advantageoneofficer and AdvantageoneHOofficer */}
-        {requiresSIA && (
-          <>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-              <p className="text-sm text-blue-800">
-                <strong>Note:</strong> SIA information is required for Advantageoneofficer and AdvantageoneHOofficer roles.
-              </p>
-            </div>
-          </>
-        )}
-        {!requiresSIA && aipAccessLevel && (
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
-            <p className="text-sm text-gray-600">
-              <strong>Note:</strong> SIA information is not required for the selected role ({aipAccessLevel}).
-            </p>
-          </div>
-        )}
-        {requiresSIA && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5" />
-                SIA Information
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="siaLicenceType"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>SIA Licence Type *</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder={isLoadingLookupData ? "Loading..." : "Select licence type"} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {siaLicenceTypes.map((type) => (
-                          <SelectItem key={type.lookupId} value={type.value}>
-                            {type.value}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="siaLicenceExpiry"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>SIA Licence Expiry *</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Driving License Information Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5" />
-              Driving License Information
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="drivingLicenceType"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Driving Licence</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder={isLoadingDrivingLicenceTypes ? "Loading licence types..." : "Select licence type"} />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {drivingLicenceTypes.map((type) => (
-                        <SelectItem key={type.lookupId} value={type.value}>
-                          {type.value}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="dateDLChecked"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Date D/L Checked</FormLabel>
-                  <FormControl>
-                    <Input type="date" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="drivingLicenceCopyTaken"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value || false}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel>Copy taken?</FormLabel>
-                  </div>
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="sixMonthlyCheck"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel>6 monthly check?</FormLabel>
-                  </div>
-                </FormItem>
-              )}
-            />
-          </CardContent>
-        </Card>
-
-        {/* Checks and References Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Checks and References
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="graydonCheckAuthorised"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                    <div className="space-y-1 leading-none">
-                      <FormLabel>Graydon check Authorised?</FormLabel>
-                    </div>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="graydonCheckDetails"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Graydon check details</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Details..." {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="initialOralReferencesComplete"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                    <div className="space-y-1 leading-none">
-                      <FormLabel>Initial oral References complete?</FormLabel>
-                    </div>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="initialOralReferencesDate"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Date</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="writtenRefsComplete"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value || false}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                    <div className="space-y-1 leading-none">
-                      <FormLabel>Written References complete?</FormLabel>
-                    </div>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="writtenRefsCompleteDate"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Date</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="quickStarterFormCompleted"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value || false}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                    <div className="space-y-1 leading-none">
-                      <FormLabel>Quick starter form complete?</FormLabel>
-                    </div>
-                  </FormItem>
-                )}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Employment Documentation Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Employment Documentation
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="workingTimeDirective"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Working Time Directive</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder={isLoadingWorkingTimeDirectives ? "Loading options..." : "Select option"} />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {workingTimeDirectives.map((option) => (
-                        <SelectItem key={option.lookupId} value={option.value}>
-                          {option.value}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="workingTimeDirectiveComplete"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                  <FormControl>
-                    <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel>Working Time Directive Complete?</FormLabel>
-                  </div>
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="contractOfEmploymentSigned"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                  <FormControl>
-                    <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel>Contract of Employment signed?</FormLabel>
-                  </div>
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="photoTaken"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                  <FormControl>
-                    <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel>Photo taken?</FormLabel>
-                  </div>
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="photoFile"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Photo Upload</FormLabel>
-                  <div className="space-y-4">
-                    <FormControl>
-                      <Input
-                        type="file"
-                        accept="image/*"
-                        onChange={handlePhotoUpload}
-                        className="cursor-pointer"
-                      />
-                    </FormControl>
-                    
-                                         {/* Photo Preview/Placeholder */}
-                     <div className="flex items-center justify-center">
-                       {photoPreview ? (
-                         photoPreview === 'loading...' ? (
-                           <div className="w-32 h-32 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center bg-gray-50">
-                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-2"></div>
-                             <p className="text-xs text-gray-500 text-center px-2">
-                               Processing image...
-                             </p>
-                           </div>
-                         ) : (
-                           <div className="relative group">
-                             <div className="w-32 h-32 rounded-lg border-2 border-gray-200 shadow-sm overflow-hidden bg-gray-50 flex items-center justify-center">
-                               <img
-                                 src={photoPreview}
-                                 alt="Employee photo"
-                                 className="w-full h-full object-cover"
-                                 style={{ imageRendering: 'auto' }}
-                               />
-                             </div>
-                             <button
-                               type="button"
-                               onClick={() => {
-                                 setPhotoPreview(null)
-                                 form.setValue('photoFile', '')
-                                 form.setValue('photoTaken', false)
-                               }}
-                               className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600 transition-colors shadow-sm"
-                               title="Remove photo"
-                             >
-                               ×
-                             </button>
-                             {/* Hover overlay for better UX */}
-                             <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all duration-200 rounded-lg flex items-center justify-center">
-                               <span className="text-white opacity-0 group-hover:opacity-100 text-xs font-medium transition-opacity duration-200">
-                                 Click to remove
-                               </span>
-                             </div>
-                           </div>
-                         )
-                       ) : (
-                         <div className="w-32 h-32 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center bg-gray-50 hover:border-gray-400 transition-colors">
-                           <Camera className="h-8 w-8 text-gray-400 mb-2" />
-                           <p className="text-xs text-gray-500 text-center px-2">
-                             No photo uploaded
-                           </p>
-                         </div>
-                       )}
-                     </div>
-                    
-                    <p className="text-xs text-gray-500">
-                      Upload a professional headshot (JPG, PNG, max 5MB). Photos will be saved after employee registration.
-                    </p>
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="idCardIssued"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                  <FormControl>
-                    <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel>ID card issued?</FormLabel>
-                  </div>
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="equipmentIssued"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                  <FormControl>
-                    <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel>Equipment issued?</FormLabel>
-                  </div>
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="uniformIssued"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                  <FormControl>
-                    <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel>Uniform issued?</FormLabel>
-                  </div>
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="nextOfKinDetailsComplete"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                  <FormControl>
-                    <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel>Next of kin details complete?</FormLabel>
-                  </div>
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="peopleHoursPin"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>People Hours PIN</FormLabel>
-                  <FormControl>
-                    <Input placeholder="PIN number" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </CardContent>
-        </Card>
-
-        {/* Training and Induction Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              Training and Induction
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                         <FormField
-               control={form.control}
-               name="fullRotasIssued"
-               render={({ field }) => (
-                 <FormItem>
-                   <FormLabel>Full Rotas Issued</FormLabel>
-                   <FormControl>
-                     <Input type="date" {...field} />
-                   </FormControl>
-                   <FormMessage />
-                 </FormItem>
-               )}
-             />
-
-             <FormField
-               control={form.control}
-               name="inductionAndTrainingBooked"
-               render={({ field }) => (
-                 <FormItem>
-                   <FormLabel>Induction and Training Booked</FormLabel>
-                   <FormControl>
-                     <Input type="date" {...field} />
-                   </FormControl>
-                   <FormMessage />
-                 </FormItem>
-               )}
-             />
-
-            <FormField
-              control={form.control}
-              name="location"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Location</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Training location" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-                         <FormField
-               control={form.control}
-               name="trainer"
-               render={({ field }) => (
-                 <FormItem>
-                   <FormLabel>Trainer</FormLabel>
-                   <Select onValueChange={field.onChange} value={field.value}>
-                     <FormControl>
-                       <SelectTrigger>
-                         <SelectValue placeholder={isLoadingLookupData ? "Loading..." : "Select trainer"} />
-                       </SelectTrigger>
-                     </FormControl>
-                     <SelectContent>
-                       {trainers.map((trainer) => (
-                         <SelectItem key={trainer.lookupId} value={trainer.value}>
-                           {trainer.value}
-                         </SelectItem>
-                       ))}
-                     </SelectContent>
-                   </Select>
-                   <FormMessage />
-                 </FormItem>
-               )}
-             />
           </CardContent>
         </Card>
 

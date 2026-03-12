@@ -18,10 +18,16 @@ namespace AIPBackend.Models.DTOs
     {
         public bool Success { get; set; }
         public string Message { get; set; } = string.Empty;
+
+        // Present when login is fully completed
         public string AccessToken { get; set; } = string.Empty;
         public string RefreshToken { get; set; } = string.Empty;
         public DateTime ExpiresAt { get; set; }
         public UserResponseDto User { get; set; } = null!;
+
+        // For step 1: indicates that a second factor is required instead of tokens
+        public bool RequiresTwoFactor { get; set; }
+        public string[] TwoFactorMethods { get; set; } = Array.Empty<string>();
     }
 
     public class RefreshTokenRequestDto
@@ -49,6 +55,36 @@ namespace AIPBackend.Models.DTOs
     {
         public bool Success { get; set; }
         public string Message { get; set; } = string.Empty;
+    }
+
+    public class UpdateProfileRequestDto
+    {
+        [MaxLength(100)]
+        public string? FirstName { get; set; }
+
+        [MaxLength(100)]
+        public string? LastName { get; set; }
+
+        [EmailAddress]
+        [MaxLength(256)]
+        public string? Email { get; set; }
+
+        [MaxLength(50)]
+        public string? PhoneNumber { get; set; }
+
+        [MaxLength(100)]
+        public string? JobTitle { get; set; }
+
+        [MaxLength(1500000)]
+        public string? ProfilePicture { get; set; }
+
+        public bool? ClearProfilePicture { get; set; }
+
+        public bool? TwoFactorEnabled { get; set; }
+
+        public bool? EmailNotificationsEnabled { get; set; }
+
+        public bool? LoginAlertsEnabled { get; set; }
     }
 
     public class ChangePasswordRequestDto
@@ -90,6 +126,18 @@ namespace AIPBackend.Models.DTOs
         [Required]
         [Compare("NewPassword")]
         public string ConfirmNewPassword { get; set; } = string.Empty;
+    }
+
+    public class CompleteTwoFactorLoginRequestDto
+    {
+        [Required]
+        [EmailAddress]
+        public string Email { get; set; } = string.Empty;
+
+        [Required]
+        [MinLength(6)]
+        [MaxLength(12)]
+        public string Code { get; set; } = string.Empty;
     }
 
     public class ApiResponseDto<T>

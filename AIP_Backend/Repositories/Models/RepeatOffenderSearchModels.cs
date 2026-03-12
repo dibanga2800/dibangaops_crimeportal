@@ -16,10 +16,13 @@ namespace AIPBackend.Repositories.Models
 	{
 		public int IncidentId { get; set; }
 		public DateTime DateOfIncident { get; set; }
-		public string SiteName { get; set; } = string.Empty;
+		public string StoreName { get; set; } = string.Empty;
 		public string IncidentType { get; set; } = string.Empty;
 		public string? Description { get; set; }
 		public string? OffenderMarks { get; set; }
+		public bool OffenderDetailsVerified { get; set; }
+		public string? VerificationMethod { get; set; }
+		public string? VerificationEvidenceImage { get; set; }
 	}
 
 	public class RepeatOffenderRepositoryResult

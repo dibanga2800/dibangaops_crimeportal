@@ -1,24 +1,22 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePageAccess } from '@/contexts/PageAccessContext'
-import { getUser } from '@/services/auth'
+import { useAuth } from '@/contexts/AuthContext'
 
 const RoleBasedRedirect = () => {
   const navigate = useNavigate()
   const { currentRole } = usePageAccess()
+  const { user } = useAuth()
   
   useEffect(() => {
-    const user = getUser()
     
     // Only redirect if we have a valid role and user
     if (currentRole && user) {
       let redirectPath = '/dashboard' // default
       
-      if (user.role === 'administrator' || user.role === 'advantageonehoofficer') {
+      if (user.role === 'administrator' || user.role === 'manager') {
         redirectPath = '/dashboard'
-      } else if (user.role === 'advantageoneofficer') {
-        redirectPath = '/dashboard'
-      } else if (user.role?.startsWith('customer')) {
+      } else if (['security-officer', 'store'].includes(user.role ?? '')) {
         redirectPath = '/dashboard'
       }
       

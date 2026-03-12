@@ -1,5 +1,6 @@
-import { Settings as SettingsIcon, LogOut, User } from 'lucide-react';
-import { Button } from '../ui/button';
+import { useContext } from 'react'
+import { Settings as SettingsIcon, LogOut, User } from 'lucide-react'
+import { Button } from '../ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -7,15 +8,23 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '../ui/dropdown-menu';
-import { USER_DATA } from '@/constants/header';
-import { UserAvatar } from '../common/UserAvatar';
+} from '../ui/dropdown-menu'
+import { AuthContext } from '@/contexts/AuthContext'
+import { UserAvatar } from '../common/UserAvatar'
 
 interface UserMenuProps {
-  className?: string;
+  className?: string
 }
 
 export const UserMenu = ({ className = '' }: UserMenuProps) => {
+  const authContext = useContext(AuthContext)
+  const user = authContext?.user ?? null
+
+  const displayName = user
+    ? `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || user.username
+    : 'User'
+  const displayEmail = user?.email ?? ''
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -26,10 +35,10 @@ export const UserMenu = ({ className = '' }: UserMenuProps) => {
       <DropdownMenuContent className="w-56" align="end">
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm leading-none">{USER_DATA.name}</p>
-            <p className="text-xs leading-none text-muted-foreground">
-              {USER_DATA.email}
-            </p>
+            <p className="text-sm leading-none">{displayName}</p>
+            {displayEmail && (
+              <p className="text-xs leading-none text-muted-foreground">{displayEmail}</p>
+            )}
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
@@ -48,5 +57,5 @@ export const UserMenu = ({ className = '' }: UserMenuProps) => {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}; 
+  )
+} 

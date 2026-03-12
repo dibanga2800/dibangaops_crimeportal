@@ -26,7 +26,8 @@ namespace AIPBackend.Models
 		// Location information
 		[Required]
 		[MaxLength(200)]
-		public string SiteName { get; set; } = string.Empty;
+		[Column("StoreName")]
+		public string StoreName { get; set; } = string.Empty;
 
 		[MaxLength(200)]
 		public string? RegionName { get; set; }
@@ -37,10 +38,12 @@ namespace AIPBackend.Models
 		// Personnel information
 		[Required]
 		[MaxLength(200)]
-		public string OfficerName { get; set; } = string.Empty;
+		[Column("StaffMemberName")]
+		public string StaffMemberName { get; set; } = string.Empty;
 
 		[MaxLength(100)]
-		public string? OfficerRole { get; set; }
+		[Column("StaffMemberRole")]
+		public string? StaffMemberRole { get; set; }
 
 		[MaxLength(50)]
 		public string? OfficerType { get; set; }
@@ -69,9 +72,38 @@ namespace AIPBackend.Models
 		[MaxLength(50)]
 		public string? ActionCode { get; set; }
 
+		/// <summary>
+		/// AI-assisted incident category (e.g. Shoplifting, Assault, Fraud).
+		/// This is derived from free-text description and other signals.
+		/// </summary>
+		[MaxLength(100)]
+		public string? IncidentCategory { get; set; }
+
+		/// <summary>
+		/// Confidence score for <see cref="IncidentCategory"/> between 0 and 1.
+		/// </summary>
+		public double? IncidentCategoryConfidence { get; set; }
+
+		/// <summary>
+		/// Machine-derived risk level (low/medium/high) independent of the manual priority field.
+		/// </summary>
+		[MaxLength(20)]
+		public string? RiskLevel { get; set; }
+
+		/// <summary>
+		/// Normalised numeric risk score between 0 and 1.
+		/// </summary>
+		public double? RiskScore { get; set; }
+
+		/// <summary>
+		/// Version of the classifier that produced the current AI fields.
+		/// </summary>
+		[MaxLength(50)]
+		public string? ClassificationVersion { get; set; }
+
 		// Store incident involved categories as JSON array
 		[MaxLength(2000)]
-		public string? IncidentInvolvedJson { get; set; }
+		public string? IncidentInvolved { get; set; }
 
 		// Description and details
 		[MaxLength(5000)]
@@ -118,16 +150,19 @@ namespace AIPBackend.Models
 
 		// Store witness statements as JSON array
 		[MaxLength(5000)]
-		public string? WitnessStatementsJson { get; set; }
+		public string? WitnessStatements { get; set; }
 
 		// Store involved parties as JSON array
 		[MaxLength(2000)]
-		public string? InvolvedPartiesJson { get; set; }
+		public string? InvolvedParties { get; set; }
 
 		[MaxLength(100)]
 		public string? ReportNumber { get; set; }
 
 		// Offender information
+		[MaxLength(100)]
+		public string? OffenderId { get; set; }
+
 		[MaxLength(200)]
 		public string? OffenderName { get; set; }
 
@@ -144,6 +179,14 @@ namespace AIPBackend.Models
 
 		[MaxLength(500)]
 		public string? OffenderMarks { get; set; }
+
+		public bool OffenderDetailsVerified { get; set; } = false;
+
+		[MaxLength(100)]
+		public string? VerificationMethod { get; set; }
+
+		[Column(TypeName = "nvarchar(max)")]
+		public string? VerificationEvidenceImage { get; set; }
 
 		// Offender address fields
 		[MaxLength(100)]
@@ -163,6 +206,10 @@ namespace AIPBackend.Models
 
 		[MaxLength(20)]
 		public string? OffenderPostCode { get; set; }
+
+		// Store modus operandi as JSON array
+		[MaxLength(2000)]
+		public string? ModusOperandi { get; set; }
 
 		// Special fields
 		[MaxLength(2000)]

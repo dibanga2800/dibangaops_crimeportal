@@ -13,7 +13,7 @@ export const extractCustomerId = (user: User | null): number | null => {
 
 	// Check if user is a customer role
 	const userRole = (user.role || (user as any).Role || '').toLowerCase();
-	const isCustomerRole = userRole === 'customersitemanager' || userRole === 'customerhomanager';
+	const isCustomerRole = userRole === 'store' || userRole === 'manager';
 	
 	// Only extract customerId for customer roles
 	if (!isCustomerRole) {

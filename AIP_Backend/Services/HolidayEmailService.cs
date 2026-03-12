@@ -403,7 +403,7 @@ namespace AIPBackend.Services
             sb.AppendLine($"<li><strong>Reason:</strong> {GetHolidayReason(holidayRequest)}</li>");
             sb.AppendLine("</ul>");
             sb.AppendLine("<p>Please review and approve or reject this request at your earliest convenience.</p>");
-            sb.AppendLine("<p>Best regards,<br/>Advantage One Security Team</p>");
+            sb.AppendLine("<p>Best regards,<br/>Crime Portal Team</p>");
             sb.AppendLine("</body></html>");
             return sb.ToString();
         }
@@ -456,12 +456,12 @@ namespace AIPBackend.Services
             sb.AppendLine("</div>");
             sb.AppendLine("<p style=\"font-size: 16px; margin-top: 30px; color: #059669;\"><strong>Enjoy your time off!</strong></p>");
             sb.AppendLine("<div class=\"signature\">");
-            sb.AppendLine("<p>Best regards,<br/><strong>Advantage One Security Team</strong></p>");
+            sb.AppendLine("<p>Best regards,<br/><strong>Crime Portal Team</strong></p>");
             sb.AppendLine("</div>");
             sb.AppendLine("</div>");
             sb.AppendLine("<div class=\"footer\">");
             sb.AppendLine("<p>This is an automated email. Please do not reply to this message.</p>");
-            sb.AppendLine("<p>&copy; " + DateTime.Now.Year + " Advantage One Security. All rights reserved.</p>");
+            sb.AppendLine("<p>&copy; " + DateTime.Now.Year + " Crime Portal. All rights reserved.</p>");
             sb.AppendLine("</div>");
             sb.AppendLine("</div>");
             sb.AppendLine("</body>");
@@ -486,7 +486,7 @@ namespace AIPBackend.Services
             sb.AppendLine($"<li><strong>Reason:</strong> {rejectionReason}</li>");
             sb.AppendLine("</ul>");
             sb.AppendLine("<p>Please contact your manager if you have any questions or would like to discuss alternative arrangements.</p>");
-            sb.AppendLine("<p>Best regards,<br/>Advantage One Security Team</p>");
+            sb.AppendLine("<p>Best regards,<br/>Crime Portal Team</p>");
             sb.AppendLine("</body></html>");
             return sb.ToString();
         }
@@ -507,7 +507,7 @@ namespace AIPBackend.Services
             sb.AppendLine($"<li><strong>Days Pending:</strong> {daysPending}</li>");
             sb.AppendLine("</ul>");
             sb.AppendLine("<p>Please review and take action on this request as soon as possible.</p>");
-            sb.AppendLine("<p>Best regards,<br/>Advantage One Security Team</p>");
+            sb.AppendLine("<p>Best regards,<br/>Crime Portal Team</p>");
             sb.AppendLine("</body></html>");
             return sb.ToString();
         }
@@ -527,7 +527,7 @@ namespace AIPBackend.Services
             sb.AppendLine($"<li><strong>Type:</strong> {GetHolidayType(holidayRequest)}</li>");
             sb.AppendLine("</ul>");
             sb.AppendLine("<p>This request has been removed from the approval queue.</p>");
-            sb.AppendLine("<p>Best regards,<br/>Advantage One Security Team</p>");
+            sb.AppendLine("<p>Best regards,<br/>Crime Portal Team</p>");
             sb.AppendLine("</body></html>");
             return sb.ToString();
         }
@@ -548,7 +548,7 @@ namespace AIPBackend.Services
             sb.AppendLine($"<li><strong>Reason:</strong> {GetHolidayReason(holidayRequest)}</li>");
             sb.AppendLine("</ul>");
             sb.AppendLine("<p>Please review the changes and approve or reject this request.</p>");
-            sb.AppendLine("<p>Best regards,<br/>Advantage One Security Team</p>");
+            sb.AppendLine("<p>Best regards,<br/>Crime Portal Team</p>");
             sb.AppendLine("</body></html>");
             return sb.ToString();
         }
@@ -566,7 +566,7 @@ namespace AIPBackend.Services
             sb.AppendLine($"<li><strong>Used Days:</strong> {usedDays}</li>");
             sb.AppendLine("</ul>");
             sb.AppendLine("<p>Please plan your remaining leave accordingly.</p>");
-            sb.AppendLine("<p>Best regards,<br/>Advantage One Security Team</p>");
+            sb.AppendLine("<p>Best regards,<br/>Crime Portal Team</p>");
             sb.AppendLine("</body></html>");
             return sb.ToString();
         }

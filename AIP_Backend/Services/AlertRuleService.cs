@@ -13,17 +13,20 @@ namespace AIPBackend.Services
 		private readonly IAlertRuleRepository _repository;
 		private readonly IIncidentRepository _incidentRepository;
 		private readonly IEmailService _emailService;
+		private readonly IAlertEscalationService _escalationService;
 		private readonly ILogger<AlertRuleService> _logger;
 
 		public AlertRuleService(
 			IAlertRuleRepository repository,
 			IIncidentRepository incidentRepository,
 			IEmailService emailService,
+			IAlertEscalationService escalationService,
 			ILogger<AlertRuleService> logger)
 		{
 			_repository = repository;
 			_incidentRepository = incidentRepository;
 			_emailService = emailService;
+			_escalationService = escalationService;
 			_logger = logger;
 		}
 
@@ -235,7 +238,7 @@ namespace AIPBackend.Services
 	{
 		try
 		{
-			_logger.LogInformation("🚨 Triggering alert rule: {RuleName} (ID: {RuleId}) for incident {IncidentId}",
+			_logger.LogInformation("Triggering alert rule: {RuleName} (ID: {RuleId}) for incident {IncidentId}",
 				rule.Name, rule.AlertRuleId, incidentId);
 
 			var channels = string.IsNullOrEmpty(rule.Channels)
@@ -246,32 +249,28 @@ namespace AIPBackend.Services
 				? new List<string>()
 				: JsonSerializer.Deserialize<List<string>>(rule.EmailRecipients) ?? new List<string>();
 
-			_logger.LogInformation("Alert channels configured: [{Channels}], Email recipients: [{Recipients}]",
-				string.Join(", ", channels), string.Join(", ", emailRecipients));
+			// Determine severity based on incident characteristics
+			var severity = DetermineAlertSeverity(incident);
+			var matchDetails = $"Type: {incident.IncidentType}, Site: {incident.StoreName}";
 
-			// Send email notifications if email channel is enabled and recipients are configured
+			// Create an AlertInstance for tracking and escalation
+			await _escalationService.CreateAlertAsync(
+				rule.AlertRuleId,
+				incidentId,
+				severity,
+				$"Alert rule '{rule.Name}' triggered by incident #{incidentId} at {incident.StoreName}",
+				matchDetails);
+
 			if (channels.Contains("email") && emailRecipients.Count > 0)
 			{
-				_logger.LogInformation("📧 Sending alert email to {Count} recipients...", emailRecipients.Count);
 				await SendAlertEmailAsync(rule, incident, incidentId, emailRecipients);
 			}
-			else if (channels.Contains("email") && emailRecipients.Count == 0)
-			{
-				_logger.LogWarning("⚠️ Email channel is enabled but no recipients configured for rule {RuleName}", rule.Name);
-			}
-			else if (!channels.Contains("email"))
-			{
-				_logger.LogInformation("Email channel not enabled for rule {RuleName}, skipping email notification", rule.Name);
-			}
 
-			// TODO: Add in-app notification logic here if needed
 			if (channels.Contains("in-app"))
 			{
-				_logger.LogInformation("In-app notification for alert rule {RuleName} would be triggered here", rule.Name);
-				// Future: Implement in-app notification system
+				_logger.LogInformation("In-app alert created for rule {RuleName}, incident {IncidentId}", rule.Name, incidentId);
 			}
 
-			// Update rule trigger statistics
 			rule.LastTriggered = DateTime.UtcNow;
 			rule.TriggerCount++;
 			await _repository.UpdateAsync(rule);
@@ -281,6 +280,15 @@ namespace AIPBackend.Services
 			_logger.LogError(ex, "Error triggering alert rule {RuleId} for incident {IncidentId}",
 				rule.AlertRuleId, incidentId);
 		}
+	}
+
+	private static string DetermineAlertSeverity(Incident incident)
+	{
+		if (incident.PoliceInvolvement || incident.TotalValueRecovered > 1000)
+			return "high";
+		if (incident.TotalValueRecovered > 200 || !string.IsNullOrWhiteSpace(incident.OffenderName))
+			return "medium";
+		return "low";
 	}
 
 	private async Task SendAlertEmailAsync(AlertRule rule, Incident incident, int incidentId, List<string> recipients)
@@ -346,11 +354,11 @@ namespace AIPBackend.Services
 			sb.AppendLine("<tr><th colspan=\"2\">Incident Details</th></tr>");
 			sb.AppendLine($"<tr><td><strong>Incident ID</strong></td><td>{incident.IncidentId}</td></tr>");
 			sb.AppendLine($"<tr><td><strong>Type</strong></td><td>{incident.IncidentType}</td></tr>");
-			sb.AppendLine($"<tr><td><strong>Site</strong></td><td>{incident.SiteName}</td></tr>");
+			sb.AppendLine($"<tr><td><strong>Site</strong></td><td>{incident.StoreName}</td></tr>");
 			sb.AppendLine($"<tr><td><strong>Region</strong></td><td>{incident.RegionName ?? "N/A"}</td></tr>");
 			sb.AppendLine($"<tr><td><strong>Date</strong></td><td>{incidentDate:dd/MM/yyyy}</td></tr>");
 			sb.AppendLine($"<tr><td><strong>Time</strong></td><td>{incident.TimeOfIncident ?? "N/A"}</td></tr>");
-			sb.AppendLine($"<tr><td><strong>Reported By</strong></td><td>{incident.OfficerName}</td></tr>");
+			sb.AppendLine($"<tr><td><strong>Reported By</strong></td><td>{incident.StaffMemberName}</td></tr>");
 			
 			// Priority with color coding
 			var priorityClass = incident.Priority?.ToLower() switch
@@ -400,16 +408,16 @@ namespace AIPBackend.Services
 			
 			// Action Note
 			sb.AppendLine("<div class=\"note\">");
-			sb.AppendLine("<strong>Recommended Action:</strong> Please review this incident in the Advantage One Security portal and take appropriate action based on your organization's security protocols.");
+			sb.AppendLine("<strong>Recommended Action:</strong> Please review this incident in the DibangOps portal and take appropriate action based on your organisation's security protocols.");
 			sb.AppendLine("</div>");
 			
 			sb.AppendLine("</div>");
 			
 			// Footer
 			sb.AppendLine("<div class=\"footer\">");
-			sb.AppendLine("<p>This is an automated notification from the <strong>Advantage One Security</strong> Alert System.</p>");
+			sb.AppendLine("<p>This is an automated notification from the <strong>DibangOps&trade;</strong> Alert System.</p>");
 			sb.AppendLine("<p>Please do not reply to this message.</p>");
-			sb.AppendLine("<p>&copy; " + DateTime.Now.Year + " Advantage One Security. All rights reserved.</p>");
+			sb.AppendLine("<p>&copy; " + DateTime.Now.Year + " David Ibanga. All rights reserved.</p>");
 			sb.AppendLine("</div>");
 			
 			sb.AppendLine("</div>");
@@ -426,7 +434,7 @@ namespace AIPBackend.Services
 				subject,
 				body,
 				isHtml: true,
-				fromName: "Advantage One Security - Alert System");
+				fromName: "DibangOps Alert System");
 
 			if (success)
 			{

@@ -42,7 +42,9 @@ namespace AIPBackend.Services
                 await SeedSampleUsersForTestingAsync(); // Add the new sample users
                 await SeedTestEmployeesAsync();
                 await SeedLookupTablesAsync();
+                await MigrateUserRolesAsync();
                 await UpdatePositionsAsync();
+                await EnsureLookupCategoriesAsync();
                 await SeedSitesAsync();
                 await SeedPageAccessAsync();
 
@@ -62,10 +64,9 @@ namespace AIPBackend.Services
             var roles = new[]
             {
                 new { Name = "administrator", Description = "System administrator with full access" },
-                new { Name = "advantageoneofficer", Description = "Advantage One officer role" },
-                new { Name = "advantageonehoofficer", Description = "Advantage One head office officer role" },
-                new { Name = "customersitemanager", Description = "Customer site manager role" },
-                new { Name = "customerhomanager", Description = "Customer head office manager role" }
+                new { Name = "manager", Description = "Manager with operational and analytical access" },
+                new { Name = "security-officer", Description = "Security Officer with incident report plus admin-configurable pages" },
+                new { Name = "store", Description = "Store user with incident reporting access only" }
             };
 
             foreach (var roleInfo in roles)
@@ -309,24 +310,26 @@ namespace AIPBackend.Services
             var testUsers = new[]
             {
                 new {
-                    UserName = "advantage.officer",
-                    Email = "officer@advantageone.com",
+                    UserName = "platform.store",
+                    Email = "store@dibangops.com",
                     FirstName = "John",
                     LastName = "Officer",
-                    Role = "advantageoneofficer",
-                    PageAccessRole = "advantageoneofficer",
-                    JobTitle = "Security Officer",
-                    CompanyName = "Central England COOP" // Used to find customers for assignment
+                    Role = "store",
+                    PageAccessRole = "store",
+                    JobTitle = "Store Officer",
+                    CompanyName = "Central England COOP",
+                    IsCustomerUser = false
                 },
                 new {
                     UserName = "customer.manager",
                     Email = "manager@customer.com",
                     FirstName = "Sarah",
                     LastName = "Manager",
-                    Role = "customersitemanager",
-                    PageAccessRole = "customersitemanager",
+                    Role = "manager",
+                    PageAccessRole = "manager",
                     JobTitle = "Site Manager",
-                    CompanyName = "Heart of England" // Used to find customer for CustomerId
+                    CompanyName = "Heart of England",
+                    IsCustomerUser = true
                 }
             };
 
@@ -364,8 +367,8 @@ namespace AIPBackend.Services
                             _logger.LogInformation("Created test user {UserName} and assigned {Role} role", 
                                 userInfo.UserName, userInfo.Role);
 
-                            // For customer users, set CustomerId
-                            if (userInfo.Role == "customersitemanager" || userInfo.Role == "customerhomanager")
+                            // For customer-linked users, set CustomerId directly
+                            if (userInfo.IsCustomerUser)
                             {
                                 var customer = await _context.Customers
                                     .FirstOrDefaultAsync(c => c.CompanyName == userInfo.CompanyName);
@@ -376,8 +379,8 @@ namespace AIPBackend.Services
                                     _logger.LogInformation("Set CustomerId {CustomerId} for customer user {UserName}", customer.CustomerId, userInfo.UserName);
                                 }
                             }
-                            // For AdvantageOne users, assign to specific customers
-                            else if (userInfo.Role.StartsWith("AdvantageOne"))
+                            // For platform users, assign to specific customers via assignments
+                            else
                             {
                                 var customers = await _context.Customers
                                     .Where(c => c.CompanyName == userInfo.CompanyName)
@@ -422,63 +425,68 @@ namespace AIPBackend.Services
             {
                 new {
                     UserName = "admin.test",
-                    Email = "admin.test@advantageone.com",
+                    Email = "admin.test@dibangops.com",
                     FirstName = "Michael",
                     LastName = "Admin",
                     Role = "administrator",
                     PageAccessRole = "administrator",
                     JobTitle = "System Administrator",
-                    CompanyName = "Central England COOP", // Used to find customers for assignment
+                    CompanyName = "Central England COOP",
                     Signature = "M.Admin",
-                    SignatureCode = "MA001"
+                    SignatureCode = "MA001",
+                    IsCustomerUser = false
                 },
                 new {
-                    UserName = "ho.officer",
-                    Email = "ho.officer@advantageone.com",
+                    UserName = "ops.manager",
+                    Email = "ops.manager@dibangops.com",
                     FirstName = "Emily",
                     LastName = "Wilson",
-                    Role = "advantageonehoofficer",
-                    PageAccessRole = "advantageonehoofficer",
-                    JobTitle = "Head Office Officer",
-                    CompanyName = "Central England COOP", // Used to find customers for assignment
+                    Role = "manager",
+                    PageAccessRole = "manager",
+                    JobTitle = "Operations Manager",
+                    CompanyName = "Central England COOP",
                     Signature = "E.Wilson",
-                    SignatureCode = "EW001"
+                    SignatureCode = "EW001",
+                    IsCustomerUser = false
                 },
                 new {
-                    UserName = "field.officer",
-                    Email = "field.officer@advantageone.com",
+                    UserName = "store.user",
+                    Email = "store.user@dibangops.com",
                     FirstName = "David",
                     LastName = "Brown",
-                    Role = "advantageoneofficer",
-                    PageAccessRole = "advantageoneofficer",
-                    JobTitle = "Field Officer",
-                    CompanyName = "Central England COOP", // Used to find customers for assignment
+                    Role = "store",
+                    PageAccessRole = "store",
+                    JobTitle = "Store Officer",
+                    CompanyName = "Central England COOP",
                     Signature = "D.Brown",
-                    SignatureCode = "DB001"
+                    SignatureCode = "DB001",
+                    IsCustomerUser = false
+                },
+                new {
+                    UserName = "site.store",
+                    Email = "site.store@heartofengland.com",
+                    FirstName = "Lisa",
+                    LastName = "Garcia",
+                    Role = "store",
+                    PageAccessRole = "store",
+                    JobTitle = "Store User",
+                    CompanyName = "Heart of England",
+                    Signature = "L.Garcia",
+                    SignatureCode = "LG001",
+                    IsCustomerUser = true
                 },
                 new {
                     UserName = "site.manager",
-                    Email = "site.manager@heartofengland.com",
-                    FirstName = "Lisa",
-                    LastName = "Garcia",
-                    Role = "customersitemanager",
-                    PageAccessRole = "customersitemanager",
-                    JobTitle = "Site Manager",
-                    CompanyName = "Heart of England", // Used to find customer for CustomerId
-                    Signature = "L.Garcia",
-                    SignatureCode = "LG001"
-                },
-                new {
-                    UserName = "ho.manager",
-                    Email = "ho.manager@midcounties.com",
+                    Email = "site.manager@midcounties.com",
                     FirstName = "Robert",
                     LastName = "Taylor",
-                    Role = "customerhomanager",
-                    PageAccessRole = "customerhomanager",
-                    JobTitle = "Head Office Manager",
-                    CompanyName = "Midcounties COOP", // Used to find customer for CustomerId
+                    Role = "manager",
+                    PageAccessRole = "manager",
+                    JobTitle = "Site Manager",
+                    CompanyName = "Midcounties COOP",
                     Signature = "R.Taylor",
-                    SignatureCode = "RT001"
+                    SignatureCode = "RT001",
+                    IsCustomerUser = true
                 }
             };
 
@@ -520,8 +528,8 @@ namespace AIPBackend.Services
                             _logger.LogInformation("Created sample user {UserName} with role {Role}", 
                                 userInfo.UserName, userInfo.Role);
 
-                            // For customer users, set CustomerId
-                            if (userInfo.Role == "customersitemanager" || userInfo.Role == "customerhomanager")
+                            // For customer-linked users, set CustomerId directly
+                            if (userInfo.IsCustomerUser)
                             {
                                 var customer = await _context.Customers
                                     .FirstOrDefaultAsync(c => c.CompanyName == userInfo.CompanyName);
@@ -532,8 +540,8 @@ namespace AIPBackend.Services
                                     _logger.LogInformation("Set CustomerId {CustomerId} for customer user {UserName}", customer.CustomerId, userInfo.UserName);
                                 }
                             }
-                            // For AdvantageOne users, assign to customers
-                            else if (userInfo.Role.StartsWith("advantageone") || userInfo.Role == "administrator")
+                            // For platform users, assign to all customers
+                            else if (!userInfo.IsCustomerUser)
                             {
                                 var customers = await _context.Customers.ToListAsync();
                                 var assignments = customers.Select(c => new UserCustomerAssignment
@@ -781,11 +789,12 @@ namespace AIPBackend.Services
                     });
                 }
 
-                // User Roles
+                // User Roles (3-tier model: administrator, manager, store)
                 var userRoles = new[]
                 {
-                    "AdvantageOneAdmin", "AdvantageOneManager", "AdvantageOneOfficer",
-                    "CustomerHOManager", "CustomerSiteManager"
+                    new { Value = "administrator", Description = "System administrator with full access" },
+                    new { Value = "manager", Description = "Manager with operational and analytical access" },
+                    new { Value = "store", Description = "Store user with incident reporting access" }
                 };
 
                 for (int i = 0; i < userRoles.Length; i++)
@@ -793,8 +802,8 @@ namespace AIPBackend.Services
                     lookupTables.Add(new LookupTable
                     {
                         Category = "User_Roles",
-                        Value = userRoles[i],
-                        Description = $"User Role: {userRoles[i]}",
+                        Value = userRoles[i].Value,
+                        Description = userRoles[i].Description,
                         Code = "",
                         SortOrder = i,
                         IsActive = true,
@@ -826,6 +835,45 @@ namespace AIPBackend.Services
                     });
                 }
 
+                // Product Departments
+                var productDepartments = new[]
+                {
+                    "BABY FOOD",
+                    "BAKERY",
+                    "BEERS/WINES/SPIRITS",
+                    "BUTTER & CHEESE",
+                    "CIGARETTES & TOBACCO",
+                    "COFFEE",
+                    "CONFECTIONARY",
+                    "FROZEN FOODS",
+                    "FRUIT & VEGETABLES",
+                    "GROCERY",
+                    "HEALTH & BEAUTY",
+                    "HOMEWARES",
+                    "LAUNDRY DETERGENT",
+                    "MEAT & POULTRY",
+                    "MEDICINE",
+                    "NEWSPAPERS & MAGAZINES",
+                    "NON FOOD",
+                    "SEASONAL",
+                    "SOFT BEVERAGES",
+                    "SPORTS & ENERGY DRINKS"
+                };
+
+                for (int i = 0; i < productDepartments.Length; i++)
+                {
+                    lookupTables.Add(new LookupTable
+                    {
+                        Category = "ProductDepartments",
+                        Value = productDepartments[i],
+                        Description = $"Product Department: {productDepartments[i]}",
+                        Code = "",
+                        SortOrder = i,
+                        IsActive = true,
+                        CreatedBy = "System"
+                    });
+                }
+
                 // Add all lookup tables to the context
                 await _context.LookupTables.AddRangeAsync(lookupTables);
                 await _context.SaveChangesAsync();
@@ -836,6 +884,92 @@ namespace AIPBackend.Services
             {
                 _logger.LogError(ex, "Error seeding lookup tables");
                 throw;
+            }
+        }
+
+        /// <summary>
+        /// Migrates User_Roles lookup entries from the old 5-role model to the 3-tier model.
+        /// Runs on every startup so the lookup table stays in sync with the application roles.
+        /// </summary>
+        public async Task MigrateUserRolesAsync()
+        {
+            try
+            {
+                // Use the admin user as the audit owner for lookup updates
+                var adminUser = await _userManager.FindByEmailAsync("admin@advantageone.com");
+                var auditUserId = adminUser?.Id ?? "system";
+
+                var oldRoleValues = new[] { "AdvantageOneAdmin", "AdvantageOneManager", "AdvantageOneOfficer", "CustomerHOManager", "CustomerSiteManager", "officer" };
+                var newRoles = new[]
+                {
+                    new { Value = "administrator", Description = "System administrator with full access", SortOrder = 0 },
+                    new { Value = "manager", Description = "Manager with operational and analytical access", SortOrder = 1 },
+                    new { Value = "security-officer", Description = "Security Officer with incident report plus admin-configurable pages", SortOrder = 2 },
+                    new { Value = "store", Description = "Store user with incident reporting access only", SortOrder = 3 }
+                };
+
+                var existingEntries = await _context.LookupTables
+                    .Where(l => l.Category == "User_Roles")
+                    .ToListAsync();
+
+                if (existingEntries.Count == 0)
+                {
+                    _logger.LogInformation("No User_Roles entries found, skipping migration.");
+                    return;
+                }
+
+                var hasOldRoles = existingEntries.Any(e => oldRoleValues.Contains(e.Value));
+                var hasAllNewRoles = newRoles.All(nr => existingEntries.Any(e => e.Value == nr.Value && e.IsActive));
+
+                if (!hasOldRoles && hasAllNewRoles)
+                {
+                    _logger.LogInformation("User_Roles already up to date, skipping migration.");
+                    return;
+                }
+
+                _logger.LogInformation("Migrating User_Roles lookup entries to 3-tier model...");
+
+                // Deactivate old entries
+                foreach (var entry in existingEntries.Where(e => oldRoleValues.Contains(e.Value)))
+                {
+                    entry.IsActive = false;
+                    entry.UpdatedAt = DateTime.UtcNow;
+                    entry.UpdatedBy = auditUserId;
+                }
+
+                // Add or reactivate new entries
+                foreach (var role in newRoles)
+                {
+                    var existing = existingEntries.FirstOrDefault(e => e.Value == role.Value);
+                    if (existing != null)
+                    {
+                        existing.IsActive = true;
+                        existing.Description = role.Description;
+                        existing.SortOrder = role.SortOrder;
+                        existing.UpdatedAt = DateTime.UtcNow;
+                        existing.UpdatedBy = auditUserId;
+                    }
+                    else
+                    {
+                        _context.LookupTables.Add(new LookupTable
+                        {
+                            Category = "User_Roles",
+                            Value = role.Value,
+                            Description = role.Description,
+                            Code = "",
+                            SortOrder = role.SortOrder,
+                            IsActive = true,
+                            CreatedBy = auditUserId
+                        });
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("User_Roles migration completed successfully.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error migrating User_Roles lookup entries");
             }
         }
 
@@ -1398,6 +1532,108 @@ namespace AIPBackend.Services
                 _logger.LogError(ex, "Error seeding sites");
                 throw;
             }
+        }
+
+        public async Task EnsureLookupCategoriesAsync()
+        {
+            try
+            {
+                _logger.LogInformation("Ensuring IncidentTypes and ProductDepartments lookup categories...");
+
+                await EnsureCategoryValuesAsync("IncidentTypes", new[]
+                {
+                    "Theft",
+                    "Theft Prevention",
+                    "Suspicious Activity",
+                    "Anti-Social Behaviour",
+                    "Arrest",
+                    "Deter",
+                    "Underage Purchase",
+                    "Criminal Damage",
+                    "Credit Card Fraud",
+                    "Colleague Assault",
+                    "Colleague Abuse",
+                    "Violent Behaviour",
+                    "Abusive Behaviour",
+                    "Shoplifting",
+                    "Customer Complaint",
+                    "Suspicious Behaviour",
+                    "Self Scan Tills",
+                    "Scan and Go",
+                    "Threats and Intimidation",
+                    "Ban from Store",
+                    "Police Involvement",
+                    "Arrest - Saved?",
+                    "Spitting",
+                    "Police Failed to Attend",
+                    "Others"
+                });
+
+                await EnsureCategoryValuesAsync("ProductDepartments", new[]
+                {
+                    "BABY FOOD",
+                    "BAKERY",
+                    "BEERS/WINES/SPIRITS",
+                    "BUTTER & CHEESE",
+                    "CIGARETTES & TOBACCO",
+                    "COFFEE",
+                    "CONFECTIONARY",
+                    "FROZEN FOODS",
+                    "FRUIT & VEGETABLES",
+                    "GROCERY",
+                    "HEALTH & BEAUTY",
+                    "HOMEWARES",
+                    "LAUNDRY DETERGENT",
+                    "MEAT & POULTRY",
+                    "MEDICINE",
+                    "NEWSPAPERS & MAGAZINES",
+                    "NON FOOD",
+                    "SEASONAL",
+                    "SOFT BEVERAGES",
+                    "SPORTS & ENERGY DRINKS"
+                });
+
+                _logger.LogInformation("Lookup categories ensured successfully.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error ensuring lookup categories");
+            }
+        }
+
+        private async Task EnsureCategoryValuesAsync(string category, string[] values)
+        {
+            var existing = await _context.LookupTables
+                .Where(lt => lt.Category == category)
+                .Select(lt => lt.Value)
+                .ToListAsync();
+
+            var toAdd = values
+                .Where(v => !existing.Contains(v))
+                .ToList();
+
+            if (!toAdd.Any()) return;
+
+            var maxSortOrder = existing.Any()
+                ? await _context.LookupTables
+                    .Where(lt => lt.Category == category)
+                    .MaxAsync(lt => lt.SortOrder)
+                : -1;
+
+            var entries = toAdd.Select((value, index) => new LookupTable
+            {
+                Category = category,
+                Value = value,
+                Description = $"{category}: {value}",
+                Code = "",
+                SortOrder = maxSortOrder + index + 1,
+                IsActive = true,
+                CreatedBy = "System"
+            }).ToList();
+
+            await _context.LookupTables.AddRangeAsync(entries);
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Added {Count} values to {Category}", entries.Count, category);
         }
     }
 }

@@ -13,7 +13,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { UserDialog } from "./UserDialog"
-import { User } from "@/data/users"
+import type { UserRecord as User } from "@/types/user"
 import { format } from "date-fns"
 import { Input } from "@/components/ui/input"
 import {

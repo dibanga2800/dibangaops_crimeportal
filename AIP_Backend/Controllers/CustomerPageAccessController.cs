@@ -69,10 +69,10 @@ namespace AIPBackend.Controllers
                 
                 // Use case-insensitive comparison to handle any case variations
                 var isAdministrator = string.Equals(userRole, "administrator", StringComparison.OrdinalIgnoreCase);
-                var isOfficer = string.Equals(userRole, "advantageoneofficer", StringComparison.OrdinalIgnoreCase) 
-                    || string.Equals(userRole, "advantageonehoofficer", StringComparison.OrdinalIgnoreCase);
-                var isCustomerRole = string.Equals(userRole, "customersitemanager", StringComparison.OrdinalIgnoreCase) 
-                    || string.Equals(userRole, "customerhomanager", StringComparison.OrdinalIgnoreCase);
+                var isOfficer = string.Equals(userRole, "store", StringComparison.OrdinalIgnoreCase) 
+                    || string.Equals(userRole, "manager", StringComparison.OrdinalIgnoreCase);
+                var isCustomerRole = string.Equals(userRole, "store", StringComparison.OrdinalIgnoreCase) 
+                    || string.Equals(userRole, "manager", StringComparison.OrdinalIgnoreCase);
                 
                 _logger.LogInformation("Role check results: isAdministrator={IsAdmin}, isOfficer={IsOfficer}, isCustomerRole={IsCustomer}", 
                     isAdministrator, isOfficer, isCustomerRole);

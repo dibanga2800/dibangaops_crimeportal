@@ -27,6 +27,7 @@ namespace AIPBackend.Services
                     ProductName = p.ProductName,
                     Section = p.Section,
                     Category = p.Category,
+                    Department = p.Department,
                     Description = p.Description,
                     Price = p.Price,
                     Brand = p.Brand,
@@ -49,6 +50,7 @@ namespace AIPBackend.Services
                     ProductName = p.ProductName,
                     Section = p.Section,
                     Category = p.Category,
+                    Department = p.Department,
                     Description = p.Description,
                     Price = p.Price,
                     Brand = p.Brand,
@@ -89,6 +91,7 @@ namespace AIPBackend.Services
                     ProductName = p.ProductName,
                     Section = p.Section,
                     Category = p.Category,
+                    Department = p.Department,
                     Description = p.Description,
                     Price = p.Price,
                     Brand = p.Brand,
@@ -108,6 +111,7 @@ namespace AIPBackend.Services
                 ProductName = productDto.ProductName,
                 Section = productDto.Section,
                 Category = productDto.Category,
+                Department = productDto.Department,
                 Description = productDto.Description,
                 Price = productDto.Price,
                 Brand = productDto.Brand,
@@ -127,6 +131,7 @@ namespace AIPBackend.Services
                 ProductName = product.ProductName,
                 Section = product.Section,
                 Category = product.Category,
+                Department = product.Department,
                 Description = product.Description,
                 Price = product.Price,
                 Brand = product.Brand,
@@ -147,6 +152,7 @@ namespace AIPBackend.Services
             product.ProductName = productDto.ProductName;
             product.Section = productDto.Section;
             product.Category = productDto.Category;
+            product.Department = productDto.Department;
             product.Description = productDto.Description;
             product.Price = productDto.Price;
             product.Brand = productDto.Brand;
@@ -163,6 +169,7 @@ namespace AIPBackend.Services
                 ProductName = product.ProductName,
                 Section = product.Section,
                 Category = product.Category,
+                Department = product.Department,
                 Description = product.Description,
                 Price = product.Price,
                 Brand = product.Brand,

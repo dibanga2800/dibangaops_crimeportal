@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig, UserConfig } from "vite"
 import react from "@vitejs/plugin-react"
 import { fileURLToPath } from 'url'
@@ -138,24 +139,51 @@ export default defineConfig(({ mode }) => ({
       '@zxing/library'
     ]
   },
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+    include: ['src/**/*.test.{ts,tsx}'],
+  },
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
-    sourcemap: mode === 'development',
+    sourcemap: mode === 'production' ? false : true,
     target: 'esnext',
     minify: 'terser',
+    cssMinify: true,
+    reportCompressedSize: true,
+    chunkSizeWarningLimit: 1000,
     terserOptions: {
       compress: {
-        drop_console: true,
-        drop_debugger: true
+        drop_console: mode === 'production',
+        drop_debugger: true,
+        pure_funcs: mode === 'production' ? ['console.log', 'console.debug', 'console.info'] : []
+      },
+      format: {
+        comments: false
       }
     },
     rollupOptions: {
       output: {
         manualChunks: {
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'ui-vendor': ['framer-motion', '@radix-ui/react-primitive']
-        }
+          'ui-vendor': ['framer-motion', '@radix-ui/react-primitive', 'lucide-react'],
+          'state-vendor': ['@reduxjs/toolkit', 'react-redux', '@tanstack/react-query'],
+          'form-vendor': ['react-hook-form', 'zod', '@hookform/resolvers'],
+          'chart-vendor': ['recharts'],
+        },
+        assetFileNames: (assetInfo) => {
+          let extType = assetInfo.name?.split('.').at(-1) || 'asset';
+          if (/png|jpe?g|svg|gif|tiff|bmp|ico/i.test(extType)) {
+            extType = 'images';
+          } else if (/woff|woff2|eot|ttf|otf/i.test(extType)) {
+            extType = 'fonts';
+          }
+          return `assets/${extType}/[name]-[hash][extname]`;
+        },
+        chunkFileNames: 'assets/js/[name]-[hash].js',
+        entryFileNames: 'assets/js/[name]-[hash].js',
       }
     }
   }

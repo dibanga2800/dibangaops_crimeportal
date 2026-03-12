@@ -236,7 +236,7 @@ export const DailyActivityTable = ({ onEdit, onView, onNew, refreshTrigger, cust
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search by officer name, customer, site..."
+                  placeholder="Search by officer name, company, site..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10 h-11 border-0 bg-white shadow-sm focus-visible:ring-2 focus-visible:ring-purple-500"
@@ -297,16 +297,16 @@ export const DailyActivityTable = ({ onEdit, onView, onNew, refreshTrigger, cust
               {/* Customer Filter (Admin only) */}
               {isAdmin && (
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Customer</label>
+                  <label className="text-sm font-medium">Company</label>
                   <Select
                     value={filters.customerId}
                     onValueChange={(value) => setFilters(prev => ({ ...prev, customerId: value, siteId: '' }))}
                   >
                     <SelectTrigger className="bg-white">
-                      <SelectValue placeholder="All customers" />
+                      <SelectValue placeholder="All companies" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All customers</SelectItem>
+                      <SelectItem value="">All companies</SelectItem>
                       <SelectItem value="21">Central England COOP</SelectItem>
                       <SelectItem value="22">Heart of England</SelectItem>
                       <SelectItem value="23">Midcounties COOP</SelectItem>
@@ -417,7 +417,7 @@ export const DailyActivityTable = ({ onEdit, onView, onNew, refreshTrigger, cust
         <Table>
           <TableHeader>
             <TableRow className="bg-gradient-to-r from-gray-50 to-gray-100/50 border-b-0">
-              <TableHead className="font-semibold text-gray-900 py-4">Customer</TableHead>
+              <TableHead className="font-semibold text-gray-900 py-4">Company</TableHead>
               <TableHead className="font-semibold text-gray-900">Site</TableHead>
               <TableHead className="font-semibold text-gray-900">Officer</TableHead>
               <TableHead className="font-semibold text-gray-900">Date Created</TableHead>

@@ -46,7 +46,7 @@ export function CustomerStats({ selectedCustomerId, updateTrigger }: CustomerSta
           }
         } else {
           // Fetch all regions for totals
-          const regionsResult = await regionService.getRegions()
+        const regionsResult = await regionService.getRegions({ page: 1, pageSize: 1000 })
           if (regionsResult.success) {
             setRegions(regionsResult.data || [])
             console.log('✅ [CustomerStats] Successfully fetched all regions:', regionsResult.data?.length || 0)
@@ -125,7 +125,7 @@ export function CustomerStats({ selectedCustomerId, updateTrigger }: CustomerSta
       iconColor: "text-blue-100"
     },
     {
-      title: selectedCustomerId ? "Customer Type" : "Customer Types",
+      title: selectedCustomerId ? "Company Type" : "Company Types",
       value: statsData.customerTypes,
       description: selectedCustomerId 
         ? "Service type" 

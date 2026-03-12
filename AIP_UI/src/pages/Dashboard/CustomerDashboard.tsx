@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils'
 import { IncidentTable } from '@/components/dashboard/IncidentTable'
 import { DashboardGreeting } from '@/components/dashboard/DashboardGreeting'
 import { useState, useEffect, useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import { customerDashboardService } from '@/services/dashboardService'
 import { CustomerRole, Region, CustomerStoreData, DailyActivity, SatisfactionDataPoint, BeSafeDataPoint, Site } from '@/types/dashboard'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
@@ -108,7 +109,7 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
         // Check if user is a customer role - try multiple sources
         const userRoleRaw = user?.role || (user as any)?.Role || '';
         const userRole = userRoleRaw.toLowerCase();
-        const isCustomerRole = userRole === 'customersitemanager' || userRole === 'customerhomanager';
+        const isCustomerRole = userRole === 'store' || userRole === 'manager';
         
         // Log user object for debugging
         console.log('🔍 [CustomerDashboard] User object:', {
@@ -126,7 +127,7 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
             userRoleRaw,
             userObject: user
           });
-          setError('Access denied. This dashboard is only available for customer users.');
+          setError('Access denied. This dashboard is only available for company users.');
           setLoading(false);
           return;
         }
@@ -147,7 +148,7 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
             } : null
           });
           
-          setError('Customer ID not found. Please log out and log in again to refresh your session.');
+          setError('Company ID not found. Please log out and log in again to refresh your session.');
           setLoading(false);
           return;
         }
@@ -447,6 +448,24 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
   // For Site Managers, we need store data
   const metrics = siteData?.metrics?.[userRole] || [];
 
+  const getMetricLink = (title: string) => {
+    const normalizedTitle = title.toLowerCase()
+
+    if (normalizedTitle.includes('total incidents')) {
+      return '/operations/incident-report'
+    }
+
+    if (normalizedTitle.includes('incidents today') || normalizedTitle.includes('today incidents')) {
+      return '/operations/incident-report?preset=today'
+    }
+
+    if (normalizedTitle.includes('theft')) {
+      return '/operations/incident-report?incidentType=Theft'
+    }
+
+    return null
+  }
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-[90rem] py-4 sm:py-6 lg:py-8">
@@ -500,44 +519,61 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
         <div className="space-y-6 sm:space-y-8">
           {/* Metrics Grid */}
           <section aria-label="Key Metrics" className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {metrics.map((metric, index) => (
-              <Card
-                key={index}
-                className={cn(
-                  "relative overflow-hidden border-none shadow-lg transition-transform hover:scale-[1.02]",
-                  metrics.length % 2 !== 0 && index === metrics.length - 1 ? "col-span-2 sm:col-span-1" : "",
-                  metric.color === 'green' ? 'bg-[#198754]' :
-                  metric.color === 'amber' ? 'bg-[#FFC107]' :
-                  metric.color === 'blue' ? 'bg-[#0D6EFD]' :
-                  'bg-[#DC3545]'
-                )}
-              >
-                <CardHeader className="pb-2 sm:pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base sm:text-lg text-white/90 font-medium">
-                      {metric.title}
-                    </CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-4 pt-2">
-                  <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white">
-                    {metric.value}
-                  </div>
-                  <div className="flex items-center mt-2 sm:mt-3">
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-white/20 text-white text-sm">
-                      {metric.trend === 'up' ? 
-                        <ArrowUpRight className="h-4 w-4 sm:h-5 sm:w-5 mr-1.5" aria-hidden="true" /> : 
-                        <ArrowDownRight className="h-4 w-4 sm:h-5 sm:w-5 mr-1.5" aria-hidden="true" />
-                      }
-                      {metric.change}
-                    </span>
-                    <span className="ml-2 text-sm text-white/70">
-                      {metric.trend === 'up' ? 'increase' : 'decrease'}
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+            {metrics.map((metric, index) => {
+              const metricLink = getMetricLink(metric.title)
+              const cardContent = (
+                <Card
+                  className={cn(
+                    "relative overflow-hidden border-none shadow-lg transition-transform hover:scale-[1.02]",
+                    metricLink ? "cursor-pointer hover:shadow-xl" : "",
+                    metrics.length % 2 !== 0 && index === metrics.length - 1 ? "col-span-2 sm:col-span-1" : "",
+                    metric.color === 'green' ? 'bg-[#198754]' :
+                    metric.color === 'amber' ? 'bg-[#FFC107]' :
+                    metric.color === 'blue' ? 'bg-[#0D6EFD]' :
+                    'bg-[#DC3545]'
+                  )}
+                >
+                  <CardHeader className="pb-2 sm:pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-base sm:text-lg text-white/90 font-medium">
+                        {metric.title}
+                      </CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-4 pt-2">
+                    <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white">
+                      {metric.value}
+                    </div>
+                    <div className="flex items-center mt-2 sm:mt-3">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-white/20 text-white text-sm">
+                        {metric.trend === 'up' ? 
+                          <ArrowUpRight className="h-4 w-4 sm:h-5 sm:w-5 mr-1.5" aria-hidden="true" /> : 
+                          <ArrowDownRight className="h-4 w-4 sm:h-5 sm:w-5 mr-1.5" aria-hidden="true" />
+                        }
+                        {metric.change}
+                      </span>
+                      <span className="ml-2 text-sm text-white/70">
+                        {metric.trend === 'up' ? 'increase' : 'decrease'}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+
+              if (metricLink) {
+                return (
+                  <Link key={index} to={metricLink} className="block" aria-label={`View ${metric.title.toLowerCase()}`}>
+                    {cardContent}
+                  </Link>
+                )
+              }
+
+              return (
+                <div key={index}>
+                  {cardContent}
+                </div>
+              )
+            })}
           </section>
 
           {/* Main Content Grid */}

@@ -12,6 +12,8 @@ interface CustomerSelectionContextType {
 	setSelectedCustomerId: (customerId: number | null) => void
 	isAdmin: boolean
 	needsCustomerSelection: boolean
+	selectedSiteId: string | null
+	setSelectedSiteId: (siteId: string | null) => void
 }
 
 const CustomerSelectionContext = createContext<CustomerSelectionContextType | undefined>(undefined)
@@ -23,6 +25,7 @@ interface CustomerSelectionProviderProps {
 export const CustomerSelectionProvider: React.FC<CustomerSelectionProviderProps> = ({ children }) => {
 	const { user } = useAuth()
 	const [selectedCustomerId, setSelectedCustomerIdState] = useState<number | null>(null)
+	const [selectedSiteId, setSelectedSiteIdState] = useState<string | null>(null)
 
 	const isAdmin = user?.role === 'administrator'
 	const needsCustomerSelection = isAdmin
@@ -30,10 +33,16 @@ export const CustomerSelectionProvider: React.FC<CustomerSelectionProviderProps>
 	useEffect(() => {
 		if (isAdmin) {
 			setSelectedCustomerIdState(null)
+			setSelectedSiteIdState(null)
 		} else {
 			const customerId = user && 'customerId' in user ? (user as any).customerId : null
 			if (customerId) {
 				setSelectedCustomerIdState(typeof customerId === 'string' ? parseInt(customerId, 10) : customerId)
+			}
+			// For store users, also fix the site from primarySiteId if available
+			const primarySiteId = user && 'primarySiteId' in user ? (user as any).primarySiteId : null
+			if (primarySiteId) {
+				setSelectedSiteIdState(String(primarySiteId))
 			}
 		}
 	}, [isAdmin, user])
@@ -43,6 +52,10 @@ export const CustomerSelectionProvider: React.FC<CustomerSelectionProviderProps>
 	// Store selected customer in context state
 	const setSelectedCustomerId = useCallback((customerId: number | null) => {
 		setSelectedCustomerIdState(customerId)
+	}, [])
+
+	const setSelectedSiteId = useCallback((siteId: string | null) => {
+		setSelectedSiteIdState(siteId)
 	}, [])
 
 	// For now, we'll fetch customer details when needed
@@ -58,7 +71,9 @@ export const CustomerSelectionProvider: React.FC<CustomerSelectionProviderProps>
 				selectedCustomer,
 				setSelectedCustomerId,
 				isAdmin,
-				needsCustomerSelection
+				needsCustomerSelection,
+				selectedSiteId,
+				setSelectedSiteId
 			}}
 		>
 			{children}

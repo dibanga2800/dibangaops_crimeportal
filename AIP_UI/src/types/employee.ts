@@ -24,47 +24,10 @@ export interface Employee {
   town?: string
   county?: string
   postCode?: string
-  
-  // SIA License Information
-  siaLicenceType?: string
-  siaLicenceExpiry?: Date | null
-  
+
   // Personal Information
   nationality?: string
   rightToWorkCondition?: string
-  
-  // Driving License Information
-  drivingLicenceType?: string
-  dateDLChecked?: Date | null
-  drivingLicenceCopyTaken?: boolean
-  sixMonthlyCheck?: boolean
-  
-  // Checks and References
-  graydonCheckAuthorised?: boolean
-  graydonCheckDetails?: string
-  initialOralReferencesComplete?: boolean
-  initialOralReferencesDate?: Date | null
-  writtenRefsComplete?: boolean
-  writtenRefsCompleteDate?: Date | null
-  quickStarterFormCompleted?: boolean
-  
-  // Employment Documentation Status
-  workingTimeDirective?: string
-  workingTimeDirectiveComplete?: boolean
-  contractOfEmploymentSigned?: boolean
-  photoTaken?: boolean
-  photoFile?: string
-  idCardIssued?: boolean
-  equipmentIssued?: boolean
-  uniformIssued?: boolean
-  nextOfKinDetailsComplete?: boolean
-  peopleHoursPin?: string
-  
-  // Training and Induction
-  fullRotasIssued?: Date | null
-  inductionAndTrainingBooked?: Date | null
-  location?: string
-  trainer?: string
   
   // Relationships
   userId?: string
@@ -74,11 +37,9 @@ export interface Employee {
   createdBy?: string
   updatedAt?: Date | null
   updatedBy?: string
-  
+
   // Computed Properties (from backend)
   fullName?: string
-  isSiaLicenceExpired?: boolean
-  isSiaLicenceExpiringSoon?: boolean
 }
 
 export type ActivityCategory = 

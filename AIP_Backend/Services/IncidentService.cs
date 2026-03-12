@@ -20,19 +20,22 @@ namespace AIPBackend.Services
 		private readonly ILogger<IncidentService> _logger;
 		private readonly IUserContextService _userContext;
 		private readonly IServiceProvider _serviceProvider;
+		private readonly IIncidentClassifier _classifier;
 
 		public IncidentService(
 			IIncidentRepository repository,
 			ISiteRepository siteRepository,
 			ILogger<IncidentService> logger,
 			IUserContextService userContext,
-			IServiceProvider serviceProvider)
+			IServiceProvider serviceProvider,
+			IIncidentClassifier classifier)
 		{
 			_repository = repository;
 			_siteRepository = siteRepository;
 			_logger = logger;
 			_userContext = userContext;
 			_serviceProvider = serviceProvider;
+			_classifier = classifier;
 		}
 
 		public async Task<IncidentResponseDto> GetByIdAsync(string id)
@@ -50,7 +53,7 @@ namespace AIPBackend.Services
 
 			_userContext.EnsureCanAccessRecord(incident.CustomerId, incident.CreatedBy);
 
-			return new IncidentResponseDto
+				return new IncidentResponseDto
 			{
 				Data = MapToDto(incident),
 				Success = true,
@@ -81,27 +84,60 @@ namespace AIPBackend.Services
 				}
 			}
 
+			// Derive effective customer and site filters from query and user context
 			int? customerId = null;
 			if (!string.IsNullOrWhiteSpace(query.CustomerId) && int.TryParse(query.CustomerId, out var parsedCustomerId))
 			{
 				customerId = parsedCustomerId;
 			}
 
-			string? createdByFilter = null;
+			string? siteIdFilter = query.SiteId;
 
 			if (!context.IsAdministrator)
 			{
+				// Customer-linked users are always scoped to their own customer
 				if (context.IsCustomer && context.CustomerId.HasValue)
 				{
 					customerId = context.CustomerId.Value;
 					query.CustomerId = context.CustomerId.Value.ToString();
 				}
-				else if (context.IsOfficer)
+
+				// Intersect requested customerId with accessible customers if any
+				if (context.AccessibleCustomerIds.Count > 0)
 				{
-					customerId = null;
-					query.CustomerId = null;
-					createdByFilter = context.UserId;
+					if (customerId.HasValue && !context.AccessibleCustomerIds.Contains(customerId.Value))
+					{
+						// Requested customer outside scope → force to first accessible or null
+						customerId = context.AccessibleCustomerIds.First();
+						query.CustomerId = customerId.Value.ToString();
+					}
+					else if (!customerId.HasValue)
+					{
+						// No explicit filter → default to first accessible customer
+						customerId = context.AccessibleCustomerIds.First();
+						query.CustomerId = customerId.Value.ToString();
+					}
 				}
+
+				// Site-level scoping: if user has explicit accessible sites, restrict to them
+				if (context.AccessibleSiteIds.Count > 0)
+				{
+					if (!string.IsNullOrWhiteSpace(siteIdFilter))
+					{
+						if (!context.AccessibleSiteIds.Contains(siteIdFilter))
+						{
+							// Requested site not in scope → force to first accessible
+							siteIdFilter = context.AccessibleSiteIds.First();
+							query.SiteId = siteIdFilter;
+						}
+					}
+					else
+					{
+						siteIdFilter = context.AccessibleSiteIds.First();
+						query.SiteId = siteIdFilter;
+					}
+				}
+
 			}
 
 			var (incidents, totalCount) = await _repository.GetPagedAsync(
@@ -109,13 +145,13 @@ namespace AIPBackend.Services
 				pageSize: query.PageSize,
 				search: query.Search,
 				customerId: customerId,
-				siteId: query.SiteId,
+				siteId: siteIdFilter,
 				regionId: null, // Can be added if needed
 				incidentType: query.IncidentType,
 				status: query.Status,
 				fromDate: fromDate,
 				toDate: toDate,
-				createdByUserId: createdByFilter);
+				createdByUserId: null);
 
 			var totalPages = (int)Math.Ceiling(totalCount / (double)query.PageSize);
 
@@ -156,12 +192,50 @@ namespace AIPBackend.Services
 
 		_logger.LogInformation("Incident created with ID {IncidentId} by user {UserId}", created.IncidentId, context.UserId);
 
-		// Check for matching alert rules and send notifications (async fire-and-forget)
+		// Auto-classify and set priority if not already provided
 		_ = Task.Run(async () =>
 		{
 			try
 			{
 				using var scope = _serviceProvider.CreateScope();
+
+				var classifier = scope.ServiceProvider.GetService<IIncidentClassifier>();
+				if (classifier != null)
+				{
+					var classificationRequest = new Models.DTOs.IncidentClassificationRequestDto
+					{
+						IncidentId = created.IncidentId,
+						IncidentType = created.IncidentType,
+						Description = created.Description,
+						IncidentDetails = created.IncidentDetails,
+						TotalValueRecovered = created.TotalValueRecovered,
+						PoliceInvolvement = created.PoliceInvolvement,
+						OffenderName = created.OffenderName,
+						StolenItemCount = created.StolenItems?.Count ?? 0
+					};
+					var classification = await classifier.ClassifyAsync(classificationRequest);
+
+					var repo = scope.ServiceProvider.GetRequiredService<IIncidentRepository>();
+					var toUpdate = await repo.GetByIdAsync(created.IncidentId);
+					if (toUpdate != null)
+					{
+						// Persist AI-derived fields for downstream analytics and dashboards.
+						toUpdate.IncidentCategory = classification.SuggestedCategory;
+						toUpdate.IncidentCategoryConfidence = classification.Confidence;
+						toUpdate.RiskLevel = classification.RiskLevel;
+						toUpdate.RiskScore = classification.RiskScore;
+						toUpdate.ClassificationVersion = classification.ClassifierVersion;
+
+						// Only override manual priority when it has not been set by the user.
+						if (string.IsNullOrWhiteSpace(toUpdate.Priority))
+						{
+							toUpdate.Priority = classification.RiskLevel;
+						}
+
+						await repo.UpdateAsync(toUpdate);
+					}
+				}
+
 				var alertRuleService = scope.ServiceProvider.GetService<IAlertRuleService>();
 				if (alertRuleService != null)
 				{
@@ -170,7 +244,7 @@ namespace AIPBackend.Services
 			}
 			catch (Exception ex)
 			{
-				_logger.LogError(ex, "Error checking incident {IncidentId} for alert rules", created.IncidentId);
+				_logger.LogError(ex, "Error in post-create processing for incident {IncidentId}", created.IncidentId);
 			}
 		});
 
@@ -270,20 +344,40 @@ namespace AIPBackend.Services
 			var context = _userContext.GetCurrentContext();
 			if (!context.IsAdministrator)
 			{
+				// Customer-linked users are always scoped to their own customer
 				if (context.IsCustomer && context.CustomerId.HasValue)
 				{
 					customerId = context.CustomerId.Value;
 				}
+
+				// Intersect requested customerId with accessible customers if any
+				if (context.AccessibleCustomerIds.Count > 0)
+				{
+					if (customerId.HasValue && !context.AccessibleCustomerIds.Contains(customerId.Value))
+					{
+						customerId = context.AccessibleCustomerIds.First();
+					}
+					else if (!customerId.HasValue)
+					{
+						customerId = context.AccessibleCustomerIds.First();
+					}
+				}
+
+				// Site-level scoping if explicit accessible sites are defined
+				if (context.AccessibleSiteIds.Count > 0)
+				{
+					if (!string.IsNullOrWhiteSpace(siteId) && !context.AccessibleSiteIds.Contains(siteId))
+					{
+						siteId = context.AccessibleSiteIds.First();
+					}
+					else if (string.IsNullOrWhiteSpace(siteId))
+					{
+						siteId = context.AccessibleSiteIds.First();
+					}
+				}
 			}
 
 			var incidents = await _repository.GetAllForStatsAsync(customerId, siteId, regionId);
-
-			if (context.IsOfficer)
-			{
-				incidents = incidents
-					.Where(i => string.Equals(i.CreatedBy, context.UserId, StringComparison.Ordinal))
-					.ToList();
-			}
 
 			return incidents.Select(MapToDto).ToList();
 		}
@@ -364,8 +458,8 @@ namespace AIPBackend.Services
 			var totalIncidents = incidents.Count;
 			var totalValue = incidents.Sum(CalculateIncidentValue);
 			var distinctStores = incidents
-				.Where(i => !string.IsNullOrWhiteSpace(i.SiteName))
-				.Select(i => i.SiteName!)
+				.Where(i => !string.IsNullOrWhiteSpace(i.StoreName))
+				.Select(i => i.StoreName!)
 				.Distinct(StringComparer.OrdinalIgnoreCase)
 				.Count();
 
@@ -383,7 +477,7 @@ namespace AIPBackend.Services
 				.ToList();
 
 			var storeGroups = incidents
-				.GroupBy(i => string.IsNullOrWhiteSpace(i.SiteName) ? "Unassigned Site" : i.SiteName!)
+				.GroupBy(i => string.IsNullOrWhiteSpace(i.StoreName) ? "Unassigned Site" : i.StoreName!)
 				.Select(g => new CrimeInsightListItemDto
 				{
 					Name = g.Key,
@@ -456,41 +550,54 @@ namespace AIPBackend.Services
 		{
 			// Parse JSON arrays
 			List<string>? incidentInvolved = null;
-			if (!string.IsNullOrWhiteSpace(incident.IncidentInvolvedJson))
+			if (!string.IsNullOrWhiteSpace(incident.IncidentInvolved))
 			{
 				try
 				{
-					incidentInvolved = JsonSerializer.Deserialize<List<string>>(incident.IncidentInvolvedJson);
+					incidentInvolved = JsonSerializer.Deserialize<List<string>>(incident.IncidentInvolved);
 				}
 				catch (JsonException ex)
 				{
-					_logger.LogWarning(ex, "Failed to parse IncidentInvolvedJson for incident {IncidentId}", incident.IncidentId);
+					_logger.LogWarning(ex, "Failed to parse IncidentInvolved for incident {IncidentId}", incident.IncidentId);
 				}
 			}
 
 			List<string>? witnessStatements = null;
-			if (!string.IsNullOrWhiteSpace(incident.WitnessStatementsJson))
+			if (!string.IsNullOrWhiteSpace(incident.WitnessStatements))
 			{
 				try
 				{
-					witnessStatements = JsonSerializer.Deserialize<List<string>>(incident.WitnessStatementsJson);
+					witnessStatements = JsonSerializer.Deserialize<List<string>>(incident.WitnessStatements);
 				}
 				catch (JsonException ex)
 				{
-					_logger.LogWarning(ex, "Failed to parse WitnessStatementsJson for incident {IncidentId}", incident.IncidentId);
+					_logger.LogWarning(ex, "Failed to parse WitnessStatements for incident {IncidentId}", incident.IncidentId);
 				}
 			}
 
 			List<string>? involvedParties = null;
-			if (!string.IsNullOrWhiteSpace(incident.InvolvedPartiesJson))
+			if (!string.IsNullOrWhiteSpace(incident.InvolvedParties))
 			{
 				try
 				{
-					involvedParties = JsonSerializer.Deserialize<List<string>>(incident.InvolvedPartiesJson);
+					involvedParties = JsonSerializer.Deserialize<List<string>>(incident.InvolvedParties);
 				}
 				catch (JsonException ex)
 				{
-					_logger.LogWarning(ex, "Failed to parse InvolvedPartiesJson for incident {IncidentId}", incident.IncidentId);
+					_logger.LogWarning(ex, "Failed to parse InvolvedParties for incident {IncidentId}", incident.IncidentId);
+				}
+			}
+
+			List<string>? modusOperandi = null;
+			if (!string.IsNullOrWhiteSpace(incident.ModusOperandi))
+			{
+				try
+				{
+					modusOperandi = JsonSerializer.Deserialize<List<string>>(incident.ModusOperandi);
+				}
+				catch (JsonException ex)
+				{
+					_logger.LogWarning(ex, "Failed to parse ModusOperandi for incident {IncidentId}", incident.IncidentId);
 				}
 			}
 
@@ -511,19 +618,19 @@ namespace AIPBackend.Services
 				};
 			}
 
-			return new IncidentDto
+				return new IncidentDto
 			{
 				Id = incident.IncidentId.ToString(),
 				CustomerId = incident.CustomerId,
 				CustomerName = incident.Customer?.CompanyName ?? string.Empty,
-				SiteName = incident.SiteName,
+				StoreName = incident.StoreName,
 				SiteId = incident.SiteId,
 				RegionId = incident.RegionId,
 				RegionName = incident.RegionName,
 				Location = incident.Location,
-				Store = incident.SiteName, // Legacy field
-				OfficerName = incident.OfficerName,
-				OfficerRole = incident.OfficerRole,
+				Store = incident.StoreName, // Legacy field
+				StaffMemberName = incident.StaffMemberName,
+				StaffMemberRole = incident.StaffMemberRole,
 				OfficerType = incident.OfficerType,
 				DutyManagerName = incident.DutyManagerName,
 				AssignedTo = incident.AssignedTo,
@@ -534,6 +641,11 @@ namespace AIPBackend.Services
 				IncidentType = incident.IncidentType,
 				Type = incident.IncidentType, // Legacy field
 				ActionCode = incident.ActionCode,
+				IncidentCategory = incident.IncidentCategory,
+				IncidentCategoryConfidence = incident.IncidentCategoryConfidence,
+				RiskLevel = incident.RiskLevel,
+				RiskScore = incident.RiskScore,
+				ClassificationVersion = incident.ClassificationVersion,
 				IncidentInvolved = incidentInvolved,
 				Description = incident.Description,
 				IncidentDetails = incident.IncidentDetails,
@@ -572,7 +684,12 @@ namespace AIPBackend.Services
 				OffenderDOB = incident.OffenderDOB?.ToString("yyyy-MM-dd"),
 				OffenderPlaceOfBirth = incident.OffenderPlaceOfBirth,
 				OffenderMarks = incident.OffenderMarks,
+				OffenderDetailsVerified = incident.OffenderDetailsVerified,
+				VerificationMethod = incident.VerificationMethod,
+				VerificationEvidenceImage = incident.VerificationEvidenceImage,
 				OffenderAddress = offenderAddress,
+				OffenderId = incident.OffenderId,
+				ModusOperandi = modusOperandi,
 				ArrestSaveComment = incident.ArrestSaveComment
 			};
 		}
@@ -584,11 +701,11 @@ namespace AIPBackend.Services
 				CustomerId = dto.CustomerId,
 				SiteId = dto.SiteId,
 				RegionId = dto.RegionId,
-				SiteName = dto.SiteName,
+				StoreName = dto.StoreName,
 				RegionName = dto.RegionName,
 				Location = dto.Location,
-				OfficerName = dto.OfficerName,
-				OfficerRole = dto.OfficerRole,
+				StaffMemberName = dto.StaffMemberName,
+				StaffMemberRole = dto.StaffMemberRole,
 				OfficerType = dto.OfficerType,
 				DutyManagerName = dto.DutyManagerName,
 				AssignedTo = dto.AssignedTo,
@@ -617,29 +734,38 @@ namespace AIPBackend.Services
 				OffenderDOB = dto.OffenderDOB,
 				OffenderPlaceOfBirth = dto.OffenderPlaceOfBirth,
 				OffenderMarks = dto.OffenderMarks,
+				OffenderDetailsVerified = dto.OffenderDetailsVerified,
+				VerificationMethod = dto.VerificationMethod,
+				VerificationEvidenceImage = dto.VerificationEvidenceImage,
 				OffenderHouseName = dto.OffenderAddress?.HouseName,
 				OffenderNumberAndStreet = dto.OffenderAddress?.NumberAndStreet,
 				OffenderVillageOrSuburb = dto.OffenderAddress?.VillageOrSuburb,
 				OffenderTown = dto.OffenderAddress?.Town,
 				OffenderCounty = dto.OffenderAddress?.County,
 				OffenderPostCode = dto.OffenderAddress?.PostCode,
+				OffenderId = dto.OffenderId,
 				ArrestSaveComment = dto.ArrestSaveComment
 			};
 
 			// Serialize JSON arrays
+			if (dto.ModusOperandi != null && dto.ModusOperandi.Any())
+			{
+				incident.ModusOperandi = JsonSerializer.Serialize(dto.ModusOperandi);
+			}
+
 			if (dto.IncidentInvolved != null && dto.IncidentInvolved.Any())
 			{
-				incident.IncidentInvolvedJson = JsonSerializer.Serialize(dto.IncidentInvolved);
+				incident.IncidentInvolved = JsonSerializer.Serialize(dto.IncidentInvolved);
 			}
 
 			if (dto.WitnessStatements != null && dto.WitnessStatements.Any())
 			{
-				incident.WitnessStatementsJson = JsonSerializer.Serialize(dto.WitnessStatements);
+				incident.WitnessStatements = JsonSerializer.Serialize(dto.WitnessStatements);
 			}
 
 			if (dto.InvolvedParties != null && dto.InvolvedParties.Any())
 			{
-				incident.InvolvedPartiesJson = JsonSerializer.Serialize(dto.InvolvedParties);
+				incident.InvolvedParties = JsonSerializer.Serialize(dto.InvolvedParties);
 			}
 
 			// Map stolen items
@@ -689,7 +815,7 @@ namespace AIPBackend.Services
 
 			dto.RegionId = site.fkRegionID.ToString(CultureInfo.InvariantCulture);
 			dto.RegionName = site.Region?.RegionName ?? dto.RegionName;
-			dto.SiteName = string.IsNullOrWhiteSpace(dto.SiteName) ? site.LocationName : dto.SiteName;
+			dto.StoreName = string.IsNullOrWhiteSpace(dto.StoreName) ? site.LocationName : dto.StoreName;
 			dto.Location ??= site.LocationName;
 		}
 
@@ -698,11 +824,11 @@ namespace AIPBackend.Services
 			incident.CustomerId = dto.CustomerId;
 			incident.SiteId = dto.SiteId;
 			incident.RegionId = dto.RegionId;
-			incident.SiteName = dto.SiteName;
+			incident.StoreName = dto.StoreName;
 			incident.RegionName = dto.RegionName;
 			incident.Location = dto.Location;
-			incident.OfficerName = dto.OfficerName;
-			incident.OfficerRole = dto.OfficerRole;
+			incident.StaffMemberName = dto.StaffMemberName;
+			incident.StaffMemberRole = dto.StaffMemberRole;
 			incident.OfficerType = dto.OfficerType;
 			incident.DutyManagerName = dto.DutyManagerName;
 			incident.AssignedTo = dto.AssignedTo;
@@ -731,32 +857,45 @@ namespace AIPBackend.Services
 			incident.OffenderDOB = dto.OffenderDOB;
 			incident.OffenderPlaceOfBirth = dto.OffenderPlaceOfBirth;
 			incident.OffenderMarks = dto.OffenderMarks;
+			incident.OffenderDetailsVerified = dto.OffenderDetailsVerified;
+			incident.VerificationMethod = dto.VerificationMethod;
+			incident.VerificationEvidenceImage = dto.VerificationEvidenceImage;
 			incident.OffenderHouseName = dto.OffenderAddress?.HouseName;
 			incident.OffenderNumberAndStreet = dto.OffenderAddress?.NumberAndStreet;
 			incident.OffenderVillageOrSuburb = dto.OffenderAddress?.VillageOrSuburb;
 			incident.OffenderTown = dto.OffenderAddress?.Town;
 			incident.OffenderCounty = dto.OffenderAddress?.County;
 			incident.OffenderPostCode = dto.OffenderAddress?.PostCode;
+			incident.OffenderId = dto.OffenderId;
 			incident.ArrestSaveComment = dto.ArrestSaveComment;
 
 			// Serialize JSON arrays
+			if (dto.ModusOperandi != null && dto.ModusOperandi.Any())
+			{
+				incident.ModusOperandi = JsonSerializer.Serialize(dto.ModusOperandi);
+			}
+			else
+			{
+				incident.ModusOperandi = null;
+			}
+
 			if (dto.IncidentInvolved != null)
 			{
-				incident.IncidentInvolvedJson = dto.IncidentInvolved.Any()
+				incident.IncidentInvolved = dto.IncidentInvolved.Any()
 					? JsonSerializer.Serialize(dto.IncidentInvolved)
 					: null;
 			}
 
 			if (dto.WitnessStatements != null)
 			{
-				incident.WitnessStatementsJson = dto.WitnessStatements.Any()
+				incident.WitnessStatements = dto.WitnessStatements.Any()
 					? JsonSerializer.Serialize(dto.WitnessStatements)
 					: null;
 			}
 
 			if (dto.InvolvedParties != null)
 			{
-				incident.InvolvedPartiesJson = dto.InvolvedParties.Any()
+				incident.InvolvedParties = dto.InvolvedParties.Any()
 					? JsonSerializer.Serialize(dto.InvolvedParties)
 					: null;
 			}
@@ -814,10 +953,13 @@ namespace AIPBackend.Services
 				{
 					IncidentId = incident.IncidentId.ToString(),
 					DateOfIncident = incident.DateOfIncident.ToString("yyyy-MM-dd"),
-					SiteName = incident.SiteName,
-					IncidentType = incident.IncidentType,
-					Description = incident.Description,
-					OffenderMarks = incident.OffenderMarks
+				SiteName = incident.StoreName,
+				IncidentType = incident.IncidentType,
+				Description = incident.Description,
+				OffenderMarks = incident.OffenderMarks,
+					OffenderDetailsVerified = incident.OffenderDetailsVerified,
+					VerificationMethod = incident.VerificationMethod,
+					VerificationEvidenceImage = incident.VerificationEvidenceImage
 				}).ToList()
 			};
 		}
@@ -952,7 +1094,7 @@ namespace AIPBackend.Services
 			}
 
 			var storeGroups = matchingItems
-				.GroupBy(x => string.IsNullOrWhiteSpace(x.incident.SiteName) ? "Unassigned Site" : x.incident.SiteName!)
+				.GroupBy(x => string.IsNullOrWhiteSpace(x.incident.StoreName) ? "Unassigned Site" : x.incident.StoreName!)
 				.Select(g => new
 				{
 					Store = g.Key,

@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Bell, Store, Shield, Plus, Trash2, Edit2, CheckCircle2, XCircle } from 'lucide-react'
+import { Bell, Store, Shield, Plus, Trash2, Edit2, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { StoreAlertRuleForm } from '@/components/operations/StoreAlertRuleForm'
 import { LPMAlertRuleForm } from '@/components/operations/LPMAlertRuleForm'
+import { AlertQueue } from '@/components/operations/AlertQueue'
 import { StoreAlertRule, LPMAlertRule } from '@/types/alertRules'
 import {
 	Dialog,
@@ -36,7 +37,7 @@ import { Badge } from '@/components/ui/badge'
 import { alertRuleService } from '@/services/alertRuleService'
 
 export default function AlertRulesPage() {
-	const [activeTab, setActiveTab] = useState<'store' | 'lpm'>('store')
+	const [activeTab, setActiveTab] = useState<'store' | 'lpm' | 'instances'>('store')
 	const [storeRules, setStoreRules] = useState<StoreAlertRule[]>([])
 	const [lpmRules, setLpmRules] = useState<LPMAlertRule[]>([])
 	const [isStoreDialogOpen, setIsStoreDialogOpen] = useState(false)
@@ -372,8 +373,8 @@ export default function AlertRulesPage() {
 				</Card>
 			)}
 
-			<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'store' | 'lpm')} className="w-full">
-				<TabsList className="grid w-full grid-cols-2 mb-4 sm:mb-6 h-auto">
+			<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'store' | 'lpm' | 'instances')} className="w-full">
+				<TabsList className="grid w-full grid-cols-3 mb-4 sm:mb-6 h-auto">
 					<TabsTrigger value="store" className="flex items-center gap-2 text-xs sm:text-sm py-2">
 						<Store className="h-4 w-4" />
 						<span className="hidden sm:inline">Store Alert Rules</span>
@@ -386,7 +387,17 @@ export default function AlertRulesPage() {
 						<span className="sm:hidden">LPM</span>
 						<Badge variant="secondary" className="ml-1 sm:ml-2 text-xs">{lpmRules.length}</Badge>
 					</TabsTrigger>
+					<TabsTrigger value="instances" className="flex items-center gap-2 text-xs sm:text-sm py-2">
+						<AlertTriangle className="h-4 w-4" />
+						<span className="hidden sm:inline">Alert Instances</span>
+						<span className="sm:hidden">Alerts</span>
+					</TabsTrigger>
 				</TabsList>
+
+				{/* Alert Instances Tab */}
+				<TabsContent value="instances" className="space-y-4 sm:space-y-6">
+					<AlertQueue />
+				</TabsContent>
 
 				{/* Store Alert Rules Tab */}
 				<TabsContent value="store" className="space-y-4 sm:space-y-6">

@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
 import { User, CreateUserInput, UpdateUserInput, UserRole } from '@/types/user'
 import { userService } from '@/services/userService'
+import { sessionStore } from '@/state/sessionStore'
 
 interface UsersState {
   users: User[]
@@ -100,7 +101,7 @@ export const deleteUserAsync = createAsyncThunk(
 export const fetchUserCustomerAssignments = createAsyncThunk(
   'users/fetchUserCustomerAssignments',
   async (userId: string) => {
-    const token = localStorage.getItem('authToken')
+    const token = sessionStore.getToken()
     const response = await fetch(`/api/CustomerAssignment/user/${userId}`, {
       headers: {
         'Authorization': `Bearer ${token}`
@@ -119,7 +120,7 @@ export const fetchUserCustomerAssignments = createAsyncThunk(
 export const checkUserHasCustomer = createAsyncThunk(
   'users/checkUserHasCustomer',
   async ({ userId, customerId }: { userId: string; customerId: number }) => {
-    const token = localStorage.getItem('authToken')
+    const token = sessionStore.getToken()
     const response = await fetch(`/api/CustomerAssignment/user/${userId}/has/${customerId}`, {
       headers: {
         'Authorization': `Bearer ${token}`

@@ -16,6 +16,37 @@ using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure for IIS deployment
+// When running under IIS, the ASP.NET Core Module handles port binding
+// Check if running under IIS by looking for the IIS environment variables
+var isRunningUnderIIS = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ASPNETCORE_IIS_HTTP_PORT")) ||
+						 !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ASPNETCORE_IIS_HTTPS_PORT")) ||
+						 !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ASPNETCORE_PORT")) ||
+						 !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ASPNETCORE_TOKEN"));
+
+if (isRunningUnderIIS)
+{
+	// When running under IIS, don't configure Kestrel to listen on specific ports
+	// IIS will handle the binding through the ASP.NET Core Module
+	builder.WebHost.UseIISIntegration();
+	
+	// Clear any default URL bindings - IIS will provide the binding
+	// This prevents the "Failed to bind to address" error
+	builder.WebHost.UseUrls(); // Empty means no explicit binding, IIS handles it
+}
+else if (builder.Environment.IsProduction())
+{
+	// In Production but not under IIS (shouldn't happen, but handle it)
+	// Still use IIS integration in case it's being called incorrectly
+	builder.WebHost.UseIISIntegration();
+	builder.WebHost.UseUrls(); // Don't bind to specific ports
+}
+else
+{
+	// In development, use default Kestrel configuration
+	// This allows the app to run standalone with dotnet run
+}
+
 // Add services to the container.
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
@@ -26,6 +57,7 @@ builder.Services.AddSingleton(u => new BlobServiceClient(
     builder.Configuration.GetConnectionString("StorageAccount")));
 builder.Services.AddSingleton<IBlobService, BlobService>();
 builder.Services.AddScoped<IFileStorageService, FileStorageService>();
+builder.Services.AddHttpClient();
 
 builder.Services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
 {
@@ -79,13 +111,12 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-// Configure Authorization - using lowercase role names for consistency
+// Configure Authorization - 4-role model: admin, manager, security-officer, store
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("AdminOnly", policy => policy.RequireRole("administrator"));
-    options.AddPolicy("AdvantageOneOnly", policy => policy.RequireRole("administrator", "advantageoneofficer", "advantageonehoofficer"));
-    options.AddPolicy("CustomerManagerOnly", policy => policy.RequireRole("customersitemanager", "customerhomanager"));
-    options.AddPolicy("AllRoles", policy => policy.RequireRole("administrator", "advantageoneofficer", "advantageonehoofficer", "customersitemanager", "customerhomanager"));
+    options.AddPolicy("ManagerAndAbove", policy => policy.RequireRole("administrator", "manager"));
+    options.AddPolicy("AllRoles", policy => policy.RequireRole("administrator", "manager", "security-officer", "store"));
 });
 
 // Register Repositories
@@ -123,6 +154,19 @@ builder.Services.AddScoped<IExcelImportService, ExcelImportService>();
 builder.Services.AddScoped<IDailyActivityReportService, DailyActivityReportService>();
 builder.Services.AddScoped<IActionCalendarEmailService, ActionCalendarEmailService>();
 builder.Services.AddScoped<IAlertRuleService, AlertRuleService>();
+// AI classification: Azure OpenAI with rule-based fallback
+builder.Services.Configure<AzureOpenAiOptions>(
+	builder.Configuration.GetSection("AzureOpenAI"));
+builder.Services.AddHttpClient<IAzureOpenAiClient, AzureOpenAiClient>();
+builder.Services.AddScoped<RuleBasedIncidentClassifier>();
+builder.Services.AddScoped<IIncidentClassifier, AzureOpenAiIncidentClassifier>();
+builder.Services.AddScoped<IIncidentAnalyticsService, IncidentAnalyticsService>();
+builder.Services.AddScoped<IEvidenceService, EvidenceService>();
+builder.Services.AddScoped<IAlertEscalationService, AlertEscalationService>();
+builder.Services.AddScoped<ILoginProtectionService, LoginProtectionService>();
+builder.Services.AddScoped<IOffenderRecognitionService, OffenderRecognitionService>();
+builder.Services.AddScoped<IIncidentPatternService, IncidentPatternService>();
+builder.Services.AddScoped<IRiskScoringService, RiskScoringService>();
 builder.Services.Configure<StockNotificationSettings>(
 	builder.Configuration.GetSection("StockNotifications"));
 
@@ -154,11 +198,40 @@ builder.Services.AddCors(options =>
             }
             else
             {
-                // In production, use specific origins
-                policy.WithOrigins("http://localhost:3000", "http://localhost:5173", "http://localhost:4173", "http://localhost:8080")
-                       .AllowAnyMethod()
-                       .AllowAnyHeader()
-                       .AllowCredentials();
+				// In production, use specific origins
+				var allowedOrigins = new List<string>
+				{
+					"https://coop-aip-ui.vercel.app",  // Production domain
+					"https://coop-aip-ui-*.vercel.app"  // Preview deployments
+				};
+				
+				// Add custom domain if you have one
+				var customDomain = builder.Configuration["FrontendUrl"];
+				if (!string.IsNullOrEmpty(customDomain))
+				{
+					allowedOrigins.Add(customDomain);
+				}
+				
+				policy.SetIsOriginAllowed(origin =>
+					{
+						if (string.IsNullOrEmpty(origin)) return false;
+						
+						// Exact match
+						if (allowedOrigins.Any(allowed => allowed == origin))
+							return true;
+						
+						// Allow any Vercel domain (for testing - can be narrowed down later)
+						// This covers all Vercel deployments: production, preview, and branch deployments
+						if (origin.StartsWith("https://") && origin.EndsWith(".vercel.app"))
+						{
+							return true;
+						}
+						
+						return false;
+					})
+                    .AllowAnyMethod()
+                    .AllowAnyHeader()
+                    .AllowCredentials();
             }
         });
 });
@@ -174,9 +247,9 @@ builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo
     {
-        Title = "AIP API",
+        Title = "DibangOps API",
         Version = "v1",
-        Description = "AIP Backend API"
+        Description = "DibangOps\u2122 \u2014 AI-Driven Enterprise Security Intelligence Platform API"
     });
     
     // Add JWT Bearer token authentication to Swagger
@@ -230,6 +303,10 @@ _ = Task.Run(async () =>
         try
         {
             logger.LogInformation("=== STARTING PAGE ACCESS INITIALIZATION ===");
+
+            // Migrate User_Roles lookup table to 3-tier model (runs on every startup, idempotent)
+            var dataSeedingService = services.GetRequiredService<IDataSeedingService>();
+            await dataSeedingService.MigrateUserRolesAsync();
             
             var pageAccessService = services.GetRequiredService<IPageAccessService>();
             var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
@@ -280,6 +357,9 @@ if (app.Environment.IsDevelopment())
 }
 else
 {
+    // Enable Swagger in Production for API documentation
+    app.UseSwagger();
+    app.UseSwaggerUI();
     app.UseHttpsRedirection();
 }
 

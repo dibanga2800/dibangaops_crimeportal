@@ -69,11 +69,11 @@ export function CompanyDetailsSection({ form }: CompanyDetailsSectionProps) {
           name="customerType"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Customer Type</FormLabel>
+              <FormLabel>Company Type</FormLabel>
               <Select onValueChange={field.onChange} value={field.value}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select customer type" />
+                    <SelectValue placeholder="Select company type" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>

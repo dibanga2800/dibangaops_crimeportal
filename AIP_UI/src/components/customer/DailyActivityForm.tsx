@@ -447,12 +447,12 @@ export const DailyActivityForm = ({ open, onOpenChange, report, onSuccess, custo
                     ) : (
                       <Select value={formData.siteId} onValueChange={handleSiteChange} disabled={!isAdmin && propSiteId ? true : false}>
                         <SelectTrigger>
-                          <SelectValue placeholder={siteOptions.length === 0 ? "No sites available for this customer" : "Select site"} />
+                          <SelectValue placeholder={siteOptions.length === 0 ? "No sites available for this company" : "Select site"} />
                         </SelectTrigger>
                         <SelectContent>
                           {siteOptions.length === 0 ? (
                             <SelectItem key="no-sites" value="no-sites" disabled>
-                              No sites available for this customer
+                              No sites available for this company
                             </SelectItem>
                           ) : (
                             siteOptions.map((site) => (
@@ -732,7 +732,7 @@ export const DailyActivityForm = ({ open, onOpenChange, report, onSuccess, custo
             </Button>
             {sites.length === 0 && (
               <p className="text-sm text-red-600 mt-2">
-                Cannot create report: No sites are available for this customer. Please contact administrator to add sites first.
+                Cannot create report: No sites are available for this company. Please contact administrator to add sites first.
               </p>
             )}
           </DialogFooter>

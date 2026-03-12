@@ -54,7 +54,7 @@ const CustomerPageSettings: React.FC = () => {
 			console.error('Error loading customers:', error)
 			toast({
 				title: 'Error',
-				description: 'Failed to load customers. Please try again.',
+				description: 'Failed to load companies. Please try again.',
 				variant: 'destructive'
 			})
 		} finally {
@@ -91,7 +91,7 @@ const CustomerPageSettings: React.FC = () => {
 			if (response.availablePages.length === 0) {
 				toast({
 					title: 'No Pages Available',
-					description: 'No customer pages found in the database. Please ensure pages are synced from the page definitions.',
+					description: 'No company pages found in the database. Please ensure pages are synced from the page definitions.',
 					variant: 'default'
 				})
 			}
@@ -169,14 +169,14 @@ const CustomerPageSettings: React.FC = () => {
 			
 			toast({
 				title: 'Success',
-				description: 'Customer page access updated successfully.',
+				description: 'Company page access updated successfully.',
 				variant: 'default'
 			})
 		} catch (error) {
 			console.error('Error saving customer page access:', error)
 			toast({
 				title: 'Error',
-				description: 'Failed to save customer page access. Please try again.',
+				description: 'Failed to save company page access. Please try again.',
 				variant: 'destructive'
 			})
 		} finally {
@@ -268,23 +268,23 @@ const CustomerPageSettings: React.FC = () => {
 				<CardHeader>
 					<CardTitle className="flex items-center gap-2">
 						<Building2 className="h-5 w-5 text-primary" />
-						Customer Page Settings
+						Company Page Settings
 					</CardTitle>
 					<CardDescription>
-						Assign customer-specific pages that will be visible to each customer when they log in.
+						Assign company-specific pages that will be visible to each company when they log in.
 						Dashboard is always available.
 					</CardDescription>
 				</CardHeader>
 				<CardContent className="space-y-4">
 					{/* Customer Selection */}
 					<div className="space-y-2">
-						<label className="text-sm font-medium">Select Customer</label>
+						<label className="text-sm font-medium">Select Company</label>
 						<Select
 							value={selectedCustomerId?.toString() || ''}
 							onValueChange={(value) => setSelectedCustomerId(value ? parseInt(value) : null)}
 						>
 							<SelectTrigger className="w-full">
-								<SelectValue placeholder="Choose a customer..." />
+								<SelectValue placeholder="Choose a company..." />
 							</SelectTrigger>
 							<SelectContent>
 								{customers.map((customer) => {
@@ -307,7 +307,7 @@ const CustomerPageSettings: React.FC = () => {
 									<Building2 className="h-4 w-4" />
 									<AlertTitle>Configuring pages for: {selectedCustomer.companyName}</AlertTitle>
 									<AlertDescription>
-										Only assigned pages (plus Dashboard) will be visible to this customer.
+										Only assigned pages (plus Dashboard) will be visible to this company.
 									</AlertDescription>
 								</Alert>
 								
@@ -586,7 +586,7 @@ const CustomerPageSettings: React.FC = () => {
 									<AlertDescription>
 										{searchQuery || selectedCategory !== 'all' || assignmentFilter !== 'all' ? (
 											<>
-												No customer pages match your current filters. Try adjusting your search or filter criteria.
+												No company pages match your current filters. Try adjusting your search or filter criteria.
 												<Button
 													variant="link"
 													className="p-0 h-auto ml-1"
@@ -601,7 +601,7 @@ const CustomerPageSettings: React.FC = () => {
 											</>
 										) : availablePages.length === 0 ? (
 											<>
-												No customer pages are available in the database. This usually means:
+												No company pages are available in the database. This usually means:
 												<ul className="list-disc list-inside mt-2 space-y-1 text-sm">
 													<li>Pages with category "Customer" or path starting with "/customer" need to be synced to the database</li>
 													<li>Go to Settings page and use the "Sync Pages" feature to sync pages from definitions</li>
@@ -620,9 +620,9 @@ const CustomerPageSettings: React.FC = () => {
 					{!selectedCustomer && !isLoading && (
 						<Alert>
 							<AlertCircle className="h-4 w-4" />
-							<AlertTitle>No customer selected</AlertTitle>
-							<AlertDescription>
-								Please select a customer from the dropdown above to configure their page access.
+<AlertTitle>No company selected</AlertTitle>
+						<AlertDescription>
+							Please select a company from the dropdown above to configure their page access.
 							</AlertDescription>
 						</Alert>
 					)}

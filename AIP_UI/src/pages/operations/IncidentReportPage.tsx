@@ -1,7 +1,9 @@
-import { useState, useCallback, useMemo } from "react"
-import { Incident, StolenItem } from "@/types/incidents"
+import { useState, useCallback, useEffect, useMemo } from "react"
+import { Incident, IncidentType, StolenItem } from "@/types/incidents"
 import { IncidentForm } from "@/components/operations/IncidentForm"
 import { IncidentsTable } from "@/components/operations/IncidentsTable"
+import { IncidentClassificationBadge } from "@/components/operations/IncidentClassificationBadge"
+import { EvidenceTimeline } from "@/components/operations/EvidenceTimeline"
 import { Button } from "@/components/ui/button"
 import { useToast } from '@/components/ui/use-toast'
 import {
@@ -38,6 +40,13 @@ import {
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   Table,
   TableBody,
   TableCell,
@@ -57,7 +66,10 @@ import BarcodeScanner from '@/components/BarcodeScanner'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { incidentsApi } from "@/services/api/incidents"
 import { productService } from "@/services/productService"
+import { regionService } from "@/services/regionService"
+import type { Region } from "@/types/customer"
 import { Toaster } from '@/components/ui/toaster'
+import { useSearchParams } from 'react-router-dom'
 
 interface IncidentReportPageProps {
   isCustomerView?: boolean;
@@ -72,19 +84,187 @@ export default function IncidentReportPage({ isCustomerView = false, customerId,
   const [editingIncident, setEditingIncident] = useState<Incident | null>(null)
   const [deletingIncident, setDeletingIncident] = useState<Incident | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [viewingIncident, setViewingIncident] = useState<Incident | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [scanningBarcode, setScanningBarcode] = useState(false)
   const [isLoadingProduct, setIsLoadingProduct] = useState(false)
+  const [datePreset, setDatePreset] = useState<'today' | 'week' | 'month' | 'custom' | null>(null)
+  const [fromDate, setFromDate] = useState("")
+  const [toDate, setToDate] = useState("")
+  const [fromDateInput, setFromDateInput] = useState("")
+  const [toDateInput, setToDateInput] = useState("")
+  const [incidentTypeFilter, setIncidentTypeFilter] = useState<string | null>(null)
+  const [regionFilter, setRegionFilter] = useState<string>('all')
+  const [regions, setRegions] = useState<Region[]>([])
+  const [isLoadingRegions, setIsLoadingRegions] = useState(false)
+  const [searchParams] = useSearchParams()
   const itemsPerPage = 10
+
+  const formatDateInput = (date: Date) => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
+  const getPresetRange = (preset: 'today' | 'week' | 'month') => {
+    const today = new Date()
+    const end = formatDateInput(today)
+    const startDate = new Date(today)
+
+    if (preset === 'week') {
+      startDate.setDate(startDate.getDate() - 6)
+    }
+
+    if (preset === 'month') {
+      startDate.setDate(startDate.getDate() - 29)
+    }
+
+    return {
+      from: formatDateInput(startDate),
+      to: end
+    }
+  }
+
+  const handlePresetFilter = (preset: 'today' | 'week' | 'month') => {
+    const range = getPresetRange(preset)
+    setDatePreset(preset)
+    setFromDate(range.from)
+    setToDate(range.to)
+    setFromDateInput(range.from)
+    setToDateInput(range.to)
+    setCurrentPage(1)
+  }
+
+  const handleApplyDateRange = () => {
+    if (!fromDateInput && !toDateInput) {
+      handleClearFilters()
+      return
+    }
+
+    if (fromDateInput && toDateInput && new Date(fromDateInput) > new Date(toDateInput)) {
+      toast({
+        title: 'Invalid Date Range',
+        description: 'The start date must be before the end date.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setDatePreset('custom')
+    setFromDate(fromDateInput)
+    setToDate(toDateInput)
+    setCurrentPage(1)
+  }
+
+  const handleClearFilters = () => {
+    setDatePreset(null)
+    setFromDate("")
+    setToDate("")
+    setFromDateInput("")
+    setToDateInput("")
+    setIncidentTypeFilter(null)
+    setRegionFilter('all')
+    setCurrentPage(1)
+  }
+
+  const isDateRangeActive = Boolean(fromDate || toDate)
+  const isIncidentTypeFilterActive = Boolean(incidentTypeFilter)
+  const isRegionFilterActive = regionFilter !== 'all'
+  const isClientFilterActive = isDateRangeActive || isIncidentTypeFilterActive || isRegionFilterActive
+
+  useEffect(() => {
+    const presetParam = searchParams.get('preset')
+    const incidentTypeParam = searchParams.get('incidentType')
+    const fromDateParam = searchParams.get('fromDate')
+    const toDateParam = searchParams.get('toDate')
+
+    if (!presetParam && !incidentTypeParam && !fromDateParam && !toDateParam) {
+      return
+    }
+
+    if (presetParam === 'today' || presetParam === 'week' || presetParam === 'month') {
+      const range = getPresetRange(presetParam)
+      setDatePreset(presetParam)
+      setFromDate(range.from)
+      setToDate(range.to)
+      setFromDateInput(range.from)
+      setToDateInput(range.to)
+      setCurrentPage(1)
+    } else if (fromDateParam || toDateParam) {
+      setDatePreset('custom')
+      setFromDate(fromDateParam || "")
+      setToDate(toDateParam || "")
+      setFromDateInput(fromDateParam || "")
+      setToDateInput(toDateParam || "")
+      setCurrentPage(1)
+    } else {
+      setDatePreset(null)
+      setFromDate("")
+      setToDate("")
+      setFromDateInput("")
+      setToDateInput("")
+    }
+
+    if (incidentTypeParam) {
+      setIncidentTypeFilter(incidentTypeParam)
+    } else {
+      setIncidentTypeFilter(null)
+    }
+  }, [searchParams])
+
+  useEffect(() => {
+    let isMounted = true
+
+    const loadRegions = async () => {
+      setIsLoadingRegions(true)
+      try {
+        const response = isCustomerView && customerId
+          ? await regionService.getRegionsByCustomer(Number(customerId))
+          : await regionService.getRegions({ page: 1, pageSize: 1000 })
+        if (isMounted) {
+          setRegions(response.success ? response.data : [])
+        }
+      } catch (error) {
+        if (isMounted) {
+          setRegions([])
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingRegions(false)
+        }
+      }
+    }
+
+    loadRegions()
+
+    return () => {
+      isMounted = false
+    }
+  }, [isCustomerView, customerId])
+
+  // Debounce search term so we don't refetch on every keypress
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      setDebouncedSearch(searchTerm.trim())
+      setCurrentPage(1)
+    }, 300)
+
+    return () => clearTimeout(handle)
+  }, [searchTerm])
 
   // Fetch incidents using the API service
   const { data: incidentsResponse = { data: [], pagination: { currentPage: 1, totalPages: 1, pageSize: 10, totalCount: 0, hasPrevious: false, hasNext: false } }, isLoading, error } = useQuery({
-    queryKey: ['incidents', currentPage, searchTerm, customerId, siteId],
+    queryKey: ['incidents', currentPage, debouncedSearch, customerId, siteId, fromDate, toDate, incidentTypeFilter, regionFilter],
     queryFn: () => incidentsApi.getIncidents({
       page: currentPage,
       pageSize: itemsPerPage,
-      search: searchTerm,
+      search: debouncedSearch || undefined,
+      ...(fromDate && { fromDate }),
+      ...(toDate && { toDate }),
+      ...(incidentTypeFilter && { incidentType: incidentTypeFilter }),
+      ...(regionFilter !== 'all' && { regionId: regionFilter }),
       ...(isCustomerView && customerId && { customerId }),
       ...(siteId && { siteId })
     })
@@ -141,22 +321,52 @@ export default function IncidentReportPage({ isCustomerView = false, customerId,
     }
   })
 
-  // Fetch all incidents for stats calculation (separate query to get complete data)
-  const { data: allIncidentsResponse } = useQuery({
-    queryKey: ['incidents-stats', searchTerm, customerId, siteId],
-    queryFn: () => incidentsApi.getIncidents({
-      page: 1,
-      pageSize: 1000, // Large page size to get all incidents for stats
-      search: searchTerm,
-      ...(isCustomerView && customerId && { customerId }),
-      ...(siteId && { siteId })
+  const filteredIncidents = useMemo(() => {
+    const baseData = incidentsResponse.data
+
+    if (!isClientFilterActive) {
+    	return baseData
+    }
+
+    const fromBoundary = fromDate ? new Date(`${fromDate}T00:00:00`) : null
+    const toBoundary = toDate ? new Date(`${toDate}T23:59:59`) : null
+
+    const selectedRegion = regions.find((region) => region.regionID.toString() === regionFilter)
+    const selectedRegionName = selectedRegion?.regionName?.toLowerCase()
+
+    return baseData.filter((incident) => {
+      if (regionFilter !== 'all') {
+        const regionIdMatches = incident?.regionId?.toString() === regionFilter
+        const regionNameMatches = selectedRegionName
+          ? (incident?.regionName || '').toLowerCase() === selectedRegionName
+          : false
+        if (!regionIdMatches && !regionNameMatches) {
+          return false
+        }
+      }
+
+      const incidentTypeValue = (incident?.incidentType || incident?.type || '').toLowerCase()
+      if (incidentTypeFilter && incidentTypeValue !== incidentTypeFilter.toLowerCase()) {
+        return false
+      }
+
+      const incidentDateValue = incident?.dateOfIncident || incident?.date
+      if (!incidentDateValue) return false
+
+      const incidentDate = new Date(incidentDateValue)
+      if (Number.isNaN(incidentDate.getTime())) return false
+
+      if (fromBoundary && incidentDate < fromBoundary) return false
+      if (toBoundary && incidentDate > toBoundary) return false
+      return true
     })
-  })
+  }, [incidentsResponse.data, isClientFilterActive, fromDate, toDate, incidentTypeFilter, regionFilter, regions])
 
   // Calculate statistics using useMemo with null checks
   const stats = useMemo(() => {
-    // Use all incidents for stats calculation, fall back to current page if not available
-    const statsData = allIncidentsResponse?.data || incidentsResponse.data
+    // Use filtered data when a date or region/type filter is active,
+    // otherwise use the current page data and the server-reported totalCount.
+    const statsData = isClientFilterActive ? filteredIncidents : incidentsResponse.data
     
     return {
       totalAmountSaved: Array.prototype.reduce.call(
@@ -165,9 +375,11 @@ export default function IncidentReportPage({ isCustomerView = false, customerId,
         0
       ),
       uniqueSites: new Set(statsData.map(incident => incident?.siteName).filter(Boolean)).size,
-      totalIncidents: allIncidentsResponse?.pagination?.totalCount || incidentsResponse.pagination?.totalCount || statsData.length
+      totalIncidents: isClientFilterActive
+        ? filteredIncidents.length
+        : incidentsResponse.pagination?.totalCount || statsData.length
     }
-  }, [allIncidentsResponse?.data, allIncidentsResponse?.pagination?.totalCount, incidentsResponse.data, incidentsResponse.pagination?.totalCount])
+  }, [incidentsResponse.data, incidentsResponse.pagination?.totalCount, isClientFilterActive, filteredIncidents])
 
   const handleSubmit = useCallback((incident: Incident) => {
     mutation.mutate(incident)
@@ -193,11 +405,16 @@ export default function IncidentReportPage({ isCustomerView = false, customerId,
     }
   }, [deletingIncident, deleteMutation])
 
-  // Update pagination to use the API response (with safe fallback)
-  const { totalPages = 1 } = incidentsResponse.pagination || {}
+  const clientTotalPages = Math.max(1, Math.ceil(filteredIncidents.length / itemsPerPage))
+  const totalPages = isClientFilterActive ? clientTotalPages : incidentsResponse.pagination?.totalPages || 1
 
   // Update the filtered and paginated incidents
-  const paginatedIncidents = incidentsResponse.data
+  const paginatedIncidents = isClientFilterActive
+    ? filteredIncidents.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+    : incidentsResponse.data
+
+  const hasIncidents = paginatedIncidents.length > 0
+  const isSearchActive = Boolean(searchTerm)
 
   const handlePageChange = useCallback((page: number) => {
     if (page < 1 || page > totalPages) return
@@ -299,12 +516,13 @@ export default function IncidentReportPage({ isCustomerView = false, customerId,
 
       const newItem: StolenItem = {
         id: Date.now().toString(),
+        barcode,
         category: mappedCategory,
         productName: productData.productName || '',
-        description: '', // Empty - officer will fill this manually
-        cost: 0, // Set to 0 - officer will fill this manually
-        quantity: 1, // Default quantity is 1, officer can change
-        totalAmount: 0 // Will be calculated as cost * quantity
+        description: '',
+        cost: 0,
+        quantity: 1,
+        totalAmount: 0
       }
 
       // Update editingIncident if it exists, or initialize a new one
@@ -405,105 +623,6 @@ export default function IncidentReportPage({ isCustomerView = false, customerId,
     )
   }
 
-  // Empty state component (will be rendered alongside dialogs)
-  const emptyStateContent = !incidentsResponse.data || incidentsResponse.data.length === 0 ? (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-slate-50 to-blue-50 flex items-center justify-center">
-      <div className="text-center max-w-md mx-auto p-6 bg-white rounded-lg shadow-sm">
-        <div className="mb-4">
-          <FileText className="h-12 w-12 text-gray-400 mx-auto" />
-        </div>
-        <h2 className="text-xl font-semibold text-gray-900 mb-2">No Incidents Found</h2>
-        <p className="text-gray-600 mb-4">
-          There are no incident reports available. Create your first incident report to get started.
-        </p>
-        <Button
-          onClick={() => {
-            setEditingIncident(null)
-            setOpen(true)
-          }}
-          className="w-full"
-        >
-          Create New Incident
-        </Button>
-      </div>
-    </div>
-  ) : null
-
-  // Show empty state if no incidents
-  if (!incidentsResponse.data || incidentsResponse.data.length === 0) {
-    return (
-      <>
-        {emptyStateContent}
-        {/* Dialogs - must be rendered even in empty state */}
-        <Dialog 
-          open={open} 
-          onOpenChange={(isOpen) => {
-            setOpen(isOpen)
-            if (!isOpen) {
-              setEditingIncident(null)
-            }
-          }}
-        >
-          <DialogContent className="max-w-[65vw] md:max-w-[60vw] lg:max-w-[50vw] h-[90vh] p-0 bg-white">
-            <DialogHeader className="px-4 py-3 border-b bg-white">
-              <DialogTitle className="text-xl font-bold">
-                {editingIncident ? 'Edit Incident Report' : 'New Incident Report'}
-              </DialogTitle>
-              <DialogDescription className="text-sm text-gray-500">
-                {editingIncident ? 'Update the incident details below' : 'Fill in the incident details below'}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex-1 overflow-y-auto bg-gray-50">
-              <IncidentForm
-                initialData={editingIncident}
-                onSubmit={handleSubmit}
-                onCancel={() => {
-                  setOpen(false)
-                  setEditingIncident(null)
-                }}
-                onScanBarcode={() => setScanningBarcode(true)}
-                onBarcodeScanned={handleBarcodeScanned}
-                isLoading={mutation.isPending}
-                customerId={customerId}
-                siteId={siteId}
-              />
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        <AlertDialog 
-          open={!!deletingIncident} 
-          onOpenChange={(isOpen) => !isOpen && setDeletingIncident(null)}
-        >
-          <AlertDialogContent className="w-[calc(100%-32px)] max-w-md">
-            <AlertDialogHeader>
-              <AlertDialogTitle className="text-lg sm:text-xl">Delete Incident Report</AlertDialogTitle>
-              <AlertDialogDescription className="text-sm">
-                Are you sure you want to delete this incident report? This action cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter className="gap-2 sm:gap-0">
-              <AlertDialogCancel className="text-sm">Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleConfirmDelete}
-                className="bg-red-600 hover:bg-red-700 text-white text-sm"
-                disabled={deleteMutation.isPending}
-              >
-                {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
-        <BarcodeScanner
-          isOpen={scanningBarcode}
-          onClose={() => setScanningBarcode(false)}
-          onScan={handleBarcodeScanned}
-        />
-      </>
-    )
-  }
-
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-blue-50 via-slate-50 to-blue-50">
       <Toaster />
@@ -546,7 +665,7 @@ export default function IncidentReportPage({ isCustomerView = false, customerId,
             </Card>
             <Card className="bg-gradient-to-br from-emerald-800 to-emerald-900 border-emerald-700 shadow-md col-span-1">
               <CardHeader className="flex flex-row items-center justify-between p-2 md:p-4 xl:p-6 pb-1 md:pb-2 xl:pb-3">
-                <CardTitle className="text-xs sm:text-sm lg:text-base xl:text-lg font-medium text-white">Unique Sites</CardTitle>
+                <CardTitle className="text-xs sm:text-sm lg:text-base xl:text-lg font-medium text-white">Unique Stores</CardTitle>
                 <Store className="h-3 w-3 sm:h-4 sm:w-4 xl:h-5 xl:w-5 text-emerald-300" />
               </CardHeader>
               <CardContent className="p-2 md:p-4 xl:p-6 pt-0 md:pt-1 xl:pt-2">
@@ -568,7 +687,99 @@ export default function IncidentReportPage({ isCustomerView = false, customerId,
         {/* Table Section */}
         <div className="mt-3 sm:mt-4 md:mt-6 lg:mt-8 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           {/* Search Bar */}
-          <div className="p-3 sm:p-4 md:p-6 border-b border-gray-200">
+          <div className="p-3 sm:p-4 md:p-6 border-b border-gray-200 space-y-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant={datePreset === 'today' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => handlePresetFilter('today')}
+                  className="h-9 text-xs sm:text-sm"
+                >
+                  Today
+                </Button>
+                <Button
+                  variant={datePreset === 'week' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => handlePresetFilter('week')}
+                  className="h-9 text-xs sm:text-sm"
+                >
+                  Week
+                </Button>
+                <Button
+                  variant={datePreset === 'month' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => handlePresetFilter('month')}
+                  className="h-9 text-xs sm:text-sm"
+                >
+                  Month
+                </Button>
+                <Button
+                  variant={incidentTypeFilter === IncidentType.THEFT ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => {
+                    setIncidentTypeFilter((current) => current === IncidentType.THEFT ? null : IncidentType.THEFT)
+                    setCurrentPage(1)
+                  }}
+                  className="h-9 text-xs sm:text-sm"
+                >
+                  Theft
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleClearFilters}
+                  className="h-9 text-xs sm:text-sm"
+                  disabled={!isDateRangeActive && !datePreset && !isIncidentTypeFilterActive && !isRegionFilterActive}
+                >
+                  Clear
+                </Button>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full lg:w-auto">
+                <Select value={regionFilter} onValueChange={(value) => {
+                  setRegionFilter(value)
+                  setCurrentPage(1)
+                }}>
+                  <SelectTrigger className="h-9 text-xs sm:text-sm w-full sm:w-[200px]">
+                    <SelectValue placeholder={isLoadingRegions ? 'Loading regions...' : 'All regions'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All regions</SelectItem>
+                    {regions.map((region) => (
+                      <SelectItem key={region.regionID} value={region.regionID.toString()}>
+                        {region.regionName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="flex flex-col sm:flex-row gap-2 w-full">
+                  <Input
+                    type="date"
+                    value={fromDateInput}
+                    onChange={(e) => setFromDateInput(e.target.value)}
+                    className="h-9 text-xs sm:text-sm"
+                    aria-label="Filter from date"
+                  />
+                  <Input
+                    type="date"
+                    value={toDateInput}
+                    onChange={(e) => setToDateInput(e.target.value)}
+                    className="h-9 text-xs sm:text-sm"
+                    aria-label="Filter to date"
+                  />
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleApplyDateRange}
+                  className="h-9 text-xs sm:text-sm w-full sm:w-auto"
+                >
+                  Apply
+                </Button>
+              </div>
+            </div>
+
             <div className="relative max-w-2xl">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 xl:w-5 xl:h-5" />
               <Input
@@ -580,10 +791,59 @@ export default function IncidentReportPage({ isCustomerView = false, customerId,
             </div>
           </div>
 
+          {!hasIncidents && (
+            <div className="p-6 sm:p-8 text-center border-b border-gray-200">
+              <div className="mb-4">
+                <FileText className="h-10 w-10 text-gray-300 mx-auto" />
+              </div>
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">
+                {isClientFilterActive
+                  ? 'No Incidents Match Your Filters'
+                  : isSearchActive
+                    ? 'No Incidents Match Your Search'
+                    : 'No Incidents Found'}
+              </h2>
+              <p className="text-sm sm:text-base text-gray-600 mb-4">
+                {isClientFilterActive
+                  ? 'Try adjusting your filters to see more incident reports.'
+                  : isSearchActive
+                    ? 'Try adjusting your search terms to see more incident reports.'
+                    : 'There are no incident reports available. Create your first incident report to get started.'}
+              </p>
+              {isClientFilterActive ? (
+                <Button
+                  variant="outline"
+                  onClick={handleClearFilters}
+                  className="text-sm"
+                >
+                  Clear Filters
+                </Button>
+              ) : isSearchActive ? (
+                <Button
+                  variant="outline"
+                  onClick={() => setSearchTerm("")}
+                  className="text-sm"
+                >
+                  Clear Search
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => {
+                    setEditingIncident(null)
+                    setOpen(true)
+                  }}
+                  className="text-sm"
+                >
+                  Create New Incident
+                </Button>
+              )}
+            </div>
+          )}
+
           {/* Mobile Card Layout - visible only on small screens */}
-          <div className="block md:hidden p-3 space-y-3">
-            {paginatedIncidents.length > 0 ? (
-              paginatedIncidents.map((incident) => (
+          {hasIncidents && (
+            <div className="block md:hidden p-3 space-y-3">
+              {paginatedIncidents.map((incident) => (
                 <div key={incident.id} className="rounded-lg border bg-white shadow-sm p-4 space-y-3">
                   {/* Header with customer and amount */}
                   <div className="flex items-start justify-between gap-2">
@@ -657,135 +917,106 @@ export default function IncidentReportPage({ isCustomerView = false, customerId,
                     </Button>
                   </div>
                 </div>
-              ))
-            ) : (
-              <div className="text-center py-8">
-                <p className="text-gray-500 text-sm">No incidents found</p>
-                <Button
-                  variant="link"
-                  onClick={() => {
-                    setEditingIncident(null)
-                    setOpen(true)
-                  }}
-                  className="text-blue-600 hover:text-blue-700 mt-2 text-sm"
-                >
-                  Create your first incident report
-                </Button>
-              </div>
-            )}
-          </div>
+              ))}
+            </div>
+          )}
 
           {/* Desktop Table Layout - visible on medium screens and above */}
-          <div className="hidden md:block overflow-x-auto">
-            <div className="min-w-[480px]">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-gray-50 hover:bg-gray-50">
-                    <TableHead className="font-medium text-sm lg:text-base xl:text-lg text-gray-900 py-3 xl:py-4 whitespace-nowrap">Customer Name</TableHead>
-                    <TableHead className="font-medium text-sm lg:text-base xl:text-lg text-gray-900 py-3 xl:py-4 whitespace-nowrap">Site Name</TableHead>
-                    <TableHead className="font-medium text-sm lg:text-base xl:text-lg text-gray-900 py-3 xl:py-4 whitespace-nowrap">Officer Name</TableHead>
-                    <TableHead className="font-medium text-sm lg:text-base xl:text-lg text-gray-900 py-3 xl:py-4 whitespace-nowrap hidden lg:table-cell">
-                      <div className="flex items-center gap-2 xl:gap-3">
-                        <Calendar className="w-4 h-4 xl:w-5 xl:h-5 text-gray-500" />
-                        <span>Incident Date</span>
-                      </div>
-                    </TableHead>
-                    <TableHead className="font-medium text-sm lg:text-base xl:text-lg text-gray-900 py-3 xl:py-4 whitespace-nowrap">Total Amount</TableHead>
-                    <TableHead className="font-medium text-sm lg:text-base xl:text-lg text-gray-900 py-3 xl:py-4 whitespace-nowrap hidden lg:table-cell">Incident Type</TableHead>
-                    <TableHead className="font-medium text-sm lg:text-base xl:text-lg text-gray-900 py-3 xl:py-4 text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedIncidents.map((incident) => (
-                    <TableRow 
-                      key={incident.id}
-                      className="hover:bg-gray-50 transition-colors text-sm lg:text-base xl:text-lg"
-                    >
-                      <TableCell className="py-3 xl:py-4 font-medium whitespace-nowrap">
-                        {incident.customerName || 'N/A'}
-                      </TableCell>
-                      <TableCell className="py-3 xl:py-4 font-medium whitespace-nowrap">
-                        {incident.siteName}
-                      </TableCell>
-                      <TableCell className="py-3 xl:py-4 whitespace-nowrap">{incident.officerName || 'N/A'}</TableCell>
-                      <TableCell className="py-3 xl:py-4 hidden lg:table-cell whitespace-nowrap">
-                        {incident.date ? new Date(incident.date).toLocaleDateString() : 'N/A'}
-                      </TableCell>
-                      <TableCell className="py-3 xl:py-4 whitespace-nowrap">
-                        £{(() => {
-                          const value = incident?.totalValueRecovered
-                          if (typeof value === 'number' && !isNaN(value)) {
-                            return value.toFixed(2)
-                          }
-                          if (Array.isArray(incident?.stolenItems) && incident.stolenItems.length > 0) {
-                            const total = incident.stolenItems.reduce(
-                              (sum, item) => sum + (typeof item?.totalAmount === 'number' ? item.totalAmount : 0),
-                              0
-                            )
-                            return total.toFixed(2)
-                          }
-                          return '0.00'
-                        })()}
-                      </TableCell>
-                      <TableCell className="py-3 xl:py-4 hidden lg:table-cell whitespace-nowrap">{incident.incidentType}</TableCell>
-                      <TableCell className="py-3 xl:py-4">
-                        <div className="flex items-center justify-end gap-2 xl:gap-3">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleView(incident)}
-                            className="h-8 w-8 xl:h-10 xl:w-10 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
-                          >
-                            <Eye className="w-4 h-4 xl:w-5 xl:h-5" />
-                            <span className="sr-only">View</span>
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEdit(incident)}
-                            className="h-8 w-8 xl:h-10 xl:w-10 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
-                          >
-                            <Edit2 className="w-4 h-4 xl:w-5 xl:h-5" />
-                            <span className="sr-only">Edit</span>
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDelete(incident)}
-                            className="h-8 w-8 xl:h-10 xl:w-10 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
-                          >
-                            <Trash2 className="w-4 h-4 xl:w-5 xl:h-5" />
-                            <span className="sr-only">Delete</span>
-                          </Button>
+          {hasIncidents && (
+            <div className="hidden md:block overflow-x-auto">
+              <div className="min-w-[480px]">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-gray-50 hover:bg-gray-50">
+                      <TableHead className="font-medium text-sm lg:text-base xl:text-lg text-gray-900 py-3 xl:py-4 whitespace-nowrap">Company Name</TableHead>
+                      <TableHead className="font-medium text-sm lg:text-base xl:text-lg text-gray-900 py-3 xl:py-4 whitespace-nowrap">Store Name</TableHead>
+                      <TableHead className="font-medium text-sm lg:text-base xl:text-lg text-gray-900 py-3 xl:py-4 whitespace-nowrap">Staff Member Name</TableHead>
+                      <TableHead className="font-medium text-sm lg:text-base xl:text-lg text-gray-900 py-3 xl:py-4 whitespace-nowrap hidden lg:table-cell">
+                        <div className="flex items-center gap-2 xl:gap-3">
+                          <Calendar className="w-4 h-4 xl:w-5 xl:h-5 text-gray-500" />
+                          <span>Incident Date</span>
                         </div>
-                      </TableCell>
+                      </TableHead>
+                      <TableHead className="font-medium text-sm lg:text-base xl:text-lg text-gray-900 py-3 xl:py-4 whitespace-nowrap">Total Amount</TableHead>
+                      <TableHead className="font-medium text-sm lg:text-base xl:text-lg text-gray-900 py-3 xl:py-4 whitespace-nowrap hidden lg:table-cell">Incident Type</TableHead>
+                      <TableHead className="font-medium text-sm lg:text-base xl:text-lg text-gray-900 py-3 xl:py-4 text-right">Actions</TableHead>
                     </TableRow>
-                  ))}
-                  {incidentsResponse.data.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 xl:py-12">
-                        <p className="text-gray-500 text-sm xl:text-base">No incidents found</p>
-                        <Button
-                          variant="link"
-                          onClick={() => {
-                            setEditingIncident(null)
-                            setOpen(true)
-                          }}
-                          className="text-blue-600 hover:text-blue-700 mt-2 text-sm xl:text-base"
-                        >
-                          Create your first incident report
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedIncidents.map((incident) => (
+                      <TableRow 
+                        key={incident.id}
+                        className="hover:bg-gray-50 transition-colors text-sm lg:text-base xl:text-lg"
+                      >
+                        <TableCell className="py-3 xl:py-4 font-medium whitespace-nowrap">
+                          {incident.customerName || 'N/A'}
+                        </TableCell>
+                        <TableCell className="py-3 xl:py-4 font-medium whitespace-nowrap">
+                          {incident.siteName}
+                        </TableCell>
+                        <TableCell className="py-3 xl:py-4 whitespace-nowrap">{incident.officerName || 'N/A'}</TableCell>
+                        <TableCell className="py-3 xl:py-4 hidden lg:table-cell whitespace-nowrap">
+                          {incident.date ? new Date(incident.date).toLocaleDateString() : 'N/A'}
+                        </TableCell>
+                        <TableCell className="py-3 xl:py-4 whitespace-nowrap">
+                          £{(() => {
+                            const value = incident?.totalValueRecovered
+                            if (typeof value === 'number' && !isNaN(value)) {
+                              return value.toFixed(2)
+                            }
+                            if (Array.isArray(incident?.stolenItems) && incident.stolenItems.length > 0) {
+                              const total = incident.stolenItems.reduce(
+                                (sum, item) => sum + (typeof item?.totalAmount === 'number' ? item.totalAmount : 0),
+                                0
+                              )
+                              return total.toFixed(2)
+                            }
+                            return '0.00'
+                          })()}
+                        </TableCell>
+                        <TableCell className="py-3 xl:py-4 hidden lg:table-cell whitespace-nowrap">{incident.incidentType}</TableCell>
+                        <TableCell className="py-3 xl:py-4">
+                          <div className="flex items-center justify-end gap-2 xl:gap-3">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleView(incident)}
+                              className="h-8 w-8 xl:h-10 xl:w-10 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
+                            >
+                              <Eye className="w-4 h-4 xl:w-5 xl:h-5" />
+                              <span className="sr-only">View</span>
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEdit(incident)}
+                              className="h-8 w-8 xl:h-10 xl:w-10 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
+                            >
+                              <Edit2 className="w-4 h-4 xl:w-5 xl:h-5" />
+                              <span className="sr-only">Edit</span>
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDelete(incident)}
+                              className="h-8 w-8 xl:h-10 xl:w-10 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                            >
+                              <Trash2 className="w-4 h-4 xl:w-5 xl:h-5" />
+                              <span className="sr-only">Delete</span>
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Pagination */}
-        {incidentsResponse.data.length > 0 && totalPages > 1 && (
+        {hasIncidents && totalPages > 1 && (
           <div className="flex justify-center py-3 sm:py-4 border-t border-gray-200 bg-white">
             <Pagination>
               <PaginationContent className="flex flex-wrap items-center gap-1 sm:gap-0">
@@ -859,7 +1090,7 @@ export default function IncidentReportPage({ isCustomerView = false, customerId,
           }
         }}
       >
-        <DialogContent className="max-w-[65vw] md:max-w-[60vw] lg:max-w-[50vw] h-[90vh] p-0 bg-white">
+        <DialogContent className="w-[calc(100%-16px)] sm:w-[calc(100%-32px)] max-w-[95vw] sm:max-w-[92vw] md:max-w-[90vw] lg:max-w-[90vw] xl:max-w-[85vw] 2xl:max-w-[80vw] h-[90vh] p-0 bg-white">
           <DialogHeader className="px-4 py-3 border-b bg-white">
             <DialogTitle className="text-xl font-bold">
               {editingIncident ? 'Edit Incident Report' : 'New Incident Report'}
@@ -890,7 +1121,7 @@ export default function IncidentReportPage({ isCustomerView = false, customerId,
         open={!!viewingIncident} 
         onOpenChange={(isOpen) => !isOpen && setViewingIncident(null)}
       >
-        <DialogContent className="max-w-[65vw] md:max-w-[60vw] lg:max-w-[50vw] h-[90vh] p-0">
+        <DialogContent className="w-[calc(100%-16px)] sm:w-[calc(100%-32px)] max-w-[95vw] sm:max-w-[92vw] md:max-w-[90vw] lg:max-w-[90vw] xl:max-w-[85vw] 2xl:max-w-[80vw] h-[90vh] p-0">
           <DialogHeader className="px-4 py-3 border-b">
             <DialogTitle className="text-xl font-bold">View Incident Details</DialogTitle>
             <DialogDescription className="text-sm text-gray-500">
@@ -909,15 +1140,15 @@ export default function IncidentReportPage({ isCustomerView = false, customerId,
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                       <div>
-                        <label className="text-sm font-medium text-gray-500">Customer Name</label>
+                        <label className="text-sm font-medium text-gray-500">Company Name</label>
                         <p className="mt-1 text-sm text-gray-900">{viewingIncident.customerName || 'N/A'}</p>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-gray-500">Site Name</label>
+                        <label className="text-sm font-medium text-gray-500">Store Name</label>
                         <p className="mt-1 text-sm text-gray-900">{viewingIncident.siteName || 'N/A'}</p>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-gray-500">Officer Name</label>
+                        <label className="text-sm font-medium text-gray-500">Staff Member Name</label>
                         <p className="mt-1 text-sm text-gray-900">{viewingIncident.officerName || 'N/A'}</p>
                       </div>
                       <div>
@@ -1143,6 +1374,19 @@ export default function IncidentReportPage({ isCustomerView = false, customerId,
                           </tbody>
                         </table>
                       </div>
+                    </div>
+                  )}
+                  {/* AI Classification */}
+                  {viewingIncident.id && (
+                    <div className="mb-4">
+                      <IncidentClassificationBadge incidentId={viewingIncident.id} />
+                    </div>
+                  )}
+
+                  {/* Evidence Chain */}
+                  {viewingIncident.id && (
+                    <div className="mb-4">
+                      <EvidenceTimeline incidentId={viewingIncident.id} />
                     </div>
                   )}
                 </div>

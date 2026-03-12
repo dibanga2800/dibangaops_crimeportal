@@ -10,19 +10,22 @@ namespace AIPBackend.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize(Roles = "administrator,advantageonehoofficer")]
+    [Authorize(Roles = "administrator,manager")]
     public class UserController : ControllerBase
     {
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly RoleManager<ApplicationRole> _roleManager;
         private readonly ApplicationDbContext _context;
         private readonly ILogger<UserController> _logger;
 
         public UserController(
             UserManager<ApplicationUser> userManager,
+            RoleManager<ApplicationRole> roleManager,
             ApplicationDbContext context,
             ILogger<UserController> logger)
         {
             _userManager = userManager;
+            _roleManager = roleManager;
             _context = context;
             _logger = logger;
         }
@@ -91,33 +94,25 @@ namespace AIPBackend.Controllers
                     Role = request.Role ?? string.Empty,
                     PageAccessRole = string.IsNullOrWhiteSpace(request.PageAccessRole)
                         ? (request.Role ?? string.Empty)
-                        : request.PageAccessRole
+                        : request.PageAccessRole,
+                    PrimarySiteId = string.IsNullOrWhiteSpace(request.PrimarySiteId)
+                        ? null
+                        : request.PrimarySiteId
                 };
 
-                // Set CustomerId based on role (normalize to lowercase for comparison)
-                var normalizedRole = request.Role?.ToLowerInvariant() ?? "";
-                if (normalizedRole == "customersitemanager" || normalizedRole == "customerhomanager")
+                // Set CustomerId if provided (customer-linked users have a direct CustomerId)
+                if (request.CustomerId.HasValue && request.CustomerId.Value > 0)
                 {
-                    // For customer roles, set CustomerId (direct foreign key)
-                    if (request.CustomerId.HasValue && request.CustomerId.Value > 0)
+                    var customer = await _context.Customers.FindAsync(request.CustomerId.Value);
+                    if (customer != null)
                     {
-                        // Validate that the customer exists
-                        var customer = await _context.Customers.FindAsync(request.CustomerId.Value);
-                        if (customer != null)
-                        {
-                            newUser.CustomerId = request.CustomerId.Value;
-                            _logger.LogInformation("Setting CustomerId {CustomerId} for customer user {UserId}", request.CustomerId.Value, newUser.Id);
-                        }
-                        else
-                        {
-                            _logger.LogWarning("Customer with ID {CustomerId} not found. CustomerId not set.", request.CustomerId.Value);
-                        }
+                        newUser.CustomerId = request.CustomerId.Value;
+                        _logger.LogInformation("Setting CustomerId {CustomerId} for user {UserId}", request.CustomerId.Value, newUser.Id);
                     }
-                }
-                else
-                {
-                    // For AdvantageOne roles, set CustomerId to null
-                    newUser.CustomerId = null;
+                    else
+                    {
+                        _logger.LogWarning("Customer with ID {CustomerId} not found. CustomerId not set.", request.CustomerId.Value);
+                    }
                 }
 
                 var createResult = await _userManager.CreateAsync(newUser, request.Password);
@@ -202,25 +197,37 @@ namespace AIPBackend.Controllers
                     _logger.LogInformation("Assigned user {UserId} to {CustomerCount} specified customers", 
                         newUser.Id, request.AssignedCustomerIds.Count);
                 }
-                else if (request.Role == "advantageoneofficer" || request.Role == "advantageonehoofficer" || request.Role == "administrator")
+                else if (!newUser.CustomerId.HasValue)
                 {
-                    // For AdvantageOne roles without specific assignments, assign all customers
+                    // For platform users without a direct CustomerId, assign all customers
                     var customers = await _context.Customers.ToListAsync();
                     var assignments = customers.Select(c => new UserCustomerAssignment
                     {
                         UserId = newUser.Id,
                         CustomerId = c.CustomerId,
                         CreatedAt = DateTime.UtcNow,
-                        CreatedBy = newUser.Id // Self-reference for now
+                        CreatedBy = newUser.Id
                     }).ToList();
 
                     _context.UserCustomerAssignments.AddRange(assignments);
                     
-                    _logger.LogInformation("Assigned user {UserId} to all {CustomerCount} customers (default for AdvantageOne roles)", 
+                    _logger.LogInformation("Assigned user {UserId} to all {CustomerCount} customers (platform user)", 
                         newUser.Id, customers.Count);
                 }
                 
                 await _context.SaveChangesAsync();
+
+                // Assign sites if provided
+                if (request.AssignedSiteIds != null && request.AssignedSiteIds.Any())
+                {
+                    newUser.SiteIds = request.AssignedSiteIds
+                        .Where(id => !string.IsNullOrWhiteSpace(id))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+                    _logger.LogInformation("Assigned user {UserId} to {SiteCount} specified sites", 
+                        newUser.Id, newUser.SiteIds.Count);
+                    await _userManager.UpdateAsync(newUser);
+                }
 
                 // Return created user
                 var userResponse = new AdminUserResponseDto
@@ -235,6 +242,7 @@ namespace AIPBackend.Controllers
                     Signature = newUser.Signature,
                     SignatureCode = newUser.SignatureCode,
                     JobTitle = newUser.JobTitle,
+                    ProfilePicture = newUser.ProfilePicture,
                     CustomerId = newUser.CustomerId,
                     RecordIsDeleted = newUser.RecordIsDeleted,
                     IsActive = newUser.IsActive,
@@ -245,7 +253,11 @@ namespace AIPBackend.Controllers
                     LastLoginAt = newUser.LastLoginAt,
                     PhoneNumber = newUser.PhoneNumber,
                     EmailConfirmed = newUser.EmailConfirmed,
-                    EmployeeId = request.EmployeeId
+                    EmployeeId = request.EmployeeId,
+                    PrimarySiteId = newUser.PrimarySiteId,
+                    AssignedCustomerIds = request.AssignedCustomerIds ?? new List<int>(),
+                    AssignedCustomerNames = new List<string>(),
+                    AssignedSiteIds = newUser.SiteIds.ToList()
                 };
 
                 _logger.LogInformation("User account created successfully: {UserId}", newUser.Id);
@@ -273,7 +285,16 @@ namespace AIPBackend.Controllers
                 }
 
                 var roles = await _userManager.GetRolesAsync(user);
-                var role = roles.FirstOrDefault() ?? "User";
+                var identityRole = roles.FirstOrDefault() ?? "User";
+                var effectiveRole = string.IsNullOrWhiteSpace(user.Role)
+                    ? identityRole
+                    : user.Role;
+
+                // Get assigned customers for this user
+                var customerAssignments = await _context.UserCustomerAssignments
+                    .Where(uca => uca.UserId == user.Id)
+                    .Include(uca => uca.Customer)
+                    .ToListAsync();
 
                 var userResponse = new AdminUserResponseDto
                 {
@@ -282,11 +303,12 @@ namespace AIPBackend.Controllers
                     FirstName = user.FirstName,
                     LastName = user.LastName,
                     Email = user.Email ?? "",
-                    Role = role,
+                    Role = effectiveRole,
                     PageAccessRole = user.PageAccessRole ?? string.Empty,
                     Signature = user.Signature,
                     SignatureCode = user.SignatureCode,
                     JobTitle = user.JobTitle,
+                    ProfilePicture = user.ProfilePicture,
                     CustomerId = user.CustomerId,
                     RecordIsDeleted = user.RecordIsDeleted,
                     IsActive = user.IsActive,
@@ -296,7 +318,14 @@ namespace AIPBackend.Controllers
                     UpdatedBy = user.UpdatedBy,
                     LastLoginAt = user.LastLoginAt,
                     PhoneNumber = user.PhoneNumber,
-                    EmailConfirmed = user.EmailConfirmed
+                    EmailConfirmed = user.EmailConfirmed,
+                    PrimarySiteId = user.PrimarySiteId,
+                    AssignedCustomerIds = customerAssignments.Select(uca => uca.CustomerId).ToList(),
+                    AssignedCustomerNames = customerAssignments
+                        .Where(uca => uca.Customer != null)
+                        .Select(uca => uca.Customer!.CompanyName)
+                        .ToList(),
+                    AssignedSiteIds = user.SiteIds.ToList()
                 };
 
                 // Note: Employee information lookup removed (Employee model deleted)
@@ -318,17 +347,6 @@ namespace AIPBackend.Controllers
                 }
 
                 // Get assigned customers
-                var customerAssignments = await _context.UserCustomerAssignments
-                    .Where(uca => uca.UserId == user.Id)
-                    .Include(uca => uca.Customer)
-                    .ToListAsync();
-
-                userResponse.AssignedCustomerIds = customerAssignments.Select(uca => uca.CustomerId).ToList();
-                userResponse.AssignedCustomerNames = customerAssignments
-                    .Where(uca => uca.Customer != null)
-                    .Select(uca => uca.Customer!.CompanyName)
-                    .ToList();
-
                 return Ok(userResponse);
             }
             catch (Exception ex)
@@ -364,7 +382,10 @@ namespace AIPBackend.Controllers
                 foreach (var user in users)
                 {
                     var roles = await _userManager.GetRolesAsync(user);
-                    var role = roles.FirstOrDefault() ?? "User";
+                    var identityRole = roles.FirstOrDefault() ?? "User";
+                    var effectiveRole = string.IsNullOrWhiteSpace(user.Role)
+                        ? identityRole
+                        : user.Role;
 
                     var userResponse = new AdminUserResponseDto
                     {
@@ -373,13 +394,14 @@ namespace AIPBackend.Controllers
                         FirstName = user.FirstName,
                         LastName = user.LastName,
                         Email = user.Email ?? "",
-                        Role = role,
+                        Role = effectiveRole,
                         PageAccessRole = user.PageAccessRole,
-                    Signature = user.Signature,
-                    SignatureCode = user.SignatureCode,
-                    JobTitle = user.JobTitle,
-                    CustomerId = user.CustomerId,
-                    RecordIsDeleted = user.RecordIsDeleted,
+                        Signature = user.Signature,
+                        SignatureCode = user.SignatureCode,
+                        JobTitle = user.JobTitle,
+                        ProfilePicture = user.ProfilePicture,
+                        CustomerId = user.CustomerId,
+                        RecordIsDeleted = user.RecordIsDeleted,
                         IsActive = user.IsActive,
                         CreatedAt = user.CreatedAt,
                         UpdatedAt = user.UpdatedAt,
@@ -387,7 +409,11 @@ namespace AIPBackend.Controllers
                         UpdatedBy = user.UpdatedBy,
                         LastLoginAt = user.LastLoginAt,
                         PhoneNumber = user.PhoneNumber,
-                        EmailConfirmed = user.EmailConfirmed
+                        EmailConfirmed = user.EmailConfirmed,
+                        PrimarySiteId = user.PrimarySiteId,
+                        AssignedCustomerIds = new List<int>(),
+                        AssignedCustomerNames = new List<string>(),
+                        AssignedSiteIds = user.SiteIds.ToList()
                     };
 
                     // Note: Employee information lookup removed (Employee model deleted)
@@ -454,6 +480,12 @@ namespace AIPBackend.Controllers
 
                 foreach (var user in usersInRole)
                 {
+                    // Get assigned customers for this user
+                    var customerAssignments = await _context.UserCustomerAssignments
+                        .Where(uca => uca.UserId == user.Id)
+                        .Include(uca => uca.Customer)
+                        .ToListAsync();
+
                     var userResponse = new AdminUserResponseDto
                     {
                         Id = user.Id,
@@ -463,11 +495,12 @@ namespace AIPBackend.Controllers
                         Email = user.Email ?? "",
                         Role = role,
                         PageAccessRole = user.PageAccessRole,
-                    Signature = user.Signature,
-                    SignatureCode = user.SignatureCode,
-                    JobTitle = user.JobTitle,
-                    CustomerId = user.CustomerId,
-                    RecordIsDeleted = user.RecordIsDeleted,
+                        Signature = user.Signature,
+                        SignatureCode = user.SignatureCode,
+                        JobTitle = user.JobTitle,
+                        ProfilePicture = user.ProfilePicture,
+                        CustomerId = user.CustomerId,
+                        RecordIsDeleted = user.RecordIsDeleted,
                         IsActive = user.IsActive,
                         CreatedAt = user.CreatedAt,
                         UpdatedAt = user.UpdatedAt,
@@ -475,7 +508,14 @@ namespace AIPBackend.Controllers
                         UpdatedBy = user.UpdatedBy,
                         LastLoginAt = user.LastLoginAt,
                         PhoneNumber = user.PhoneNumber,
-                        EmailConfirmed = user.EmailConfirmed
+                        EmailConfirmed = user.EmailConfirmed,
+                        PrimarySiteId = user.PrimarySiteId,
+                        AssignedCustomerIds = customerAssignments.Select(uca => uca.CustomerId).ToList(),
+                        AssignedCustomerNames = customerAssignments
+                            .Where(uca => uca.Customer != null)
+                            .Select(uca => uca.Customer!.CompanyName)
+                            .ToList(),
+                        AssignedSiteIds = user.SiteIds.ToList()
                     };
 
                     // Note: Employee information lookup removed (Employee model deleted)
@@ -688,6 +728,7 @@ namespace AIPBackend.Controllers
                     Signature = user.Signature,
                     SignatureCode = user.SignatureCode,
                     JobTitle = user.JobTitle,
+                    ProfilePicture = user.ProfilePicture,
                     CustomerId = user.CustomerId,
                     RecordIsDeleted = user.RecordIsDeleted,
                     IsActive = user.IsActive,
@@ -841,6 +882,15 @@ namespace AIPBackend.Controllers
                     user.JobTitle = request.JobTitle;
                 }
 
+                if (request.ClearProfilePicture == true)
+                {
+                    user.ProfilePicture = null;
+                }
+                else if (request.ProfilePicture != null)
+                {
+                    user.ProfilePicture = request.ProfilePicture;
+                }
+
                 if (request.Signature != null)
                 {
                     user.Signature = request.Signature;
@@ -856,6 +906,14 @@ namespace AIPBackend.Controllers
                     user.PageAccessRole = request.PageAccessRole;
                 }
 
+                // Update primary site for store users or when explicitly provided
+                if (request.PrimarySiteId != null)
+                {
+                    user.PrimarySiteId = string.IsNullOrWhiteSpace(request.PrimarySiteId)
+                        ? null
+                        : request.PrimarySiteId;
+                }
+
                 if (request.RecordIsDeleted.HasValue)
                 {
                     user.RecordIsDeleted = request.RecordIsDeleted.Value;
@@ -866,22 +924,38 @@ namespace AIPBackend.Controllers
                 string finalRole;
                 if (!string.IsNullOrEmpty(request.Role))
                 {
+                    var requestedRole = request.Role.Trim();
+                    var requestedRoleLower = requestedRole.ToLowerInvariant();
+
                     var existingRoles = await _userManager.GetRolesAsync(user);
-                    _logger.LogInformation("🟡 [UpdateUser] Changing role from {OldRole} to {NewRole} for user {UserId}", 
-                        string.Join(", ", existingRoles), request.Role, user.Id);
+                    _logger.LogInformation("🟡 [UpdateUser] Changing role from {OldRole} to {NewRole} for user {UserId}",
+                        string.Join(", ", existingRoles), requestedRoleLower, user.Id);
                     await _userManager.RemoveFromRolesAsync(user, existingRoles);
-                    // Normalize role to lowercase for storage (backend stores roles in lowercase)
-                    var normalizedRole = request.Role.ToLowerInvariant();
-                    await _userManager.AddToRoleAsync(user, normalizedRole);
-                    finalRole = normalizedRole;
-                    _logger.LogInformation("✅ [UpdateUser] Role updated to {Role} (normalized: {NormalizedRole}) for user {UserId}", 
-                        request.Role, finalRole, user.Id);
+
+                    // Always keep ApplicationUser.Role in normalized (lowercase) form
+                    user.Role = requestedRoleLower;
+
+                    // Only touch Identity roles if the target role actually exists
+                    if (await _roleManager.RoleExistsAsync(requestedRoleLower))
+                    {
+                        await _userManager.AddToRoleAsync(user, requestedRoleLower);
+                        finalRole = requestedRoleLower;
+                        _logger.LogInformation("✅ [UpdateUser] Role updated to {Role} for user {UserId}",
+                            requestedRoleLower, user.Id);
+                    }
+                    else
+                    {
+                        finalRole = requestedRoleLower;
+                        _logger.LogWarning("🔴 [UpdateUser] Requested role {Role} does not exist in Identity. " +
+                                           "Updated ApplicationUser.Role but skipped AddToRoleAsync.",
+                            requestedRoleLower);
+                    }
                 }
                 else
                 {
                     // Use current role if not being changed
-                var currentUserRoles = await _userManager.GetRolesAsync(user);
-                    finalRole = currentUserRoles.FirstOrDefault() ?? "user";
+                    var currentUserRoles = await _userManager.GetRolesAsync(user);
+                    finalRole = (currentUserRoles.FirstOrDefault() ?? user.Role ?? "user").ToLowerInvariant();
                     _logger.LogInformation("🟡 [UpdateUser] Role not changed, using current role: {Role} for user {UserId}", finalRole, user.Id);
                 }
 
@@ -892,9 +966,9 @@ namespace AIPBackend.Controllers
                 _logger.LogInformation("🟡 [UpdateUser] Processing CustomerId update - Final Role: {Role} (normalized), Request CustomerId: {CustomerId}, Current CustomerId: {CurrentCustomerId}", 
                     finalRole, request.CustomerId?.ToString() ?? "null", user.CustomerId?.ToString() ?? "null");
                 
-                if (finalRole == "customersitemanager" || finalRole == "customerhomanager")
+                if (request.CustomerId.HasValue)
                 {
-                    _logger.LogInformation("🟡 [UpdateUser] User has customer role, processing CustomerId update");
+                    _logger.LogInformation("🟡 [UpdateUser] Processing CustomerId update for user");
                     // For customer roles, update CustomerId if provided
                     if (request.CustomerId.HasValue)
                     {
@@ -1054,15 +1128,30 @@ namespace AIPBackend.Controllers
                     _logger.LogInformation("Updated customer assignments for user {UserId}: {CustomerCount} customers", user.Id, request.AssignedCustomerIds.Count);
                 }
 
+                // Update site assignments if provided
+                if (request.AssignedSiteIds != null)
+                {
+                    user.SiteIds = request.AssignedSiteIds
+                        .Where(id => !string.IsNullOrWhiteSpace(id))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+
+                    _logger.LogInformation("Updated site assignments for user {UserId}: {SiteCount} sites",
+                        user.Id, user.SiteIds.Count);
+                }
+
                 _logger.LogInformation("🟡 [UpdateUser] Saving changes to database for user {UserId}", user.Id);
                 await _userManager.UpdateAsync(user);
                 await _context.SaveChangesAsync();
                 _logger.LogInformation("✅ [UpdateUser] Changes saved successfully for user {UserId}", user.Id);
 
                 var roles = await _userManager.GetRolesAsync(user);
-                var role = roles.FirstOrDefault() ?? "User";
+                var identityRoleForResponse = roles.FirstOrDefault() ?? "User";
+                var effectiveRoleForResponse = string.IsNullOrWhiteSpace(user.Role)
+                    ? identityRoleForResponse
+                    : user.Role;
                 _logger.LogInformation("🟡 [UpdateUser] Building response - Final Role: {Role}, Final CustomerId: {CustomerId}", 
-                    role, user.CustomerId?.ToString() ?? "null");
+                    effectiveRoleForResponse, user.CustomerId?.ToString() ?? "null");
 
                 var userResponse = new AdminUserResponseDto
                 {
@@ -1071,7 +1160,7 @@ namespace AIPBackend.Controllers
                     FirstName = user.FirstName,
                     LastName = user.LastName,
                     Email = user.Email ?? "",
-                    Role = role,
+                    Role = effectiveRoleForResponse,
                     PageAccessRole = user.PageAccessRole ?? string.Empty,
                     Signature = user.Signature,
                     SignatureCode = user.SignatureCode,
@@ -1085,7 +1174,9 @@ namespace AIPBackend.Controllers
                     UpdatedBy = user.UpdatedBy,
                     LastLoginAt = user.LastLoginAt,
                     PhoneNumber = user.PhoneNumber,
-                    EmailConfirmed = user.EmailConfirmed
+                    EmailConfirmed = user.EmailConfirmed,
+                    PrimarySiteId = user.PrimarySiteId,
+                    AssignedSiteIds = user.SiteIds.ToList()
                 };
 
                 // Note: Employee information retrieval removed (Employee model deleted)
@@ -1286,6 +1377,10 @@ namespace AIPBackend.Controllers
         public bool RecordIsDeleted { get; set; } = false;
         public List<int>? AssignedCustomerIds { get; set; }
         public int? CustomerId { get; set; } // For Customer users - direct foreign key to Customer table
+
+        // Store / site assignment
+        public string? PrimarySiteId { get; set; }
+        public List<string>? AssignedSiteIds { get; set; }
     }
 
     public class AdminUserResponseDto
@@ -1300,6 +1395,7 @@ namespace AIPBackend.Controllers
         public string? Signature { get; set; }
         public string? SignatureCode { get; set; }
         public string? JobTitle { get; set; }
+        public string? ProfilePicture { get; set; }
         public int? CustomerId { get; set; } // For Customer users - direct foreign key to Customer table
         public string? CustomerName { get; set; } // Company name for Customer users
         public bool RecordIsDeleted { get; set; }
@@ -1319,6 +1415,10 @@ namespace AIPBackend.Controllers
         // Customer assignment fields
         public List<int> AssignedCustomerIds { get; set; } = new();
         public List<string> AssignedCustomerNames { get; set; } = new();
+
+        // Store / site assignment fields
+        public string? PrimarySiteId { get; set; }
+        public List<string> AssignedSiteIds { get; set; } = new();
     }
 
     public class UserListResponseDto
@@ -1365,9 +1465,15 @@ namespace AIPBackend.Controllers
         public string? JobTitle { get; set; }
         public string? Signature { get; set; }
         public string? SignatureCode { get; set; }
+            public string? ProfilePicture { get; set; }
+        public bool? ClearProfilePicture { get; set; }
         public string? PageAccessRole { get; set; }
         public bool? RecordIsDeleted { get; set; }
         public List<int>? AssignedCustomerIds { get; set; }
         public int? CustomerId { get; set; } // For Customer users - direct foreign key to Customer table
+
+        // Store / site assignment
+        public string? PrimarySiteId { get; set; }
+        public List<string>? AssignedSiteIds { get; set; }
     }
 }

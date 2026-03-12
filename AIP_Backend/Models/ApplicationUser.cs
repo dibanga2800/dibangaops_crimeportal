@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json;
@@ -53,6 +53,10 @@ namespace AIPBackend.Models
         [MaxLength(100)]
         public string? JobTitle { get; set; }
 
+        // Profile picture stored as data URL (base64) - max ~1 MB output from frontend
+        [MaxLength(1500000)]
+        public string? ProfilePicture { get; set; }
+
         // Direct Customer Assignment - Foreign key to Customer table (for Customer users)
         // This replaces UserCompany string mapping and provides direct access to customerId
         public int? CustomerId { get; set; }
@@ -60,6 +64,15 @@ namespace AIPBackend.Models
         // Customer Assignment - JSON array of customer IDs (for AdvantageOne officers)
         [MaxLength(4000)] // Reasonable limit for JSON array
         public string? AssignedCustomerIds { get; set; }
+
+        // Store/Site assignment
+        // Primary site for store users (single store within a customer)
+        [MaxLength(200)]
+        public string? PrimarySiteId { get; set; }
+
+        // Serialized array of site IDs for security officers or multi-site users
+        [MaxLength(4000)]
+        public string? AssignedSiteIds { get; set; }
 
         // Status and Audit Fields
         public bool RecordIsDeleted { get; set; } = false;
@@ -84,6 +97,17 @@ namespace AIPBackend.Models
         public int LoginAttempts { get; set; } = 0;
 
         public DateTime? LockoutUntil { get; set; }
+
+        // Security preferences (persisted in DB, not localStorage)
+        public bool EmailNotificationsEnabled { get; set; } = true;
+
+        public bool LoginAlertsEnabled { get; set; } = true;
+
+        // Email-based two-factor authentication (per-login verification code)
+        [MaxLength(12)]
+        public string? PendingTwoFactorCode { get; set; }
+
+        public DateTime? PendingTwoFactorExpiryUtc { get; set; }
 
         // Computed Properties
         [NotMapped]
@@ -161,6 +185,67 @@ namespace AIPBackend.Models
         public void ClearCustomerIds()
         {
             AssignedCustomerIds = null;
+        }
+
+        // Helper methods for working with AssignedSiteIds
+        [NotMapped]
+        public List<string> SiteIds
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(AssignedSiteIds))
+                    return new List<string>();
+
+                try
+                {
+                    return JsonSerializer.Deserialize<List<string>>(AssignedSiteIds) ?? new List<string>();
+                }
+                catch
+                {
+                    return new List<string>();
+                }
+            }
+            set
+            {
+                AssignedSiteIds = value != null && value.Count > 0
+                    ? JsonSerializer.Serialize(value)
+                    : null;
+            }
+        }
+
+        public void AddSiteId(string siteId)
+        {
+            if (string.IsNullOrWhiteSpace(siteId)) return;
+
+            var siteIds = SiteIds;
+            if (!siteIds.Contains(siteId))
+            {
+                siteIds.Add(siteId);
+                SiteIds = siteIds;
+            }
+        }
+
+        public void RemoveSiteId(string siteId)
+        {
+            if (string.IsNullOrWhiteSpace(siteId)) return;
+
+            var siteIds = SiteIds;
+            if (siteIds.Contains(siteId))
+            {
+                siteIds.Remove(siteId);
+                SiteIds = siteIds;
+            }
+        }
+
+        public bool HasSiteId(string siteId)
+        {
+            if (string.IsNullOrWhiteSpace(siteId)) return false;
+            return SiteIds.Contains(siteId);
+        }
+
+        public void ClearSiteIds()
+        {
+            AssignedSiteIds = null;
         }
     }
 }

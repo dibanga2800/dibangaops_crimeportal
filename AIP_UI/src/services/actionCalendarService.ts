@@ -1,4 +1,5 @@
 import { BASE_API_URL } from '@/config/api';
+import { sessionStore } from '@/state/sessionStore';
 
 export interface ActionCalendarTask {
   actionCalendarId: number;
@@ -113,7 +114,7 @@ class ActionCalendarService {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
-    const token = localStorage.getItem('authToken');
+    const token = sessionStore.getToken();
     
     const config: RequestInit = {
       headers: {
@@ -128,8 +129,9 @@ class ActionCalendarService {
 
     if (!response.ok) {
       if (response.status === 401) {
-        localStorage.removeItem('authToken');
-        window.location.replace('/login');
+        // Let the global Axios 401 handler in api.ts manage session clearing.
+        // Only log here — do NOT clear storage or redirect.
+        console.warn('⚠️ [ActionCalendarService] 401 from', endpoint);
         throw new Error('Unauthorized');
       }
 

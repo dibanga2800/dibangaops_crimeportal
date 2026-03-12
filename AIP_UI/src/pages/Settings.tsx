@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { UserCog, Search, Check, X, Save, AlertCircle, Eye } from 'lucide-react'
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/tooltip"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { usePageAccess } from '@/contexts/PageAccessContext'
+import { broadcastPageAccessUpdated } from '@/lib/pageAccessBroadcast'
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { settingsService } from '@/services/settingsService'
@@ -35,33 +36,32 @@ const Settings = () => {
   const queryClient = useQueryClient();
   
   // Define user roles (stored in lowercase to match backend)
+  // Store: incident only (fixed). Officer: incident + admin-configurable. Manager/Admin: full access
   const userRoles: UserRole[] = [
     { 
-      id: 'advantageoneofficer', 
-      name: 'Advantage One Officer', 
-      description: 'Security officers working on site' 
+      id: 'store', 
+      name: 'Store User', 
+      description: 'Incident page only (fixed access)' 
     },
     { 
-      id: 'advantageonehoofficer', 
-      name: 'Advantage One HO Officer', 
-      description: 'Head office staff managing operations' 
+      id: 'security-officer', 
+      name: 'Security Officer', 
+      description: 'Security Officer - incident report + admin-configurable pages' 
+    },
+    { 
+      id: 'manager', 
+      name: 'Manager', 
+      description: 'Managers overseeing operations' 
     },
     { 
       id: 'administrator', 
-      name: 'Administrator', 
-      description: 'System administrators with full access' 
-    },
-    { 
-      id: 'customersitemanager', 
-      name: 'Customer Site Manager', 
-      description: 'Client managers at specific locations' 
-    },
-    { 
-      id: 'customerhomanager', 
-      name: 'Customer Head Office Manager', 
-      description: 'Client executives overseeing all sites' 
+      name: 'Admin', 
+      description: 'System admins with full access' 
     }
   ];
+
+  // Mandatory pages that managers must always have access to
+  const mandatoryManagerPageIds: string[] = ['data-analytics-hub'];
 
   const { 
     availablePages, 
@@ -75,18 +75,15 @@ const Settings = () => {
     refreshSettings
   } = usePageAccess();
   
-  // State for search filter
+  // State for search filter (with debounced value for heavy lists)
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   
   // State to track if admin access has been modified
   const [adminAccessModified, setAdminAccessModified] = useState(false);
 
   // State for the selected role in the mobile view
   const [selectedRoleForMobile, setSelectedRoleForMobile] = useState<string>(userRoles[0]?.id || ''); // Default to first role
-
-  // State for loading and error handling
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   // Ref to track the last synced settings to prevent infinite loops
   const lastSyncedSettingsRef = useRef<string>('');
@@ -108,27 +105,43 @@ const Settings = () => {
     if (settingsKey !== lastSyncedSettingsRef.current) {
       // Log what we're syncing (for debugging)
       if (import.meta.env.DEV) {
-        const officerPages = settings.pageAccessByRole['advantageoneofficer'] || [];
+        const officerPages = settings.pageAccessByRole['store'] || [];
       }
       
       lastSyncedSettingsRef.current = settingsKey;
       
-      // Ensure administrators always have full access when syncing
+      // Ensure admins always have full access when syncing
       const pagesToUse = settings?.availablePages && settings.availablePages.length > 0 
         ? settings.availablePages 
         : availablePages;
       const allPageIds = pagesToUse.map(page => page.id);
       
-      const syncedSettings = {
+      const syncedSettings: Record<string, string[]> = {
         ...settings.pageAccessByRole,
-        administrator: allPageIds  // Force full access for administrators
+        administrator: allPageIds,  // Backend role key
+        admin: allPageIds,          // Legacy alias
       };
+
+      // Ensure managers always have mandatory pages
+      const currentManagerPages = syncedSettings.manager || [];
+      const managerPageSet = new Set<string>(currentManagerPages);
+      mandatoryManagerPageIds.forEach(id => managerPageSet.add(id));
+      syncedSettings.manager = Array.from(managerPageSet);
       
       setPageAccessByRole(syncedSettings);
       
-      console.log('✅ [Settings] Synced settings with full administrator access:', allPageIds.length, 'pages');
+      console.log('✅ [Settings] Synced settings with full admin access:', allPageIds.length, 'pages');
     }
   }, [settings]); // Only depend on settings to prevent infinite loop
+
+  // Debounce search input to avoid recomputing filters on every keystroke
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      setDebouncedSearch(searchQuery.trim().toLowerCase());
+    }, 200);
+
+    return () => clearTimeout(handle);
+  }, [searchQuery]);
 
   // Effect to check if admin access has been modified
   useEffect(() => {
@@ -136,10 +149,11 @@ const Settings = () => {
       ? settings.availablePages 
       : availablePages;
     
-    if (pagesToUse.length > 0 && pageAccessByRole.administrator) {
+    const adminPages = pageAccessByRole.administrator || pageAccessByRole.admin;
+    if (pagesToUse.length > 0 && adminPages) {
       const allPageIds = pagesToUse.map(page => page.id);
       setAdminAccessModified(
-        !allPageIds.every(id => pageAccessByRole.administrator.includes(id))
+        !allPageIds.every(id => adminPages.includes(id))
       );
     }
   }, [pageAccessByRole, settings, availablePages]);
@@ -157,7 +171,7 @@ const Settings = () => {
     onSuccess: async (data) => {
       // Log what was saved
       if (import.meta.env.DEV) {
-        const officerPages = data.pageAccessByRole['advantageoneofficer'] || [];
+        const officerPages = data.pageAccessByRole['store'] || [];
         const customerReportingPages = officerPages.filter(id => 
           id === 'management-customer-reporting' || id === 'customer-reporting' || id.includes('customer-reporting')
         );
@@ -182,7 +196,7 @@ const Settings = () => {
       toast({
         title: adminAccessModified ? "Warning: Admin Access Modified" : "Settings Saved",
         description: adminAccessModified 
-          ? "You have modified administrator access. This may affect system functionality."
+          ? "You have modified admin access. This may affect system functionality."
           : "Page access settings have been saved successfully. Changes are now active.",
         variant: adminAccessModified ? "destructive" : "default",
       });
@@ -193,6 +207,9 @@ const Settings = () => {
       
       // Also invalidate to ensure fresh data on next load, but don't refetch immediately
       queryClient.invalidateQueries({ queryKey: ['pageAccess'] });
+      
+      // Notify other tabs to refresh their page access context
+      broadcastPageAccessUpdated();
     },
     onError: (error: any) => {
       // Log detailed error information
@@ -240,24 +257,50 @@ const Settings = () => {
       
       toast({
         title: "Admin Access Reset",
-        description: "Administrator access has been restored to full access.",
+        description: "Admin access has been restored to full access.",
       });
       queryClient.invalidateQueries({ queryKey: ['pageAccess'] });
+      broadcastPageAccessUpdated();
     },
     onError: () => {
       toast({
         title: "Error Resetting Admin Access",
-        description: "Failed to reset administrator access. Please try again.",
+        description: "Failed to reset admin access. Please try again.",
         variant: "destructive",
       });
     }
   });
 
-  const officerCustomerReportingEnabled = useMemo(() => {
-    const officerPages = pageAccessByRole['advantageoneofficer'] || [];
+  const officerCustomerReportingEnabled = (() => {
+    const officerPages = pageAccessByRole['store'] || [];
     return officerPages.includes('management-customer-reporting');
-  }, [pageAccessByRole]);
+  })();
 
+  // Use pages from query result if available, otherwise fall back to context
+  const pagesToUse = settings?.availablePages && settings.availablePages.length > 0 
+    ? settings.availablePages 
+    : availablePages;
+
+  // Filter pages based on (debounced) search query
+  const filteredPages = (pagesToUse || [])
+    // Remove legacy/retired pages from the Settings UI
+    .filter(page => {
+      const id = page?.id?.toLowerCase() || '';
+      const path = page?.path?.toLowerCase() || '';
+      // Strip Action Calendar completely from Settings
+      if (id === 'action-calendar' || path.includes('/action-calendar')) {
+        return false;
+      }
+      return true;
+    })
+    .filter(page => {
+      if (!debouncedSearch) return true;
+      const title = page?.title?.toLowerCase() || '';
+      const path = page?.path?.toLowerCase() || '';
+      return title.includes(debouncedSearch) || path.includes(debouncedSearch);
+    });
+
+  // Define category display names and order
   if (queryLoading) {
     return (
       <div className="w-full h-[50vh] flex items-center justify-center">
@@ -278,36 +321,11 @@ const Settings = () => {
     );
   }
 
-  // Use pages from query result if available, otherwise fall back to context
-  const pagesToUse = settings?.availablePages && settings.availablePages.length > 0 
-    ? settings.availablePages 
-    : availablePages;
-
-  // Filter pages based on search query
-  const filteredPages = pagesToUse?.filter(page => {
-    const searchLower = searchQuery?.toLowerCase() || '';
-    return (
-      page?.title?.toLowerCase().includes(searchLower) ||
-      page?.path?.toLowerCase().includes(searchLower)
-    );
-  }) || [];
-
-  // Group pages by category for better organization
-  const pagesByCategory = filteredPages.reduce((acc, page) => {
-    const category = page.path.split('/')[1] || 'dashboard';
-    if (!acc[category]) {
-      acc[category] = [];
-    }
-    acc[category].push(page);
-    return acc;
-  }, {} as Record<string, Page[]>);
-
-  // Define category display names and order
   const categoryDisplayNames: Record<string, string> = {
     'dashboard': 'Dashboard',
     'management': 'Management',
     'reports': 'Operations',
-    'customer': 'Customer',
+    'customer': 'Company',
     'settings': 'Settings',
     'recruitment': 'Recruitment'
   };
@@ -316,6 +334,10 @@ const Settings = () => {
   const getPageSubcategory = (page: Page): string => {
     // First, try to use the category from the database
     if (page.category) {
+      // Map generic "Main" category into Dashboard group for display
+      if (page.category === 'Main') {
+        return 'Dashboard';
+      }
       return page.category;
     }
     
@@ -328,7 +350,7 @@ const Settings = () => {
     }
     
     // Final fallback: Use page ID to infer category
-    if (page.id.includes('customer-')) return 'Customer';
+    if (page.id.includes('customer-')) return 'Company';
     if (page.id.includes('recruitment-') || page.id === 'cbt' || page.id === 'vetting') return 'Recruitment';
     if (page.id.includes('compliance-')) return 'Compliance';
     
@@ -347,10 +369,9 @@ const Settings = () => {
     return acc;
   }, {} as Record<string, Page[]>);
 
-  // Define subcategory order
+  // Define preferred subcategory order for display
   const subcategoryOrder = [
     'Dashboard',
-    'Action Calendar',
     'Administration',
     'Recruitment',
     'Compliance',
@@ -360,6 +381,14 @@ const Settings = () => {
     'Reports',
     'Customer',
     'Settings'
+  ];
+
+  // Include any additional subcategories returned from the backend
+  const orderedSubcategories = [
+    ...subcategoryOrder,
+    ...Object.keys(pagesBySubcategory).filter(
+      (subcategory) => !subcategoryOrder.includes(subcategory)
+    ),
   ];
 
   // Split roles into two groups for the mobile/small tablet view
@@ -379,11 +408,21 @@ const Settings = () => {
 
   // Handle toggle change
   const handleToggle = (pageId: string, roleId: string) => {
-    // Completely block any modifications to Administrator access
+    // Completely block any modifications to Admin access
     if (roleId === 'administrator') {
       toast({
-        title: "Administrator Access Protected",
-        description: "Administrators must have access to all pages. This cannot be changed.",
+        title: "Admin Access Protected",
+        description: "Admins must have access to all pages. This cannot be changed.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Prevent disabling mandatory pages for managers
+    if (roleId === 'manager' && mandatoryManagerPageIds.includes(pageId)) {
+      toast({
+        title: "Mandatory Page",
+        description: "Data Analytics Hub is mandatory for managers and cannot be disabled.",
         variant: "destructive",
       });
       return;
@@ -401,7 +440,7 @@ const Settings = () => {
   // Handle save changes
   // Handler for officer customer reporting toggle
   const handleOfficerReportingToggle = (enabled: boolean) => {
-    updateRoleAccess('advantageoneofficer', (pages) => {
+    updateRoleAccess('store', (pages) => {
       if (enabled) {
         pages.add('management-customer-reporting');
       } else {
@@ -410,7 +449,7 @@ const Settings = () => {
     });
     toast({
       title: "Setting Updated",
-      description: `Officer Customer Reporting access has been ${enabled ? 'enabled' : 'disabled'}.`,
+      description: `Store Company Reporting access has been ${enabled ? 'enabled' : 'disabled'}.`,
     });
   };
 
@@ -429,18 +468,26 @@ const Settings = () => {
       return;
     }
     
-    // Ensure administrators always have access to all pages before saving
+    // Ensure admins always have access to all pages before saving
     const pagesToUse = settings?.availablePages && settings.availablePages.length > 0 
       ? settings.availablePages 
       : availablePages;
     const allPageIds = pagesToUse.map(page => page.id);
+
+    // Ensure managers always have mandatory pages before saving
+    const currentManagerPages = pageAccessByRole.manager || [];
+    const managerPageSet = new Set<string>(currentManagerPages);
+    mandatoryManagerPageIds.forEach(id => managerPageSet.add(id));
+    const managerPagesWithMandatory = Array.from(managerPageSet);
     
     const settingsToSave = {
       ...pageAccessByRole,
-      administrator: allPageIds  // Force full access for administrators
+      manager: managerPagesWithMandatory,
+      administrator: allPageIds,  // Force full access for admins; backend expects 'administrator'
+      admin: allPageIds,         // Legacy alias for compatibility
     };
     
-    console.log('💾 [Settings] Ensuring administrator has all pages:', allPageIds.length);
+    console.log('💾 [Settings] Ensuring admin has all pages:', allPageIds.length);
     console.log('💾 [Settings] Calling saveSettings mutation...');
     saveSettings({ pageAccessByRole: settingsToSave });
   };
@@ -454,14 +501,15 @@ const Settings = () => {
     const allPageIds = pagesToUse.map(page => page.id);
     const updatedSettings = {
       ...pageAccessByRole,
-      administrator: allPageIds
+      administrator: allPageIds,
+      admin: allPageIds,
     };
     setPageAccessByRole(updatedSettings);
     saveSettings({ pageAccessByRole: updatedSettings });
     setAdminAccessModified(false);
     toast({
       title: "Admin Access Reset",
-      description: "Administrator access has been restored to full access.",
+      description: "Admin access has been restored to full access.",
     });
   };
 
@@ -482,7 +530,7 @@ const Settings = () => {
           </AlertTitle>
           <AlertDescription>
             You are in test mode viewing the application as {userRoles.find(r => r.id === testRole)?.name || testRole}.
-            You still have access to this settings page as an administrator.
+            You still have access to this settings page as an admin.
           </AlertDescription>
         </Alert>
       )}
@@ -537,9 +585,9 @@ const Settings = () => {
           {adminAccessModified && (
             <Alert variant="destructive" className="mb-2 sm:mb-3 md:mb-4">
               <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              <AlertTitle className="text-xs sm:text-sm">Warning: Administrator Access Modified</AlertTitle>
+              <AlertTitle className="text-xs sm:text-sm">Warning: Admin Access Modified</AlertTitle>
               <AlertDescription className="text-xs sm:text-sm">
-                You have restricted administrator access to certain pages. This may affect system functionality.
+                You have restricted admin access to certain pages. This may affect system functionality.
                 Click "Reset Admin Access" to restore full access.
               </AlertDescription>
             </Alert>
@@ -559,9 +607,9 @@ const Settings = () => {
             <CardContent>
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
-                  <p className="text-sm font-medium">Customer Reporting Access</p>
+                  <p className="text-sm font-medium">Company Reporting Access</p>
                   <p className="text-xs text-muted-foreground">
-                    Allow AdvantageOne officers to access the Customer Reporting page
+                    Allow store users to access the Company Reporting page
                   </p>
                 </div>
                 <Switch
@@ -633,7 +681,7 @@ const Settings = () => {
                     ))}
                   </tr>
                 </thead>
-                <tbody>{subcategoryOrder.map(subcategory => {
+                <tbody>{orderedSubcategories.map(subcategory => {
                   const pagesInSubcategory = pagesBySubcategory[subcategory] || [];
                   if (pagesInSubcategory.length === 0) return null;
                   return (<React.Fragment key={subcategory + '-lg'}>
@@ -656,9 +704,21 @@ const Settings = () => {
                               <Switch
                                 checked={(pageAccessByRole[role.id] || []).includes(page.id)}
                                 onCheckedChange={() => handleToggle(page.id, role.id)}
-                                disabled={role.id === 'administrator'}
+                                disabled={
+                                  role.id === 'administrator' ||
+                                  role.id === 'store' ||
+                                  (role.id === 'manager' && mandatoryManagerPageIds.includes(page.id))
+                                }
                                 className="data-[state=checked]:bg-primary h-5 w-9"
-                                title={role.id === 'administrator' ? 'Administrator access cannot be modified' : ''}
+                                title={
+                                  role.id === 'administrator'
+                                    ? 'Admin access cannot be modified'
+                                    : role.id === 'store'
+                                    ? 'Store User has fixed access (Incident Report only)'
+                                    : role.id === 'manager' && mandatoryManagerPageIds.includes(page.id)
+                                    ? 'This page is mandatory for managers and cannot be disabled'
+                                    : ''
+                                }
                               />
                             </div>
                           </td>))}
@@ -692,7 +752,7 @@ const Settings = () => {
                     </th>
                   </tr>
                 </thead>
-                <tbody>{subcategoryOrder.map(subcategory => {
+                <tbody>{orderedSubcategories.map(subcategory => {
                   const pagesInSubcategory = pagesBySubcategory[subcategory] || [];
                   if (pagesInSubcategory.length === 0) return null;
                   return (<React.Fragment key={subcategory + '-sm'}>
@@ -712,7 +772,11 @@ const Settings = () => {
                             <Switch
                               checked={(pageAccessByRole[selectedRoleForMobile] || []).includes(page.id)}
                               onCheckedChange={() => handleToggle(page.id, selectedRoleForMobile)}
-                              disabled={selectedRoleForMobile === 'administrator' && !adminAccessModified}
+                              disabled={
+                                selectedRoleForMobile === 'administrator' ||
+                                selectedRoleForMobile === 'store' ||
+                                (selectedRoleForMobile === 'manager' && mandatoryManagerPageIds.includes(page.id))
+                              }
                               className="data-[state=checked]:bg-primary h-5 w-9"
                             />
                           </div>

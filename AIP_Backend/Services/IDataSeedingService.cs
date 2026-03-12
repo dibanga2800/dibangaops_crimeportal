@@ -11,6 +11,8 @@ namespace AIPBackend.Services
         Task SeedSampleUsersForTestingAsync();
         Task SeedTestEmployeesAsync();
         Task SeedLookupTablesAsync();
+        Task MigrateUserRolesAsync();
         Task UpdatePositionsAsync();
+        Task EnsureLookupCategoriesAsync();
     }
 }

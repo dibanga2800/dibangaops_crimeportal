@@ -27,6 +27,9 @@ namespace AIPBackend.Models
         [MaxLength(100)]
         public string? Category { get; set; }
 
+        [MaxLength(100)]
+        public string? Department { get; set; }
+
         [MaxLength(500)]
         public string? Description { get; set; }
 

@@ -28,7 +28,7 @@ export function AdminSection() {
       <SidebarMenuButton asChild>
         <Link to="/administration/customer-setup">
           <Database className="w-4 h-4" />
-          <span>Customer Setup</span>
+          <span>Company Setup</span>
         </Link>
       </SidebarMenuButton>
     </div>

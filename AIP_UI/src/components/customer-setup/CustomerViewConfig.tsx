@@ -33,16 +33,16 @@ export function CustomerViewConfig({ customerType = 'retail', initialConfig }: C
     <div className="space-y-4">
       <Alert>
         <Lock className="h-4 w-4" />
-        <AlertTitle>Customer page configuration</AlertTitle>
+        <AlertTitle>Company page configuration</AlertTitle>
         <AlertDescription>
-          The summary below reflects the current view configuration for this customer.
+          The summary below reflects the current view configuration for this company.
         </AlertDescription>
       </Alert>
 
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm text-muted-foreground">Currently enabled pages for this customer</p>
-          <p className="text-xs text-muted-foreground">Customer type: {customerType}</p>
+          <p className="text-sm text-muted-foreground">Currently enabled pages for this company</p>
+          <p className="text-xs text-muted-foreground">Company type: {customerType}</p>
         </div>
       </div>
 
@@ -71,7 +71,7 @@ export function CustomerViewConfig({ customerType = 'retail', initialConfig }: C
         </div>
       ) : (
         <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-          No custom view configuration found for this customer.
+          No custom view configuration found for this company.
         </div>
       )}
     </div>

@@ -129,6 +129,82 @@ namespace AIPBackend.Migrations
                     b.ToTable("ActionCalendarStatusUpdates");
                 });
 
+            modelBuilder.Entity("AIPBackend.Models.AlertInstance", b =>
+                {
+                    b.Property<int>("AlertInstanceId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("AlertInstanceId"));
+
+                    b.Property<DateTime?>("AcknowledgedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("AcknowledgedBy")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("AlertRuleId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("EscalatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("EscalatedTo")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("EscalationLevel")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("IncidentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("MatchDetails")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Message")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("ResolutionNotes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ResolvedBy")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("AlertInstanceId");
+
+                    b.HasIndex("AlertRuleId");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("IncidentId");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("AlertInstances");
+                });
+
             modelBuilder.Entity("AIPBackend.Models.AlertRule", b =>
                 {
                     b.Property<int>("AlertRuleId")
@@ -190,9 +266,6 @@ namespace AIPBackend.Migrations
 
                     b.Property<int?>("SiteId")
                         .HasColumnType("int");
-
-                    b.Property<decimal?>("StoreRadius")
-                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("TriggerCondition")
                         .IsRequired()
@@ -286,6 +359,10 @@ namespace AIPBackend.Migrations
                         .HasMaxLength(4000)
                         .HasColumnType("nvarchar(4000)");
 
+                    b.Property<string>("AssignedSiteIds")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .HasColumnType("nvarchar(max)");
@@ -305,6 +382,9 @@ namespace AIPBackend.Migrations
                         .HasColumnType("nvarchar(256)");
 
                     b.Property<bool>("EmailConfirmed")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("EmailNotificationsEnabled")
                         .HasColumnType("bit");
 
                     b.Property<int?>("EmployeeId")
@@ -345,6 +425,9 @@ namespace AIPBackend.Migrations
                     b.Property<DateTime?>("LockoutUntil")
                         .HasColumnType("datetime2");
 
+                    b.Property<bool>("LoginAlertsEnabled")
+                        .HasColumnType("bit");
+
                     b.Property<int>("LoginAttempts")
                         .HasColumnType("int");
 
@@ -364,11 +447,26 @@ namespace AIPBackend.Migrations
                     b.Property<string>("PasswordHash")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("PendingTwoFactorCode")
+                        .HasMaxLength(12)
+                        .HasColumnType("nvarchar(12)");
+
+                    b.Property<DateTime?>("PendingTwoFactorExpiryUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("PhoneNumber")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("bit");
+
+                    b.Property<string>("PrimarySiteId")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ProfilePicture")
+                        .HasMaxLength(1500000)
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("RecordIsDeleted")
                         .HasColumnType("bit");
@@ -1227,6 +1325,239 @@ namespace AIPBackend.Migrations
                     b.ToTable("DailyOccurrenceBooks");
                 });
 
+            modelBuilder.Entity("AIPBackend.Models.Employee", b =>
+                {
+                    b.Property<int>("EmployeeId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("EmployeeId"));
+
+                    b.Property<string>("AipAccessLevel")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ContactNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("County")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateModified")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("EmployeeNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("EmployeeStatus")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("EmploymentType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("FirstName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("nvarchar(max)")
+                        .HasComputedColumnSql("CONCAT([FirstName], ' ', [Surname])");
+
+                    b.Property<string>("HouseName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Nationality")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("NumberAndStreet")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Position")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("PostCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<bool>("RecordIsDeletedYN")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Region")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("RightToWorkCondition")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<DateTime?>("SiaLicenceExpiry")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("StartDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Surname")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Town")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("EmployeeId");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.HasIndex("Email")
+                        .IsUnique()
+                        .HasFilter("[Email] IS NOT NULL");
+
+                    b.HasIndex("EmployeeNumber")
+                        .IsUnique();
+
+                    b.HasIndex("ModifiedBy");
+
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasFilter("[UserId] IS NOT NULL");
+
+                    b.ToTable("Employees");
+                });
+
+            modelBuilder.Entity("AIPBackend.Models.EvidenceCustodyEvent", b =>
+                {
+                    b.Property<int>("CustodyEventId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("CustodyEventId"));
+
+                    b.Property<DateTime>("EventTimestamp")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("EvidenceItemId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Location")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("PerformedBy")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("PerformedByName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("CustodyEventId");
+
+                    b.HasIndex("EvidenceItemId");
+
+                    b.ToTable("EvidenceCustodyEvents");
+                });
+
+            modelBuilder.Entity("AIPBackend.Models.EvidenceItem", b =>
+                {
+                    b.Property<int>("EvidenceItemId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("EvidenceItemId"));
+
+                    b.Property<string>("Barcode")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("EvidenceType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("IncidentId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("RegisteredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("RegisteredBy")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("StorageLocation")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("EvidenceItemId");
+
+                    b.HasIndex("Barcode");
+
+                    b.HasIndex("IncidentId");
+
+                    b.ToTable("EvidenceItems");
+                });
+
             modelBuilder.Entity("AIPBackend.Models.HolidayRequest", b =>
                 {
                     b.Property<int>("Id")
@@ -1383,7 +1714,7 @@ namespace AIPBackend.Migrations
                         .HasMaxLength(5000)
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("IncidentInvolvedJson")
+                    b.Property<string>("IncidentInvolved")
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
@@ -1392,13 +1723,17 @@ namespace AIPBackend.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<string>("InvolvedPartiesJson")
+                    b.Property<string>("InvolvedParties")
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
                     b.Property<string>("Location")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("ModusOperandi")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<string>("OffenderCounty")
                         .HasMaxLength(100)
@@ -1407,7 +1742,14 @@ namespace AIPBackend.Migrations
                     b.Property<DateTime?>("OffenderDOB")
                         .HasColumnType("datetime2");
 
+                    b.Property<bool>("OffenderDetailsVerified")
+                        .HasColumnType("bit");
+
                     b.Property<string>("OffenderHouseName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("OffenderId")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
@@ -1440,15 +1782,6 @@ namespace AIPBackend.Migrations
                         .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("OffenderVillageOrSuburb")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("OfficerName")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("OfficerRole")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
@@ -1490,10 +1823,16 @@ namespace AIPBackend.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<string>("SiteName")
+                    b.Property<string>("StaffMemberName")
                         .IsRequired()
                         .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("StaffMemberName");
+
+                    b.Property<string>("StaffMemberRole")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("StaffMemberRole");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -1503,6 +1842,12 @@ namespace AIPBackend.Migrations
                     b.Property<string>("StoreComments")
                         .HasMaxLength(5000)
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("StoreName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("StoreName");
 
                     b.Property<string>("TimeOfIncident")
                         .HasMaxLength(20)
@@ -1525,7 +1870,14 @@ namespace AIPBackend.Migrations
                     b.Property<decimal?>("ValueRecovered")
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<string>("WitnessStatementsJson")
+                    b.Property<string>("VerificationEvidenceImage")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("VerificationMethod")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("WitnessStatements")
                         .HasMaxLength(5000)
                         .HasColumnType("nvarchar(max)");
 
@@ -1570,7 +1922,6 @@ namespace AIPBackend.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("CreatedBy")
-                        .IsRequired()
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
@@ -1592,7 +1943,6 @@ namespace AIPBackend.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("UpdatedBy")
-                        .IsRequired()
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
 
@@ -1790,6 +2140,10 @@ namespace AIPBackend.Migrations
                     b.Property<string>("CreatedBy")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Department")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("Description")
                         .HasMaxLength(500)
@@ -2380,6 +2734,24 @@ namespace AIPBackend.Migrations
                     b.Navigation("UpdatedByUser");
                 });
 
+            modelBuilder.Entity("AIPBackend.Models.AlertInstance", b =>
+                {
+                    b.HasOne("AIPBackend.Models.AlertRule", "AlertRule")
+                        .WithMany()
+                        .HasForeignKey("AlertRuleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("AIPBackend.Models.Incident", "Incident")
+                        .WithMany()
+                        .HasForeignKey("IncidentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("AlertRule");
+
+                    b.Navigation("Incident");
+                });
+
             modelBuilder.Entity("AIPBackend.Models.AlertRule", b =>
                 {
                     b.HasOne("AIPBackend.Models.Customer", "Customer")
@@ -2551,6 +2923,52 @@ namespace AIPBackend.Migrations
                     b.Navigation("ReportedByUser");
                 });
 
+            modelBuilder.Entity("AIPBackend.Models.Employee", b =>
+                {
+                    b.HasOne("AIPBackend.Models.ApplicationUser", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("AIPBackend.Models.ApplicationUser", "ModifiedByUser")
+                        .WithMany()
+                        .HasForeignKey("ModifiedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("AIPBackend.Models.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("ModifiedByUser");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("AIPBackend.Models.EvidenceCustodyEvent", b =>
+                {
+                    b.HasOne("AIPBackend.Models.EvidenceItem", "EvidenceItem")
+                        .WithMany("CustodyEvents")
+                        .HasForeignKey("EvidenceItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("EvidenceItem");
+                });
+
+            modelBuilder.Entity("AIPBackend.Models.EvidenceItem", b =>
+                {
+                    b.HasOne("AIPBackend.Models.Incident", "Incident")
+                        .WithMany()
+                        .HasForeignKey("IncidentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Incident");
+                });
+
             modelBuilder.Entity("AIPBackend.Models.HolidayRequest", b =>
                 {
                     b.HasOne("AIPBackend.Models.ApplicationUser", "AuthorisedByUser")
@@ -2613,14 +3031,12 @@ namespace AIPBackend.Migrations
                     b.HasOne("AIPBackend.Models.ApplicationUser", "CreatedByUser")
                         .WithMany()
                         .HasForeignKey("CreatedBy")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("AIPBackend.Models.ApplicationUser", "UpdatedByUser")
                         .WithMany()
                         .HasForeignKey("UpdatedBy")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("CreatedByUser");
 
@@ -2853,6 +3269,11 @@ namespace AIPBackend.Migrations
                     b.Navigation("SecurityChecks");
 
                     b.Navigation("VisitorLog");
+                });
+
+            modelBuilder.Entity("AIPBackend.Models.EvidenceItem", b =>
+                {
+                    b.Navigation("CustodyEvents");
                 });
 
             modelBuilder.Entity("AIPBackend.Models.Incident", b =>

@@ -33,7 +33,7 @@ namespace AIPBackend.Models
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         [MaxLength(450)]
-        public string CreatedBy { get; set; } = string.Empty;
+        public string? CreatedBy { get; set; }
 
         [ForeignKey("CreatedBy")]
         public virtual ApplicationUser? CreatedByUser { get; set; }
@@ -41,7 +41,7 @@ namespace AIPBackend.Models
         public DateTime? UpdatedAt { get; set; }
 
         [MaxLength(450)]
-        public string UpdatedBy { get; set; } = string.Empty;
+        public string? UpdatedBy { get; set; }
 
         [ForeignKey("UpdatedBy")]
         public virtual ApplicationUser? UpdatedByUser { get; set; }

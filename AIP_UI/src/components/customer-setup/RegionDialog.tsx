@@ -192,11 +192,11 @@ export function RegionDialog({ open, onOpenChange, region, selectedCustomerId, o
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder={isLoadingCustomers ? "Loading customers..." : (selectedCustomerId ? "Customer selected" : "Select customer")}>
+                          <SelectValue placeholder={isLoadingCustomers ? "Loading companies..." : (selectedCustomerId ? "Company selected" : "Select company")}>
                                                          {(() => {
                                if (selectedCustomerId && field.value > 0) {
                                  const selectedCustomer = customers.find(c => String(c.id) === selectedCustomerId)
-                                 return selectedCustomer ? selectedCustomer.companyName : "Customer selected"
+                                 return selectedCustomer ? selectedCustomer.companyName : "Company selected"
                                }
                                return undefined
                              })()}

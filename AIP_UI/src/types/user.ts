@@ -1,10 +1,5 @@
-// Roles are stored in lowercase to match backend
-export type UserRole = 
-  | 'advantageoneofficer'
-  | 'advantageonehoofficer'
-  | 'administrator'
-  | 'customersitemanager'
-  | 'customerhomanager';
+// 4-role model: admin, manager, security-officer, store
+export type UserRole = 'administrator' | 'manager' | 'security-officer' | 'store';
 
 export interface Customer {
   id: string;
@@ -70,26 +65,31 @@ export interface BaseUser {
   signature?: string;
   signatureCode?: string;
   jobTitle?: string;
+  profilePicture?: string;
   recordIsDeleted?: boolean;
   createdAt: string;
   updatedAt: string;
   employeeId?: number;
   employeeName?: string;
+  twoFactorEnabled?: boolean;
+  emailNotificationsEnabled?: boolean;
+  loginAlertsEnabled?: boolean;
+  // Store / site assignments
+  primarySiteId?: string;
+  assignedSiteIds?: string[];
 }
 
 export interface CustomerUser extends BaseUser {
-  role: Extract<UserRole, 'customersitemanager' | 'customerhomanager'>;
   customerId: number;
-  customerName?: string; // Company name for customer users
+  customerName?: string;
 }
 
-export interface AdvantageOneUser extends BaseUser {
-  role: Extract<UserRole, 'advantageoneofficer' | 'advantageonehoofficer' | 'administrator'>;
+export interface PlatformUser extends BaseUser {
   assignedCustomerIds?: number[];
   assignedCustomerNames?: string[];
 }
 
-export type User = CustomerUser | AdvantageOneUser;
+export type User = CustomerUser | PlatformUser;
 
 export interface Employee {
   id: string;
@@ -131,25 +131,20 @@ export interface UsersResponse {
 }
 
 /**
- * @deprecated Use customerService.getAllCustomers() or customerMappingService.getCustomerMappings() instead
- * This static array is kept for backward compatibility only.
- * Customer IDs should be fetched dynamically from the API to ensure they match the database.
+ * Simple user record shape used by legacy user-setup components.
+ * Not used in the main application flow — the active user types are CustomerUser and PlatformUser above.
  */
-export const AVAILABLE_CUSTOMERS = [
-  { id: 1, name: "Central England COOP" },
-  { id: 22, name: "Heart of England" },
-  { id: 23, name: "Midcounties COOP" },
-  { id: 24, name: "Eastbrook Worcester" },
-  { id: 25, name: "Eastbrook Tewksbury" }
-] as const;
-
-export const USER_COMPANIES = [
-  'Central England COOP',
-  'Midcounties COOP',
-  'Eastbrook Worcester',
-  'Eastbrook Tewksbury',
-  'Heart of England'
-] as const;
+export interface UserRecord {
+  id: string
+  username: string
+  email: string
+  role: 'Admin' | 'Manager' | 'User' | 'Support'
+  status: 'active' | 'inactive'
+  lastLogin: string
+  createdAt: string
+  assignedCustomers?: { id: string; name: string }[]
+  officerType?: string
+}
 
 export interface CreateUserInput extends Omit<User, 'id' | 'createdAt' | 'updatedAt'> {
   confirmPassword?: string;

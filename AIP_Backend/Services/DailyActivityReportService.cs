@@ -71,7 +71,7 @@ namespace AIPBackend.Services
 					query.CustomerId = userContext.CustomerId.Value.ToString();
 					queryBuilder = queryBuilder.Where(r => r.CustomerId == userContext.CustomerId.Value);
 				}
-				else if (userContext.IsOfficer)
+				else if (userContext.IsStore)
 				{
 					queryBuilder = queryBuilder.Where(r => r.CreatedBy == userContext.UserId);
 				}

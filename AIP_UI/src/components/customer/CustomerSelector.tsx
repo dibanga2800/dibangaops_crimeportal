@@ -81,7 +81,7 @@ export const CustomerSelector: React.FC = () => {
 	return (
 		<div className="px-3 py-2 mb-2 border-b border-border">
 			<label className="block text-xs font-medium text-muted-foreground mb-2">
-				Select Customer
+				Select Company
 			</label>
 			<Select
 				value={selectValue}
@@ -89,7 +89,7 @@ export const CustomerSelector: React.FC = () => {
 				disabled={isLoading || customers.length === 0}
 			>
 				<SelectTrigger className="w-full h-9 text-sm">
-					<SelectValue placeholder={isLoading ? 'Loading customers...' : 'Select a customer'} />
+					<SelectValue placeholder={isLoading ? 'Loading companies...' : 'Select a company'} />
 				</SelectTrigger>
 				<SelectContent className="max-h-[300px]">
 					{customers.map((customer) => (

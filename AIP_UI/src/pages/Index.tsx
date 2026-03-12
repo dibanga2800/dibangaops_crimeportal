@@ -50,7 +50,6 @@ import { DashboardGreeting } from '@/components/dashboard/DashboardGreeting'
 
 // Lazy load the dashboard components
 const OfficerDashboard = React.lazy(() => import('@/pages/Dashboard/OfficerDashboard'))
-const CustomerDashboard = React.lazy(() => import('@/pages/Dashboard/CustomerDashboard'))
 const AdminDashboard = React.lazy(() => import('@/pages/Dashboard/AdminDashboard'))
 
 // Customer-specific data
@@ -517,7 +516,8 @@ const Index = () => {
   }
 
   // Show appropriate dashboard based on role
-  if (effectiveRole === 'administrator' || effectiveRole === 'advantageonehoofficer') {
+  // Admin/Manager: management dashboard. Officer/Store: operational dashboard.
+  if (effectiveRole === 'administrator' || effectiveRole === 'manager') {
     console.log('🏠 [Index] Rendering AdminDashboard for role:', effectiveRole);
     return (
       <Suspense fallback={
@@ -528,35 +528,22 @@ const Index = () => {
           </div>
         </div>
       }>
-        <AdminDashboard />
+        <AdminDashboard viewRole={effectiveRole === 'manager' ? 'manager' : 'administrator'} />
       </Suspense>
     )
-  } else if (effectiveRole === 'advantageoneofficer') {
+  } else if (effectiveRole === 'security-officer' || effectiveRole === 'store') {
+    // Officer and store user get OfficerDashboard with user-specific data filtering
     console.log('🏠 [Index] Rendering OfficerDashboard for role:', effectiveRole);
     return (
       <Suspense fallback={
         <div className="flex items-center justify-center min-h-screen">
           <div className="space-y-4 text-center">
-            <div className="text-lg font-medium">Loading Officer Dashboard...</div>
+            <div className="text-lg font-medium">Loading Dashboard...</div>
             <div className="text-sm text-gray-500">Please wait</div>
           </div>
         </div>
       }>
         <OfficerDashboard />
-      </Suspense>
-    )
-  } else if (effectiveRole === 'customersitemanager' || effectiveRole === 'customerhomanager') {
-    console.log('🏠 [Index] Rendering CustomerDashboard for role:', effectiveRole);
-    return (
-      <Suspense fallback={
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="space-y-4 text-center">
-            <div className="text-lg font-medium">Loading Customer Dashboard...</div>
-            <div className="text-sm text-gray-500">Please wait</div>
-          </div>
-        </div>
-      }>
-        <CustomerDashboard userRole={effectiveRole as 'customersitemanager' | 'customerhomanager'} />
       </Suspense>
     )
   }

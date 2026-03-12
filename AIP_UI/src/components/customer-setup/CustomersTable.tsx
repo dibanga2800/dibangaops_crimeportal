@@ -295,7 +295,7 @@ export function CustomersTable({ onCustomerSelect, selectedCustomerId, onDataCha
         <div className="flex items-center justify-center py-8">
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-2"></div>
-            <p className="text-sm text-gray-600">Loading customers...</p>
+            <p className="text-sm text-gray-600">Loading companies...</p>
           </div>
         </div>
       )}
@@ -367,7 +367,7 @@ export function CustomersTable({ onCustomerSelect, selectedCustomerId, onDataCha
                       <div className="font-medium">{vatNumber}</div>
                     </div>
                     <div className="col-span-2">
-                      <span className="text-gray-500 block mb-0.5">Customer Type</span>
+                      <span className="text-gray-500 block mb-0.5">Company Type</span>
                       <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
                         {typeLabel}
                       </span>
@@ -416,7 +416,7 @@ export function CustomersTable({ onCustomerSelect, selectedCustomerId, onDataCha
                     <TableHead className="text-sm">Company Number</TableHead>
                     <TableHead className="text-sm">VAT Number</TableHead>
                     <TableHead className="text-sm">Status</TableHead>
-                    <TableHead className="text-sm">Customer Type</TableHead>
+                    <TableHead className="text-sm">Company Type</TableHead>
                     <TableHead className="text-right text-sm">Actions</TableHead>
                 </TableRow>
               </TableHeader>

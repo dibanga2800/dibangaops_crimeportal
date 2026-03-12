@@ -1,0 +1,38 @@
+# ========================================
+# PRODUCTION ENVIRONMENT VARIABLES
+# ========================================
+# INSTRUCTIONS:
+# 1. Copy this file to .env.production
+# 2. Fill in actual values
+# 3. Deploy to Vercel using environment variables in dashboard
+
+# API Configuration
+VITE_API_URL=https://api.yourdomain.com
+VITE_API_TIMEOUT=30000
+
+# Environment
+VITE_ENV=production
+VITE_APP_ENV=production
+
+# Feature Flags
+VITE_ENABLE_ANALYTICS=true
+VITE_ENABLE_ERROR_TRACKING=true
+
+# App Configuration
+VITE_APP_NAME="AIP Security Management"
+VITE_APP_VERSION=1.0.0
+
+# ========================================
+# VERCEL DEPLOYMENT INSTRUCTIONS:
+# ========================================
+# In Vercel Dashboard:
+# 1. Go to your project → Settings → Environment Variables
+# 2. Add each variable above (one by one)
+# 3. Select "Production" environment
+# 4. Click "Save"
+# 5. Redeploy your application
+
+# ⚠️ IMPORTANT NOTES:
+# - Variables must start with VITE_ to be accessible in the app
+# - DO NOT put sensitive secrets here - they're visible in the browser!
+# - Replace api.yourdomain.com with your actual API domain

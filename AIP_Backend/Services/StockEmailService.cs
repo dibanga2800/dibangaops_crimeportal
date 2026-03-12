@@ -13,7 +13,7 @@ namespace AIPBackend.Services
 		private readonly string _operationsEmail;
 		private readonly string _fromName;
 		private const string DEFAULT_OPERATIONS_EMAIL = "ops@advantage1.co.uk";
-		private const string DEFAULT_FROM_NAME = "Advantage One Security - Stock Management";
+		private const string DEFAULT_FROM_NAME = "Crime Portal - Stock Management";
 
 		public StockEmailService(
 			IEmailService emailService,

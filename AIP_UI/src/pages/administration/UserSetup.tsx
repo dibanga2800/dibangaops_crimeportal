@@ -76,6 +76,7 @@ const UserSetup = () => {
   const dispatch = useAppDispatch()
   const { toast } = useToast()
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [filterType, setFilterType] = useState<'all' | 'name' | 'email' | 'customer'>('all')
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [selectedUser, setSelectedUser] = useState<User | undefined>()
@@ -94,44 +95,80 @@ const UserSetup = () => {
     return map
   }, [availableCustomers])
 
-  // Check authentication on component mount
-  useEffect(() => {
-    const token = localStorage.getItem('authToken')
-    
-    console.log('🔍 [UserSetup] Authentication check:', { 
-      hasToken: !!token,
-      currentPath: window.location.pathname 
-    })
-    
-    if (!token) {
-      console.warn('⚠️ [UserSetup] No authentication found, redirecting to login')
-      window.location.href = '/login'
-      return
-    }
-    
-    console.log('✅ [UserSetup] Authentication verified')
-  }, [])
+  // Auth is enforced by ProtectedRoute — no need to duplicate the check here.
 
   // Get users and loading state from Redux store
   const { users, loading, error } = useAppSelector((state: RootState) => state.users)
+
+  // Debounce the search term so we don't spam the API on every keypress
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      setDebouncedSearch(searchQuery)
+    }, 300)
+
+    return () => clearTimeout(handle)
+  }, [searchQuery])
 
   // Fetch users on mount and when pagination/search changes
   useEffect(() => {
     dispatch(fetchUsers({
       page: currentPage,
       pageSize,
-      searchTerm: searchQuery || undefined
+      searchTerm: debouncedSearch || undefined
     }))
-  }, [dispatch, currentPage, pageSize, searchQuery])
+  }, [dispatch, currentPage, pageSize, debouncedSearch])
 
-  // Use users directly since backend handles filtering and pagination
-  const displayUsers = users
+  // Apply lightweight client-side filtering for UX (while backend still handles paging)
+  const filteredUsers = useMemo(() => {
+    const query = debouncedSearch.trim().toLowerCase()
+    if (!query) return users
 
-  // Pagination calculations (these will be updated when we get the full response)
-  const totalUsers = users.length // This will be updated when we get pagination info
-  const totalPages = Math.ceil(totalUsers / pageSize)
+    const matchesName = (user: User) => {
+      const fullName = `${user.firstName || ''} ${user.lastName || ''}`.toLowerCase()
+      const username = (user.username || '').toLowerCase()
+      return fullName.includes(query) || username.includes(query)
+    }
+
+    const matchesEmail = (user: User) => (user.email || '').toLowerCase().includes(query)
+
+    const matchesCustomer = (user: User) => {
+      if (user.customerId) {
+        const directName =
+          (user as any).customerName ||
+          customerNameMap.get(user.customerId) ||
+          ''
+        if (String(directName).toLowerCase().includes(query)) return true
+      }
+
+      if ('assignedCustomerNames' in user && user.assignedCustomerNames && user.assignedCustomerNames.length > 0) {
+        const joined = user.assignedCustomerNames.join(', ').toLowerCase()
+        if (joined.includes(query)) return true
+      }
+
+      return false
+    }
+
+    return users.filter((user) => {
+      switch (filterType) {
+        case 'name':
+          return matchesName(user)
+        case 'email':
+          return matchesEmail(user)
+        case 'customer':
+          return matchesCustomer(user)
+        case 'all':
+        default:
+          return matchesName(user) || matchesEmail(user) || matchesCustomer(user)
+      }
+    })
+  }, [users, debouncedSearch, filterType, customerNameMap])
+
+  // Pagination calculations based on filtered users
+  const totalUsers = filteredUsers.length
+  const totalPages = Math.ceil(totalUsers / pageSize) || 1
   const startIndex = (currentPage - 1) * pageSize
   const endIndex = startIndex + pageSize
+  const displayUsers = filteredUsers.slice(startIndex, endIndex)
 
   // Reset to first page when search changes
   useEffect(() => {
@@ -177,19 +214,6 @@ const UserSetup = () => {
         customerId: result.customerId,
         customerName: (result as any).customerName,
         role: result.role,
-        fullResult: result
-      })
-      
-      // Refetch users to ensure we have the latest data including customerName
-      console.log('🔄 [UserSetup] Refetching users list...')
-      const refetchResult = await dispatch(fetchUsers({
-        page: currentPage,
-        pageSize,
-        searchTerm: searchQuery || undefined
-      })).unwrap()
-      console.log('✅ [UserSetup] Users list refetched:', {
-        count: refetchResult.length,
-        updatedUser: refetchResult.find((u: any) => u.id === data.id)
       })
       
       setShowUserDialog(false)
@@ -267,25 +291,40 @@ const UserSetup = () => {
         updatedAt: (detail as any).updatedAt ?? (detail as any).UpdatedAt ?? new Date().toISOString(),
         employeeId: (detail as any).employeeId ?? (detail as any).EmployeeId,
         employeeName: (detail as any).employeeName ?? (detail as any).EmployeeName,
+        primarySiteId: (detail as any).primarySiteId ?? (detail as any).PrimarySiteId,
+        assignedSiteIds:
+          (detail as any).assignedSiteIds ??
+          (detail as any).AssignedSiteIds ??
+          [],
       }
 
       let normalized: User
       const normalizedRole = role?.toLowerCase() as UserRole
-      if (normalizedRole === 'customersitemanager' || normalizedRole === 'customerhomanager') {
-        // Properly handle customerId - preserve the value from backend
-        const rawCustomerId = (detail as any).customerId ?? (detail as any).CustomerId ?? base.customerId
-        const customerId = rawCustomerId != null && rawCustomerId !== undefined && rawCustomerId !== '' 
-          ? Number(rawCustomerId) 
-          : undefined
-        // Only set customerId if it's a valid positive number
-        normalized = { 
-          ...(base as any), 
-          role: normalizedRole, 
-          customerId: customerId != null && !isNaN(customerId) && customerId > 0 ? customerId : undefined
+      const rawCustomerId = (detail as any).customerId ?? (detail as any).CustomerId ?? base.customerId
+      const customerId = rawCustomerId != null && rawCustomerId !== undefined && rawCustomerId !== '' 
+        ? Number(rawCustomerId) 
+        : undefined
+      
+      if (customerId != null && !isNaN(customerId) && customerId > 0) {
+        normalized = {
+          ...(base as any),
+          role: normalizedRole,
+          customerId,
         } as User
       } else {
-        const assignedCustomerIds = ((detail as any).assignedCustomerIds ?? (detail as any).AssignedCustomerIds ?? []).map((id: any) => Number(id))
-        normalized = { ...(base as any), role: normalizedRole, assignedCustomerIds } as User
+        const assignedCustomerIdsRaw =
+          (detail as any).assignedCustomerIds ??
+          (detail as any).AssignedCustomerIds ??
+          []
+        const assignedCustomerIds = Array.isArray(assignedCustomerIdsRaw)
+          ? assignedCustomerIdsRaw.map((id: any) => Number(id))
+          : []
+
+        normalized = {
+          ...(base as any),
+          role: normalizedRole,
+          assignedCustomerIds,
+        } as User
       }
 
       setSelectedUser(normalized)
@@ -315,61 +354,33 @@ const UserSetup = () => {
   // Helper to format role for display (PascalCase)
   const formatRoleForDisplay = (role: UserRole): string => {
     const roleMap: Record<UserRole, string> = {
-      'administrator': 'Administrator',
-      'advantageoneofficer': 'AdvantageOneOfficer',
-      'advantageonehoofficer': 'AdvantageOneHOOfficer',
-      'customersitemanager': 'CustomerSiteManager',
-      'customerhomanager': 'CustomerHOManager'
+      'administrator': 'Admin',
+      'manager': 'Manager',
+      'security-officer': 'Security Officer',
+      'store': 'Store User',
     };
     return roleMap[role] || role;
   };
 
-  const getStatusColor = (role: UserRole) => {
-    switch (role) {
-      case 'administrator':
-        return 'bg-red-100 text-red-800'
-      case 'advantageonehoofficer':
-        return 'bg-purple-100 text-purple-800'
-      case 'advantageoneofficer':
-        return 'bg-green-100 text-green-800'
-      case 'customersitemanager':
-        return 'bg-orange-100 text-orange-800'
-      case 'customerhomanager':
-        return 'bg-yellow-100 text-yellow-800'
-      default:
-        return 'bg-gray-100 text-gray-800'
+  const getStatusColor = (isDeleted?: boolean) => {
+    if (isDeleted) {
+      return 'bg-gray-100 text-gray-700'
     }
+    return 'bg-emerald-100 text-emerald-800'
   }
 
-  const getStatusIcon = (role: UserRole) => {
-    switch (role) {
-      case 'administrator':
-        return <Shield className="h-4 w-4 text-red-600" />
-      case 'advantageonehoofficer':
-        return <UserCheck className="h-4 w-4 text-purple-600" />
-      case 'advantageoneofficer':
-        return <Users className="h-4 w-4 text-green-600" />
-      case 'customersitemanager':
-      case 'customerhomanager':
-        return <Building2 className="h-4 w-4 text-orange-600" />
-      default:
-        return <UserX className="h-4 w-4 text-gray-600" />
+  const getStatusIcon = (isDeleted?: boolean) => {
+    if (isDeleted) {
+      return <UserX className="h-4 w-4 text-gray-500" />
     }
+    return <UserCheck className="h-4 w-4 text-emerald-600" />
   }
 
-  // Stats (using all filtered users, not paginated)
-  const totalFilteredUsers = displayUsers.length
-  const activeStatusList: UserRole[] = [
-    'advantageoneofficer',
-    'advantageonehoofficer',
-    'administrator',
-    'customersitemanager',
-    'customerhomanager'
-  ]
-  const activeUsers = displayUsers.filter(u => activeStatusList.includes(u.role)).length
-  const adminUsers = displayUsers.filter(u => u.role === 'administrator').length
+  const totalFilteredUsers = totalUsers
+  const activeUsers = filteredUsers.filter(u => !(u as any).recordIsDeleted).length
+  const adminUsers = filteredUsers.filter(u => u.role === 'administrator' && !(u as any).recordIsDeleted).length
   const adminPercent = totalFilteredUsers > 0 ? ((adminUsers / totalFilteredUsers) * 100).toFixed(1) : '0.0'
-  const officerUsers = displayUsers.filter(u => u.role === 'advantageoneofficer').length
+  const storeUsers = filteredUsers.filter(u => u.role === 'store' && !(u as any).recordIsDeleted).length
 
   return (
     <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden" style={{ backgroundColor: '#F4F8FE' }}>
@@ -445,12 +456,12 @@ const UserSetup = () => {
                 </span>
               </div>
             </div>
-            {/* Advantage One Officer Users */}
+            {/* Store Users */}
             <div className="rounded-xl overflow-hidden shadow bg-gradient-to-br from-green-500 to-green-700 flex items-stretch min-h-[80px] sm:min-h-[100px] sm:col-span-2 lg:col-span-1">
               <div className="flex-1 flex flex-col justify-center px-3 sm:px-4 md:px-6 py-3 sm:py-4 md:py-6">
-                <span className="text-white text-xs sm:text-sm md:text-base font-medium mb-1 leading-tight">Advantage One Officer Users</span>
-                <span className="text-xl sm:text-2xl md:text-3xl font-bold text-white leading-none">{officerUsers}</span>
-                <span className="text-white/80 text-xs mt-1 leading-tight">Advantage One Officer</span>
+                <span className="text-white text-xs sm:text-sm md:text-base font-medium mb-1 leading-tight">Store Users</span>
+                <span className="text-xl sm:text-2xl md:text-3xl font-bold text-white leading-none">{storeUsers}</span>
+                <span className="text-white/80 text-xs mt-1 leading-tight">Active store users</span>
               </div>
               <div className="flex items-center pr-2 sm:pr-3 md:pr-6">
                 <span className="bg-white/20 rounded-full p-1.5 sm:p-2 md:p-3 flex items-center justify-center">
@@ -506,16 +517,19 @@ const UserSetup = () => {
                   
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <span className="text-gray-500 block mb-0.5">Role</span>
+                      <span className="text-gray-500 block mb-0.5">User Role</span>
                       <div className="font-medium">{formatRoleForDisplay(user.role)}</div>
                     </div>
                     <div>
-                      <span className="text-gray-500 block mb-0.5">Customer</span>
-                      <div className="font-medium truncate">
-                        {user.customerId 
-                          ? ((user as any).customerName || customerNameMap.get(user.customerId) || `ID: ${user.customerId}`)
-                          : 'N/A'}
-                      </div>
+                      <span className="text-gray-500 block mb-0.5">Status</span>
+                      <Badge
+                        className={`${getStatusColor((user as any).recordIsDeleted)} flex items-center gap-1 text-[10px] px-2 py-0.5`}
+                      >
+                        {getStatusIcon((user as any).recordIsDeleted)}
+                        <span className="truncate">
+                          {(user as any).recordIsDeleted ? 'Inactive' : 'Active'}
+                        </span>
+                      </Badge>
                     </div>
                   </div>
 
@@ -577,7 +591,7 @@ const UserSetup = () => {
                   <TableHead className="text-sm">Name</TableHead>
                   <TableHead className="text-sm">Email</TableHead>
                   <TableHead className="text-sm">Job Title</TableHead>
-                  <TableHead className="text-sm hidden lg:table-cell">Customer</TableHead>
+                  <TableHead className="text-sm hidden lg:table-cell">User Role</TableHead>
                   <TableHead className="text-sm">Status</TableHead>
                   <TableHead className="text-sm hidden lg:table-cell">Assigned Customers</TableHead>
                   <TableHead className="w-[160px] text-sm">Actions</TableHead>
@@ -600,22 +614,24 @@ const UserSetup = () => {
                     <TableCell className="text-sm">{user.email}</TableCell>
                     <TableCell className="text-sm">
                       <div className="text-sm text-gray-600">
-                      {user.jobTitle || 'N/A'}
-                    </div>
-                  </TableCell>
+                        {user.jobTitle || 'N/A'}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-sm hidden lg:table-cell">
                       <div className="text-sm text-gray-600">
-                      {user.customerId 
-                        ? ((user as any).customerName || customerNameMap.get(user.customerId) || `Customer ID: ${user.customerId}`)
-                        : 'N/A'}
-                    </div>
-                  </TableCell>
+                        {formatRoleForDisplay(user.role)}
+                      </div>
+                    </TableCell>
                     <TableCell className="py-3">
-                      <Badge className={`${getStatusColor(user.role)} flex items-center gap-1.5 text-xs`}>
-                        {getStatusIcon(user.role)}
-                        <span className="truncate">{formatRoleForDisplay(user.role)}</span>
-                    </Badge>
-                  </TableCell>
+                      <Badge
+                        className={`${getStatusColor((user as any).recordIsDeleted)} flex items-center gap-1.5 text-xs`}
+                      >
+                        {getStatusIcon((user as any).recordIsDeleted)}
+                        <span className="truncate">
+                          {(user as any).recordIsDeleted ? 'Inactive' : 'Active'}
+                        </span>
+                      </Badge>
+                    </TableCell>
                     <TableCell className="hidden lg:table-cell">
                     <div className="flex items-center gap-1">
                         <Users className="h-5 w-5 text-gray-500" />

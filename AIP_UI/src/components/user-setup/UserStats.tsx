@@ -1,6 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { Users2, ShieldCheck, Clock } from "lucide-react"
-import { User } from "@/data/users"
+import type { UserRecord as User } from "@/types/user"
 
 interface UserStatsProps {
   users: User[]

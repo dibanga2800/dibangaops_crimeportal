@@ -84,6 +84,18 @@ namespace AIPBackend.Services
                     claims.Add(new Claim("AssignedCustomerIds", string.Join(',', assignedCustomerIds)));
                 }
 
+                // Store / site-level claims for role-based scoping
+                if (!string.IsNullOrWhiteSpace(user.PrimarySiteId))
+                {
+                    claims.Add(new Claim("PrimarySiteId", user.PrimarySiteId));
+                }
+
+                var assignedSiteIds = user.SiteIds;
+                if (assignedSiteIds.Count > 0)
+                {
+                    claims.Add(new Claim("AssignedSiteIds", string.Join(',', assignedSiteIds)));
+                }
+
 				var issuer = _configuration["Jwt:Issuer"] ?? throw new InvalidOperationException("JWT Issuer is not configured");
                 var audience = _configuration["Jwt:Audience"] ?? throw new InvalidOperationException("JWT Audience is not configured");
                 var expirationMinutes = _configuration["Jwt:AccessTokenExpirationMinutes"] ?? "60";

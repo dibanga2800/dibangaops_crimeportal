@@ -11,7 +11,7 @@ export function CustomerSection() {
     <div className="pl-4 space-y-2">
       <SidebarMenuButton>
         <LayoutGrid className="w-4 h-4" />
-        <span>Customer Dashboard</span>
+        <span>Company Dashboard</span>
       </SidebarMenuButton>
       <SidebarMenuButton>
         <MessageSquare className="w-4 h-4" />
@@ -19,7 +19,7 @@ export function CustomerSection() {
       </SidebarMenuButton>
       <SidebarMenuButton>
         <Calendar className="w-4 h-4" />
-        <span>Customer Diary</span>
+        <span>Company Diary</span>
       </SidebarMenuButton>
       <SidebarMenuButton>
         <FileText className="w-4 h-4" />

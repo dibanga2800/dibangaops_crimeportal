@@ -1,5 +1,5 @@
-import { useState, useCallback, memo, useEffect } from "react"
-import { Incident, IncidentType, IncidentInvolved, StolenItem, RepeatOffenderMatch } from "@/types/incidents"
+import { useState, useCallback, memo, useEffect, useRef } from "react"
+import { Incident, IncidentInvolved, StolenItem, RepeatOffenderMatch } from "@/types/incidents"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -30,9 +30,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import {  
-  MOCK_OFFICER_ROLES 
-} from "@/data/mockDropdownData"
 import { useForm, useWatch } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -40,21 +37,22 @@ import { v4 as uuidv4 } from "uuid"
 import React from "react"
 import { Badge } from "@/components/ui/badge"
 import { incidentService } from "@/services/incidentService"
+import { offenderRecognitionApi, type OffenderMatchResult } from '@/services/api/offenderRecognition'
 import { useAuth } from "@/hooks/useAuth"
 import { customerService } from "@/services/customerService"
 import { siteService } from "@/services/siteService"
+import { regionService } from "@/services/regionService"
 import { lookupTableService } from "@/services/lookupTableService"
-import type { Customer } from "@/types/customer"
-import type { Site } from "@/types/site"
+import type { Customer, Region, Site } from "@/types/customer"
 import type { LookupTableItem } from "@/services/lookupTableService"
 
 const formSchema = z.object({
   customerId: z.string().min(1, "Customer is required"),
-  customerName: z.string().min(1, "Customer name is required"),
+  customerName: z.string().min(1, "Company name is required"),
   siteId: z.string().optional(),
-  siteName: z.string().min(1, "Site name is required"),
-  officerName: z.string().min(1, "Officer name is required"),
-  officerRole: z.string().min(1, "Officer role is required"),
+  siteName: z.string().min(1, "Store name is required"),
+  officerName: z.string().min(1, "Staff member name is required"),
+  officerRole: z.string().min(1, "Staff member role is required"),
   dateOfIncident: z.date({
     required_error: "Date of incident is required",
   }),
@@ -69,6 +67,7 @@ const formSchema = z.object({
   totalValueRecovered: z.string().optional(),
   stolenItems: z.array(z.object({
     id: z.string(),
+    barcode: z.string().nullable().optional(),
     description: z.string(),
     cost: z.number(),
     quantity: z.number(),
@@ -100,19 +99,38 @@ const formSchema = z.object({
   policeID: z.string().optional(),
   crimeRefNumber: z.string().optional(),
   arrestSaveComment: z.string().optional(),
+  offenderDetailsVerified: z.boolean().default(false),
+  verificationMethod: z.string().optional(),
+  verificationEvidenceImage: z.string().optional(),
+  offenderId: z.string().optional(),
+  modusOperandi: z.array(z.string()).optional(),
+}).superRefine((values, context) => {
+  if (values.offenderDetailsVerified && !values.verificationMethod) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Verification method is required when details are verified.',
+      path: ['verificationMethod'],
+    })
+  }
 })
 
-const incidentTypes: IncidentType[] = [
-  IncidentType.ARREST,
-  IncidentType.DETER,
-  IncidentType.THEFT,
-  IncidentType.CRIMINAL_DAMAGE,
-  IncidentType.CREDIT_CARD_FRAUD,
-  IncidentType.SUSPICIOUS_BEHAVIOUR,
-  IncidentType.UNDERAGE_PURCHASE,
-  IncidentType.ANTI_SOCIAL,
-  IncidentType.OTHERS
-]
+const verificationMethods = [
+  'Drivers licence',
+  'Police',
+  'ID card',
+  'Others'
+] as const
+
+const formatDateSafe = (value: string | Date | undefined, pattern: string, fallback = 'N/A') => {
+  if (!value) {
+    return fallback
+  }
+  const dateValue = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(dateValue.getTime())) {
+    return fallback
+  }
+  return format(dateValue, pattern)
+}
 
 const incidentInvolved: IncidentInvolved[] = [
   IncidentInvolved.SELF_SCAN_TILLS,
@@ -125,36 +143,18 @@ const incidentInvolved: IncidentInvolved[] = [
   IncidentInvolved.POLICE_FAILED_TO_ATTEND
 ]
 
-// Update the retail categories
-const retailCategories = {
-  'COOP': [
-    { id: 'alcohol', label: 'Alcohol' },
-    { id: 'ambient', label: 'Ambient' },
-    { id: 'tobacco', label: 'Tobacco' },
-    { id: 'meat', label: 'Meat' },
-    { id: 'fish', label: 'Fish' },
-    { id: 'dairy', label: 'Dairy' },
-    { id: 'confectionery', label: 'Confectionery' },
-    { id: 'fresh', label: 'Fresh' },
-    { id: 'health-beauty', label: 'Health & Beauty' },
-    { id: 'household', label: 'Household' },
-    { id: 'grocery', label: 'Grocery' },
-    { id: 'frozen', label: 'Frozen' },
-    { id: 'produce', label: 'Produce' },
-    { id: 'bakery', label: 'Bakery' },
-    { id: 'non-food', label: 'Non Food' },
-    { id: 'other', label: 'Other' }
-  ],
-  'Tesco': [
-    { id: 'f&f', label: 'F&F Clothing' },
-    { id: 'fresh', label: 'Fresh & Chilled' },
-    { id: 'grocery', label: 'Grocery & Packaged' },
-    { id: 'BWS', label: 'Beers, Wines & Spirits' },
-    { id: 'health', label: 'Health & Beauty' },
-    { id: 'electronics', label: 'Electronics & Entertainment' },
-    { id: 'home', label: 'Home & Seasonal' },
-  ]
-} as const
+const modusOperandiOptions = [
+  'Late evening entry',
+  'Distraction technique',
+  'Group operation',
+  'Solo quick grab',
+  'Return policy abuse',
+  'High-value electronics focus',
+  'Self-scan till bypass',
+  'Concealment in bags/coats',
+  'Other'
+] as const
+
 
 export interface IncidentFormProps {
   initialData?: Incident | null
@@ -189,20 +189,46 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
   } | null>(null)
   const [offenderSearchError, setOffenderSearchError] = useState<string | null>(null)
   const [offenderMarksPreview, setOffenderMarksPreview] = useState<string>(initialData?.offenderMarks || '')
+  const [verificationEvidencePreview, setVerificationEvidencePreview] = useState<string>(initialData?.verificationEvidenceImage || '')
+  const [zoomedEvidenceImage, setZoomedEvidenceImage] = useState<string | null>(null)
+  const [verificationFileName, setVerificationFileName] = useState<string>('')
+  const [imageSearchUrl, setImageSearchUrl] = useState<string>('')
+  const [isImageSearching, setIsImageSearching] = useState(false)
+  const [isProcessingVerificationImage, setIsProcessingVerificationImage] = useState(false)
+  const [isCameraActive, setIsCameraActive] = useState(false)
+  const [cameraError, setCameraError] = useState<string | null>(null)
+  const cameraStreamRef = useRef<MediaStream | null>(null)
   
-  // State for dynamic customers and sites
+  // State for dynamic customers, sites, and regions
   const [customers, setCustomers] = useState<Customer[]>([])
   const [sites, setSites] = useState<Site[]>([])
+  const [regions, setRegions] = useState<Region[]>([])
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(false)
   const [isLoadingSites, setIsLoadingSites] = useState(false)
   
   // State for counties from lookup table
   const [counties, setCounties] = useState<LookupTableItem[]>([])
   const [isLoadingCounties, setIsLoadingCounties] = useState(false)
+
+  // State for positions from lookup table
+  const [positions, setPositions] = useState<LookupTableItem[]>([])
+  const [isLoadingPositions, setIsLoadingPositions] = useState(false)
+
+  // State for incident types from lookup table
+  const [incidentTypesFromDb, setIncidentTypesFromDb] = useState<LookupTableItem[]>([])
+  const [isLoadingIncidentTypes, setIsLoadingIncidentTypes] = useState(false)
+
+  // State for product departments from lookup table
+  const [productDepartments, setProductDepartments] = useState<LookupTableItem[]>([])
+  const [isLoadingDepartments, setIsLoadingDepartments] = useState(false)
   
   // State for manual barcode entry
   const [manualBarcode, setManualBarcode] = useState('')
   const [isProcessingBarcode, setIsProcessingBarcode] = useState(false)
+  const didPrefillSiteRef = useRef(false)
+  const previousCustomerIdRef = useRef<string | null>(null)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
 
   const searchOffender = async (name: string, dob?: Date, marks?: string) => {
     setIsSearchingOffender(true);
@@ -238,7 +264,19 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
         form.setValue('offenderAddress', topMatch.offenderAddress)
       }
       if (topMatch.gender) {
-        form.setValue('gender', topMatch.gender)
+        const normalizedGender = topMatch.gender.toLowerCase().trim()
+        const genderMap: Record<string, 'Male' | 'Female' | 'N/A or N/K'> = {
+          male: 'Male',
+          female: 'Female',
+          'n/a or n/k': 'N/A or N/K',
+          'n/a': 'N/A or N/K',
+          'n/k': 'N/A or N/K',
+          'unknown': 'N/A or N/K'
+        }
+        const mappedGender = genderMap[normalizedGender]
+        if (mappedGender) {
+          form.setValue('gender', mappedGender)
+        }
       }
       if (topMatch.offenderDOB) {
         form.setValue('offenderDOB', new Date(topMatch.offenderDOB))
@@ -260,6 +298,46 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
       setIsSearchingOffender(false);
     }
   };
+
+  const searchOffenderByImage = async () => {
+    const url = imageSearchUrl.trim() || verificationEvidencePreview.trim()
+    if (!url) {
+      setOffenderSearchError('Please provide an image URL or capture/upload verification evidence before searching by image.')
+      return
+    }
+
+    setIsImageSearching(true)
+    setOffenderSearchError(null)
+
+    try {
+      const result: OffenderMatchResult = await offenderRecognitionApi.indexAndMatch({ url })
+
+      const matches = result.matches || []
+
+      if (matches.length === 0) {
+        setOffenderVerified(false)
+        setRepeatOffenderCount(0)
+        setOffenderHistory(null)
+        return
+      }
+
+      setOffenderHistory({
+        matches,
+        totalCount: result.totalCount ?? matches.length,
+      })
+
+      setRepeatOffenderCount(result.totalCount ?? matches.length)
+      setOffenderVerified(matches.length > 0)
+    } catch (error) {
+      console.error('Error searching offender by image:', error)
+      setOffenderSearchError(error instanceof Error ? error.message : 'Unable to search offenders by image')
+      setOffenderVerified(false)
+      setRepeatOffenderCount(0)
+      setOffenderHistory(null)
+    } finally {
+      setIsImageSearching(false)
+    }
+  }
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -304,6 +382,11 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
       offenderDOB: initialData?.offenderDOB ? new Date(initialData.offenderDOB) : undefined,
       offenderPlaceOfBirth: initialData?.offenderPlaceOfBirth || "",
       offenderMarks: initialData?.offenderMarks || "",
+      offenderDetailsVerified: initialData?.offenderDetailsVerified || false,
+      verificationMethod: initialData?.verificationMethod || "",
+      verificationEvidenceImage: initialData?.verificationEvidenceImage || "",
+      offenderId: initialData?.offenderId || "",
+      modusOperandi: initialData?.modusOperandi || [],
       policeID: initialData?.policeID || "",
       crimeRefNumber: initialData?.crimeRefNumber || "",
       arrestSaveComment: initialData?.arrestSaveComment || "",
@@ -314,6 +397,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
   const customerId = form.watch('customerId')
   const selectedCustomer = customers.find(c => c.id.toString() === customerId)
   const offenderMarksValue = form.watch('offenderMarks')
+  const offenderDetailsVerified = form.watch('offenderDetailsVerified')
   
   // Fetch customers on mount
   useEffect(() => {
@@ -333,55 +417,102 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
     fetchCustomers()
   }, [])
   
-  // Fetch counties from lookup table on mount
+  // Fetch counties, positions and incident types from lookup table on mount
   useEffect(() => {
-    const fetchCounties = async () => {
+    const fetchLookups = async () => {
       setIsLoadingCounties(true)
+      setIsLoadingPositions(true)
+      setIsLoadingIncidentTypes(true)
+      setIsLoadingDepartments(true)
       try {
-        const fetchedCounties = await lookupTableService.getByCategory('UK_Counties')
+        const [fetchedCounties, fetchedPositions, fetchedIncidentTypes, fetchedDepartments] = await Promise.all([
+          lookupTableService.getByCategory('UK_Counties'),
+          lookupTableService.getByCategory('Positions'),
+          lookupTableService.getByCategory('IncidentTypes'),
+          lookupTableService.getByCategory('ProductDepartments'),
+        ])
         setCounties(fetchedCounties)
-        console.log('✅ [IncidentForm] Loaded counties:', fetchedCounties.length)
+        setPositions(fetchedPositions)
+        setIncidentTypesFromDb(fetchedIncidentTypes)
+        setProductDepartments(fetchedDepartments)
+        console.log(
+          '✅ [IncidentForm] Loaded counties:', fetchedCounties.length,
+          '| positions:', fetchedPositions.length,
+          '| incident types:', fetchedIncidentTypes.length,
+          '| departments:', fetchedDepartments.length
+        )
       } catch (error) {
-        console.error('❌ [IncidentForm] Failed to load counties:', error)
+        console.error('❌ [IncidentForm] Failed to load lookup tables:', error)
         setCounties([])
+        setPositions([])
+        setIncidentTypesFromDb([])
+        setProductDepartments([])
       } finally {
         setIsLoadingCounties(false)
+        setIsLoadingPositions(false)
+        setIsLoadingIncidentTypes(false)
+        setIsLoadingDepartments(false)
       }
     }
-    
-    fetchCounties()
+
+    fetchLookups()
   }, [])
   
-  // Fetch sites when customer changes
+  // Fetch sites and regions when customer changes
   useEffect(() => {
-    const fetchSites = async () => {
+    const fetchSitesAndRegions = async () => {
       if (!customerId) {
         setSites([])
+        setRegions([])
         form.setValue('siteId', '')
         form.setValue('siteName', '')
         return
+      }
+
+      if (previousCustomerIdRef.current && previousCustomerIdRef.current !== customerId) {
+        didPrefillSiteRef.current = false
       }
       
       setIsLoadingSites(true)
       try {
         const customerIdNum = parseInt(customerId, 10)
-        const response = await siteService.getSitesByCustomer(customerIdNum)
-        if (response.success) {
-          setSites(response.data)
-          console.log('✅ [IncidentForm] Loaded sites for customer:', response.data.length)
-          // Reset site selection when customer changes
-          form.setValue('siteId', '')
-          form.setValue('siteName', '')
+        const [sitesResponse, regionsResponse] = await Promise.all([
+          siteService.getSitesByCustomer(customerIdNum),
+          regionService.getRegionsByCustomer(customerIdNum)
+        ])
+        if (regionsResponse.success) {
+          setRegions(regionsResponse.data)
+        }
+        if (sitesResponse.success) {
+          setSites(sitesResponse.data)
+          console.log('✅ [IncidentForm] Loaded sites for customer:', sitesResponse.data.length)
+          if (initialData?.siteId && !didPrefillSiteRef.current) {
+            const matchById = sitesResponse.data.find(site => site.siteID?.toString() === initialData.siteId)
+            const matchByName = sitesResponse.data.find(site =>
+              site.locationName?.toLowerCase().trim() === (initialData.siteName || '').toLowerCase().trim()
+            )
+            const matchedSite = matchById || matchByName
+
+            form.setValue('siteId', matchedSite?.siteID?.toString() || initialData.siteId)
+            form.setValue('siteName', matchedSite?.locationName || initialData.siteName || '')
+            didPrefillSiteRef.current = true
+          } else if (!initialData) {
+            // Reset site selection when customer changes for new incidents
+            form.setValue('siteId', '')
+            form.setValue('siteName', '')
+          }
         }
       } catch (error) {
-        console.error('❌ [IncidentForm] Failed to load sites:', error)
+        console.error('❌ [IncidentForm] Failed to load sites and regions:', error)
         setSites([])
+        setRegions([])
       } finally {
+        previousCustomerIdRef.current = customerId
         setIsLoadingSites(false)
       }
     }
     
-    fetchSites()
+    fetchSitesAndRegions()
   }, [customerId, form])
 
   // Helper functions to get pre-filled data
@@ -437,6 +568,49 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
     }
   }
 
+  const stopCamera = () => {
+    if (cameraStreamRef.current) {
+      cameraStreamRef.current.getTracks().forEach(track => track.stop())
+      cameraStreamRef.current = null
+    }
+    setIsCameraActive(false)
+  }
+
+  const startCamera = () => {
+    setCameraError(null)
+    setIsCameraActive(true)
+  }
+
+  const captureVerificationImage = () => {
+    if (!videoRef.current || !canvasRef.current) {
+      return
+    }
+
+    const video = videoRef.current
+    const canvas = canvasRef.current
+    const context = canvas.getContext('2d')
+    if (!context) {
+      return
+    }
+
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    context.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
+    form.setValue('verificationEvidenceImage', dataUrl, { shouldValidate: true })
+    setVerificationEvidencePreview(dataUrl)
+    setVerificationFileName('captured-image.jpg')
+    stopCamera()
+  }
+
+  const handleRetakeVerificationImage = () => {
+    setVerificationEvidencePreview('')
+    setVerificationFileName('')
+    form.setValue('verificationEvidenceImage', '')
+    setCameraError(null)
+  }
+
   // Pre-fill customer, site, and officer info for new incidents
   useEffect(() => {
     if (!initialData && customers.length > 0) {
@@ -469,11 +643,10 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
         if (user.role) {
           // Map user roles to officer roles
           const roleMapping: Record<string, string> = {
-            'Security Officer': 'Security Officer',
-            'advantageoneofficer': 'Security Officer',
-            'customersitemanager': 'Site Manager',
-            'customerhomanager': 'Head of Security',
-            'administrator': 'Security Officer'
+            'security-officer': 'Security Officer',
+            'store': 'Store User',
+            'manager': 'Manager',
+            'administrator': 'Admin'
           };
           
           const officerRole = roleMapping[user.role] || 'Security Officer';
@@ -488,6 +661,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
       setStolenItems(initialData.stolenItems || [])
       setIncidentType(initialData.incidentType || '')
       setArrestSaveComment(initialData.arrestSaveComment || '')
+      setVerificationEvidencePreview(initialData.verificationEvidenceImage || '')
       
       // Reset form with the new initial data - fix date handling
       const formData = {
@@ -529,6 +703,9 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
         offenderDOB: initialData.offenderDOB ? new Date(initialData.offenderDOB) : undefined,
         offenderPlaceOfBirth: initialData.offenderPlaceOfBirth || "",
         offenderMarks: initialData.offenderMarks || "",
+        offenderDetailsVerified: initialData.offenderDetailsVerified || false,
+        verificationMethod: initialData.verificationMethod || "",
+        verificationEvidenceImage: initialData.verificationEvidenceImage || "",
         policeID: initialData.policeID || "",
         crimeRefNumber: initialData.crimeRefNumber || "",
         arrestSaveComment: initialData.arrestSaveComment || "",
@@ -552,6 +729,11 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
         }
         if (formData.offenderDOB) {
           form.setValue('offenderDOB', formData.offenderDOB)
+        }
+        if (formData.verificationEvidenceImage) {
+          setVerificationEvidencePreview(formData.verificationEvidenceImage)
+        } else {
+          setVerificationEvidencePreview('')
         }
       }, 100)
     }
@@ -588,6 +770,58 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
   React.useEffect(() => {
     setOffenderMarksPreview(offenderMarksValue || '')
   }, [offenderMarksValue])
+
+  React.useEffect(() => {
+    if (!offenderDetailsVerified) {
+      form.setValue('verificationMethod', '')
+      form.setValue('verificationEvidenceImage', '')
+      setVerificationEvidencePreview('')
+      setVerificationFileName('')
+      stopCamera()
+    }
+  }, [offenderDetailsVerified, form])
+
+  useEffect(() => {
+    const attachCameraStream = async () => {
+      if (!isCameraActive) {
+        return
+      }
+
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setCameraError('Camera access is not supported in this browser or context.')
+        setIsCameraActive(false)
+        return
+      }
+
+      setIsProcessingVerificationImage(true)
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' },
+          audio: false
+        })
+        cameraStreamRef.current = stream
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+          await videoRef.current.play()
+        }
+      } catch (error) {
+        console.error('Error accessing camera:', error)
+        setCameraError('Unable to access camera. Please check permissions or HTTPS.')
+        setIsCameraActive(false)
+      } finally {
+        setIsProcessingVerificationImage(false)
+      }
+    }
+
+    attachCameraStream()
+  }, [isCameraActive])
+
+  useEffect(() => {
+    return () => {
+      stopCamera()
+    }
+  }, [])
 
   const handleSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
@@ -627,10 +861,35 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
       const finalCustomerId = values.customerId || propCustomerId || selectedCustomer?.id?.toString() || '0'
       const finalSiteId = values.siteId || propSiteId || ''
       
+      // Derive regionId and regionName from selected site for analytics
+      const selectedSite = sites.find(s => s.siteID?.toString() === finalSiteId)
+      const regionId = selectedSite?.fkRegionID?.toString() ?? initialData?.regionId
+      const region = regions.find(r => r.regionID === selectedSite?.fkRegionID)
+      const regionName = region?.regionName ?? initialData?.regionName
+      
+      // Auto-generate offenderId when there is an offender but no ID yet
+      let offenderIdToUse = values.offenderId
+      if (
+        !offenderIdToUse &&
+        values.offenderName &&
+        values.offenderName.trim().length > 0
+      ) {
+        const prefix = 'OFF'
+        const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14)
+        const namePart = values.offenderName
+          .split(' ')
+          .map((part) => part.charAt(0).toUpperCase())
+          .join('')
+          .padEnd(2, 'X')
+        offenderIdToUse = `${prefix}-${namePart}-${timestamp}`
+      }
+      
       const formattedData: Incident = {
         id: initialData?.id || uuidv4(),
         customerId: parseInt(finalCustomerId, 10),
         siteId: finalSiteId,
+        regionId,
+        regionName,
         customerName: values.customerName,
         siteName: values.siteName,
         officerName: values.officerName,
@@ -649,6 +908,8 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
         gender: values.gender,
         stolenItems: stolenItems.map(item => ({
           ...item,
+          // Normalise barcode so we never send explicit null back
+          barcode: item.barcode || undefined,
           totalAmount: item.cost * item.quantity
         })),
         // Optional fields
@@ -664,11 +925,16 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
         offenderDOB: values.offenderDOB,
         offenderPlaceOfBirth: values.offenderPlaceOfBirth,
         offenderMarks: values.offenderMarks,
+        offenderDetailsVerified: values.offenderDetailsVerified,
+        verificationMethod: values.verificationMethod,
+        verificationEvidenceImage: values.verificationEvidenceImage,
         policeID: values.policeID,
         crimeRefNumber: values.crimeRefNumber || '',
         // Additional fields
         dateInputted: new Date().toISOString(),
         arrestSaveComment: values.arrestSaveComment,
+        offenderId: offenderIdToUse,
+        modusOperandi: values.modusOperandi,
       }
       console.log('Formatted data to submit:', formattedData)
       onSubmit(formattedData)
@@ -683,7 +949,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
       const lastItem = stolenItems[stolenItems.length - 1]
       const incompleteFields = []
       
-      if (!lastItem.category) incompleteFields.push('Category')
+      if (!lastItem.category) incompleteFields.push('Department')
       if (!lastItem.productName) incompleteFields.push('Product Name')
       if (!lastItem.description) incompleteFields.push('Description')
       if (!lastItem.cost || lastItem.cost <= 0) incompleteFields.push('Cost')
@@ -772,8 +1038,36 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="bg-gradient-to-br from-blue-50 via-slate-50 to-blue-50 min-h-full">
-        <div className="w-full max-w-[98%] mx-auto px-4 py-4">
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="bg-gradient-to-br from-blue-50 via-slate-50 to-blue-50 min-h-screen">
+        {zoomedEvidenceImage && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Verification evidence preview"
+            onClick={() => setZoomedEvidenceImage(null)}
+          >
+            <div
+              className="relative max-h-[90vh] w-full max-w-3xl"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                className="absolute -top-3 -right-3 rounded-full bg-white px-2 py-1 text-xs font-semibold text-gray-700 shadow"
+                onClick={() => setZoomedEvidenceImage(null)}
+                aria-label="Close preview"
+              >
+                Close
+              </button>
+              <img
+                src={zoomedEvidenceImage}
+                alt="Verification evidence enlarged view"
+                className="max-h-[90vh] w-full rounded-lg bg-white object-contain"
+              />
+            </div>
+          </div>
+        )}
+        <div className="w-full max-w-none px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
           {/* Header */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
             <div className="flex items-center gap-4">
@@ -813,7 +1107,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                     name="customerId"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Customer Name *</FormLabel>
+                        <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Company Name *</FormLabel>
                         {!isAdmin && propCustomerId ? (
                           <div className="flex h-11 w-full rounded-md border border-input bg-gray-50 px-3 py-2 text-sm">
                             {form.watch('customerName') || 'Loading...'}
@@ -826,7 +1120,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                           >
                             <FormControl>
                               <SelectTrigger className="h-12 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg shadow-sm">
-                                <SelectValue placeholder={isLoadingCustomers ? "Loading customers..." : "Select customer"} />
+                                <SelectValue placeholder={isLoadingCustomers ? "Loading companies..." : "Select company"} />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
@@ -851,7 +1145,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                     name="siteId"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Site Name *</FormLabel>
+                        <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Store Name *</FormLabel>
                         {!isAdmin && propSiteId ? (
                           <div className="flex h-11 w-full rounded-md border border-input bg-gray-50 px-3 py-2 text-sm">
                             {form.watch('siteName') || 'Loading...'}
@@ -866,7 +1160,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                               <SelectTrigger className="h-12 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg shadow-sm">
                                 <SelectValue placeholder={
                                   !customerId 
-                                    ? "Select customer first" 
+                                    ? "Select company first" 
                                     : isLoadingSites 
                                       ? "Loading sites..." 
                                       : "Select site"
@@ -884,7 +1178,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                                 )
                               })}
                               {sites.length === 0 && customerId && !isLoadingSites && (
-                                <SelectItem value="no-sites" disabled>No sites available for this customer</SelectItem>
+                                <SelectItem value="no-sites" disabled>No sites available for this company</SelectItem>
                               )}
                             </SelectContent>
                           </Select>
@@ -899,9 +1193,9 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                     name="officerName"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Officer Name *</FormLabel>
+                        <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Employee Name *</FormLabel>
                         <FormControl>
-                          <Input className="h-12 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg shadow-sm" {...field} placeholder="Enter officer name" />
+                          <Input className="h-12 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg shadow-sm" {...field} placeholder="Enter staff member name" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -913,19 +1207,25 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                     name="officerRole"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Officer Role *</FormLabel>
+                        <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Employee Role *</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
                             <SelectTrigger className="h-12 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg shadow-sm">
-                              <SelectValue placeholder="Select role" />
+                              {isLoadingPositions
+                                ? <span className="text-gray-400 text-sm">Loading roles...</span>
+                                : <SelectValue placeholder="Select role" />
+                              }
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {MOCK_OFFICER_ROLES.map((role) => (
-                              <SelectItem key={role.id} value={role.name}>
-                                {role.name}
-                              </SelectItem>
-                            ))}
+                            {positions.length > 0
+                              ? positions.map((pos) => (
+                                  <SelectItem key={pos.lookupId} value={pos.value}>
+                                    {pos.value}
+                                  </SelectItem>
+                                ))
+                              : <SelectItem value="none" disabled>No roles configured</SelectItem>
+                            }
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -1093,13 +1393,19 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                         >
                           <FormControl>
                             <SelectTrigger className="h-12 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg shadow-sm">
-                              <SelectValue placeholder="Select type" />
+                              {isLoadingIncidentTypes
+                                ? <span className="text-gray-400 text-sm">Loading types...</span>
+                                : <SelectValue placeholder="Select type" />
+                              }
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {incidentTypes.map((type) => (
-                              <SelectItem key={type} value={type}>
-                                {type}
+                            {incidentTypesFromDb.length === 0 && !isLoadingIncidentTypes && (
+                              <div className="px-3 py-2 text-sm text-gray-400">No incident types available</div>
+                            )}
+                            {incidentTypesFromDb.map((t) => (
+                              <SelectItem key={t.lookupId} value={t.value}>
+                                {t.value}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -1197,7 +1503,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                 </div>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <FormField
                   control={form.control}
                   name="policeInvolvement"
@@ -1275,16 +1581,16 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                   <FormField
                     control={form.control}
                     name="offenderName"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem className="lg:col-span-2">
                         <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Offender Name</FormLabel>
                         <div className="space-y-2">
-                          <div className="flex gap-2">
+                          <div className="flex flex-col sm:flex-row gap-2">
                             <FormControl>
                               <Input className="h-12 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg shadow-sm" {...field} placeholder="Enter offender name" />
                             </FormControl>
@@ -1321,6 +1627,102 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                               {offenderVerified ? 'Details Verified' : 'Details Not Verified'}
                             </Badge>
                           </div>
+                          <div className="mt-3 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-3 space-y-2">
+                            <p className="text-xs font-semibold text-gray-700">
+                              Visual offender search (optional)
+                            </p>
+                            <p className="text-[11px] text-gray-600">
+                              Paste an image URL or use the captured verification image to search for visually similar known offenders.
+                            </p>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                              <Input
+                                value={imageSearchUrl}
+                                onChange={(e) => setImageSearchUrl(e.target.value)}
+                                placeholder="https://example.com/offender-face.jpg"
+                                className="h-10 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg shadow-sm text-xs sm:text-sm"
+                                aria-label="Offender image URL"
+                              />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="h-10 whitespace-nowrap text-xs sm:text-sm"
+                                onClick={searchOffenderByImage}
+                                disabled={isImageSearching}
+                              >
+                                {isImageSearching ? 'Searching image…' : 'Search by image'}
+                              </Button>
+                            </div>
+                            {!imageSearchUrl && verificationEvidencePreview && (
+                              <p className="text-[11px] text-gray-500">
+                                No URL provided – the system will use the captured verification image instead.
+                              </p>
+                            )}
+                          </div>
+                        <FormField
+                          control={form.control}
+                          name="offenderId"
+                          render={({ field }) => (
+                            <FormItem className="mt-4">
+                              <FormLabel className="text-sm font-semibold text-gray-700 mb-2">
+                                Offender ID / Intelligence Ref (optional)
+                              </FormLabel>
+                              <FormControl>
+                                <Input
+                                  className="h-11 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg shadow-sm"
+                                  {...field}
+                                  placeholder="e.g. INT-2024-001"
+                                />
+                              </FormControl>
+                              <FormDescription className="text-xs">
+                                For repeat offender tracking and crime linking analytics
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="modusOperandi"
+                          render={({ field }) => (
+                            <FormItem className="mt-4">
+                              <FormLabel className="text-sm font-semibold text-gray-700 mb-2">
+                                Modus operandi (optional)
+                              </FormLabel>
+                              <FormDescription className="text-xs mb-2">
+                                Select how the incident was carried out for crime linking analytics
+                              </FormDescription>
+                              <FormControl>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  {modusOperandiOptions.map((option) => (
+                                    <div
+                                      key={option}
+                                      className="flex items-center space-x-2"
+                                    >
+                                      <Checkbox
+                                        id={`mo-${option}`}
+                                        checked={(field.value || []).includes(option)}
+                                        onCheckedChange={(checked) => {
+                                          const current = field.value || []
+                                          const next = checked
+                                            ? [...current, option]
+                                            : current.filter((v) => v !== option)
+                                          field.onChange(next)
+                                        }}
+                                      />
+                                      <label
+                                        htmlFor={`mo-${option}`}
+                                        className="text-sm text-gray-700 cursor-pointer select-none"
+                                      >
+                                        {option}
+                                      </label>
+                                    </div>
+                                  ))}
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
                         {offenderSearchError && (
                           <div className="mt-2 text-sm text-red-600">
                             {offenderSearchError}
@@ -1341,7 +1743,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                                     <div>
                                       <p className="text-sm font-semibold text-gray-800">{match.offenderName}</p>
                                       <p className="text-xs text-gray-600">
-                                        {match.offenderDOB ? `DOB: ${format(new Date(match.offenderDOB), 'dd MMM yyyy')}` : 'DOB: N/A'}
+                                        DOB: {formatDateSafe(match.offenderDOB, 'dd MMM yyyy')}
                                       </p>
                                       {match.offenderMarks && (
                                         <p className="text-xs text-gray-600 mt-1">
@@ -1372,6 +1774,20 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                                           form.setValue('offenderMarks', match.offenderMarks)
                                           setOffenderMarksPreview(match.offenderMarks)
                                         }
+                                        const verificationSource = match.recentIncidents.find((incident) =>
+                                          incident.offenderDetailsVerified !== undefined ||
+                                          Boolean(incident.verificationMethod) ||
+                                          Boolean(incident.verificationEvidenceImage)
+                                        )
+                                        if (verificationSource) {
+                                          const isVerified = verificationSource.offenderDetailsVerified
+                                            ?? Boolean(verificationSource.verificationMethod || verificationSource.verificationEvidenceImage)
+                                          form.setValue('offenderDetailsVerified', isVerified, { shouldValidate: true })
+                                          form.setValue('verificationMethod', verificationSource.verificationMethod || '', { shouldValidate: true })
+                                          form.setValue('verificationEvidenceImage', verificationSource.verificationEvidenceImage || '', { shouldValidate: true })
+                                          setVerificationEvidencePreview(verificationSource.verificationEvidenceImage || '')
+                                          setVerificationFileName(verificationSource.verificationEvidenceImage ? 'history-evidence.jpg' : '')
+                                        }
                                         setOffenderVerified(true)
                                       }}
                                       aria-label={`Use offender details for ${match.offenderName}`}
@@ -1382,8 +1798,30 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                                   <div className="mt-2 space-y-1">
                                     {match.recentIncidents.map((incident) => (
                                       <div key={incident.incidentId} className="text-xs text-gray-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 border-t border-dashed pt-1 first:border-none first:pt-0">
-                                        <span>{format(new Date(incident.dateOfIncident), 'dd MMM yyyy')} - {incident.siteName}</span>
+                                        <span>{formatDateSafe(incident.dateOfIncident, 'dd MMM yyyy')} - {incident.siteName}</span>
                                         <span className="text-gray-500">{incident.incidentType}</span>
+												{(incident.offenderDetailsVerified !== undefined || incident.verificationMethod || incident.verificationEvidenceImage) && (
+													<div className="text-[11px] text-gray-600 flex flex-wrap gap-x-2 gap-y-1 sm:basis-full">
+														{incident.offenderDetailsVerified !== undefined && (
+															<span>Verified: {incident.offenderDetailsVerified ? 'Yes' : 'No'}</span>
+														)}
+														{incident.verificationMethod && (
+															<span>Method: {incident.verificationMethod}</span>
+														)}
+														{incident.verificationEvidenceImage && (
+															<span className="text-gray-500">Evidence attached</span>
+														)}
+													</div>
+												)}
+												{incident.verificationEvidenceImage && (
+													<img
+														src={incident.verificationEvidenceImage}
+														alt={`Verification evidence for ${match.offenderName}`}
+														className="mt-1 max-h-20 w-full max-w-[160px] cursor-zoom-in rounded-md border border-gray-200 object-contain sm:basis-full"
+														loading="lazy"
+														onClick={() => setZoomedEvidenceImage(incident.verificationEvidenceImage || null)}
+													/>
+												)}
                                       </div>
                                     ))}
                                   </div>
@@ -1402,7 +1840,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                     control={form.control}
                     name="gender"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem className="lg:col-span-1">
                         <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Gender</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
@@ -1421,6 +1859,9 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                     )}
                   />
 
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="offenderDOB"
@@ -1549,6 +1990,166 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                     )}
                   />
                 </div>
+
+                <FormField
+                  control={form.control}
+                  name="offenderDetailsVerified"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Details Verified?</FormLabel>
+                      <div className="flex flex-wrap items-center gap-4">
+                        <label className="flex items-center gap-2 text-sm text-gray-700">
+                          <input
+                            type="radio"
+                            checked={field.value === true}
+                            onChange={() => field.onChange(true)}
+                            className="h-4 w-4"
+                          />
+                          Yes
+                        </label>
+                        <label className="flex items-center gap-2 text-sm text-gray-700">
+                          <input
+                            type="radio"
+                            checked={field.value === false}
+                            onChange={() => field.onChange(false)}
+                            className="h-4 w-4"
+                          />
+                          No
+                        </label>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+              {offenderDetailsVerified && (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 rounded-xl border border-gray-200 bg-gray-50 p-3 sm:p-4">
+                  <FormField
+                    control={form.control}
+                    name="verificationMethod"
+                    render={({ field }) => (
+                      <FormItem className="lg:col-span-1">
+                        <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Verification Method *</FormLabel>
+                        <Select
+                          value={field.value || ''}
+                          onValueChange={field.onChange}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="h-11 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg shadow-sm">
+                              <SelectValue placeholder="Select verification method" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {verificationMethods.map((method) => (
+                              <SelectItem key={method} value={method}>
+                                {method}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="verificationEvidenceImage"
+                    render={() => (
+                      <FormItem className="lg:col-span-2">
+                        <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Verification Evidence</FormLabel>
+                        <FormControl>
+                          <div className="space-y-3">
+                            {verificationEvidencePreview ? (
+                              <div className="space-y-3">
+                                <div className="rounded-lg border border-gray-200 bg-white p-3">
+                                  <img
+                                    src={verificationEvidencePreview}
+                                    alt="Verification evidence preview"
+                                    className="max-h-56 w-full cursor-zoom-in rounded-md object-contain"
+                                    onClick={() => setZoomedEvidenceImage(verificationEvidencePreview)}
+                                  />
+                                  {verificationFileName && (
+                                    <p className="mt-2 text-xs text-gray-500">{verificationFileName}</p>
+                                  )}
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={startCamera}
+                                    className="h-9 text-xs sm:text-sm"
+                                  >
+                                    Capture New Image
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={handleRetakeVerificationImage}
+                                    className="h-9 text-xs sm:text-sm"
+                                  >
+                                    Remove Image
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="space-y-3">
+                                {isCameraActive ? (
+                                  <div className="space-y-3">
+                                    <div className="rounded-lg border border-gray-200 bg-white p-3">
+                                      <div className="mx-auto w-full max-w-sm sm:max-w-lg">
+                                        <video ref={videoRef} className="w-full rounded-md" playsInline muted />
+                                      </div>
+                                      <canvas ref={canvasRef} className="hidden" />
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={captureVerificationImage}
+                                        className="h-9 text-xs sm:text-sm"
+                                      >
+                                        Capture Image
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={stopCamera}
+                                        className="h-9 text-xs sm:text-sm"
+                                      >
+                                        Cancel
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={startCamera}
+                                    className="h-9 text-xs sm:text-sm"
+                                    disabled={isProcessingVerificationImage}
+                                  >
+                                    {isProcessingVerificationImage ? 'Starting Camera...' : 'Capture Image'}
+                                  </Button>
+                                )}
+                              </div>
+                            )}
+                            {cameraError && (
+                              <p className="text-xs text-red-600">{cameraError}</p>
+                            )}
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
 
                 <div className="space-y-3 sm:space-y-4 pt-4 border-t">
                   <FormField
@@ -1777,7 +2378,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
               <div className="space-y-4">
                 <div className="hidden sm:grid sm:grid-cols-12 gap-4">
                   <div className="col-span-2">
-                    <Label className="text-base font-medium">Category</Label>
+                    <Label className="text-base font-medium">Department</Label>
                   </div>
                   <div className="col-span-3">
                     <Label className="text-base font-medium">Product Name</Label>
@@ -1791,8 +2392,11 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                   <div className="col-span-1">
                     <Label className="text-base font-medium">Qty</Label>
                   </div>
-                  <div className="col-span-2">
+                  <div className="col-span-1">
                     <Label className="text-base font-medium">Total</Label>
+                  </div>
+                  <div className="col-span-1">
+                    <Label className="text-base font-medium">Barcode</Label>
                   </div>
                 </div>
 
@@ -1801,18 +2405,24 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                     {stolenItems.map((item, index) => (
                       <div key={index} className="flex flex-col sm:grid sm:grid-cols-12 gap-3 sm:gap-4 items-start sm:items-center border-b sm:border-0 pb-4 sm:pb-0">
                         <div className="w-full sm:col-span-2">
-                          <Label className="sm:hidden mb-1 block text-sm font-medium">Category</Label>
+                          <Label className="sm:hidden mb-1 block text-sm font-medium">Department</Label>
                           <Select
                             value={item.category}
                             onValueChange={(value) => updateStolenItem(index, "category", value)}
                           >
                             <SelectTrigger className="h-12 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg shadow-sm">
-                              <SelectValue placeholder="Select category" />
+                              {isLoadingDepartments
+                                ? <span className="text-gray-400 text-sm">Loading...</span>
+                                : <SelectValue placeholder="Select department" />
+                              }
                             </SelectTrigger>
                             <SelectContent>
-                              {retailCategories.COOP.map(cat => (
-                                <SelectItem key={cat.id} value={cat.id}>
-                                  {cat.label}
+                              {productDepartments.length === 0 && !isLoadingDepartments && (
+                                <div className="px-3 py-2 text-sm text-gray-400">No departments available</div>
+                              )}
+                              {productDepartments.map((dept) => (
+                                <SelectItem key={dept.lookupId} value={dept.value}>
+                                  {dept.value}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -1857,7 +2467,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                             placeholder="1"
                           />
                         </div>
-                        <div className="w-full sm:col-span-2 flex items-center gap-2">
+                        <div className="w-full sm:col-span-1 flex items-center gap-2">
                           <div className="flex-1">
                             <Label className="sm:hidden mb-1 block text-sm font-medium">Total</Label>
                             <Input
@@ -1876,6 +2486,14 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                           >
                             <Trash2 className="h-7 w-7" />
                           </Button>
+                        </div>
+                        <div className="w-full sm:col-span-1">
+                          <Label className="sm:hidden mb-1 block text-sm font-medium">Barcode</Label>
+                          <Input
+                            className="h-11"
+                            value={item.barcode || ''}
+                            disabled
+                          />
                         </div>
                       </div>
                     ))}

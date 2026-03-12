@@ -38,7 +38,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Package, TrendingUp, AlertTriangle, DollarSign, Search, Filter, ChevronDown, ChevronUp, MapPin, Eye, EyeOff, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Package, TrendingUp, AlertTriangle, PoundSterling, Search, Filter, ChevronDown, ChevronUp, MapPin, Eye, EyeOff, ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface HotProductsDashboardProps {
 	data: HotProductsData
@@ -183,7 +183,7 @@ export const HotProductsDashboard = ({
 										})}
 									</p>
 								</div>
-								<DollarSign className="h-8 w-8 text-gray-400" />
+								<PoundSterling className="h-8 w-8 text-gray-400" />
 							</div>
 						</CardContent>
 					</Card>

@@ -39,6 +39,8 @@ export interface SidebarGuardContext {
 	isCustomerRole: boolean
 	isAdministrator: boolean
 	isOfficerRole: boolean
+	isStoreUser?: boolean
+	isManager?: boolean
 }
 
 type GuardFn = (context: SidebarGuardContext) => boolean
@@ -62,24 +64,14 @@ export interface SidebarSection {
 
 export const SIDEBAR_TOP_LINKS: SidebarNavLink[] = [
 	{
-		path: '/action-calendar',
-		label: 'Action Calendar',
-		icon: Calendar,
-		bypassAccessCheck: true,
-	},
-	{
 		path: '/analytics/data-analytics-hub',
 		label: 'Data Analytics Hub',
 		icon: Brain,
-		bypassAccessCheck: true,
-		guard: () => true, // Always show
 	},
 	{
 		path: '/operations/alert-rules',
 		label: 'Alert Rules',
 		icon: Bell,
-		bypassAccessCheck: true,
-		guard: () => true, // Always show
 	},
 ]
 
@@ -104,7 +96,7 @@ export const SIDEBAR_SECTIONS: SidebarSection[] = [
 			},
 			{
 				path: '/administration/customer-setup',
-				label: 'Customer Setup',
+				label: 'Company Setup',
 				icon: Building,
 			},
 		],
