@@ -250,55 +250,6 @@ AIP_Backend/
 ---
 
 This is an actively developed production application; the README reflects the current **Crime Portal** architecture and feature set (role‑based access, AI‑assisted classification, AI analytics hub, computer‑vision offender search, hardened authentication, and real API integration).
-# Advantage One Interactive Portal (AIP)
-
-Advantage One Interactive Portal (AIP) is an advanced, full-featured crime and incident management software designed to streamline and automate various aspects of incident reporting, management, and follow-up. Built as an API-centric solution, AIP leverages a modern technology stack including React, Vite, .NET (with Entity Framework), and MSSQL for robust, scalable, and high-performance functionality across various modules.
-
-## Key Features
-
-### Crime & Incident Management
-- Capture, track, and resolve incidents efficiently
-- Enhanced user workflows
-- Comprehensive incident tracking system
-
-### CRM (Customer Relationship Management)
-- Manage client interactions
-- Track communication
-- Ensure smooth information flow
-
-### CBT (Computer-Based Training)
-- Implement training programs for personnel
-- Ensure staff are properly equipped to handle incidents
-
-### Additional Features
-- Incident Reporting
-- Satisfaction Surveys
-- Advanced Reporting & Analytics
-- Stock Management
-- Recruitment Management
-- Employee Activity Tracking
-- Site Visit Management
-- Action Calendar & Task Management
-
-## Technologies Used
-
-### Frontend
-- **React** with **TypeScript** - Modern, type-safe UI development
-- **Vite** - Fast, modern development and build tooling
-- **TailwindCSS** - Utility-first CSS framework
-- **Radix UI** - Accessible component primitives
-- **Shadcn/ui** - Beautiful, accessible components
-- **React Hook Form** with **Zod** - Form validation
-- **Redux Toolkit** - State management
-- **TanStack Query** - Data fetching and caching
-- **Framer Motion** - Animation library
-- **Recharts** - Data visualization
-
-### Backend
-- **.NET** - Robust and scalable API
-- **Entity Framework** - ORM for seamless database interaction
-- **MSSQL** - Reliable, high-performance relational database
-- **CORS** - Configured for secure cross-origin requests
 
 ## Getting Started
 
