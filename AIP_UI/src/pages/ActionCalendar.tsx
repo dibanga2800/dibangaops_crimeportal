@@ -123,19 +123,30 @@ const ActionCalendar: React.FC = () => {
 
   const loadTasks = async () => {
     try {
-      setLoading(true);
-      const response = await actionCalendarService.getTasks();
+      // Use server-side pagination with a reasonable page size
+      const response = await actionCalendarService.getTasks({
+        page: 1,
+        pageSize: 100,
+      });
       if (response.success) {
-        const convertedTasks = response.data.map((task: any) => actionCalendarService.convertToFrontendFormat(task));
+        const convertedTasks = response.data.map((task: any) =>
+          actionCalendarService.convertToFrontendFormat(task)
+        );
         setTasks(convertedTasks);
       } else {
-        toast({ title: "Error", description: response.message || "Failed to load tasks", variant: "destructive" });
+        toast({
+          title: "Error",
+          description: response.message || "Failed to load tasks",
+          variant: "destructive",
+        });
       }
     } catch (error) {
       console.error("Error loading tasks:", error);
-      toast({ title: "Error", description: "Failed to load tasks from server", variant: "destructive" });
-    } finally {
-      setLoading(false);
+      toast({
+        title: "Error",
+        description: "Failed to load tasks from server",
+        variant: "destructive",
+      });
     }
   };
 
@@ -271,40 +282,35 @@ const ActionCalendar: React.FC = () => {
   };
 
   useEffect(() => {
-    loadTasks();
-    loadStatistics();
+    let isMounted = true;
+
+    const initialize = async () => {
+      try {
+        setLoading(true);
+        await Promise.allSettled([
+          loadTasks(),
+          loadStatistics(),
+        ]);
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    initialize();
+
+    return () => {
+      isMounted = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex flex-col bg-gray-50">
-        <header className="bg-white border-b">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <h1 className="text-2xl font-semibold text-gray-900">Action Calendar</h1>
-                <p className="text-sm text-gray-500 mt-1">{isAdmin ? "Plan, organize, and assign tasks efficiently" : "View your assigned tasks and their status"}</p>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        <main className="flex-1 flex items-center justify-center p-6">
-          <div className="text-center">
-            <Loader2 className="h-8 w-8 animate-spin text-gray-500 mx-auto mb-4" />
-            <p className="text-sm text-gray-500">Loading tasks...</p>
-          </div>
-        </main>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div className="px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h1 className="text-2xl font-semibold text-gray-900">Action Calendar</h1>
@@ -346,7 +352,7 @@ const ActionCalendar: React.FC = () => {
 
       {/* Main content area */}
       <main className="py-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="px-4 sm:px-6 lg:px-8">
           {/* Stats */}
           <section className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-6">
             <Card className="border-0 shadow-sm bg-blue-600 text-white">
@@ -397,7 +403,7 @@ const ActionCalendar: React.FC = () => {
           {/* Two column responsive layout: calendar + tasks */}
           <section className="grid grid-cols-1 md:grid-cols-12 gap-6">
             {/* Calendar column */}
-            <div className="md:col-span-4 lg:col-span-3 order-2 md:order-1">
+            <div className="md:col-span-4 order-2 md:order-1">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <CalendarDays className="h-5 w-5 text-gray-700" />
@@ -409,17 +415,16 @@ const ActionCalendar: React.FC = () => {
                 </div>
               </div>
 
-              <Card className="border-0 shadow-sm bg-white overflow-hidden">
-                <CardContent className="p-3 sm:p-4">
-                  {/* Centered calendar with responsive sizing */}
-                  <div className="w-full flex justify-center">
-                    <div className="w-full max-w-[360px] sm:max-w-[420px]">
+              <Card className="border-0 shadow-sm bg-white">
+                <CardContent className="p-2 sm:p-3">
+                  <div className="w-full overflow-x-auto">
+                    <div className="w-full min-w-[280px] max-w-full mx-auto">
                       <div className="flex items-center justify-center mb-2">
                         <button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth() - 1, 1))} aria-label="Previous month" className="p-1">
                           <ChevronLeft className="h-5 w-5 text-gray-700" />
                         </button>
 
-                        <div className="flex-1 text-center font-medium">{format(date, "MMMM yyyy")}</div>
+                        <div className="flex-1 text-center font-medium truncate">{format(date, "MMMM yyyy")}</div>
 
                         <button onClick={() => setDate(new Date(date.getFullYear(), date.getMonth() + 1, 1))} aria-label="Next month" className="p-1">
                           <ChevronRight className="h-5 w-5 text-gray-700" />
@@ -473,7 +478,7 @@ const ActionCalendar: React.FC = () => {
             </div>
 
             {/* Tasks column */}
-            <div className="md:col-span-8 lg:col-span-9 order-1 md:order-2">
+            <div className="md:col-span-8 order-1 md:order-2">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <ListTodo className="h-5 w-5 text-gray-700" />
@@ -510,8 +515,13 @@ const ActionCalendar: React.FC = () => {
                       </div>
 
                       <div className="p-4">
-                        {tasks.filter((task) => isSameDay(new Date(task.date), date)).length > 0 ? (
-                          <TaskList 
+                        {loading ? (
+                          <div className="flex flex-col items-center justify-center py-12 text-center">
+                            <Loader2 className="h-8 w-8 animate-spin text-gray-400 mb-4" />
+                            <p className="text-sm text-gray-500">Loading tasks...</p>
+                          </div>
+                        ) : tasks.filter((task) => isSameDay(new Date(task.date), date)).length > 0 ? (
+                          <TaskList
                             tasks={tasks.filter((task) => isSameDay(new Date(task.date), date))}
                             onOpenProgress={handleOpenProgress}
                             onUpdateTask={handleUpdateTask}
@@ -526,7 +536,9 @@ const ActionCalendar: React.FC = () => {
                             </div>
                             <h3 className="text-lg font-medium mb-2 text-gray-900">No Tasks Scheduled</h3>
                             <p className="text-sm text-gray-500 max-w-md">
-                              {isAdmin ? "No tasks are scheduled for this period. Create a new task to get started." : "No tasks have been assigned to you for this period."}
+                              {isAdmin
+                                ? "No tasks are scheduled for this period. Create a new task to get started."
+                                : "No tasks have been assigned to you for this period."}
                             </p>
 
                             {isAdmin && (
@@ -538,9 +550,11 @@ const ActionCalendar: React.FC = () => {
                                   </Button>
                                 </DialogTrigger>
                                 <DialogContent className="sm:max-w-[550px]">
-          <DialogHeader>
-            <DialogTitle>Create New Task</DialogTitle>
-                                    <DialogDescription>Fill in the details below to create a new task. All fields are required.</DialogDescription>
+                                  <DialogHeader>
+                                    <DialogTitle>Create New Task</DialogTitle>
+                                    <DialogDescription>
+                                      Fill in the details below to create a new task. All fields are required.
+                                    </DialogDescription>
                                   </DialogHeader>
                                   <AddTaskForm onSubmit={handleAddTask} selectedDate={date} />
                                 </DialogContent>

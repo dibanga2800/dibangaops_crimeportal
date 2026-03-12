@@ -82,7 +82,7 @@ export const DailyActivityDialog = ({ open, onOpenChange, report }: DailyActivit
                   <p className="font-medium">{report.officerName}</p>
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Customer</p>
+                  <p className="text-sm font-medium text-muted-foreground">Company</p>
                   <p className="font-medium">{report.customerName}</p>
                 </div>
                 <div>

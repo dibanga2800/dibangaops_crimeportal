@@ -12,6 +12,10 @@ interface IncidentReport {
   date: string
   amount: number
   incidentType: string
+  incidentCategory?: string
+  incidentCategoryConfidence?: number
+  riskLevel?: 'low' | 'medium' | 'high'
+  riskScore?: number
 }
 
 interface DataTableProps {
@@ -200,7 +204,7 @@ export function IncidentTable({ data }: DataTableProps) {
                 onClick={() => sortData('customerName')}
               >
                 <div className="flex items-center gap-1">
-                  Customer Name {getSortIcon('customerName')}
+                  Company Name {getSortIcon('customerName')}
                 </div>
               </th>
               <th 
@@ -216,7 +220,7 @@ export function IncidentTable({ data }: DataTableProps) {
                 onClick={() => sortData('officerName')}
               >
                 <div className="flex items-center gap-1">
-                  Officer Name {getSortIcon('officerName')}
+                  Staff Member Name {getSortIcon('officerName')}
                 </div>
               </th>
               <th 
@@ -243,12 +247,15 @@ export function IncidentTable({ data }: DataTableProps) {
                   Incident Type {getSortIcon('incidentType')}
                 </div>
               </th>
+              <th className="h-12 px-4 text-left align-middle font-semibold tracking-tight text-muted-foreground">
+                AI Insight
+              </th>
             </tr>
           </thead>
           <tbody className="tracking-normal">
             {filteredAndSortedData.length === 0 && data.length > 0 && (
               <tr>
-                <td colSpan={6} className="h-12 text-center text-sm text-amber-600">
+                <td colSpan={7} className="h-12 text-center text-sm text-amber-600">
                   Data available but filtered out: {data.length} records found
                 </td>
               </tr>
@@ -270,11 +277,41 @@ export function IncidentTable({ data }: DataTableProps) {
                     })}
                   </td>
                     <td className="p-4 align-middle text-muted-foreground leading-relaxed">{report.incidentType}</td>
+                    <td className="p-4 align-middle text-xs space-y-1">
+                      {report.incidentCategory && (
+                        <div className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-800">
+                          {report.incidentCategory}
+                          {typeof report.incidentCategoryConfidence === 'number' && (
+                            <span className="ml-1 text-[10px] text-slate-500">
+                              ({Math.round(report.incidentCategoryConfidence * 100)}% conf.)
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {report.riskLevel && (
+                        <div
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${
+                            report.riskLevel === 'high'
+                              ? 'bg-red-100 text-red-700'
+                              : report.riskLevel === 'medium'
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-emerald-100 text-emerald-700'
+                          }`}
+                        >
+                          Risk: {report.riskLevel}
+                          {typeof report.riskScore === 'number' && (
+                            <span className="ml-1 text-[10px] opacity-80">
+                              {Math.round(report.riskScore * 100)}/100
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan={6} className="h-24 text-center text-sm text-muted-foreground">
+                <td colSpan={7} className="h-24 text-center text-sm text-muted-foreground">
                   No results found. Data length: {data.length}
                 </td>
               </tr>

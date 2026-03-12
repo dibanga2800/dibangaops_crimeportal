@@ -1,4 +1,4 @@
-export type ViewPermission = "all" | "admin" | "manager"
+export type ViewPermission = "all" | "administrator" | "manager"
 
 export interface ViewConfig {
   id: string

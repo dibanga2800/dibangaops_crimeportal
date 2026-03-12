@@ -29,6 +29,7 @@ interface AuthContextType {
   login: (username: string, password: string) => Promise<User>;
   logout: () => void;
   clearError: () => void;
+  updateProfilePicture: (dataUrl: string | null) => void;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -62,8 +63,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Backend returns ApiResponseDto with capital Data property
       const apiResponse = response.data;
       if (apiResponse.Success && apiResponse.Data) {
-        setUser(apiResponse.Data);
         sessionStore.setUser(apiResponse.Data);
+        setUser(sessionStore.getUser());
         setError(null);
       } else {
         throw new Error(apiResponse.Message || 'Failed to fetch user data');
@@ -99,8 +100,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const updatedUser = event.detail;
       if (updatedUser && updatedUser.id === user?.id) {
         console.log('🔄 [AuthContext] Updating user assignments from event');
-        setUser(updatedUser);
         sessionStore.setUser(updatedUser);
+        setUser(sessionStore.getUser());
       }
     };
 
@@ -190,9 +191,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Backend LoginResponseDto has AccessToken (capital A) and User (capital U)
       // Handle both capital and lowercase for compatibility
-      const loginData = responseData;
-      const accessToken = loginData?.AccessToken ?? loginData?.accessToken;
-      const user = loginData?.User ?? loginData?.user;
+      const loginData = responseData as LoginResponsePayload;
+      const requiresTwoFactor = (loginData as any)?.RequiresTwoFactor ?? (loginData as any)?.requiresTwoFactor ?? false;
+
+      if (requiresTwoFactor) {
+        if (import.meta.env.DEV) {
+          console.log('🔐 [AuthContext] 2FA required for user:', {
+            email: username,
+            methods: loginData?.TwoFactorMethods ?? loginData?.twoFactorMethods,
+          });
+        }
+        // Caller (LoginPage) will handle the second step using email + code
+        return { requiresTwoFactor: true, email: username } as any;
+      }
+
+      const accessToken = loginData?.AccessToken ?? (loginData as any)?.accessToken;
+      const refreshToken = loginData?.RefreshToken ?? (loginData as any)?.refreshToken;
+      const expiresAt = loginData?.ExpiresAt ?? (loginData as any)?.expiresAt;
+      const user = (loginData as any)?.User ?? (loginData as any)?.user;
 
       if (!accessToken || !user) {
         console.error('❌ [AuthContext] Missing token or user in response:', {
@@ -205,19 +221,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       sessionStore.setToken(accessToken);
-      setUser(user);
+      sessionStore.setRefreshToken(refreshToken ?? null);
+      sessionStore.setTokenExpiresAt(expiresAt ?? null);
       sessionStore.setUser(user);
+      const normalizedUser = sessionStore.getUser()!;
+      setUser(normalizedUser);
       setError(null);
       
       if (import.meta.env.DEV) {
         console.log('✅ [AuthContext] Login successful:', {
-          username: user.username,
-          userId: user.id,
-          role: user.role
+          username: normalizedUser.username,
+          userId: normalizedUser.id,
+          role: normalizedUser.role
         });
       }
       
-      return user;
+      return normalizedUser;
     } catch (err: any) {
       // Check if error was already handled (timeout or HTTP error)
       if (err instanceof Error && err.message) {
@@ -262,8 +281,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
   };
 
+  const updateProfilePicture = (dataUrl: string | null) => {
+    sessionStore.setProfilePicture(dataUrl);
+    if (user) {
+      setUser({ ...user, profilePicture: dataUrl ?? undefined });
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, error, login, logout, clearError }}>
+    <AuthContext.Provider value={{ user, isLoading, error, login, logout, clearError, updateProfilePicture }}>
       {children}
     </AuthContext.Provider>
   );

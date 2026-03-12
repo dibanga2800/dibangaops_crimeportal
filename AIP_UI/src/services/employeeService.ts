@@ -23,35 +23,8 @@ export interface EmployeeRegistrationRequest {
   Town?: string
   County?: string
   PostCode?: string
-  SiaLicenceType?: string
-  SiaLicenceExpiry?: Date | null
   Nationality?: string
   RightToWorkCondition?: string
-  DrivingLicenceType?: string
-  DateDLChecked?: Date | null
-  DrivingLicenceCopyTaken?: boolean
-  SixMonthlyCheck?: boolean
-  GraydonCheckAuthorised?: boolean
-  GraydonCheckDetails?: string
-  InitialOralReferencesComplete?: boolean
-  InitialOralReferencesDate?: Date | null
-  WrittenRefsComplete?: boolean
-  WrittenRefsCompleteDate?: Date | null
-  QuickStarterFormCompleted?: boolean
-  WorkingTimeDirective?: string
-  WorkingTimeDirectiveComplete?: boolean
-  ContractOfEmploymentSigned?: boolean
-  PhotoTaken?: boolean
-  PhotoFile?: string
-  IdCardIssued?: boolean
-  EquipmentIssued?: boolean
-  UniformIssued?: boolean
-  NextOfKinDetailsComplete?: boolean
-  PeopleHoursPin?: string
-  FullRotasIssued?: Date | null
-  InductionAndTrainingBooked?: Date | null
-  Location?: string
-  Trainer?: string
 }
 
 export interface EmployeeRegistrationResponse {
@@ -85,37 +58,8 @@ export interface EmployeeDetailResponse {
   town?: string
   county?: string
   postCode?: string
-  siaLicenceType?: string
-  siaLicenceExpiry?: Date | null
-  isSiaLicenceExpired?: boolean
-  isSiaLicenceExpiringSoon?: boolean
   nationality?: string
   rightToWorkCondition?: string
-  drivingLicenceType?: string
-  dateDLChecked?: Date | null
-  drivingLicenceCopyTaken?: boolean
-  sixMonthlyCheck?: boolean
-  graydonCheckAuthorised?: boolean
-  graydonCheckDetails?: string
-  initialOralReferencesComplete?: boolean
-  initialOralReferencesDate?: Date | null
-  writtenRefsComplete?: boolean
-  writtenRefsCompleteDate?: Date | null
-  quickStarterFormCompleted?: boolean
-  workingTimeDirective?: string
-  workingTimeDirectiveComplete?: boolean
-  contractOfEmploymentSigned?: boolean
-  photoTaken?: boolean
-  photoFile?: string
-  idCardIssued?: boolean
-  equipmentIssued?: boolean
-  uniformIssued?: boolean
-  nextOfKinDetailsComplete?: boolean
-  peopleHoursPin?: string
-  fullRotasIssued?: Date | null
-  inductionAndTrainingBooked?: Date | null
-  location?: string
-  trainer?: string
   userId?: string
   username?: string
   createdAt: Date

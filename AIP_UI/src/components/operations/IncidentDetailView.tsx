@@ -17,16 +17,16 @@ export const IncidentDetailView = ({ incident }: IncidentDetailViewProps) => {
 					</div>
 					<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
 						<div>
-							<label className="text-sm font-medium text-gray-500">Customer Name</label>
+							<label className="text-sm font-medium text-gray-500">Company Name</label>
 							<p className="mt-1 text-sm text-gray-900">{incident.customerName || 'N/A'}</p>
 						</div>
 						<div>
-							<label className="text-sm font-medium text-gray-500">Site Name</label>
-							<p className="mt-1 text-sm text-gray-900">{incident.siteName || 'N/A'}</p>
-						</div>
-						<div>
-							<label className="text-sm font-medium text-gray-500">Officer Name</label>
-							<p className="mt-1 text-sm text-gray-900">{incident.officerName || 'N/A'}</p>
+						<label className="text-sm font-medium text-gray-500">Store Name</label>
+						<p className="mt-1 text-sm text-gray-900">{incident.siteName || 'N/A'}</p>
+					</div>
+					<div>
+						<label className="text-sm font-medium text-gray-500">Staff Member Name</label>
+						<p className="mt-1 text-sm text-gray-900">{incident.officerName || 'N/A'}</p>
 						</div>
 						<div>
 							<label className="text-sm font-medium text-gray-500">Assigned To</label>

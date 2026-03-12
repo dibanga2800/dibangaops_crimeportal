@@ -4,6 +4,7 @@ import { AuthContext } from '@/contexts/AuthContext';
 import { customerPageAccessCache } from '@/services/customerPageAccessCache';
 import { PAGE_DEFINITIONS } from '@/config/navigation/pageDefinitions';
 import { sessionStore } from '@/state/sessionStore';
+import { subscribeToPageAccessUpdates } from '@/lib/pageAccessBroadcast';
 
 interface PageAccessContextType {
 	hasAccess: (path: string) => boolean;
@@ -47,16 +48,18 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 	const [currentRole, setCurrentRoleState] = useState<string | null>(() => {
 		// Initialize from sessionStore if available
 		const initialUser = sessionStore.getUser();
-		if (initialUser?.pageAccessRole) return initialUser.pageAccessRole.trim().toLowerCase();
+		// Prefer the primary user role for UI/page access; fall back to pageAccessRole
 		if (initialUser?.role) return initialUser.role.trim().toLowerCase();
+		if (initialUser?.pageAccessRole) return initialUser.pageAccessRole.trim().toLowerCase();
 		return null;
 	});
 	
 	useEffect(() => {
-		if (user?.pageAccessRole) {
-			setCurrentRoleState(user.pageAccessRole.trim().toLowerCase());
-		} else if (user?.role) {
+		// Prefer the main application role first; use pageAccessRole only as a fallback
+		if (user?.role) {
 			setCurrentRoleState(user.role.trim().toLowerCase());
+		} else if (user?.pageAccessRole) {
+			setCurrentRoleState(user.pageAccessRole.trim().toLowerCase());
 		} else {
 			setCurrentRoleState(null);
 		}
@@ -111,12 +114,8 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 		return match || normalized;
 	}, [pageAccessByRole, normalizeRoleName]);
 
-	// Load page access settings from API
+	// Load page access settings from API (AllowAnonymous endpoint - safe to call without token)
 	const loadPageAccessSettings = useCallback(async (): Promise<PageAccessSettings> => {
-		if (!hasAuthToken()) {
-			return EMPTY_PAGE_ACCESS_SETTINGS;
-		}
-
 		try {
 			const data = await pageAccessApi.getSettings();
 			
@@ -129,8 +128,8 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 					roleKeys: Object.keys(data.pageAccessByRole)
 				});
 				
-				// Log AdvantageOneOfficer specifically
-				const officerPages = data.pageAccessByRole['advantageoneofficer'] || [];
+				// Log Store Role specifically
+				const officerPages = data.pageAccessByRole['store'] || [];
 				const customerPagesInList = officerPages.filter(p => String(p).toLowerCase().includes('customer')).map(p => String(p));
 				
 				// Check if this looks like default settings (has all default customer pages)
@@ -157,7 +156,7 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 					console.warn('⚠️ [PageAccess] If you disabled customer pages in settings, they should NOT appear here.');
 				}
 				
-				console.log('👤 AdvantageOneOfficer Pages:', {
+				console.log('👤 Store Role Pages:', {
 					count: officerPages.length,
 					hasCustomerIncidentReport: officerPages.includes('customer-incident-report'),
 					customerPagesCount: customerPagesInList.length,
@@ -165,7 +164,7 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 					allPages: officerPages,
 					pageTypes: officerPages.map(p => typeof p)
 				});
-				console.log('👤 AdvantageOneOfficer Pages (as strings):', officerPages.map(p => String(p)).join(', '));
+				console.log('👤 Store Role Pages (as strings):', officerPages.map(p => String(p)).join(', '));
 				console.log('👤 Has customer-incident-report?', officerPages.map(p => String(p).toLowerCase().trim()).includes('customer-incident-report'));
 				console.log('👤 Customer pages in list:', customerPagesInList);
 				
@@ -197,7 +196,7 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 			// Return defaults on error
 			return EMPTY_PAGE_ACCESS_SETTINGS;
 		}
-	}, [hasAuthToken]);
+	}, []);
 
 	// Load customer page assignments
 	const loadCustomerPageAssignments = useCallback(async (customerId: number | null) => {
@@ -233,19 +232,69 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 	const hasAccess = useCallback((path: string): boolean => {
 		const startTime = performance.now();
 		try {
-			// Allow access during loading or if no data loaded yet (prevents redirect loops)
-			// This check must come before the currentRole check to prevent redirect loops
-			if (status === 'loading' || Object.keys(pageAccessByRole).length === 0 || availablePages.length === 0) {
-				if (import.meta.env.DEV && path !== '/dashboard' && path !== '/') {
-					console.log('✅ [PageAccess] Allowing access during initialization:', {
+			// #region agent log
+			fetch('http://127.0.0.1:7478/ingest/36db9966-faf2-4a30-a6e8-5fe60bf82961', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'X-Debug-Session-Id': '1c2cf5',
+				},
+				body: JSON.stringify({
+					sessionId: '1c2cf5',
+					runId: 'pre-fix',
+					hypothesisId: 'H1-H4',
+					location: 'PageAccessContext.tsx:hasAccess:entry',
+					message: '[agent] hasAccess entry',
+					data: {
 						path,
 						status,
-						pageAccessByRoleCount: Object.keys(pageAccessByRole).length,
+						currentRole,
 						availablePagesCount: availablePages.length,
-						reason: 'System still loading'
-					});
-				}
+					},
+					timestamp: Date.now(),
+				}),
+			}).catch(() => {});
+			// #endregion
+
+			// During loading, allow all to prevent redirect loops. Once ready, filter strictly by Settings.
+			if (status === 'loading') {
+				// #region agent log
+				fetch('http://127.0.0.1:7478/ingest/36db9966-faf2-4a30-a6e8-5fe60bf82961', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						'X-Debug-Session-Id': '1c2cf5',
+					},
+					body: JSON.stringify({
+						sessionId: '1c2cf5',
+						runId: 'pre-fix',
+						hypothesisId: 'H1',
+						location: 'PageAccessContext.tsx:hasAccess:loading-early-return',
+						message: '[agent] hasAccess early return due to loading status',
+						data: {
+							path,
+							status,
+							currentRole,
+						},
+						timestamp: Date.now(),
+					}),
+				}).catch(() => {});
+				// #endregion
 				return true;
+			}
+			// Without availablePages we cannot resolve paths. Deny by default; allow only minimal fallback for store/officer.
+			if (availablePages.length === 0) {
+				if (currentRole?.toLowerCase() === 'administrator' || currentRole?.toLowerCase() === 'manager') {
+					return true;
+				}
+				if (currentRole?.toLowerCase() === 'store' || currentRole?.toLowerCase() === 'security-officer') {
+					let checkPath = path.split('?')[0].split('#')[0];
+					checkPath = (checkPath.endsWith('/') && checkPath !== '/' ? checkPath.slice(0, -1) : checkPath) || '/';
+					if (checkPath === '/') checkPath = '/dashboard';
+					const fallbackPaths = ['/dashboard', '/profile', '/operations/incident-report'];
+					return fallbackPaths.includes(checkPath);
+				}
+				return false;
 			}
 
 			// No role = no access (except during initialization which is handled above)
@@ -263,10 +312,85 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 			// Normalize path - strip query parameters and hash
 			let normalizedPath = path.split('?')[0].split('#')[0];
 			normalizedPath = normalizedPath.endsWith('/') && normalizedPath !== '/' ? normalizedPath.slice(0, -1) : normalizedPath;
+			// Treat root as dashboard for access checks
+			if (normalizedPath === '/') normalizedPath = '/dashboard';
 
-			// Dashboard and root are always accessible
-			if (normalizedPath === '/dashboard' || normalizedPath === '/') {
-				return true;
+			// Store and security-officer users: always allow a small, safe default set of pages,
+			// but still allow additional pages that are enabled via Settings.
+			// This keeps the defaults static while making everything else dynamic.
+			if (currentRole) {
+				const roleLower = currentRole.toLowerCase();
+				const isStoreOrOfficer = roleLower === 'store' || roleLower === 'security-officer';
+				if (isStoreOrOfficer) {
+					const allowedDefaultPaths = [
+						'/dashboard',
+						'/profile',
+						'/operations/incident-report',
+					];
+					const isAllowedDefaultPath = allowedDefaultPaths.includes(normalizedPath);
+
+					// #region agent log
+					fetch('http://127.0.0.1:7478/ingest/36db9966-faf2-4a30-a6e8-5fe60bf82961', {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+							'X-Debug-Session-Id': '1c2cf5',
+						},
+						body: JSON.stringify({
+							sessionId: '1c2cf5',
+							runId: 'pre-fix',
+							hypothesisId: 'H2',
+							location: 'PageAccessContext.tsx:hasAccess:store-officer-defaults',
+							message: '[agent] hasAccess store/officer default decision',
+							data: {
+								path,
+								normalizedPath,
+								currentRole,
+								isAllowedDefaultPath,
+								allowedDefaultPaths,
+							},
+							timestamp: Date.now(),
+						}),
+					}).catch(() => {});
+					// #endregion
+
+					// For these default pages, short‑circuit to ALLOW even if Settings are misconfigured.
+					// For all other pages, fall through to the Settings-based logic below.
+					if (isAllowedDefaultPath) {
+						return true;
+					}
+				}
+			}
+
+			// Dashboard is always accessible for administrators and managers
+			if (normalizedPath === '/dashboard') {
+				if (currentRole && (currentRole.toLowerCase() === 'administrator' || currentRole.toLowerCase() === 'manager')) {
+					// #region agent log
+					fetch('http://127.0.0.1:7478/ingest/36db9966-faf2-4a30-a6e8-5fe60bf82961', {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+							'X-Debug-Session-Id': '1c2cf5',
+						},
+						body: JSON.stringify({
+							sessionId: '1c2cf5',
+							runId: 'pre-fix',
+							hypothesisId: 'H3',
+							location: 'PageAccessContext.tsx:hasAccess:admin-manager-dashboard',
+							message: '[agent] hasAccess admin/manager dashboard auto-allow',
+							data: {
+								path,
+								normalizedPath,
+								currentRole,
+							},
+							timestamp: Date.now(),
+						}),
+					}).catch(() => {});
+					// #endregion
+
+					return true;
+				}
+				// For store and security-officer, fall through to Settings-based check below
 			}
 
 			// Find page by path (exact match first, then try without leading slash)
@@ -318,12 +442,13 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 				}
 			}
 
-			// Administrators have full access
+			// Administrators have full access; managers are controlled via Settings
 			if (currentRole.toLowerCase() === 'administrator') {
 				return true;
 			}
 
-			// Get role permissions
+			// Store and security-officer: use Settings-based page access (same logic)
+			// Navigation is hidden when a page is disabled in Settings; only enabled pages appear
 			const roleKey = resolveRoleKey(currentRole);
 			if (!roleKey) {
 				if (import.meta.env.DEV) {
@@ -332,7 +457,11 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 				return false;
 			}
 
-			const allowedPageIds = pageAccessByRole[roleKey];
+			let allowedPageIds = pageAccessByRole[roleKey];
+			// Fallback for store when no pages configured: prevent lockout with minimal safe set
+			if ((!allowedPageIds || allowedPageIds.length === 0) && currentRole.toLowerCase() === 'store') {
+				allowedPageIds = ['dashboard', 'profile', 'incident-report'];
+			}
 			if (!allowedPageIds || allowedPageIds.length === 0) {
 				if (import.meta.env.DEV) {
 					console.warn('🔒 [PageAccess] No page IDs found for role:', roleKey, 'Resolved from:', currentRole);
@@ -428,35 +557,26 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 				}
 			}
 			
-			// TERTIARY: For officers, allow access to specific pages they should always have
-			// (This happens BEFORE the debug logging so we can see if it worked)
-			const isOfficer = currentRole === 'advantageoneofficer' || currentRole === 'advantageonehoofficer';
+			// TERTIARY: For officers (not store), allow access to customer pages if granted in settings
+			// Store users are restricted to incident-report only (handled in sidebar)
+			const isOfficer = currentRole === 'security-officer';
 			const isCustomerPage = page.path?.startsWith('/customer') || page.category === 'Customer';
 			const isManagementCustomerReporting = page.path === '/management/customer-reporting' || page.id === 'management-customer-reporting';
 			
 			if (!hasRoleAccess && isOfficer) {
-				// Officers can access customer pages (customer assignment checked at API level)
-				if (isCustomerPage) {
-					if (import.meta.env.DEV) {
-						console.log('✅ [PageAccess] Allowing customer page access for officer (customer assignment checked at API level):', {
-							path,
-							pageId: page.id,
-							pagePath: page.path,
-							reason: 'Officers can access customer pages - customer assignment verified at data access level'
-						});
+				// Officers can access customer pages if granted in Settings (pageAccessByRole)
+				if (isCustomerPage || isManagementCustomerReporting) {
+					// Re-check allowedPageIds - officer gets extras from Settings
+					const officerPages = pageAccessByRole['officer'] || [];
+					const hasOfficerAccess = officerPages.some(allowedId => {
+						const allowedIdStr = String(allowedId).toLowerCase().trim();
+						return allowedIdStr === pageIdLower || 
+							(page.dbId !== undefined && allowedIdStr === String(page.dbId).toLowerCase().trim());
+					});
+					if (hasOfficerAccess && (import.meta.env.DEV)) {
+						console.log('✅ [PageAccess] Officer has access via Settings:', { path, pageId: page.id });
 					}
-					hasRoleAccess = true;
-				}
-				// Officers should always have access to management customer reporting
-				else if (isManagementCustomerReporting) {
-					if (import.meta.env.DEV) {
-						console.log('✅ [PageAccess] Allowing management customer reporting for officer:', {
-							path,
-							pageId: page.id,
-							reason: 'Officers should always have access to customer reporting management page'
-						});
-					}
-					hasRoleAccess = true;
+					hasRoleAccess = hasOfficerAccess;
 				}
 			}
 			
@@ -597,7 +717,7 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 			}
 
 			// For customer roles accessing customer pages, check customer assignments
-			const isCustomerRole = currentRole === 'customersitemanager' || currentRole === 'customerhomanager';
+			const isCustomerRole = customerAssignedPageIds.size > 0;
 
 			if (isCustomerRole && isCustomerPage && customerAssignedPageIds.size > 0) {
 				const hasCustomerAssignment = customerAssignedPageIds.has(page.id);
@@ -695,7 +815,7 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 		}
 
 		// Load customer assignments if needed
-		const isCustomerRole = normalizedRole === 'customersitemanager' || normalizedRole === 'customerhomanager';
+		const isCustomerRole = normalizedRole === 'manager';
 		if (isCustomerRole && user) {
 			const customerId = 'customerId' in user ? user.customerId : null;
 			await loadCustomerPageAssignments(customerId);
@@ -709,7 +829,8 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 	// This runs synchronously on mount and whenever user changes
 	useEffect(() => {
 		if (user) {
-			const userRole = (user as any).pageAccessRole || user.role || null;
+			// Prefer the primary role, then fall back to pageAccessRole
+			const userRole = user.role || (user as any).pageAccessRole || null;
 			const normalizedRole = normalizeRoleName(userRole);
 			if (normalizedRole && normalizedRole !== currentRole) {
 				setCurrentRoleState(normalizedRole);
@@ -728,14 +849,7 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 		}
 
 		const initialize = async () => {
-			// Skip if no auth token
-			if (!hasAuthToken()) {
-				setStatus('idle');
-				setIsLoading(false);
-				return;
-			}
-
-			// Skip if already attempted
+			// Skip if already attempted (avoid duplicate loads)
 			if (settingsLoadAttempted.current) {
 				return;
 			}
@@ -747,20 +861,22 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 				setIsLoading(true);
 				setStatus('loading');
 
-				// Load settings
+				// Load page access settings (AllowAnonymous endpoint - works without token)
 				await loadPageAccessSettings();
 
-				// Set role from user (in case it wasn't set yet)
+				// Set role from user (requires token for customer assignments)
 				if (user) {
-					const userRole = (user as any).pageAccessRole || user.role || null;
+					// Prefer the primary role field, then fall back to pageAccessRole
+					const userRole = user.role || (user as any).pageAccessRole || null;
 					const normalizedRole = normalizeRoleName(userRole);
 					
 					if (normalizedRole) {
 						setCurrentRoleState(normalizedRole);
 						
-						// Load customer assignments if needed
-						const isCustomerRole = normalizedRole === 'customersitemanager' || normalizedRole === 'customerhomanager';
-						if (isCustomerRole && 'customerId' in user) {
+						// Load customer assignments if needed (requires token)
+						// Only manager/customer-style roles need per-customer page assignments.
+						const isCustomerRole = normalizedRole === 'manager';
+						if (isCustomerRole && hasAuthToken() && 'customerId' in user && user.customerId) {
 							await loadCustomerPageAssignments(user.customerId);
 						}
 					}
@@ -771,7 +887,8 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 				
 				// Set role from user even on error
 				if (user) {
-					const userRole = (user as any).pageAccessRole || user.role || null;
+					// Prefer the primary role field, then fall back to pageAccessRole
+					const userRole = user.role || (user as any).pageAccessRole || null;
 					const normalizedRole = normalizeRoleName(userRole);
 					if (normalizedRole) {
 						setCurrentRoleState(normalizedRole);
@@ -784,6 +901,26 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
 		initialize();
 	}, [hasAuthToken, user?.id, loadPageAccessSettings, normalizeRoleName, loadCustomerPageAssignments]);
+
+	// Subscribe to cross-tab updates: when admin saves in another tab, refresh our settings
+	useEffect(() => {
+		if (!hasAuthToken()) return;
+		const unsubscribe = subscribeToPageAccessUpdates(() => {
+			refreshSettings();
+		});
+		return unsubscribe;
+	}, [hasAuthToken, refreshSettings]);
+
+	// Optional: refresh for store/officer when tab becomes visible (picks up admin changes from other sessions)
+	useEffect(() => {
+		const role = currentRole?.toLowerCase();
+		if (!hasAuthToken() || (role !== 'store' && role !== 'security-officer')) return;
+		const handleVisibility = () => {
+			if (document.visibilityState === 'visible') refreshSettings();
+		};
+		document.addEventListener('visibilitychange', handleVisibility);
+		return () => document.removeEventListener('visibilitychange', handleVisibility);
+	}, [hasAuthToken, currentRole, refreshSettings]);
 
 	// Reset when user logs out
 	useEffect(() => {

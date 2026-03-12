@@ -70,9 +70,6 @@ namespace AIPBackend.Models.DTOs
         public string? PostCode { get; set; }
 
         // SIA License Information
-        [MaxLength(100)]
-        public string? SiaLicenceType { get; set; }
-
         public DateTime? SiaLicenceExpiry { get; set; }
 
         // Personal Information
@@ -82,66 +79,6 @@ namespace AIPBackend.Models.DTOs
         [MaxLength(255)]
         public string? RightToWorkCondition { get; set; }
 
-        // Driving License Information
-        [MaxLength(100)]
-        public string? DrivingLicenceType { get; set; }
-
-        public DateTime? DateDLChecked { get; set; }
-
-        public bool? DrivingLicenceCopyTaken { get; set; }
-
-        public bool? SixMonthlyCheck { get; set; }
-
-        // Checks and References
-        public bool? GraydonCheckAuthorised { get; set; }
-
-        [MaxLength(500)]
-        public string? GraydonCheckDetails { get; set; }
-
-        public bool? InitialOralReferencesComplete { get; set; }
-
-        public DateTime? InitialOralReferencesDate { get; set; }
-
-        public bool? WrittenRefsComplete { get; set; }
-
-        public DateTime? WrittenRefsCompleteDate { get; set; }
-
-        public bool? QuickStarterFormCompleted { get; set; }
-
-        // Employment Documentation Status
-        [MaxLength(100)]
-        public string? WorkingTimeDirective { get; set; }
-
-        public bool? WorkingTimeDirectiveComplete { get; set; }
-
-        public bool? ContractOfEmploymentSigned { get; set; }
-
-        public bool? PhotoTaken { get; set; }
-
-        [MaxLength(500)]
-        public string? PhotoFile { get; set; }
-
-        public bool? IdCardIssued { get; set; }
-
-        public bool? EquipmentIssued { get; set; }
-
-        public bool? UniformIssued { get; set; }
-
-        public bool? NextOfKinDetailsComplete { get; set; }
-
-        [MaxLength(50)]
-        public string? PeopleHoursPin { get; set; }
-
-        // Training and Induction
-        public DateTime? FullRotasIssued { get; set; }
-
-        public DateTime? InductionAndTrainingBooked { get; set; }
-
-        [MaxLength(100)]
-        public string? Location { get; set; }
-
-        [MaxLength(100)]
-        public string? Trainer { get; set; }
     }
 
     /// <summary>
@@ -202,9 +139,6 @@ namespace AIPBackend.Models.DTOs
         public string? PostCode { get; set; }
 
         // SIA License Information
-        [MaxLength(100)]
-        public string? SiaLicenceType { get; set; }
-
         public DateTime? SiaLicenceExpiry { get; set; }
 
         // Personal Information
@@ -213,67 +147,6 @@ namespace AIPBackend.Models.DTOs
 
         [MaxLength(255)]
         public string? RightToWorkCondition { get; set; }
-
-        // Driving License Information
-        [MaxLength(100)]
-        public string? DrivingLicenceType { get; set; }
-
-        public DateTime? DateDLChecked { get; set; }
-
-        public bool? DrivingLicenceCopyTaken { get; set; }
-
-        public bool? SixMonthlyCheck { get; set; }
-
-        // Checks and References
-        public bool? GraydonCheckAuthorised { get; set; }
-
-        [MaxLength(500)]
-        public string? GraydonCheckDetails { get; set; }
-
-        public bool? InitialOralReferencesComplete { get; set; }
-
-        public DateTime? InitialOralReferencesDate { get; set; }
-
-        public bool? WrittenRefsComplete { get; set; }
-
-        public DateTime? WrittenRefsCompleteDate { get; set; }
-
-        public bool? QuickStarterFormCompleted { get; set; }
-
-        // Employment Documentation Status
-        [MaxLength(100)]
-        public string? WorkingTimeDirective { get; set; }
-
-        public bool? WorkingTimeDirectiveComplete { get; set; }
-
-        public bool? ContractOfEmploymentSigned { get; set; }
-
-        public bool? PhotoTaken { get; set; }
-
-        [MaxLength(500)]
-        public string? PhotoFile { get; set; }
-
-        public bool? IdCardIssued { get; set; }
-
-        public bool? EquipmentIssued { get; set; }
-
-        public bool? UniformIssued { get; set; }
-
-        public bool? NextOfKinDetailsComplete { get; set; }
-
-        [MaxLength(50)]
-        public string? PeopleHoursPin { get; set; }
-
-        // Training and Induction
-        public DateTime? FullRotasIssued { get; set; }
-
-        public DateTime? InductionAndTrainingBooked { get; set; }
-
-        [MaxLength(100)]
-        public string? Location { get; set; }
-
-        [MaxLength(100)]
-        public string? Trainer { get; set; }
     }
 
     /// <summary>
@@ -315,37 +188,11 @@ namespace AIPBackend.Models.DTOs
         public string? Town { get; set; }
         public string? County { get; set; }
         public string? PostCode { get; set; }
-        public string? SiaLicenceType { get; set; }
         public DateTime? SiaLicenceExpiry { get; set; }
         public bool? IsSiaLicenceExpired { get; set; }
         public bool? IsSiaLicenceExpiringSoon { get; set; }
         public string? Nationality { get; set; }
         public string? RightToWorkCondition { get; set; }
-        public string? DrivingLicenceType { get; set; }
-        public DateTime? DateDLChecked { get; set; }
-        public bool? DrivingLicenceCopyTaken { get; set; }
-        public bool? SixMonthlyCheck { get; set; }
-        public bool? GraydonCheckAuthorised { get; set; }
-        public string? GraydonCheckDetails { get; set; }
-        public bool? InitialOralReferencesComplete { get; set; }
-        public DateTime? InitialOralReferencesDate { get; set; }
-        public bool? WrittenRefsComplete { get; set; }
-        public DateTime? WrittenRefsCompleteDate { get; set; }
-        public bool? QuickStarterFormCompleted { get; set; }
-        public string? WorkingTimeDirective { get; set; }
-        public bool? WorkingTimeDirectiveComplete { get; set; }
-        public bool? ContractOfEmploymentSigned { get; set; }
-        public bool? PhotoTaken { get; set; }
-        public string? PhotoFile { get; set; }
-        public bool? IdCardIssued { get; set; }
-        public bool? EquipmentIssued { get; set; }
-        public bool? UniformIssued { get; set; }
-        public bool? NextOfKinDetailsComplete { get; set; }
-        public string? PeopleHoursPin { get; set; }
-        public DateTime? FullRotasIssued { get; set; }
-        public DateTime? InductionAndTrainingBooked { get; set; }
-        public string? Location { get; set; }
-        public string? Trainer { get; set; }
         public string? UserId { get; set; }
         public string? Username { get; set; }
         public DateTime CreatedAt { get; set; }
@@ -367,7 +214,6 @@ namespace AIPBackend.Models.DTOs
         public string? EmploymentType { get; set; }
         public string? Email { get; set; }
         public DateTime StartDate { get; set; }
-        public string? SiaLicenceType { get; set; }
         public DateTime? SiaLicenceExpiry { get; set; }
         public bool IsSiaLicenceExpired { get; set; }
         public bool IsSiaLicenceExpiringSoon { get; set; }

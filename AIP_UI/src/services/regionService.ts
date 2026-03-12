@@ -21,15 +21,31 @@ export interface ApiResponse<T> {
   errors?: string[]
 }
 
+export interface GetRegionsOptions {
+  customerId?: number
+  page?: number
+  pageSize?: number
+  search?: string
+}
+
 export const regionService = {
   // Get all regions
-  async getRegions(customerId?: number): Promise<{ success: boolean; data: Region[] }> {
+  async getRegions(options: GetRegionsOptions = {}): Promise<{ success: boolean; data: Region[] }> {
     try {
       console.log('🔄 [RegionService] Fetching regions from backend')
       
       const params = new URLSearchParams()
-      if (customerId) {
-        params.append('customerId', customerId.toString())
+      if (options.customerId) {
+        params.append('customerId', options.customerId.toString())
+      }
+      if (options.page) {
+        params.append('page', options.page.toString())
+      }
+      if (options.pageSize) {
+        params.append('pageSize', options.pageSize.toString())
+      }
+      if (options.search) {
+        params.append('search', options.search)
       }
       
       const response = await api.get<ApiResponse<Region[]>>(`${REGION_ENDPOINTS.LIST}?${params}`)

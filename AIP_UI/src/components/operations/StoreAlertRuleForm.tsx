@@ -7,20 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { StoreAlertRule, TriggerCondition, AlertChannel } from '@/types/alertRules'
 import { X, Loader2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { BASE_API_URL } from '@/config/api'
-
-// Incident types from the system
-const incidentTypes = [
-	'Arrest - Saved?',
-	'Deter',
-	'Theft',
-	'Criminal Damage',
-	'Credit Card Fraud',
-	'Suspicious Behaviour',
-	'Underage Purchase',
-	'Anti-Social Behaviour',
-	'Others',
-]
+import { api, REGION_ENDPOINTS } from '@/config/api'
+import { lookupTableService } from '@/services/lookupTableService'
+import { sessionStore } from '@/state/sessionStore'
 
 interface Region {
 	regionID: number
@@ -54,40 +43,39 @@ export const StoreAlertRuleForm = ({ initialData, onSubmit, onCancel }: StoreAle
 	)
 	const [isActive, setIsActive] = useState(initialData?.isActive ?? true)
 	
-	// State for regions
+	// State for regions and incident types
 	const [regions, setRegions] = useState<Region[]>([])
 	const [loadingRegions, setLoadingRegions] = useState(true)
+	const [incidentTypes, setIncidentTypes] = useState<string[]>([])
 
-	// Fetch regions for Central England COOP (customerId = 1)
 	useEffect(() => {
-		const fetchRegions = async () => {
+		const user = sessionStore.getUser()
+		const customerId = (user as any)?.customerId || (user as any)?.CustomerId
+
+		const fetchData = async () => {
+			setLoadingRegions(true)
 			try {
-				setLoadingRegions(true)
-				// Fetch regions with customerId filter from backend API
-				const response = await fetch(`${BASE_API_URL}/region?pageSize=100&customerId=1`, {
-					headers: {
-						'Authorization': `Bearer ${localStorage.getItem('token')}`,
-						'Content-Type': 'application/json',
-					},
-				})
-				
-				if (response.ok) {
-					const result = await response.json()
-					// Backend returns: { success: true, data: [...regions] }
-					const regionData = result.data || result
-					setRegions(Array.isArray(regionData) ? regionData : [])
-					console.log('✅ Loaded regions for Store Alert (Central England COOP):', regionData)
-				} else {
-					console.error('❌ Failed to fetch regions:', response.status, response.statusText)
+				const [regionsResponse, lookupItems] = await Promise.all([
+					api.get(
+						customerId
+							? `${REGION_ENDPOINTS.LIST}?pageSize=100&customerId=${customerId}`
+							: `${REGION_ENDPOINTS.LIST}?pageSize=100`
+					),
+					lookupTableService.getByCategory('IncidentType').catch(() => []),
+				])
+				const regionData = regionsResponse.data?.data ?? regionsResponse.data ?? []
+				setRegions(Array.isArray(regionData) ? regionData : [])
+				if (lookupItems.length > 0) {
+					setIncidentTypes(lookupItems.map(item => item.value))
 				}
-			} catch (error) {
-				console.error('❌ Error fetching regions:', error)
+			} catch {
+				setRegions([])
 			} finally {
 				setLoadingRegions(false)
 			}
 		}
 
-		fetchRegions()
+		fetchData()
 	}, [])
 
 	const handleAddKeyword = () => {

@@ -9,7 +9,7 @@ export const DebugPanel = () => {
 	const [debugData, setDebugData] = useState<any>(null)
 
 	const refreshData = () => {
-		const authToken = localStorage.getItem('authToken')
+		const authToken = sessionStore.getToken()
 		const currentUser = sessionStore.getUser()
 
 		setDebugData({

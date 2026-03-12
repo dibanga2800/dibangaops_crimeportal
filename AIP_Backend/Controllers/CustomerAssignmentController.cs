@@ -32,7 +32,7 @@ namespace AIPBackend.Controllers
         }
 
         [HttpPost("user/{userId}/assign")]
-        [Authorize(Policy = "AdvantageOneOnly")]
+        [Authorize(Policy = "ManagerAndAbove")]
         public async Task<ActionResult> AssignCustomersToUser(string userId, [FromBody] List<int> customerIds)
         {
             try
@@ -51,7 +51,7 @@ namespace AIPBackend.Controllers
         }
 
         [HttpPost("user/{userId}/add/{customerId}")]
-        [Authorize(Policy = "AdvantageOneOnly")]
+        [Authorize(Policy = "ManagerAndAbove")]
         public async Task<ActionResult> AddCustomerToUser(string userId, int customerId)
         {
             try
@@ -70,7 +70,7 @@ namespace AIPBackend.Controllers
         }
 
         [HttpDelete("user/{userId}/remove/{customerId}")]
-        [Authorize(Policy = "AdvantageOneOnly")]
+        [Authorize(Policy = "ManagerAndAbove")]
         public async Task<ActionResult> RemoveCustomerFromUser(string userId, int customerId)
         {
             try
@@ -89,7 +89,7 @@ namespace AIPBackend.Controllers
         }
 
         [HttpDelete("user/{userId}/clear")]
-        [Authorize(Policy = "AdvantageOneOnly")]
+        [Authorize(Policy = "ManagerAndAbove")]
         public async Task<ActionResult> ClearUserCustomerAssignments(string userId)
         {
             try
@@ -122,7 +122,7 @@ namespace AIPBackend.Controllers
         }
 
         [HttpGet("customer/{customerId}/users")]
-        [Authorize(Policy = "AdvantageOneOnly")]
+        [Authorize(Policy = "ManagerAndAbove")]
         public async Task<ActionResult<List<ApplicationUser>>> GetUsersByCustomer(int customerId)
         {
             try

@@ -119,9 +119,9 @@ export function IncidentsTable({ incidents, onEdit, onDelete }: IncidentsTablePr
         <Table>
           <TableHeader>
             <TableRow>
-              <SortableTableHead field="customerName">Customer Name</SortableTableHead>
+              <SortableTableHead field="customerName">Company Name</SortableTableHead>
               <SortableTableHead field="siteName">Store Name</SortableTableHead>
-              <SortableTableHead field="officerName">Officer Name</SortableTableHead>
+              <SortableTableHead field="officerName">Staff Member Name</SortableTableHead>
               <SortableTableHead field="dateOfIncident">Incident Date</SortableTableHead>
               <SortableTableHead field="totalValueRecovered">Total Amount</SortableTableHead>
               <TableHead className="w-[70px]"></TableHead>

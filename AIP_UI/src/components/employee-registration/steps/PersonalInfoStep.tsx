@@ -18,13 +18,9 @@ export function PersonalInfoStep({ onNext }: PersonalInfoStepProps) {
               <SelectValue placeholder="Select access level" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="readonly">Read only User</SelectItem>
-              <SelectItem value="editor">Advantage One HO Editor</SelectItem>
-              <SelectItem value="manager">Advantage One HO Manager</SelectItem>
-              <SelectItem value="admin">Administrator</SelectItem>
-              <SelectItem value="site-manager">Customer-Site Manager</SelectItem>
-              <SelectItem value="ho-manager">Customer-Head Office Manager</SelectItem>
-              <SelectItem value="officer">Advantage One Officer</SelectItem>
+              <SelectItem value="administrator">Admin</SelectItem>
+              <SelectItem value="manager">Manager</SelectItem>
+              <SelectItem value="store">Store User</SelectItem>
             </SelectContent>
           </Select>
         </div>

@@ -332,7 +332,7 @@ namespace AIPBackend.Services
 		<p style=""margin-top:16px;"">
 			If you have any questions, please contact your manager directly.
 		</p>
-		<p>Thank you,<br/>Advantage One Security</p>
+		<p>Thank you,<br/>Crime Portal</p>
 	</body>
 </html>";
 		}

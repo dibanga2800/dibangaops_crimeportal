@@ -73,7 +73,7 @@ export function CustomerPageAssignment({
         enabled: true,
         customized: true,
         lastModified: new Date().toISOString(),
-        modifiedBy: 'admin'
+        modifiedBy: 'administrator'
       }
     } else {
       delete updatedAssignments[pageId]
@@ -101,7 +101,7 @@ export function CustomerPageAssignment({
         enabled: true,
         customized: true,
         lastModified: new Date().toISOString(),
-        modifiedBy: 'admin'
+        modifiedBy: 'administrator'
       }
     })
     setAssignments(allAssignments)
@@ -139,7 +139,7 @@ export function CustomerPageAssignment({
           </div>
         </div>
         <div className="text-sm text-muted-foreground">
-          Configure which pages are available for this customer. Customer needs vary - select the pages that best fit their requirements. Service type: {' '}
+          Configure which pages are available for this company. Company needs vary - select the pages that best fit their requirements. Service type: {' '}
           <Badge variant="secondary">{customerType}</Badge>
         </div>
       </CardHeader>

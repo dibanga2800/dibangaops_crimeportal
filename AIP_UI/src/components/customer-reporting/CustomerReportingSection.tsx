@@ -62,7 +62,7 @@ export function CustomerReportingSection({ customers, onNavigate }: CustomerRepo
     } catch (error) {
       setPageState({
         isLoading: false,
-        error: error instanceof Error ? error.message : 'Failed to load customer pages',
+        error: error instanceof Error ? error.message : 'Failed to load company pages',
         pages: []
       })
     }
@@ -140,7 +140,7 @@ export function CustomerReportingSection({ customers, onNavigate }: CustomerRepo
 
             {!pageState.isLoading && !pageState.error && pageState.pages.length === 0 && (
               <div className="text-center py-8 text-sm text-muted-foreground">
-                This customer has no assigned pages.
+                This company has no assigned pages.
               </div>
             )}
           </CardContent>
@@ -152,7 +152,7 @@ export function CustomerReportingSection({ customers, onNavigate }: CustomerRepo
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-900">Customer Reporting</h2>
+        <h2 className="text-2xl font-bold text-gray-900">Company Reporting</h2>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

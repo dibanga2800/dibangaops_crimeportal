@@ -28,7 +28,7 @@ export function IncidentTable({ data }: IncidentTableProps) {
       <Table>
         <TableHeader>
           <TableRow className="bg-slate-900 border-b-0">
-            <TableHead className="text-white font-semibold">Customer Name</TableHead>
+            <TableHead className="text-white font-semibold">Company Name</TableHead>
             <TableHead className="text-white font-semibold">Store Name</TableHead>
             <TableHead className="text-white font-semibold">Officer Name</TableHead>
             <TableHead className="text-white font-semibold">Incident Date</TableHead>

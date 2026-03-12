@@ -196,24 +196,46 @@ export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({ onNavigate
 	const { selectedCustomerId, isAdmin } = useCustomerSelection()
 	const navigate = useNavigate()
 	const location = useLocation()
+
+	// Derive an effective role for navigation visibility:
+	// - Prefer the authenticated user's primary role
+	// - Fall back to pageAccessRole
+	// - Finally fall back to PageAccessContext.currentRole so behavior degrades gracefully
+	const effectiveRole = React.useMemo(() => {
+		if (user) {
+			const rawRole =
+				user.role ||
+				(user as any).pageAccessRole ||
+				null;
+			if (rawRole) {
+				return String(rawRole).trim().toLowerCase();
+			}
+		}
+		return currentRole;
+	}, [user, currentRole]);
 	
 	// Compute guard context and sections (must be before early returns)
-	const isCustomerRole = currentRole === 'customersitemanager' || currentRole === 'customerhomanager'
-	const isAdministrator = currentRole === 'administrator'
-	const isOfficerRole = currentRole === 'advantageoneofficer' || currentRole === 'advantageonehoofficer'
+	// Store: only incident page. Security Officer: incident + Settings-configurable. Manager/Admin: full access
+	const isCustomerRole = effectiveRole === 'store' || effectiveRole === 'manager' || effectiveRole === 'security-officer'
+	const isAdministrator = effectiveRole === 'administrator'
+	const isManager = effectiveRole === 'manager'
+	const isOfficerRole = effectiveRole === 'security-officer'
+	const isStoreUser = effectiveRole === 'store'
 
 	const guardContext: SidebarGuardContext = React.useMemo(() => ({
 		hasAccess,
 		isCustomerRole,
 		isAdministrator,
-		isOfficerRole
-	}), [hasAccess, isCustomerRole, isAdministrator, isOfficerRole]);
+		isOfficerRole,
+		isStoreUser,
+		isManager
+	}), [hasAccess, isCustomerRole, isAdministrator, isOfficerRole, isStoreUser, isManager]);
 
 	// Debug: Log current page access for officer role
 	React.useEffect(() => {
-		if (currentRole === 'advantageoneofficer' && import.meta.env.DEV) {
-			const officerPages = pageAccessByRole[currentRole] || [];
-			const customerReportingPages = officerPages.filter(id => 
+		if (effectiveRole === 'store' && import.meta.env.DEV) {
+			const storePages = pageAccessByRole[effectiveRole] || [];
+			const customerReportingPages = storePages.filter(id => 
 				id === 'management-customer-reporting' || id.includes('customer-reporting')
 			);
 			const customerReportingPage = availablePages.find(p => 
@@ -221,8 +243,8 @@ export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({ onNavigate
 				p.id === 'management-customer-reporting'
 			);
 			
-			console.log(`🔍 [Sidebar] Officer role page access:`, {
-				totalPages: officerPages.length,
+			console.log(`🔍 [Sidebar] Store role page access:`, {
+				totalPages: storePages.length,
 				customerReporting: {
 					enabled: customerReportingPages.length > 0,
 					pageIds: customerReportingPages,
@@ -232,28 +254,28 @@ export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({ onNavigate
 				}
 			});
 		}
-	}, [currentRole, pageAccessByRole, availablePages, hasAccess]);
+	}, [effectiveRole, pageAccessByRole, availablePages, hasAccess]);
 
 	// Create a key based on pageAccessByRole to force re-render when settings change
 	const settingsKey = React.useMemo(() => {
-		if (currentRole && pageAccessByRole[currentRole]) {
-			return JSON.stringify(pageAccessByRole[currentRole].sort());
+		if (effectiveRole && pageAccessByRole[effectiveRole]) {
+			return JSON.stringify(pageAccessByRole[effectiveRole].sort());
 		}
 		return '';
-	}, [currentRole, pageAccessByRole]);
+	}, [effectiveRole, pageAccessByRole]);
 
 	const pages = availablePages || []
 	
 	// Debug: Log available pages and page access for Customer Reporting
 	React.useEffect(() => {
-		if (currentRole === 'advantageoneofficer' && import.meta.env.DEV) {
+		if (effectiveRole === 'store' && import.meta.env.DEV) {
 			const customerReportingPage = pages.find(p => 
 				p.path === '/management/customer-reporting' || 
 				p.id === 'management-customer-reporting'
 			);
-			const officerPages = pageAccessByRole[currentRole] || [];
-			const hasCustomerReporting = officerPages.includes('management-customer-reporting') || 
-			                               officerPages.some(id => id.includes('customer-reporting'));
+			const storePages = pageAccessByRole[effectiveRole] || [];
+			const hasCustomerReporting = storePages.includes('management-customer-reporting') || 
+			                               storePages.some(id => id.includes('customer-reporting'));
 			
 			console.log(`🔍 [Sidebar] Available pages and access check:`, {
 				totalAvailablePages: pages.length,
@@ -262,31 +284,50 @@ export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({ onNavigate
 					path: customerReportingPage.path,
 					title: customerReportingPage.title
 				} : 'NOT FOUND',
-				officerHasAccess: hasCustomerReporting,
-				officerAllowedPages: officerPages.slice(0, 5), // First 5 for brevity
+				storeHasAccess: hasCustomerReporting,
+				storeAllowedPages: storePages.slice(0, 5),
 				willShowInSidebar: customerReportingPage ? guardContext.hasAccess('/management/customer-reporting') : false
 			});
 		}
-	}, [pages, currentRole, pageAccessByRole, guardContext]);
+	}, [pages, effectiveRole, pageAccessByRole, guardContext]);
 	
 	const topLevelLinks = React.useMemo(() => {
-		const filtered = SIDEBAR_TOP_LINKS.filter((link) => canDisplayLink(link, guardContext, pages, currentRole));
-		
-		// Debug Customer Reporting specifically
-		if (import.meta.env.DEV && currentRole === 'advantageoneofficer') {
-			const customerReportingLink = SIDEBAR_TOP_LINKS.find(l => l.path === '/management/customer-reporting');
-			if (customerReportingLink) {
-				const willShow = canDisplayLink(customerReportingLink, guardContext, pages, currentRole);
-				console.log(`🔍 [Sidebar] Top-level Customer Reporting link:`, {
-					willShow,
-					hasAccess: guardContext.hasAccess('/management/customer-reporting'),
-					pageInAvailablePages: !!pages.find(p => p.path === '/management/customer-reporting')
-				});
+		let filtered = SIDEBAR_TOP_LINKS.filter((link) => canDisplayLink(link, guardContext, pages, effectiveRole));
+
+		// Store & security-officer roles: always include a small default set of top-level links
+		// (currently just Action Calendar), but allow Settings to add more.
+		if (effectiveRole === 'store' || effectiveRole === 'security-officer') {
+			const defaultTopPaths = ['/action-calendar'];
+			const defaultLinks = SIDEBAR_TOP_LINKS.filter((link) =>
+				defaultTopPaths.includes(link.path)
+			);
+
+			// Merge defaults into the filtered list (avoid duplicates)
+			for (const defLink of defaultLinks) {
+				if (!filtered.some((l) => l.path === defLink.path)) {
+					filtered.push(defLink);
+				}
 			}
+		}
+
+		// Dev-only: log filtering for store/officer to verify Settings-driven visibility
+		if (import.meta.env.DEV && (effectiveRole === 'store' || effectiveRole === 'security-officer')) {
+			const rolePages = pageAccessByRole[effectiveRole] || [];
+			SIDEBAR_TOP_LINKS.forEach((link) => {
+				const canDisplay = canDisplayLink(link, guardContext, pages, effectiveRole);
+				const hasAccessResult = guardContext.hasAccess(link.path);
+				console.log(`🔍 [Sidebar] Top link "${link.label}" (${link.path}):`, {
+					canDisplay,
+					hasAccess: hasAccessResult,
+					currentRole: effectiveRole,
+					roleAllowedPagesCount: rolePages.length,
+					rolePagesSample: rolePages.slice(0, 5),
+				});
+			});
 		}
 		
 		return filtered;
-	}, [guardContext, pages, currentRole, settingsKey]);
+	}, [guardContext, pages, effectiveRole, settingsKey, pageAccessByRole]);
 
 	const visibleSections = React.useMemo(() => {
 		return SIDEBAR_SECTIONS.reduce<SidebarSection[]>((acc, section) => {
@@ -295,40 +336,37 @@ export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({ onNavigate
 				return acc
 			}
 
-			const links = section.links.filter((link) => {
-				const canDisplay = canDisplayLink(link, guardContext, pages, currentRole)
+			let links = section.links.filter((link) => {
+				const canDisplay = canDisplayLink(link, guardContext, pages, effectiveRole)
 				
-				// Enhanced debug logging for Customer Reporting specifically
-				if (link.path === '/management/customer-reporting' && import.meta.env.DEV) {
-					const page = pages.find(p => p.path === link.path);
-					const officerPages = pageAccessByRole['advantageoneofficer'] || [];
-					const hasCustomerReporting = officerPages.includes('management-customer-reporting') || 
-					                               officerPages.some(id => id.includes('customer-reporting'));
-					console.log(`🔍 [Sidebar] Customer Reporting link check:`, {
-						label: link.label,
-						path: link.path,
+				// Dev-only: log filtering for store/officer to verify Settings-driven visibility
+				if (import.meta.env.DEV && (effectiveRole === 'store' || effectiveRole === 'security-officer')) {
+					const rolePages = pageAccessByRole[effectiveRole] || [];
+					console.log(`🔍 [Sidebar] Section link "${link.label}" (${link.path}):`, {
 						canDisplay,
-						currentRole,
 						hasAccess: guardContext.hasAccess(link.path),
-						pageInAvailablePages: !!page,
-						pageId: page?.id,
-						officerHasCustomerReporting: hasCustomerReporting,
-						officerPagesCount: officerPages.length,
-						settingsKey
+						currentRole: effectiveRole,
+						rolePagesSample: rolePages.slice(0, 5),
 					});
 				}
 				
-				// Debug logging
-				if (import.meta.env.DEV && false) {
-					console.log(`🔍 [Sidebar] Link "${link.label}" (${link.path}):`, {
-						canDisplay,
-						currentRole,
-						hasAccess: guardContext.hasAccess(link.path),
-						settingsKey
-					})
-				}
 				return canDisplay
 			})
+
+			// Store & security-officer roles: always include a small default set of links inside Operations,
+			// but allow Settings to add more links (in any section).
+			if ((effectiveRole === 'store' || effectiveRole === 'security-officer') && section.id === 'operations') {
+				const defaultOpsPaths = ['/operations/incident-report'];
+				const defaultOpsLinks = section.links.filter((link) =>
+					defaultOpsPaths.includes(link.path)
+				);
+
+				for (const defLink of defaultOpsLinks) {
+					if (!links.some((l) => l.path === defLink.path)) {
+						links.push(defLink);
+					}
+				}
+			}
 			
 			// Debug logging
 			if (import.meta.env.DEV && false) {
@@ -348,7 +386,7 @@ export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({ onNavigate
 			acc.push({ ...section, links })
 			return acc
 		}, [])
-	}, [guardContext, pages, currentRole, settingsKey])
+	}, [guardContext, pages, effectiveRole, settingsKey, pageAccessByRole])
   
   if (isLoading) {
     return (
@@ -377,7 +415,7 @@ export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({ onNavigate
   }
 
   // User exists but role not initialized yet - show loading
-  if (!currentRole) {
+  if (!effectiveRole) {
     return (
       <div className="px-3 py-2">
 				<div className="text-sm text-gray-500 dark:text-gray-400">Loading navigation...</div>
@@ -475,7 +513,7 @@ export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({ onNavigate
                     <CustomerSelector />
                     {!selectedCustomerId && (
 												<p className="mt-2 text-xs text-amber-600 dark:text-amber-500">
-                        Please select a customer to access customer pages
+                        Please select a company to access company pages
                       </p>
                     )}
                   </div>

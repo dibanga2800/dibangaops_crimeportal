@@ -54,7 +54,7 @@ namespace AIPBackend.Services
                 _logger.LogWarning("Invalid or system user ID provided ({UserId}), attempting to find admin user", userId);
                 
                 // Try to find an admin user
-                var adminUsers = await _userManager.GetUsersInRoleAsync("Administrator");
+                var adminUsers = await _userManager.GetUsersInRoleAsync("administrator");
                 if (adminUsers.Any())
                 {
                     var adminId = adminUsers.First().Id;
@@ -77,7 +77,7 @@ namespace AIPBackend.Services
             _logger.LogWarning("User ID {UserId} does not exist, attempting to find admin user", userId);
             
             // Fallback to admin user
-            var fallbackAdmins = await _userManager.GetUsersInRoleAsync("Administrator");
+            var fallbackAdmins = await _userManager.GetUsersInRoleAsync("administrator");
             if (fallbackAdmins.Any())
             {
                 var fallbackId = fallbackAdmins.First().Id;
@@ -156,11 +156,27 @@ namespace AIPBackend.Services
                     var officerPages = rolePageAccess["AdvantageOneOfficer"];
                 }
 
-                // If no role page access found, return default settings
+                // If no role page access found, try auto-initializing and re-query (ensures DB is seeded before using in-memory defaults)
                 if (!rolePageAccess.Any())
                 {
-                    _logger.LogWarning("No role page access found in database, returning default page access settings");
-                    return GetDefaultPageAccessSettings();
+                    _logger.LogWarning("No role page access found in database. Attempting to initialize defaults and re-query.");
+                    try
+                    {
+                        await InitializeDefaultPageAccessAsync("System");
+                        rolePageAccess = await _context.RolePageAccesses
+                            .Where(rpa => rpa.HasAccess && !string.IsNullOrEmpty(rpa.RoleName))
+                            .Include(rpa => rpa.PageAccess)
+                            .Where(rpa => rpa.PageAccess.IsActive && !string.IsNullOrEmpty(rpa.PageAccess.PageId))
+                            .GroupBy(rpa => rpa.RoleName)
+                            .ToDictionaryAsync(g => g.Key, g => g.Select(rpa => rpa.PageAccess.PageId).ToArray(), CancellationToken.None);
+                        if (!rolePageAccess.Any())
+                            return GetDefaultPageAccessSettings();
+                    }
+                    catch (Exception initEx)
+                    {
+                        _logger.LogError(initEx, "Failed to auto-initialize page access; returning default settings");
+                        return GetDefaultPageAccessSettings();
+                    }
                 }
 
                 // If no pages found in database, return default settings
@@ -740,21 +756,17 @@ namespace AIPBackend.Services
 
             var defaultPageAccessByRole = new Dictionary<string, string[]>
             {
-                ["Administrator"] = defaultPages.Select(p => p.PageId).ToArray(),
-                ["AdvantageOneHOOfficer"] = defaultPages.Where(p => 
+                ["administrator"] = defaultPages.Select(p => p.PageId).ToArray(),
+                ["manager"] = defaultPages.Where(p => 
                     p.Category != "Customer" || 
                     p.PageId == "customer-views-config").Select(p => p.PageId).ToArray(),
-                ["AdvantageOneOfficer"] = defaultPages.Where(p => 
+                ["store"] = defaultPages.Where(p => 
                     p.Category == "Main" || 
                     p.Category == "Operations" ||
                     AdvantageOneOfficerCustomerPageIds.Contains(p.PageId, StringComparer.OrdinalIgnoreCase))
                     .Select(p => p.PageId)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToArray(),
-                // Customer roles get Main category pages (dashboard, profile, etc.) + Customer pages
-                // This aligns with InitializeDefaultPageAccessAsync which assigns Main + Customer categories
-                ["CustomerHOManager"] = defaultPages.Where(p => p.Category == "Main").Select(p => p.PageId).ToArray(),
-                ["CustomerSiteManager"] = defaultPages.Where(p => p.Category == "Main").Select(p => p.PageId).ToArray()
+                    .ToArray()
             };
 
             return new PageAccessSettingsDto
@@ -957,10 +969,10 @@ namespace AIPBackend.Services
 					var roleAccesses = new List<RolePageAccess>();
 					var roleAccessSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-					// Administrator gets access to all pages
+					// Admin gets access to all pages
 				foreach (var page in allPages)
 				{
-					var key = $"Administrator|{page.Id}";
+					var key = $"admin|{page.Id}";
 						if (roleAccessSet.Contains(key)) continue;
 
 						roleAccesses.Add(new RolePageAccess
@@ -975,20 +987,20 @@ namespace AIPBackend.Services
 						roleAccessSet.Add(key);
 					}
 
-					// AdvantageOneHOOfficer gets access to most pages
-					var hoOfficerPages = allPages.Where(p =>
+					// Manager gets access to most pages
+					var managerPages = allPages.Where(p =>
 						p.Category != "Customer" ||
 						p.PageId == "customer-reporting-page" ||
 						p.PageId == "customer-views-config").ToList();
 
-				foreach (var page in hoOfficerPages)
+				foreach (var page in managerPages)
 				{
-					var key = $"AdvantageOneHOOfficer|{page.Id}";
+					var key = $"manager|{page.Id}";
 						if (roleAccessSet.Contains(key)) continue;
 
 						roleAccesses.Add(new RolePageAccess
 						{
-						RoleName = "advantageonehoofficer",
+						RoleName = "manager",
 							PageAccessId = page.Id,
 							HasAccess = true,
 							CreatedAt = DateTime.UtcNow,
@@ -998,21 +1010,22 @@ namespace AIPBackend.Services
 						roleAccessSet.Add(key);
 					}
 
-					// AdvantageOneOfficer gets access to operational pages plus selected customer/reporting pages
-					var officerExtraPageIds = new HashSet<string>(AdvantageOneOfficerCustomerPageIds, StringComparer.OrdinalIgnoreCase);
-					var officerPages = allPages.Where(p =>
-						p.Category == "Main" ||
-						p.Category == "Operations" ||
-						officerExtraPageIds.Contains(p.PageId)).ToList();
-
-					foreach (var page in officerPages)
+					// Security Officer gets incident-report by default; admin can enable additional pages via Settings
+					var securityOfficerPageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
 					{
-					var key = $"AdvantageOneOfficer|{page.Id}";
+						"dashboard", "profile", "incident-report"
+					};
+					var securityOfficerPages = allPages.Where(p =>
+						securityOfficerPageIds.Contains(p.PageId)).ToList();
+
+					foreach (var page in securityOfficerPages)
+					{
+						var key = $"security-officer|{page.Id}";
 						if (roleAccessSet.Contains(key)) continue;
 
 						roleAccesses.Add(new RolePageAccess
 						{
-						RoleName = "advantageoneofficer",
+							RoleName = "security-officer",
 							PageAccessId = page.Id,
 							HasAccess = true,
 							CreatedAt = DateTime.UtcNow,
@@ -1022,41 +1035,29 @@ namespace AIPBackend.Services
 						roleAccessSet.Add(key);
 					}
 
-					// Customer roles get access to main pages only
-					var customerPages = allPages.Where(p =>
-						p.Category == "Main").ToList();
-
-					foreach (var page in customerPages)
+					// Store user: ONLY incident page under Operations (no configurable extras)
+					var storePageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
 					{
-					var hoKey = $"CustomerHOManager|{page.Id}";
-						if (!roleAccessSet.Contains(hoKey))
-						{
-							roleAccesses.Add(new RolePageAccess
-							{
-							RoleName = "customerhomanager",
-								PageAccessId = page.Id,
-								HasAccess = true,
-								CreatedAt = DateTime.UtcNow,
-								CreatedBy = validUserId,
-								PagePath = page.Path
-							});
-							roleAccessSet.Add(hoKey);
-						}
+						"dashboard", "profile", "incident-report"
+					};
+					var storePages = allPages.Where(p =>
+						storePageIds.Contains(p.PageId)).ToList();
 
-					var siteKey = $"CustomerSiteManager|{page.Id}";
-						if (!roleAccessSet.Contains(siteKey))
+					foreach (var page in storePages)
+					{
+						var key = $"store|{page.Id}";
+						if (roleAccessSet.Contains(key)) continue;
+
+						roleAccesses.Add(new RolePageAccess
 						{
-							roleAccesses.Add(new RolePageAccess
-							{
-							RoleName = "customersitemanager",
-								PageAccessId = page.Id,
-								HasAccess = true,
-								CreatedAt = DateTime.UtcNow,
-								CreatedBy = validUserId,
-								PagePath = page.Path
-							});
-							roleAccessSet.Add(siteKey);
-						}
+							RoleName = "store",
+							PageAccessId = page.Id,
+							HasAccess = true,
+							CreatedAt = DateTime.UtcNow,
+							CreatedBy = validUserId,
+							PagePath = page.Path
+						});
+						roleAccessSet.Add(key);
 					}
 
 					if (roleAccesses.Any())
@@ -1072,10 +1073,13 @@ namespace AIPBackend.Services
 				}
 				else
 				{
-					_logger.LogInformation("Existing role access records detected ({RoleAccessCount}); skipping default role initialization to preserve admin settings", existingRoleAccessCount);
+					_logger.LogInformation("Existing role access records detected ({RoleAccessCount}); preserving admin settings", existingRoleAccessCount);
 					
 					// Normalize existing RolePageAccess records to lowercase
 					await NormalizeRolePageAccessRoleNamesAsync(validUserId);
+					
+					// Ensure officer role has default access (for new role migration)
+					await EnsureOfficerRoleAccessAsync(validUserId);
 				}
 
                 _logger.LogInformation("Default page access settings initialized successfully");
@@ -1180,6 +1184,54 @@ namespace AIPBackend.Services
             {
                 _logger.LogError(ex, "Error normalizing RolePageAccess role names");
                 throw;
+            }
+        }
+
+        /// <summary>
+        /// Ensures the officer role has default page access (dashboard, profile, incident-report).
+        /// Called when role access exists but officer role may be missing (e.g. after adding officer role).
+        /// </summary>
+        private async Task EnsureOfficerRoleAccessAsync(string validUserId)
+        {
+            try
+            {
+                var securityOfficerAccessCount = await _context.RolePageAccesses
+                    .Where(rpa => rpa.RoleName == "security-officer" && rpa.HasAccess)
+                    .CountAsync();
+                
+                if (securityOfficerAccessCount > 0)
+                {
+                    _logger.LogInformation("Security Officer role already has {Count} page access records", securityOfficerAccessCount);
+                    return;
+                }
+
+                _logger.LogInformation("Adding default page access for security-officer role");
+                var allPages = await _context.PageAccesses.Where(p => p.IsActive).ToListAsync();
+                var securityOfficerPageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "dashboard", "profile", "incident-report"
+                };
+                var securityOfficerPages = allPages.Where(p => securityOfficerPageIds.Contains(p.PageId ?? "")).ToList();
+
+                foreach (var page in securityOfficerPages)
+                {
+                    _context.RolePageAccesses.Add(new RolePageAccess
+                    {
+                        RoleName = "security-officer",
+                        PageAccessId = page.Id,
+                        HasAccess = true,
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedBy = validUserId,
+                        PagePath = page.Path
+                    });
+                }
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Added {Count} default page access records for security-officer role", securityOfficerPages.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error ensuring officer role access");
+                // Don't throw - this is a best-effort migration
             }
         }
 

@@ -5,7 +5,7 @@ export const CUSTOMER_PAGES: Record<string, CustomerPage> = {
   'daily-activity': {
     id: 'customer-daily-activity-report',
     title: 'Daily Activity Report',
-    description: 'View and manage daily activity reports for this customer',
+    description: 'View and manage daily activity reports for this company',
     enabled: true,
     requiredForTypes: [], // No required pages - customers needs vary
     path: '/customer/daily-activity-report',
@@ -27,7 +27,7 @@ export const CUSTOMER_PAGES: Record<string, CustomerPage> = {
   'incident-report': {
     id: 'customer-incident-report',
     title: 'Incident Report',
-    description: 'View and manage incident reports for this customer',
+    description: 'View and manage incident reports for this company',
     enabled: true,
     requiredForTypes: [], // No required pages - customers needs vary
     path: '/customer/incident-report',
@@ -93,7 +93,7 @@ export const CUSTOMER_PAGES: Record<string, CustomerPage> = {
   'daily-occurrence-book': {
     id: 'customer-daily-occurrence-book',
     title: 'Daily Occurrence Book (DOB)',
-    description: 'Record and manage daily occurrences, incidents, and events for this customer',
+    description: 'Record and manage daily occurrences, incidents, and events for this company',
     enabled: true,
     requiredForTypes: [], // No required pages - customers needs vary
     path: '/customer/daily-occurrence-book',

@@ -1,4 +1,5 @@
 import { BASE_API_URL } from '@/config/api'
+import { sessionStore } from '@/state/sessionStore'
 
 export interface LookupTableItem {
   lookupId: number
@@ -23,7 +24,7 @@ const cache = new Map<string, { data: LookupTableItem[], timestamp: number }>()
 const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
 
 // Helper function to get auth token
-const getAuthToken = () => localStorage.getItem('authToken')
+const getAuthToken = () => sessionStore.getToken()
 
 // Helper function to check if cache is valid
 const isCacheValid = (timestamp: number) => {

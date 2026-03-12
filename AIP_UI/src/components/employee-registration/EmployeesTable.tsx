@@ -45,8 +45,6 @@ export function EmployeesTable({ employees, onNewEmployee, onEditEmployee, onDel
   // Function to determine which columns to hide on different screen sizes
   const getResponsiveClasses = (column: string) => {
     switch (column) {
-      case 'siaLicenceType':
-        return 'hidden lg:table-cell'
       case 'startDate':
         return 'hidden md:table-cell'
       case 'position':
@@ -97,10 +95,6 @@ export function EmployeesTable({ employees, onNewEmployee, onEditEmployee, onDel
                   <span className="text-gray-500 block mb-0.5">Position</span>
                   <div className="font-medium truncate">{employee.position}</div>
                 </div>
-                <div>
-                  <span className="text-gray-500 block mb-0.5">SIA Licence</span>
-                  <div className="font-medium truncate">{employee.siaLicenceType || '-'}</div>
-                </div>
                 <div className="col-span-2">
                   <span className="text-gray-500 block mb-0.5">Start Date</span>
                   <div className="font-medium">
@@ -147,7 +141,6 @@ export function EmployeesTable({ employees, onNewEmployee, onEditEmployee, onDel
                 <TableHead className="text-sm font-medium">Employee Name</TableHead>
                 <TableHead className="text-sm font-medium">Employee No.</TableHead>
                 <TableHead className={`text-sm font-medium ${getResponsiveClasses('position')}`}>Position</TableHead>
-                <TableHead className={`text-sm font-medium ${getResponsiveClasses('siaLicenceType')}`}>SIA Licence Type</TableHead>
                 <TableHead className={`text-sm font-medium ${getResponsiveClasses('startDate')}`}>Start Date</TableHead>
                 <TableHead className="text-sm font-medium">Status</TableHead>
                 <TableHead className="text-right text-sm font-medium">Actions</TableHead>
@@ -160,9 +153,6 @@ export function EmployeesTable({ employees, onNewEmployee, onEditEmployee, onDel
                     <TableCell className="font-medium py-3">{`${employee.firstName || ''} ${employee.surname || ''}`}</TableCell>
                     <TableCell className="py-3">{employee.employeeNumber}</TableCell>
                     <TableCell className={`py-3 ${getResponsiveClasses('position')}`}>{employee.position}</TableCell>
-                    <TableCell className={`py-3 ${getResponsiveClasses('siaLicenceType')}`}>
-                      {employee.siaLicenceType || '-'}
-                    </TableCell>
                     <TableCell className={`py-3 ${getResponsiveClasses('startDate')}`}>
                       {employee.startDate ? new Date(employee.startDate).toLocaleDateString() : ''}
                     </TableCell>

@@ -173,7 +173,7 @@ export function SitesTable({ customerId, onEdit, onDataChange, updateTrigger }: 
 
       {safeSites.length === 0 ? (
         <div className="text-center py-8 text-sm text-gray-500">
-          No sites found for this customer. Click "Add Site" to create one.
+          No sites found for this company. Click "Add Site" to create one.
         </div>
       ) : filteredSites.length === 0 ? (
         <div className="text-center py-8 text-sm text-gray-500">

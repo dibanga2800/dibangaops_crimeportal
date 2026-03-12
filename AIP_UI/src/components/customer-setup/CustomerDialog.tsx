@@ -18,8 +18,8 @@ import { SiteDialog } from "./SiteDialog"
 import { RegionsTable } from "./RegionsTable"
 import { SitesTable } from "./SitesTable"
 import { customerService } from "@/services/customerService"
-import { DUMMY_REGIONS } from "@/data/mockRegions"
-import { DUMMY_SITES } from "@/data/mockSites"
+import { regionService } from "@/services/regionService"
+import { siteService } from "@/services/siteService"
 
 const customerTypes: { value: CustomerType; label: string }[] = [
   { value: "retail", label: "Retail" },
@@ -77,30 +77,19 @@ export function CustomerDialog({ open, onOpenChange, customer, onSave }: Custome
   useEffect(() => {
     const loadCustomerData = async () => {
       if (customer?.id) {
-        console.log('🔧 [CustomerDialog] Loading regions and sites for customer:', customer.id)
-        
         // Reset arrays when customer changes
         setRegions([])
         setSites([])
         
-        // For now, use mock data filtered by customer ID
-        // TODO: Replace with actual API calls when backend is ready
         const customerIdNum = parseInt(customer.id) || 0
         if (customerIdNum > 0) {
-          // Filter mock data by customer ID
-          const customerRegions = DUMMY_REGIONS.filter(region => region.fkCustomerID === customerIdNum)
-          const customerSites = DUMMY_SITES.filter(site => site.fkCustomerID === customerIdNum)
-          
-          setRegions(customerRegions)
-          setSites(customerSites)
-          console.log('🔧 [CustomerDialog] Loaded mock data:', { regions: customerRegions.length, sites: customerSites.length })
+          const [regionsResult, sitesResult] = await Promise.all([
+            regionService.getRegionsByCustomer(customerIdNum),
+            siteService.getSitesByCustomer(customerIdNum),
+          ])
+          setRegions(regionsResult.data || [])
+          setSites(sitesResult.data || [])
         }
-        
-        // TODO: Replace with actual API calls:
-        // const regionsResult = await regionsService.getRegionsByCustomer(customer.id)
-        // const sitesResult = await sitesService.getSitesByCustomer(customer.id)
-        // setRegions(regionsResult.data || [])
-        // setSites(sitesResult.data || [])
       } else {
         setRegions([])
         setSites([])
@@ -281,7 +270,7 @@ export function CustomerDialog({ open, onOpenChange, customer, onSave }: Custome
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <Tabs defaultValue="details" className="w-full" activationMode="manual">
               <TabsList className={`grid w-full ${customer?.id ? 'grid-cols-3' : 'grid-cols-1'} transition-none`}>
-                <TabsTrigger value="details">Customer Details</TabsTrigger>
+                <TabsTrigger value="details">Company Details</TabsTrigger>
                 {customer?.id && (
                   <>
                     <TabsTrigger value="regions">Regions</TabsTrigger>
@@ -305,7 +294,7 @@ export function CustomerDialog({ open, onOpenChange, customer, onSave }: Custome
                         </h3>
                         <div className="mt-2 text-sm text-blue-700">
                           <p>
-                            After creating this customer, you'll be able to add regions and sites using the dedicated tabs that will appear.
+                            After creating this company, you'll be able to add regions and sites using the dedicated tabs that will appear.
                           </p>
                         </div>
                       </div>

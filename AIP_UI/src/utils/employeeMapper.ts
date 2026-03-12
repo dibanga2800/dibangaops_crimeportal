@@ -29,47 +29,11 @@ export const mapToBackendRequest = (employee: Partial<Employee>): EmployeeRegist
     Town: employee.town,
     County: employee.county,
     PostCode: employee.postCode,
-    
-    // SIA License Information
-    SiaLicenceType: employee.siaLicenceType,
-    SiaLicenceExpiry: employee.siaLicenceExpiry ? new Date(employee.siaLicenceExpiry) : null,
-    
+
     // Personal Information
     Nationality: employee.nationality,
     RightToWorkCondition: employee.rightToWorkCondition,
     
-    // Driving License Information
-    DrivingLicenceType: employee.drivingLicenceType,
-    DateDLChecked: employee.dateDLChecked ? new Date(employee.dateDLChecked) : null,
-    DrivingLicenceCopyTaken: employee.drivingLicenceCopyTaken,
-    SixMonthlyCheck: employee.sixMonthlyCheck,
-    
-    // Checks and References
-    GraydonCheckAuthorised: employee.graydonCheckAuthorised,
-    GraydonCheckDetails: employee.graydonCheckDetails,
-    InitialOralReferencesComplete: employee.initialOralReferencesComplete,
-    InitialOralReferencesDate: employee.initialOralReferencesDate ? new Date(employee.initialOralReferencesDate) : null,
-    WrittenRefsComplete: employee.writtenRefsComplete,
-    WrittenRefsCompleteDate: employee.writtenRefsCompleteDate ? new Date(employee.writtenRefsCompleteDate) : null,
-    QuickStarterFormCompleted: employee.quickStarterFormCompleted,
-    
-    // Employment Documentation Status
-    WorkingTimeDirective: employee.workingTimeDirective,
-    WorkingTimeDirectiveComplete: employee.workingTimeDirectiveComplete,
-    ContractOfEmploymentSigned: employee.contractOfEmploymentSigned,
-    PhotoTaken: employee.photoTaken,
-    PhotoFile: employee.photoFile,
-    IdCardIssued: employee.idCardIssued,
-    EquipmentIssued: employee.equipmentIssued,
-    UniformIssued: employee.uniformIssued,
-    NextOfKinDetailsComplete: employee.nextOfKinDetailsComplete,
-    PeopleHoursPin: employee.peopleHoursPin,
-    
-    // Training and Induction
-    FullRotasIssued: employee.fullRotasIssued ? new Date(employee.fullRotasIssued) : null,
-    InductionAndTrainingBooked: employee.inductionAndTrainingBooked ? new Date(employee.inductionAndTrainingBooked) : null,
-    Location: employee.location,
-    Trainer: employee.trainer,
   }
 }
 
@@ -105,47 +69,10 @@ export const mapFromBackendResponse = (response: EmployeeDetailResponse): Employ
     county: response.county,
     postCode: response.postCode,
     
-    // SIA License Information
-    siaLicenceType: response.siaLicenceType,
-    siaLicenceExpiry: response.siaLicenceExpiry,
-    
     // Personal Information
     nationality: response.nationality,
     rightToWorkCondition: response.rightToWorkCondition,
-    
-    // Driving License Information
-    drivingLicenceType: response.drivingLicenceType,
-    dateDLChecked: response.dateDLChecked,
-    drivingLicenceCopyTaken: response.drivingLicenceCopyTaken,
-    sixMonthlyCheck: response.sixMonthlyCheck,
-    
-    // Checks and References
-    graydonCheckAuthorised: response.graydonCheckAuthorised,
-    graydonCheckDetails: response.graydonCheckDetails,
-    initialOralReferencesComplete: response.initialOralReferencesComplete,
-    initialOralReferencesDate: response.initialOralReferencesDate,
-    writtenRefsComplete: response.writtenRefsComplete,
-    writtenRefsCompleteDate: response.writtenRefsCompleteDate,
-    quickStarterFormCompleted: response.quickStarterFormCompleted,
-    
-    // Employment Documentation Status
-    workingTimeDirective: response.workingTimeDirective,
-    workingTimeDirectiveComplete: response.workingTimeDirectiveComplete,
-    contractOfEmploymentSigned: response.contractOfEmploymentSigned,
-    photoTaken: response.photoTaken,
-    photoFile: response.photoFile,
-    idCardIssued: response.idCardIssued,
-    equipmentIssued: response.equipmentIssued,
-    uniformIssued: response.uniformIssued,
-    nextOfKinDetailsComplete: response.nextOfKinDetailsComplete,
-    peopleHoursPin: response.peopleHoursPin,
-    
-    // Training and Induction
-    fullRotasIssued: response.fullRotasIssued,
-    inductionAndTrainingBooked: response.inductionAndTrainingBooked,
-    location: response.location,
-    trainer: response.trainer,
-    
+
     // Relationships
     userId: response.userId,
     
@@ -154,11 +81,9 @@ export const mapFromBackendResponse = (response: EmployeeDetailResponse): Employ
     createdBy: response.createdBy || '',
     updatedAt: response.updatedAt,
     updatedBy: response.updatedBy || '',
-    
+
     // Computed Properties
     fullName: response.fullName,
-    isSiaLicenceExpired: response.isSiaLicenceExpired || false,
-    isSiaLicenceExpiringSoon: response.isSiaLicenceExpiringSoon || false,
   }
 }
 
@@ -198,43 +123,14 @@ export const mapFromListResponse = (response: any): Employee => {
     town: '',
     county: '',
     postCode: '',
-    siaLicenceType: response.siaLicenceType || '',
-    siaLicenceExpiry: response.siaLicenceExpiry ? new Date(response.siaLicenceExpiry) : null,
     nationality: '',
     rightToWorkCondition: '',
-    drivingLicenceType: '',
-    dateDLChecked: null,
-    drivingLicenceCopyTaken: false,
-    sixMonthlyCheck: false,
-    graydonCheckAuthorised: false,
-    graydonCheckDetails: '',
-    initialOralReferencesComplete: false,
-    initialOralReferencesDate: null,
-    writtenRefsComplete: false,
-    writtenRefsCompleteDate: null,
-    quickStarterFormCompleted: false,
-    workingTimeDirective: '',
-    workingTimeDirectiveComplete: false,
-    contractOfEmploymentSigned: false,
-    photoTaken: false,
-    photoFile: '',
-    idCardIssued: false,
-    equipmentIssued: false,
-    uniformIssued: false,
-    nextOfKinDetailsComplete: false,
-    peopleHoursPin: '',
-    fullRotasIssued: null,
-    inductionAndTrainingBooked: null,
-    location: '',
-    trainer: '',
     userId: response.userId,
     createdAt: response.createdAt ? new Date(response.createdAt) : new Date(),
     createdBy: '',
     updatedAt: null,
     updatedBy: '',
     fullName: response.fullName,
-    isSiaLicenceExpired: response.isSiaLicenceExpired || false,
-    isSiaLicenceExpiringSoon: response.isSiaLicenceExpiringSoon || false,
   }
 }
 
@@ -270,36 +166,8 @@ export const mapToBackendUpdateRequest = (employee: Partial<Employee>): any => {
   if (employee.town !== undefined) updateRequest.Town = employee.town
   if (employee.county !== undefined) updateRequest.County = employee.county
   if (employee.postCode !== undefined) updateRequest.PostCode = employee.postCode
-  if (employee.siaLicenceType !== undefined) updateRequest.SiaLicenceType = employee.siaLicenceType
-  if (employee.siaLicenceExpiry !== undefined) updateRequest.SiaLicenceExpiry = employee.siaLicenceExpiry ? new Date(employee.siaLicenceExpiry) : null
   if (employee.nationality !== undefined) updateRequest.Nationality = employee.nationality
   if (employee.rightToWorkCondition !== undefined) updateRequest.RightToWorkCondition = employee.rightToWorkCondition
-  if (employee.drivingLicenceType !== undefined) updateRequest.DrivingLicenceType = employee.drivingLicenceType
-  if (employee.dateDLChecked !== undefined) updateRequest.DateDLChecked = employee.dateDLChecked ? new Date(employee.dateDLChecked) : null
-  if (employee.drivingLicenceCopyTaken !== undefined) updateRequest.DrivingLicenceCopyTaken = employee.drivingLicenceCopyTaken
-  if (employee.sixMonthlyCheck !== undefined) updateRequest.SixMonthlyCheck = employee.sixMonthlyCheck
-  if (employee.graydonCheckAuthorised !== undefined) updateRequest.GraydonCheckAuthorised = employee.graydonCheckAuthorised
-  if (employee.graydonCheckDetails !== undefined) updateRequest.GraydonCheckDetails = employee.graydonCheckDetails
-  if (employee.initialOralReferencesComplete !== undefined) updateRequest.InitialOralReferencesComplete = employee.initialOralReferencesComplete
-  if (employee.initialOralReferencesDate !== undefined) updateRequest.InitialOralReferencesDate = employee.initialOralReferencesDate ? new Date(employee.initialOralReferencesDate) : null
-  if (employee.writtenRefsComplete !== undefined) updateRequest.WrittenRefsComplete = employee.writtenRefsComplete
-  if (employee.writtenRefsCompleteDate !== undefined) updateRequest.WrittenRefsCompleteDate = employee.writtenRefsCompleteDate ? new Date(employee.writtenRefsCompleteDate) : null
-  if (employee.quickStarterFormCompleted !== undefined) updateRequest.QuickStarterFormCompleted = employee.quickStarterFormCompleted
-  if (employee.workingTimeDirective !== undefined) updateRequest.WorkingTimeDirective = employee.workingTimeDirective
-  if (employee.workingTimeDirectiveComplete !== undefined) updateRequest.WorkingTimeDirectiveComplete = employee.workingTimeDirectiveComplete
-  if (employee.contractOfEmploymentSigned !== undefined) updateRequest.ContractOfEmploymentSigned = employee.contractOfEmploymentSigned
-  if (employee.photoTaken !== undefined) updateRequest.PhotoTaken = employee.photoTaken
-  if (employee.photoFile !== undefined) updateRequest.PhotoFile = employee.photoFile
-  if (employee.idCardIssued !== undefined) updateRequest.IdCardIssued = employee.idCardIssued
-  if (employee.equipmentIssued !== undefined) updateRequest.EquipmentIssued = employee.equipmentIssued
-  if (employee.uniformIssued !== undefined) updateRequest.UniformIssued = employee.uniformIssued
-  if (employee.nextOfKinDetailsComplete !== undefined) updateRequest.NextOfKinDetailsComplete = employee.nextOfKinDetailsComplete
-  if (employee.peopleHoursPin !== undefined) updateRequest.PeopleHoursPin = employee.peopleHoursPin
-  if (employee.fullRotasIssued !== undefined) updateRequest.FullRotasIssued = employee.fullRotasIssued ? new Date(employee.fullRotasIssued) : null
-  if (employee.inductionAndTrainingBooked !== undefined) updateRequest.InductionAndTrainingBooked = employee.inductionAndTrainingBooked ? new Date(employee.inductionAndTrainingBooked) : null
-  if (employee.location !== undefined) updateRequest.Location = employee.location
-  if (employee.trainer !== undefined) updateRequest.Trainer = employee.trainer
-  
   return updateRequest
 }
 
@@ -325,7 +193,6 @@ export const validateEmployeeRegistration = (employee: Partial<Employee>): strin
   if (!employee.region) errors.push('Region is required')
   if (!employee.nationality) errors.push('Nationality is required')
   if (!employee.rightToWorkCondition) errors.push('Right to work condition is required')
-  if (!employee.drivingLicenceType) errors.push('Driving licence type is required')
   
   return errors
 }

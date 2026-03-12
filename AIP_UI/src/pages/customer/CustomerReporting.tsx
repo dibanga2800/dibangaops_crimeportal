@@ -39,7 +39,7 @@ export default function CustomerReporting() {
         let customerData = await customerService.getAllCustomers()
         
         // For officers, filter to only assigned customers
-        if (user?.role === 'advantageoneofficer') {
+        if (user?.role === 'store') {
           const assignedCustomerIds = user.assignedCustomerIds || []
           // Normalize IDs to numbers for comparison (customer.id might be string or number)
           const assignedIdsAsNumbers = assignedCustomerIds.map(id => Number(id)).filter(id => !isNaN(id))
@@ -125,7 +125,7 @@ export default function CustomerReporting() {
         })
       } catch (error) {
         if (!isActive) return
-        const message = error instanceof Error ? error.message : 'Failed to load customer pages'
+        const message = error instanceof Error ? error.message : 'Failed to load company pages'
         console.error('❌ [CustomerReporting] Error loading pages:', error)
         setPageState({
           isLoading: false,
@@ -160,7 +160,7 @@ export default function CustomerReporting() {
     return (
       <div className="container mx-auto p-4">
         <div className="flex flex-col gap-2">
-          <h1 className="text-2xl font-bold">Customer Reporting</h1>
+          <h1 className="text-2xl font-bold">Company Reporting</h1>
           <Card className="p-6 text-center">
             <p className="text-muted-foreground">
               No customers are currently assigned to you.
@@ -176,7 +176,7 @@ export default function CustomerReporting() {
     <div className="container mx-auto p-4 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold">Customer Reporting</h1>
+          <h1 className="text-2xl font-bold">Company Reporting</h1>
           <p className="text-muted-foreground">
             Select a customer to view their reports and metrics
           </p>
@@ -243,7 +243,7 @@ export default function CustomerReporting() {
       {selectedCustomer && !pageState.isLoading && !pageState.error && pageState.pages.length === 0 && (
         <div className="text-center py-8">
           <p className="text-muted-foreground">
-            No pages have been configured for this customer.
+            No pages have been configured for this company.
             Please contact your administrator to set up page access.
           </p>
         </div>

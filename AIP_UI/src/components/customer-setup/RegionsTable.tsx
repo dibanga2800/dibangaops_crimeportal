@@ -166,7 +166,7 @@ export function RegionsTable({ customerId, onEdit, onDataChange, updateTrigger }
 
       {safeRegions.length === 0 ? (
         <div className="text-center py-8 text-sm text-gray-500">
-          No regions found for this customer. Click "Add Region" to create one.
+          No regions found for this company. Click "Add Region" to create one.
         </div>
       ) : filteredRegions.length === 0 ? (
         <div className="text-center py-8 text-sm text-gray-500">

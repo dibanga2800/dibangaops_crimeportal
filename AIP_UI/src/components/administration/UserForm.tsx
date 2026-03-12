@@ -19,10 +19,11 @@ import {
   AdvantageOneUser,
 } from '@/types/user';
 import { useAvailableCustomers } from '@/hooks/useAvailableCustomers';
-import { Users, Eye, EyeOff, Building2, Lock, FileText, Shield, Briefcase, ChevronRight, ChevronLeft, AlertTriangle, Loader2 } from 'lucide-react';
+import { Users, Eye, EyeOff, Building2, Lock, FileText, Shield, Briefcase, ChevronRight, ChevronLeft, AlertTriangle, Loader2, MapPin } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { employeeService } from '@/services/employeeService';
+import { siteService } from '@/services/siteService';
 import { userService } from '@/services/userService';
 import { Employee } from '@/types/employee';
 import { toast } from 'sonner';
@@ -34,21 +35,18 @@ interface UserFormProps {
 }
 
 const USER_ROLES: UserRole[] = [
-  'advantageoneofficer',
-  'advantageonehoofficer',
   'administrator',
-  'customersitemanager',
-  'customerhomanager',
+  'manager',
+  'security-officer',
+  'store',
 ];
 
-// Helper to format role for display (PascalCase)
 const formatRoleForDisplay = (role: UserRole): string => {
   const roleMap: Record<UserRole, string> = {
-    'administrator': 'Administrator',
-    'advantageoneofficer': 'AdvantageOneOfficer',
-    'advantageonehoofficer': 'AdvantageOneHOOfficer',
-    'customersitemanager': 'CustomerSiteManager',
-    'customerhomanager': 'CustomerHOManager'
+    'administrator': 'Admin',
+    'manager': 'Manager',
+    'security-officer': 'Security Officer',
+    'store': 'Store User',
   };
   return roleMap[role] || role;
 };
@@ -67,9 +65,12 @@ type FormState = {
   customerId?: number;
   recordIsDeleted?: boolean;
   employeeId?: number;
+  // Store / site assignments
+  primarySiteId?: string;
+  assignedSiteIds?: string[];
 } & (
-  | { role: 'customersitemanager' | 'customerhomanager' }
-  | { role: 'advantageoneofficer' | 'advantageonehoofficer' | 'administrator'; assignedCustomerIds: number[] }
+  | { role: UserRole; customerId?: number }
+  | { role: UserRole; assignedCustomerIds: number[] }
 );
 
 export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => {
@@ -97,7 +98,7 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
       }
       
       // Debug customerId for customer users
-      if (initialData.role === 'customersitemanager' || initialData.role === 'customerhomanager') {
+      if ((initialData as CustomerUser)?.customerId) {
         console.log('🔍 [UserForm] CustomerId from initialData:', (initialData as CustomerUser)?.customerId);
       }
     }
@@ -134,6 +135,8 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
       customerId: (initialData as CustomerUser)?.customerId ?? undefined,
       recordIsDeleted: initialData?.recordIsDeleted || false,
       employeeId: (initialData as any)?.employeeId ?? undefined,
+      primarySiteId: (initialData as any)?.primarySiteId ?? undefined,
+      assignedSiteIds: ((initialData as any)?.assignedSiteIds as string[] | undefined) ?? [],
     };
 
     console.log('🔍 [UserForm] Form data initialization:', {
@@ -142,10 +145,10 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
       fullBaseData: baseData
     });
 
-    if (initialData?.role === 'customersitemanager' || initialData?.role === 'customerhomanager') {
+    if ((initialData as CustomerUser)?.customerId) {
       return {
         ...baseData,
-        role: initialData.role,
+        role: initialData!.role,
         customerId: (initialData as CustomerUser)?.customerId ?? undefined,
       } as FormState;
     } else {
@@ -157,7 +160,7 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
       
       return {
         ...baseData,
-        role: (initialData?.role as 'advantageoneofficer' | 'advantageonehoofficer' | 'administrator') || 'advantageoneofficer',
+        role: (initialData?.role as UserRole) || 'store',
         assignedCustomerIds,
       } as FormState;
     }
@@ -167,9 +170,11 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [sites, setSites] = useState<any[]>([]);
+  const [loadingSites, setLoadingSites] = useState(false);
 
   useEffect(() => {
-    const shouldLoad = formData.role !== 'customersitemanager' && formData.role !== 'customerhomanager';
+    const shouldLoad = !formData.customerId;
     if (!shouldLoad) {
       setEmployees([]);
       return;
@@ -203,6 +208,47 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
     };
     load();
   }, [formData.role, initialData]);
+
+  // Load sites for the selected customer (store users) or all assigned customers (officers/managers)
+  useEffect(() => {
+    const loadSites = async () => {
+      setLoadingSites(true);
+      try {
+        // Store role: use single customerId
+        if (formData.role === 'store' && formData.customerId) {
+          const result = await siteService.getSitesByCustomer(formData.customerId);
+          setSites(result.success ? result.data : []);
+        }
+        // Any internal role with assigned customers: aggregate sites for all assigned customers
+        else if ('assignedCustomerIds' in formData && formData.assignedCustomerIds.length > 0) {
+          const allSites: any[] = [];
+          for (const cid of formData.assignedCustomerIds) {
+            const result = await siteService.getSitesByCustomer(cid);
+            if (result.success) {
+              allSites.push(...result.data);
+            }
+          }
+          // Deduplicate by siteID
+          const seen = new Set<number>();
+          const uniqueSites = allSites.filter((s) => {
+            if (seen.has(s.siteID)) return false;
+            seen.add(s.siteID);
+            return true;
+          });
+          setSites(uniqueSites);
+        } else {
+          setSites([]);
+        }
+      } catch (err) {
+        console.error('❌ [UserForm] Error loading sites:', err);
+        setSites([]);
+      } finally {
+        setLoadingSites(false);
+      }
+    };
+
+    loadSites();
+  }, [formData.role, (formData as any).assignedCustomerIds, formData.customerId]);
 
   // Convert availableCustomers to Customer objects for DualListBox
   const availableCustomersForDualList = useMemo(() => {
@@ -377,31 +423,33 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
   const handleSelectChange = (name: string, value: string) => {
     if (name === 'role') {
       const role = value as UserRole;
-      const isCustomerRole = role === 'customersitemanager' || role === 'customerhomanager';
-      
-      if (isCustomerRole) {
-        setFormData({
-          ...formData,
-          role,
-          pageAccessRole: role,
-          employeeId: undefined,
-          customerId: undefined,
-        } as FormState);
-      } else {
-        setFormData({
-          ...formData,
-          role,
-          pageAccessRole: role,
-          assignedCustomerIds: [],
-          employeeId: undefined,
-        } as FormState);
-      }
+      setFormData({
+        ...formData,
+        role,
+        pageAccessRole: role,
+        assignedCustomerIds: [],
+        employeeId: undefined,
+        customerId: undefined,
+        primarySiteId: undefined,
+        assignedSiteIds: [],
+      } as FormState);
     } else if (name === 'customerId') {
-      setFormData(prev => ({ ...prev, customerId: value ? parseInt(value) : undefined }));
+      setFormData(prev => ({
+        ...prev,
+        customerId: value ? parseInt(value) : undefined,
+        // When customer changes for a store user, reset the selected primary site
+        primarySiteId: prev.role === 'store' ? undefined : prev.primarySiteId,
+      }));
     }
   };
 
-  const isCustomerRole = formData.role === 'customersitemanager' || formData.role === 'customerhomanager';
+  // Treat store users – and only non-security roles with an explicit customerId –
+  // as "customer users" so they see the Customer + Store assignment UI.
+  // Security officers should always use the multi-customer + multi-store
+  // assignment card, even if a customerId happens to be set.
+  const isCustomerRole =
+    formData.role === 'store' ||
+    (formData.role !== 'security-officer' && !!formData.customerId);
 
   // Debug logging for customerId changes
   useEffect(() => {
@@ -442,13 +490,19 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
     
     // Validate employee requirement for non-customer users
     if (!isCustomerRole && !formData.employeeId) {
-      toast.error('Employee selection is required for non-customer users');
+      toast.error('Employee selection is required for non-company users');
       return;
     }
     
     // Validate customerId requirement for customer users
     if (isCustomerRole && !formData.customerId) {
-      toast.error('Customer selection is required for customer users');
+      toast.error('Company selection is required for company users');
+      return;
+    }
+
+    // For store users, ensure a primary site is selected
+    if (formData.role === 'store' && !formData.primarySiteId) {
+      toast.error('Store selection is required for store users');
       return;
     }
     
@@ -627,50 +681,53 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
             </Select>
           </div>
 
-                     {/* Employee Selection for non-customer roles */}
-           {!isCustomerRole && (
-             <div className="md:col-span-2">
-               <Label htmlFor="employeeId" className={!formData.employeeId ? 'text-red-600' : ''}>
-                 Select Employee *
-               </Label>
-               <Select
-                 value={formData.employeeId ? String(formData.employeeId) : ''}
-                 onValueChange={(value) => setFormData(prev => ({ ...prev, employeeId: value ? parseInt(value) : undefined }))}
-                 required
-               >
-                 <SelectTrigger className={!formData.employeeId ? 'border-red-500' : ''}>
-                   <SelectValue placeholder={loadingEmployees ? 'Loading employees...' : 'Select an employee'} />
-                 </SelectTrigger>
-                 <SelectContent>
-                   {loadingEmployees ? (
-                     <SelectItem value="loading" disabled>
-                       <div className="flex items-center gap-2">
-                         <Loader2 className="h-4 w-4 animate-spin" />
-                         Loading employees...
-                       </div>
-                     </SelectItem>
-                   ) : employees.length === 0 ? (
-                     <SelectItem value="no-employees" disabled>
-                       <div className="flex items-center gap-2">
-                         <AlertTriangle className="h-4 w-4 text-amber-500" />
-                         No employees available - Check backend connection
-                       </div>
-                     </SelectItem>
-                   ) : (
-                     employees.map(emp => (
-                       <SelectItem key={emp.id} value={String(emp.id)}>
-                         {emp.firstName} {emp.surname}
-                       </SelectItem>
-                     ))
-                   )}
-                 </SelectContent>
-               </Select>
-             </div>
-           )}
+          {/* Employee selection – always shown so we can link a user to an employee record */}
+          <div className="md:col-span-2">
+            <Label htmlFor="employeeId" className={!formData.employeeId ? 'text-red-600' : ''}>
+              Select Employee *
+            </Label>
+            <Select
+              value={formData.employeeId ? String(formData.employeeId) : ''}
+              onValueChange={(value) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  employeeId: value ? parseInt(value) : undefined,
+                }))
+              }
+              required
+            >
+              <SelectTrigger className={!formData.employeeId ? 'border-red-500' : ''}>
+                <SelectValue placeholder={loadingEmployees ? 'Loading employees...' : 'Select an employee'} />
+              </SelectTrigger>
+              <SelectContent>
+                {loadingEmployees ? (
+                  <SelectItem value="loading" disabled>
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading employees...
+                    </div>
+                  </SelectItem>
+                ) : employees.length === 0 ? (
+                  <SelectItem value="no-employees" disabled>
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-amber-500" />
+                      No employees available - Check backend connection
+                    </div>
+                  </SelectItem>
+                ) : (
+                  employees.map((emp) => (
+                    <SelectItem key={emp.id} value={String(emp.id)}>
+                      {emp.firstName} {emp.surname}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Customer Assignment Section - Only for Advantage One roles */}
+      {/* Customer Assignment Section - Only for internal security roles */}
       {!isCustomerRole && (
         <Card>
           <CardHeader className="pb-4">
@@ -682,11 +739,15 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
           <CardContent>
             {isLoading ? (
               <div className="text-center py-4">
-                <div className="text-sm text-gray-500">Loading customers...</div>
+                <div className="text-sm text-gray-500">Loading companies...</div>
               </div>
             ) : (
               <div className="space-y-4">
-                <Label className="text-sm font-medium">Assign customers to this officer</Label>
+                <Label className="text-sm font-medium">
+                  {formData.role === 'manager'
+                    ? 'Assign customers to this manager'
+                    : 'Assign customers to this security officer'}
+                </Label>
                 <DualListBox
                   available={availableCustomersNotSelected}
                   selected={selectedCustomersForDualList}
@@ -696,6 +757,67 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
                 <div className="text-sm text-gray-500">
                   {selectedCustomersForDualList.length} customer(s) assigned
                 </div>
+
+                {/* Store / site assignments for internal roles with assigned customers */}
+                {'assignedCustomerIds' in formData && formData.assignedCustomerIds.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    <Label className="text-sm font-medium flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-primary" />
+                      Assign stores (sites){' '}
+                      {formData.role === 'security-officer'
+                        ? 'to this security officer'
+                        : formData.role === 'manager'
+                        ? 'to this manager'
+                        : 'to this user'}
+                    </Label>
+                    {loadingSites ? (
+                      <div className="flex items-center gap-2 text-sm text-gray-500">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Loading sites for assigned customers...
+                      </div>
+                    ) : sites.length === 0 ? (
+                      <div className="text-sm text-gray-500">
+                        No sites found for the assigned customers yet.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-64 overflow-y-auto border rounded-md p-2">
+                        {sites.map((site) => {
+                          const id = String(site.siteID ?? site.siteId ?? site.id);
+                          const checked = formData.assignedSiteIds?.includes(id) ?? false;
+                          return (
+                            <label key={id} className="flex items-center gap-2 text-sm cursor-pointer">
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={(isChecked) => {
+                                  setFormData((prev) => {
+                                    const current = prev.assignedSiteIds ?? [];
+                                    const next = isChecked
+                                      ? Array.from(new Set([...current, id]))
+                                      : current.filter((s) => s !== id);
+                                    return { ...prev, assignedSiteIds: next } as FormState;
+                                  });
+                                }}
+                              />
+                              <span>
+                                {site.locationName || site.LocationName || `Site ${id}`}
+                                {site.sinNumber && (
+                                  <span className="ml-1 text-xs text-gray-500">
+                                    ({site.sinNumber})
+                                  </span>
+                                )}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {formData.assignedSiteIds && formData.assignedSiteIds.length > 0 && (
+                      <div className="text-xs text-gray-500">
+                        {formData.assignedSiteIds.length} site(s) assigned
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
@@ -731,14 +853,14 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
                 required
               >
                 <SelectTrigger className={!formData.customerId ? 'border-red-500' : ''}>
-                  <SelectValue placeholder={isLoading ? 'Loading customers...' : 'Select customer'} />
+                  <SelectValue placeholder={isLoading ? 'Loading companies...' : 'Select company'} />
                 </SelectTrigger>
                 <SelectContent>
                   {isLoading ? (
                     <SelectItem value="loading" disabled>
                       <div className="flex items-center gap-2">
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        Loading customers...
+                        Loading companies...
                       </div>
                     </SelectItem>
                   ) : availableCustomers.length === 0 ? (
@@ -758,7 +880,54 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
                 </SelectContent>
               </Select>
               {!formData.customerId && (
-                <p className="text-xs text-red-600 mt-1">Customer selection is required for customer users</p>
+                <p className="text-xs text-red-600 mt-1">Company selection is required for company users</p>
+              )}
+            </div>
+          )}
+          {formData.role === 'store' && isCustomerRole && (
+            <div>
+              <Label htmlFor="primarySiteId" className={!formData.primarySiteId ? 'text-red-600' : ''}>
+                Store (Site) *
+              </Label>
+              <Select
+                value={formData.primarySiteId ?? ''}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, primarySiteId: value || undefined } as FormState))
+                }
+                required
+              >
+                <SelectTrigger className={!formData.primarySiteId ? 'border-red-500' : ''}>
+                  <SelectValue placeholder={loadingSites ? 'Loading stores...' : 'Select store'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {loadingSites ? (
+                    <SelectItem value="loading" disabled>
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Loading stores...
+                      </div>
+                    </SelectItem>
+                  ) : sites.length === 0 ? (
+                    <SelectItem value="no-sites" disabled>
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4" />
+                        No stores available for this customer
+                      </div>
+                    </SelectItem>
+                  ) : (
+                    sites.map((site) => {
+                      const id = String(site.siteID ?? site.siteId ?? site.id);
+                      return (
+                        <SelectItem key={id} value={id}>
+                          {site.locationName || site.LocationName || `Site ${id}`}
+                        </SelectItem>
+                      );
+                    })
+                  )}
+                </SelectContent>
+              </Select>
+              {!formData.primarySiteId && (
+                <p className="text-xs text-red-600 mt-1">Store selection is required for store users</p>
               )}
             </div>
           )}
@@ -797,10 +966,14 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button 
-          type="submit" 
+        <Button
+          type="submit"
           disabled={Object.keys(validationErrors).length > 0}
-          title={Object.keys(validationErrors).length > 0 ? 'Please fix validation errors before submitting' : ''}
+          title={
+            Object.keys(validationErrors).length > 0
+              ? 'Please fix validation errors before submitting'
+              : ''
+          }
         >
           {initialData ? 'Update' : 'Create'} User
         </Button>

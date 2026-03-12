@@ -15,8 +15,13 @@ export interface CreateUserRequest {
   jobTitle?: string
   signature?: string
   signatureCode?: string
+  profilePicture?: string | null
+  clearProfilePicture?: boolean
   recordIsDeleted?: boolean
   assignedCustomerIds?: number[]
+  // Store / site assignment
+  primarySiteId?: string
+  assignedSiteIds?: string[]
 }
 
 // Backend response interfaces
@@ -31,6 +36,7 @@ export interface BackendUserResponse {
   signature?: string
   signatureCode?: string
   jobTitle?: string
+  profilePicture?: string
   customerId?: number
   customerName?: string // Company name for customer users
   recordIsDeleted: boolean
@@ -46,6 +52,12 @@ export interface BackendUserResponse {
   employeeName?: string
   assignedCustomerIds?: number[] | string // Can be array or JSON string
   assignedCustomerNames?: string[]
+  twoFactorEnabled?: boolean
+  emailNotificationsEnabled?: boolean
+  loginAlertsEnabled?: boolean
+  // Store / site assignment
+  primarySiteId?: string
+  assignedSiteIds?: string[] | string
 }
 
 export interface BackendUserListResponse {
@@ -85,6 +97,21 @@ class UserService {
     return [];
   }
 
+  // Helper function to parse assignedSiteIds
+  private parseAssignedSiteIds(siteIds: any): string[] {
+    if (!siteIds) return [];
+    if (Array.isArray(siteIds)) return siteIds;
+    if (typeof siteIds === 'string') {
+      try {
+        const parsed = JSON.parse(siteIds);
+        return Array.isArray(parsed) ? parsed : siteIds.split(',').map((s: string) => s.trim()).filter(Boolean);
+      } catch {
+        return siteIds.split(',').map((s: string) => s.trim()).filter(Boolean);
+      }
+    }
+    return [];
+  }
+
   /**
    * Creates a new user account with optional employee linking
    */
@@ -108,6 +135,7 @@ class UserService {
         signature: backendUser.signature,
         signatureCode: backendUser.signatureCode,
         jobTitle: backendUser.jobTitle,
+        profilePicture: backendUser.profilePicture,
         customerId: backendUser.customerId,
         customerName: backendUser.customerName,
         recordIsDeleted: backendUser.recordIsDeleted,
@@ -119,7 +147,12 @@ class UserService {
         assignedCustomerNames: backendUser.assignedCustomerNames || [],
         phoneNumber: backendUser.phoneNumber,
         emailConfirmed: backendUser.emailConfirmed,
-        lastLoginAt: backendUser.lastLoginAt
+        lastLoginAt: backendUser.lastLoginAt,
+        twoFactorEnabled: backendUser.twoFactorEnabled,
+        emailNotificationsEnabled: backendUser.emailNotificationsEnabled,
+        loginAlertsEnabled: backendUser.loginAlertsEnabled,
+        primarySiteId: backendUser.primarySiteId,
+        assignedSiteIds: this.parseAssignedSiteIds(backendUser.assignedSiteIds)
       } as User
     } catch (error) {
       console.error('❌ [UserService] Error creating user:', error)
@@ -155,7 +188,7 @@ class UserService {
       const transformedUsers = backendUsers.map(user => {
         // Backend returns roles in lowercase, use directly
         const normalizedRole = (user.role?.toLowerCase() || '') as UserRole;
-        const isCustomerRole = normalizedRole === 'customersitemanager' || normalizedRole === 'customerhomanager';
+        const isCustomerRole = !!user.customerId;
         const normalizedPageAccessRole = (user.pageAccessRole?.toLowerCase() || normalizedRole) as UserRole;
         
         console.log('🔄 [UserService] getUsers - Transforming user:', {
@@ -178,6 +211,7 @@ class UserService {
           signature: user.signature,
           signatureCode: user.signatureCode,
           jobTitle: user.jobTitle,
+            profilePicture: user.profilePicture,
           customerId: user.customerId,
           recordIsDeleted: user.recordIsDeleted,
           createdAt: user.createdAt,
@@ -186,14 +220,19 @@ class UserService {
           employeeName: user.employeeName,
           phoneNumber: user.phoneNumber,
           emailConfirmed: user.emailConfirmed,
-          lastLoginAt: user.lastLoginAt
+          lastLoginAt: user.lastLoginAt,
+          twoFactorEnabled: user.twoFactorEnabled,
+          emailNotificationsEnabled: user.emailNotificationsEnabled,
+          loginAlertsEnabled: user.loginAlertsEnabled,
+          primarySiteId: user.primarySiteId,
+          assignedSiteIds: this.parseAssignedSiteIds(user.assignedSiteIds)
         };
 
         // Handle union type based on role
         if (isCustomerRole) {
           const customerUser = {
             ...baseUser,
-            role: normalizedRole as 'customersitemanager' | 'customerhomanager',
+            role: normalizedRole as UserRole,
             customerId: user.customerId ?? undefined, // Use actual customerId from backend
             customerName: user.customerName
           } as CustomerUser;
@@ -206,7 +245,7 @@ class UserService {
         } else {
           return {
             ...baseUser,
-            role: normalizedRole as 'advantageoneofficer' | 'advantageonehoofficer' | 'administrator',
+            role: normalizedRole as UserRole,
             assignedCustomerIds: this.parseAssignedCustomerIds(user.assignedCustomerIds),
             assignedCustomerNames: user.assignedCustomerNames || []
           } as AdvantageOneUser;
@@ -278,7 +317,12 @@ class UserService {
         assignedCustomerNames: backendUser.assignedCustomerNames || [],
         phoneNumber: backendUser.phoneNumber,
         emailConfirmed: backendUser.emailConfirmed,
-        lastLoginAt: backendUser.lastLoginAt
+        lastLoginAt: backendUser.lastLoginAt,
+        twoFactorEnabled: backendUser.twoFactorEnabled,
+        emailNotificationsEnabled: backendUser.emailNotificationsEnabled,
+        loginAlertsEnabled: backendUser.loginAlertsEnabled,
+        primarySiteId: backendUser.primarySiteId,
+        assignedSiteIds: this.parseAssignedSiteIds(backendUser.assignedSiteIds)
       } as User
     } catch (error) {
       console.error('❌ [UserService] Error getting user:', error)
@@ -287,7 +331,69 @@ class UserService {
   }
 
   /**
-   * Updates a user account
+   * Updates the current user's own profile. Works for any authenticated user (store, officer, manager, administrator).
+   * Use this for the Profile page instead of updateUser, which requires admin/manager role.
+   */
+  async updateMyProfile(data: {
+    firstName?: string
+    lastName?: string
+    email?: string
+    phoneNumber?: string
+    jobTitle?: string
+    profilePicture?: string | null
+    clearProfilePicture?: boolean
+    twoFactorEnabled?: boolean
+    emailNotificationsEnabled?: boolean
+    loginAlertsEnabled?: boolean
+  }): Promise<User> {
+    try {
+      const response = await api.put('/Auth/profile', data)
+      const apiResponse = response.data as { Success?: boolean; success?: boolean; Data?: BackendUserResponse; data?: BackendUserResponse }
+      const backendUser = apiResponse.Data ?? apiResponse.data
+      if (!backendUser) {
+        throw new Error('Invalid response from server')
+      }
+      const normalizedRole = (backendUser.role?.toLowerCase() || '') as UserRole
+      const normalizedPageAccessRole = (backendUser.pageAccessRole?.toLowerCase() || normalizedRole) as UserRole
+      const user: User = {
+        id: backendUser.id,
+        username: backendUser.username,
+        firstName: backendUser.firstName,
+        lastName: backendUser.lastName,
+        email: backendUser.email,
+        role: normalizedRole,
+        pageAccessRole: normalizedPageAccessRole,
+        signature: backendUser.signature,
+        signatureCode: backendUser.signatureCode,
+        jobTitle: backendUser.jobTitle,
+        profilePicture: backendUser.profilePicture,
+        customerId: backendUser.customerId,
+        customerName: backendUser.customerName,
+        recordIsDeleted: backendUser.recordIsDeleted,
+        createdAt: backendUser.createdAt,
+        updatedAt: backendUser.updatedAt || backendUser.createdAt,
+        employeeId: backendUser.employeeId,
+        employeeName: backendUser.employeeName,
+        assignedCustomerIds: this.parseAssignedCustomerIds(backendUser.assignedCustomerIds),
+        assignedCustomerNames: backendUser.assignedCustomerNames || [],
+        phoneNumber: backendUser.phoneNumber,
+        emailConfirmed: backendUser.emailConfirmed,
+        lastLoginAt: backendUser.lastLoginAt,
+        twoFactorEnabled: backendUser.twoFactorEnabled,
+        emailNotificationsEnabled: backendUser.emailNotificationsEnabled,
+        loginAlertsEnabled: backendUser.loginAlertsEnabled,
+        primarySiteId: backendUser.primarySiteId,
+        assignedSiteIds: this.parseAssignedSiteIds(backendUser.assignedSiteIds)
+      }
+      return user
+    } catch (error) {
+      console.error('❌ [UserService] Error updating profile:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Updates a user account (requires administrator or manager role)
    */
   async updateUser(userData: { id: string } & Partial<CreateUserRequest>): Promise<User> {
     try {
@@ -310,6 +416,13 @@ class UserService {
       
       // Always include customerId in update data (even if null/undefined)
       // This ensures the backend can properly handle customerId updates
+      if ('profilePicture' in userData) {
+        (updateData as any).profilePicture = userData.profilePicture
+      }
+      if ('clearProfilePicture' in userData) {
+        (updateData as any).clearProfilePicture = userData.clearProfilePicture
+      }
+
       if ('customerId' in userData) {
         // Send null explicitly if customerId is undefined, to allow backend to process it
         (updateData as any).customerId = userData.customerId ?? null
@@ -374,7 +487,12 @@ class UserService {
         assignedCustomerNames: backendUser.assignedCustomerNames || [],
         phoneNumber: backendUser.phoneNumber,
         emailConfirmed: backendUser.emailConfirmed,
-        lastLoginAt: backendUser.lastLoginAt
+        lastLoginAt: backendUser.lastLoginAt,
+        twoFactorEnabled: backendUser.twoFactorEnabled,
+        emailNotificationsEnabled: backendUser.emailNotificationsEnabled,
+        loginAlertsEnabled: backendUser.loginAlertsEnabled,
+        primarySiteId: backendUser.primarySiteId,
+        assignedSiteIds: this.parseAssignedSiteIds(backendUser.assignedSiteIds)
       } as User
     } catch (error) {
       console.error('❌ [UserService] Error updating user:', error)

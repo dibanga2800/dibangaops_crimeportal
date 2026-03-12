@@ -1,11 +1,5 @@
-// User data
-export const USER_DATA = {
-  name: "David Ibanga",
-  email: "david.ibanga@example.com",
-  role: "Administrator",
-  avatar: "/A1logo1.png",
-  initials: "DI"
-} as const;
+// Default avatar used when no user session is available
+export const DEFAULT_AVATAR = '/A1logo1.png'
 
 // Common button styles
 export const BUTTON_STYLES = {
@@ -54,7 +48,7 @@ export const NAVIGATION_ITEMS = [
         description: "Register and manage employees"
       },
       {
-        title: "Customer Setup",
+        title: "Company Setup",
         href: "/administration/customer-setup",
         description: "Manage customer accounts"
       }

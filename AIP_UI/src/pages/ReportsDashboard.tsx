@@ -404,7 +404,7 @@ const ReportsDashboard = () => {
         <Label htmlFor="customer" className="text-xs font-medium">Customer</Label>
         <Select value={customerFilter} onValueChange={setCustomerFilter}>
           <SelectTrigger id="customer" className="bg-white">
-            <SelectValue placeholder="All Customers" />
+            <SelectValue placeholder="All Companies" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Customers</SelectItem>

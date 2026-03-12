@@ -126,7 +126,7 @@ export const RepeatOffenderAnalysis = ({
 							<Table>
 								<TableHeader>
 									<TableRow>
-										<TableHead>Offender ID</TableHead>
+										<TableHead>Offender Name</TableHead>
 										<TableHead>Incidents</TableHead>
 										<TableHead>Stores Targeted</TableHead>
 										<TableHead>Total Value</TableHead>
@@ -137,9 +137,9 @@ export const RepeatOffenderAnalysis = ({
 								</TableHeader>
 								<TableBody>
 									{data.mostActive.map((offender) => (
-										<TableRow key={offender.offenderId}>
-											<TableCell className="font-medium font-mono">
-												{offender.offenderId}
+									<TableRow key={offender.offenderId}>
+											<TableCell className="font-medium">
+												{offender.name}
 											</TableCell>
 											<TableCell>
 												<Badge variant="outline">{offender.incidentCount}</Badge>

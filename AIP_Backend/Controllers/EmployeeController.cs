@@ -10,7 +10,7 @@ namespace AIPBackend.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize(Roles = "administrator,advantageonehoofficer")]
+    [Authorize(Roles = "administrator,manager")]
     public class EmployeeController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
@@ -86,7 +86,6 @@ namespace AIPBackend.Controllers
                     EmploymentType = e.EmploymentType,
                     Email = e.Email,
                     StartDate = e.StartDate,
-                    SiaLicenceType = e.SiaLicenceType,
                     SiaLicenceExpiry = e.SiaLicenceExpiry,
                     IsSiaLicenceExpired = e.IsSiaLicenceExpired,
                     IsSiaLicenceExpiringSoon = e.IsSiaLicenceExpiringSoon,
@@ -146,7 +145,6 @@ namespace AIPBackend.Controllers
                     EmploymentType = e.EmploymentType,
                     Email = e.Email,
                     StartDate = e.StartDate,
-                    SiaLicenceType = e.SiaLicenceType,
                     SiaLicenceExpiry = e.SiaLicenceExpiry,
                     IsSiaLicenceExpired = e.IsSiaLicenceExpired,
                     IsSiaLicenceExpiringSoon = e.IsSiaLicenceExpiringSoon,
@@ -217,37 +215,11 @@ namespace AIPBackend.Controllers
                     Town = employee.Town,
                     County = employee.County,
                     PostCode = employee.PostCode,
-                    SiaLicenceType = employee.SiaLicenceType,
                     SiaLicenceExpiry = employee.SiaLicenceExpiry,
                     IsSiaLicenceExpired = employee.IsSiaLicenceExpired,
                     IsSiaLicenceExpiringSoon = employee.IsSiaLicenceExpiringSoon,
                     Nationality = employee.Nationality,
                     RightToWorkCondition = employee.RightToWorkCondition,
-                    DrivingLicenceType = employee.DrivingLicenceType,
-                    DateDLChecked = employee.DateDLChecked,
-                    DrivingLicenceCopyTaken = employee.DrivingLicenceCopyTakenYN,
-                    SixMonthlyCheck = employee.SixMonthlyCheck,
-                    GraydonCheckAuthorised = employee.GraydonCheckAuthorised,
-                    GraydonCheckDetails = employee.GraydonCheckDetails,
-                    InitialOralReferencesComplete = employee.InitialOralReferencesComplete,
-                    InitialOralReferencesDate = employee.InitialOralReferencesDate,
-                    WrittenRefsComplete = employee.WrittenRefsComplete,
-                    WrittenRefsCompleteDate = employee.WrittenRefsCompleteDate,
-                    QuickStarterFormCompleted = employee.QuickStarterFormCompletedYN,
-                    WorkingTimeDirective = employee.WorkingTimeDirective,
-                    WorkingTimeDirectiveComplete = employee.WorkingTimeDirectiveComplete,
-                    ContractOfEmploymentSigned = employee.ContractOfEmploymentSignedYN,
-                    PhotoTaken = employee.PhotoTakenYN,
-                    PhotoFile = employee.PhotoFile,
-                    IdCardIssued = employee.IDCardIssuedYN,
-                    EquipmentIssued = employee.EquipmentIssuedYN,
-                    UniformIssued = employee.UniformIssuedYN,
-                    NextOfKinDetailsComplete = employee.NextOfKinDetailsComplete,
-                    PeopleHoursPin = employee.PeopleHoursPin,
-                    FullRotasIssued = employee.FullRotasIssued,
-                    InductionAndTrainingBooked = employee.InductionAndTrainingBooked,
-                    Location = employee.Location,
-                    Trainer = employee.Trainer,
                     UserId = employee.UserId,
                     Username = employee.User?.UserName,
                     CreatedAt = employee.DateCreated,
@@ -340,35 +312,9 @@ namespace AIPBackend.Controllers
                     Town = request.Town,
                     County = request.County,
                     PostCode = request.PostCode,
-                    SiaLicenceType = request.SiaLicenceType,
                     SiaLicenceExpiry = request.SiaLicenceExpiry,
                     Nationality = request.Nationality,
                     RightToWorkCondition = request.RightToWorkCondition,
-                    DrivingLicenceType = request.DrivingLicenceType,
-                    DateDLChecked = request.DateDLChecked,
-                    DrivingLicenceCopyTakenYN = request.DrivingLicenceCopyTaken ?? false,
-                    SixMonthlyCheck = request.SixMonthlyCheck ?? false,
-                    GraydonCheckAuthorised = request.GraydonCheckAuthorised ?? false,
-                    GraydonCheckDetails = request.GraydonCheckDetails,
-                    InitialOralReferencesComplete = request.InitialOralReferencesComplete ?? false,
-                    InitialOralReferencesDate = request.InitialOralReferencesDate,
-                    WrittenRefsComplete = request.WrittenRefsComplete ?? false,
-                    WrittenRefsCompleteDate = request.WrittenRefsCompleteDate,
-                    QuickStarterFormCompletedYN = request.QuickStarterFormCompleted ?? false,
-                    WorkingTimeDirective = request.WorkingTimeDirective,
-                    WorkingTimeDirectiveComplete = request.WorkingTimeDirectiveComplete ?? false,
-                    ContractOfEmploymentSignedYN = request.ContractOfEmploymentSigned ?? false,
-                    PhotoTakenYN = request.PhotoTaken ?? false,
-                    PhotoFile = request.PhotoFile,
-                    IDCardIssuedYN = request.IdCardIssued ?? false,
-                    EquipmentIssuedYN = request.EquipmentIssued ?? false,
-                    UniformIssuedYN = request.UniformIssued ?? false,
-                    NextOfKinDetailsComplete = request.NextOfKinDetailsComplete ?? false,
-                    PeopleHoursPin = request.PeopleHoursPin,
-                    FullRotasIssued = request.FullRotasIssued,
-                    InductionAndTrainingBooked = request.InductionAndTrainingBooked,
-                    Location = request.Location,
-                    Trainer = request.Trainer,
                     DateCreated = DateTime.UtcNow,
                     CreatedBy = userId ?? "system",
                     RecordIsDeletedYN = false
@@ -487,36 +433,9 @@ namespace AIPBackend.Controllers
                 if (request.Town != null) employee.Town = request.Town;
                 if (request.County != null) employee.County = request.County;
                 if (request.PostCode != null) employee.PostCode = request.PostCode;
-                if (request.SiaLicenceType != null) employee.SiaLicenceType = request.SiaLicenceType;
                 if (request.SiaLicenceExpiry.HasValue) employee.SiaLicenceExpiry = request.SiaLicenceExpiry;
                 if (request.Nationality != null) employee.Nationality = request.Nationality;
                 if (request.RightToWorkCondition != null) employee.RightToWorkCondition = request.RightToWorkCondition;
-                if (request.DrivingLicenceType != null) employee.DrivingLicenceType = request.DrivingLicenceType;
-                if (request.DateDLChecked.HasValue) employee.DateDLChecked = request.DateDLChecked;
-                if (request.DrivingLicenceCopyTaken.HasValue) employee.DrivingLicenceCopyTakenYN = request.DrivingLicenceCopyTaken.Value;
-                if (request.SixMonthlyCheck.HasValue) employee.SixMonthlyCheck = request.SixMonthlyCheck.Value;
-                if (request.GraydonCheckAuthorised.HasValue) employee.GraydonCheckAuthorised = request.GraydonCheckAuthorised.Value;
-                if (request.GraydonCheckDetails != null) employee.GraydonCheckDetails = request.GraydonCheckDetails;
-                if (request.InitialOralReferencesComplete.HasValue) employee.InitialOralReferencesComplete = request.InitialOralReferencesComplete.Value;
-                if (request.InitialOralReferencesDate.HasValue) employee.InitialOralReferencesDate = request.InitialOralReferencesDate;
-                if (request.WrittenRefsComplete.HasValue) employee.WrittenRefsComplete = request.WrittenRefsComplete.Value;
-                if (request.WrittenRefsCompleteDate.HasValue) employee.WrittenRefsCompleteDate = request.WrittenRefsCompleteDate;
-                if (request.QuickStarterFormCompleted.HasValue) employee.QuickStarterFormCompletedYN = request.QuickStarterFormCompleted.Value;
-                if (request.WorkingTimeDirective != null) employee.WorkingTimeDirective = request.WorkingTimeDirective;
-                if (request.WorkingTimeDirectiveComplete.HasValue) employee.WorkingTimeDirectiveComplete = request.WorkingTimeDirectiveComplete.Value;
-                if (request.ContractOfEmploymentSigned.HasValue) employee.ContractOfEmploymentSignedYN = request.ContractOfEmploymentSigned.Value;
-                if (request.PhotoTaken.HasValue) employee.PhotoTakenYN = request.PhotoTaken.Value;
-                if (request.PhotoFile != null) employee.PhotoFile = request.PhotoFile;
-                if (request.IdCardIssued.HasValue) employee.IDCardIssuedYN = request.IdCardIssued.Value;
-                if (request.EquipmentIssued.HasValue) employee.EquipmentIssuedYN = request.EquipmentIssued.Value;
-                if (request.UniformIssued.HasValue) employee.UniformIssuedYN = request.UniformIssued.Value;
-                if (request.NextOfKinDetailsComplete.HasValue) employee.NextOfKinDetailsComplete = request.NextOfKinDetailsComplete.Value;
-                if (request.PeopleHoursPin != null) employee.PeopleHoursPin = request.PeopleHoursPin;
-                if (request.FullRotasIssued.HasValue) employee.FullRotasIssued = request.FullRotasIssued;
-                if (request.InductionAndTrainingBooked.HasValue) employee.InductionAndTrainingBooked = request.InductionAndTrainingBooked;
-                if (request.Location != null) employee.Location = request.Location;
-                if (request.Trainer != null) employee.Trainer = request.Trainer;
-
                 employee.DateModified = DateTime.UtcNow;
                 employee.ModifiedBy = userId;
 

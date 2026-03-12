@@ -106,7 +106,7 @@ const normalizeSettings = (dto: BackendPageAccessSettingsDto): PageAccessSetting
 			// Log conversion for debugging (only in dev mode)
 			if (import.meta.env.DEV && pageIds.length > 0) {
 				const hasNumericIds = pageIds.some(id => !isNaN(Number(id)) && isFinite(Number(id)));
-				if (hasNumericIds && roleKey.toLowerCase().includes('advantageoneofficer')) {
+				if (hasNumericIds && roleKey.toLowerCase() === 'store') {
 					console.group(`🔄 [PageAccess API] Converted ${roleKey} page IDs`);
 					console.log('📊 Conversion Summary:', {
 						total: pageIds.length,
@@ -141,6 +141,24 @@ const normalizeSettings = (dto: BackendPageAccessSettingsDto): PageAccessSetting
 			}
 		}
 	}
+
+	// Ensure Data Analytics Hub page is always present in availablePages
+	if (!normalizedPages.some(p => p.id === 'data-analytics-hub' || p.path === '/analytics/data-analytics-hub')) {
+		normalizedPages.push({
+			id: 'data-analytics-hub',
+			title: 'Data Analytics Hub',
+			path: '/analytics/data-analytics-hub',
+			category: 'Main',
+			description: 'Analytics dashboard with crime trends, hot products, and resource deployment',
+			sortOrder: 6,
+		});
+	}
+
+	// Ensure managers always have access to Data Analytics Hub at the settings level
+	const managerPages = normalizedPageAccessByRole['manager'] || [];
+	if (!managerPages.includes('data-analytics-hub')) {
+		normalizedPageAccessByRole['manager'] = [...managerPages, 'data-analytics-hub'];
+	}
 	
 	return {
 		pageAccessByRole: normalizedPageAccessByRole,
@@ -151,14 +169,13 @@ const normalizeSettings = (dto: BackendPageAccessSettingsDto): PageAccessSetting
 const buildDefaultPages = (): PageAccess[] => {
 	const basePages: PageAccess[] = [
 		{ id: 'dashboard', title: 'Dashboard', path: '/dashboard' },
-		{ id: 'action-calendar', title: 'Action Calendar', path: '/action-calendar' },
 		{ id: 'profile', title: 'Profile', path: '/profile' },
 		{ id: 'settings', title: 'Settings', path: '/settings' },
 		{ id: 'alert-rules', title: 'Alert Rules', path: '/operations/alert-rules' },
 		{ id: 'data-analytics-hub', title: 'Data Analytics Hub', path: '/analytics/data-analytics-hub' },
 		{ id: 'user-setup', title: 'User Setup', path: '/administration/user-setup' },
 		{ id: 'employee-registration', title: 'Employee Registration', path: '/administration/employee-registration' },
-		{ id: 'customer-setup', title: 'Customer Setup', path: '/administration/customer-setup' },
+		{ id: 'customer-setup', title: 'Company Setup', path: '/administration/customer-setup' },
 		{ id: 'incident-report', title: 'Incident Report', path: '/operations/incident-report' },
 		{ id: 'incident-graph', title: 'Incident Graph', path: '/operations/incident-graph' },
 		{ id: 'crime-intelligence', title: 'Crime Intelligence', path: '/operations/crime-intelligence' },
@@ -177,25 +194,19 @@ const buildDefaultSettings = (): PageAccessSettings => {
 	return {
 		pageAccessByRole: {
 			administrator: availablePages.map(page => page.id),
-		advantageonehoofficer: [
-			'dashboard', 'action-calendar', 'profile', 'alert-rules', 'data-analytics-hub',
-			'user-setup', 'employee-registration', 'customer-setup',
-			'incident-report', 'incident-graph', 'crime-intelligence',
-			'crm-dashboard', 'crm-contacts',
-			'crm-leads', 'crm-deals', 'crm-pipeline', 'crm-tasks',
-			'customer-mystery-shopper-report', 'customer-site-visit-reports', 'customer-crime-intelligence'
-		],
-		advantageoneofficer: [
-			'dashboard', 'action-calendar', 'profile', 'data-analytics-hub',
-			'incident-report', 'incident-graph', 'crime-intelligence'
-		],
-			customerhomanager: [
-				'dashboard', 'action-calendar', 'profile', 'alert-rules', 'data-analytics-hub',
-				'incident-report', 'crime-intelligence'
+			manager: [
+				'dashboard', 'profile', 'alert-rules', 'data-analytics-hub',
+				'user-setup', 'employee-registration', 'customer-setup',
+				'incident-report', 'incident-graph', 'crime-intelligence',
+				'crm-dashboard', 'crm-contacts',
+				'crm-leads', 'crm-deals', 'crm-pipeline', 'crm-tasks',
+				'customer-mystery-shopper-report', 'customer-site-visit-reports', 'customer-crime-intelligence'
 			],
-			customersitemanager: [
-				'dashboard', 'action-calendar', 'profile', 'alert-rules', 'data-analytics-hub',
-				'incident-report', 'crime-intelligence'
+			'security-officer': [
+				'dashboard', 'profile', 'incident-report'
+			],
+			store: [
+				'dashboard', 'profile', 'incident-report'
 			]
 		},
 		availablePages
@@ -222,13 +233,13 @@ export const pageAccessApi = {
 				}
 				
 				// Log full payload for Customer Reporting debugging
-				if (pageAccessByRole['advantageoneofficer']) {
-					const hasCustomerReporting = pageAccessByRole['advantageoneofficer'].some(id => 
+				if (pageAccessByRole['store']) {
+					const hasCustomerReporting = pageAccessByRole['store'].some(id => 
 						id === 'management-customer-reporting' || id.includes('customer-reporting')
 					);
 					if (hasCustomerReporting) {
-						console.log(`🔍 [PageAccess API] advantageoneofficer has Customer Reporting in payload:`, 
-							pageAccessByRole['advantageoneofficer'].filter(id => 
+						console.log(`🔍 [PageAccess API] store role has Customer Reporting in payload:`, 
+							pageAccessByRole['store'].filter(id => 
 								id === 'management-customer-reporting' || id.includes('customer-reporting')
 							)
 						);
@@ -288,7 +299,7 @@ export const pageAccessApi = {
 				
 				// Log if we're getting defaults from backend (check for default customer pages in officer role)
 				if (import.meta.env.DEV) {
-					const officerPages = normalized.pageAccessByRole['advantageoneofficer'] || [];
+					const officerPages = normalized.pageAccessByRole['store'] || [];
 					const hasDefaultCustomerPages = [
 						'customer-incident-report',
 						'customer-incident-graph',

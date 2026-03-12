@@ -1,3 +1,4 @@
+using System;
 using System.ComponentModel.DataAnnotations;
 
 namespace AIPBackend.Models.DTOs
@@ -49,11 +50,19 @@ namespace AIPBackend.Models.DTOs
 
         public bool IsActive { get; set; } = true;
 
-        // For AdvantageOne users (AdvantageOneOfficer, AdvantageOneHOOfficer, Administrator)
+        // For platform users (assigned to multiple customers)
         public int[] AssignedCustomerIds { get; set; } = new int[0];
 
-        // For Customer users (CustomerSiteManager, CustomerHOManager)
+        // For customer-linked users (direct single customer)
         public int? CustomerId { get; set; }
+
+        // Store / site assignments
+        // Primary site for store users
+        [MaxLength(200)]
+        public string? PrimarySiteId { get; set; }
+
+        // Multiple sites for security officers or multi-site users
+        public string[] AssignedSiteIds { get; set; } = Array.Empty<string>();
     }
 
     public class UserUpdateRequestDto
@@ -85,11 +94,17 @@ namespace AIPBackend.Models.DTOs
 
         public bool? IsActive { get; set; }
 
-        // For AdvantageOne users
+        // For platform users
         public int[] AssignedCustomerIds { get; set; } = new int[0];
 
         // For Customer users
         public int? CustomerId { get; set; }
+
+        // Store / site assignments
+        [MaxLength(200)]
+        public string? PrimarySiteId { get; set; }
+
+        public string[] AssignedSiteIds { get; set; } = Array.Empty<string>();
     }
 
     public class UserPasswordChangeRequestDto
@@ -147,11 +162,14 @@ namespace AIPBackend.Models.DTOs
         public string? Signature { get; set; }
         public string? SignatureCode { get; set; }
         public string? JobTitle { get; set; }
+        public string? ProfilePicture { get; set; }
         public bool IsActive { get; set; }
         public bool RecordIsDeleted { get; set; }
         public bool EmailConfirmed { get; set; }
         public bool PhoneNumberConfirmed { get; set; }
         public bool TwoFactorEnabled { get; set; }
+        public bool EmailNotificationsEnabled { get; set; }
+        public bool LoginAlertsEnabled { get; set; }
         public DateTime? LastLoginAt { get; set; }
         public int LoginAttempts { get; set; }
         public DateTime? LockoutUntil { get; set; }
@@ -161,11 +179,15 @@ namespace AIPBackend.Models.DTOs
         public DateTime? UpdatedAt { get; set; }
         public string? UpdatedBy { get; set; }
 
-        // For AdvantageOne users
+        // For platform users
         public int[] AssignedCustomerIds { get; set; } = new int[0];
 
         // For Customer users
         public int? CustomerId { get; set; }
+
+        // Store / site assignments
+        public string? PrimarySiteId { get; set; }
+        public string[] AssignedSiteIds { get; set; } = Array.Empty<string>();
     }
 
     public class UserListResponseDto
@@ -187,11 +209,15 @@ namespace AIPBackend.Models.DTOs
         public DateTime? UpdatedAt { get; set; }
         public string? UpdatedBy { get; set; }
 
-        // For AdvantageOne users
+        // For platform users
         public int[] AssignedCustomerIds { get; set; } = new int[0];
 
         // For Customer users
         public int? CustomerId { get; set; }
+
+        // Store / site assignments
+        public string? PrimarySiteId { get; set; }
+        public string[] AssignedSiteIds { get; set; } = Array.Empty<string>();
     }
 
     public class RoleResponseDto

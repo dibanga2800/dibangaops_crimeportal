@@ -71,9 +71,6 @@ namespace AIPBackend.Models
         public string? PostCode { get; set; }
 
         // SIA License Information
-        [MaxLength(100)]
-        public string? SiaLicenceType { get; set; }
-
         public DateTime? SiaLicenceExpiry { get; set; }
 
         // Personal Information
@@ -82,67 +79,6 @@ namespace AIPBackend.Models
 
         [MaxLength(255)]
         public string? RightToWorkCondition { get; set; }
-
-        // Driving License Information
-        [MaxLength(100)]
-        public string? DrivingLicenceType { get; set; }
-
-        public DateTime? DateDLChecked { get; set; }
-
-        public bool DrivingLicenceCopyTakenYN { get; set; } = false;
-
-        public bool SixMonthlyCheck { get; set; } = false;
-
-        // Checks and References
-        public bool GraydonCheckAuthorised { get; set; } = false;
-
-        [MaxLength(500)]
-        public string? GraydonCheckDetails { get; set; }
-
-        public bool InitialOralReferencesComplete { get; set; } = false;
-
-        public DateTime? InitialOralReferencesDate { get; set; }
-
-        public bool WrittenRefsComplete { get; set; } = false;
-
-        public DateTime? WrittenRefsCompleteDate { get; set; }
-
-        public bool QuickStarterFormCompletedYN { get; set; } = false;
-
-        // Employment Documentation Status
-        [MaxLength(100)]
-        public string? WorkingTimeDirective { get; set; }
-
-        public bool WorkingTimeDirectiveComplete { get; set; } = false;
-
-        public bool ContractOfEmploymentSignedYN { get; set; } = false;
-
-        public bool PhotoTakenYN { get; set; } = false;
-
-        [MaxLength(500)]
-        public string? PhotoFile { get; set; }
-
-        public bool IDCardIssuedYN { get; set; } = false;
-
-        public bool EquipmentIssuedYN { get; set; } = false;
-
-        public bool UniformIssuedYN { get; set; } = false;
-
-        public bool NextOfKinDetailsComplete { get; set; } = false;
-
-        [MaxLength(50)]
-        public string? PeopleHoursPin { get; set; }
-
-        // Training and Induction
-        public DateTime? FullRotasIssued { get; set; }
-
-        public DateTime? InductionAndTrainingBooked { get; set; }
-
-        [MaxLength(100)]
-        public string? Location { get; set; }
-
-        [MaxLength(100)]
-        public string? Trainer { get; set; }
 
         // User Linking (optional link to ApplicationUser)
         [MaxLength(450)]

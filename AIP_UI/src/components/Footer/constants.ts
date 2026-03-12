@@ -1,7 +1,7 @@
 import { CompanyInfo, ContactInfo, QuickLink } from './types';
 
 export const COMPANY_INFO: CompanyInfo = {
-  name: 'Advantage One Security',
+  name: 'Security Operations Centre',
   address: [
     '1 Madeley Road',
     'Moons Moat North Industrial Estate',

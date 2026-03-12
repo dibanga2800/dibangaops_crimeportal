@@ -9,14 +9,13 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { UK_COUNTIES } from "@/lib/constants"
-import { DUMMY_CUSTOMERS } from "@/data/customers"
-import { DUMMY_REGIONS } from "@/data/mockRegions"
 import { useState, useEffect } from "react"
 import { useToast } from "@/hooks/use-toast"
 import { siteService } from "@/services/siteService"
 import { regionService } from "@/services/regionService"
+import { customerService } from "@/services/customerService"
 import { useAuth } from "@/contexts/AuthContext"
-import type { Site, Region } from "@/types/customer"
+import type { Site, Region, Customer } from "@/types/customer"
 
 // UK postcode validation regex
 const UK_POSTCODE_REGEX = /^[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}$/i
@@ -57,10 +56,26 @@ interface SiteDialogProps {
 
 export function SiteDialog({ open, onOpenChange, site, selectedCustomerId, onSuccess }: SiteDialogProps) {
   const [availableRegions, setAvailableRegions] = useState<Region[]>([])
+  const [availableCustomers, setAvailableCustomers] = useState<Customer[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingRegions, setIsLoadingRegions] = useState(false)
+  const [isLoadingCustomers, setIsLoadingCustomers] = useState(false)
   const { toast } = useToast()
   const { user } = useAuth()
+
+  // Load customers for dropdown when no customer is pre-selected
+  const loadCustomers = async () => {
+    if (selectedCustomerId || isLoadingCustomers) return
+    setIsLoadingCustomers(true)
+    try {
+      const customers = await customerService.getAllCustomers()
+      setAvailableCustomers(customers)
+    } catch {
+      setAvailableCustomers([])
+    } finally {
+      setIsLoadingCustomers(false)
+    }
+  }
 
   // Load regions from service
   const loadRegions = async () => {
@@ -68,20 +83,14 @@ export function SiteDialog({ open, onOpenChange, site, selectedCustomerId, onSuc
     
     setIsLoadingRegions(true)
     try {
-      console.log('🔧 [SiteDialog] Loading regions from service for customer:', selectedCustomerId)
       const result = await regionService.getRegionsByCustomer(selectedCustomerId)
       if (result.success) {
-        console.log('🔧 [SiteDialog] Found regions from service:', result.data.length)
         setAvailableRegions(result.data)
+      } else {
+        setAvailableRegions([])
       }
-    } catch (error) {
-      console.log('🔧 [SiteDialog] Service failed, using fallback data')
-      // Fallback to static data if service fails
-      const filteredRegions = selectedCustomerId
-        ? DUMMY_REGIONS.filter(region => region.fkCustomerID === selectedCustomerId)
-        : DUMMY_REGIONS
-      console.log('🔧 [SiteDialog] Found regions from fallback:', filteredRegions.length)
-      setAvailableRegions(filteredRegions as Region[])
+    } catch {
+      setAvailableRegions([])
     } finally {
       setIsLoadingRegions(false)
     }
@@ -137,6 +146,8 @@ export function SiteDialog({ open, onOpenChange, site, selectedCustomerId, onSuc
     const effectiveCustomerId = selectedCustomerId || site?.fkCustomerID
     if (effectiveCustomerId) {
       loadRegions()
+    } else {
+      loadCustomers()
     }
   }, [open, selectedCustomerId, site?.fkCustomerID])
 
@@ -299,7 +310,7 @@ export function SiteDialog({ open, onOpenChange, site, selectedCustomerId, onSuc
                   </h3>
                   <div className="mt-1 text-sm text-amber-700">
                     <p>
-                      This customer doesn't have any regions yet. Please create a region first before adding sites.
+                      This company doesn't have any regions yet. Please create a region first before adding sites.
                     </p>
                   </div>
                 </div>
@@ -319,19 +330,24 @@ export function SiteDialog({ open, onOpenChange, site, selectedCustomerId, onSuc
                     name="fkCustomerID"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Customer *</FormLabel>
+                        <FormLabel>Company *</FormLabel>
                         <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value.toString()} disabled={isLoading}>
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue placeholder="Select customer" />
+                              <SelectValue placeholder="Select company" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {DUMMY_CUSTOMERS.map((customer) => (
-                              <SelectItem key={customer.id} value={customer.id.toString()}>
-                                {customer.companyName}
-                              </SelectItem>
-                            ))}
+                            {isLoadingCustomers
+                              ? <SelectItem value="loading" disabled>Loading customers...</SelectItem>
+                              : availableCustomers.length === 0
+                                ? <SelectItem value="none" disabled>No customers available</SelectItem>
+                                : availableCustomers.map((customer) => (
+                                    <SelectItem key={customer.id} value={customer.id.toString()}>
+                                      {customer.companyName}
+                                    </SelectItem>
+                                  ))
+                            }
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -355,7 +371,7 @@ export function SiteDialog({ open, onOpenChange, site, selectedCustomerId, onSuc
                         <SelectContent>
                           {availableRegions.length === 0 ? (
                             <SelectItem value="no-regions" disabled>
-                              No regions available for this customer
+                              No regions available for this company
                             </SelectItem>
                           ) : (
                             availableRegions.map((region) => (
@@ -371,7 +387,7 @@ export function SiteDialog({ open, onOpenChange, site, selectedCustomerId, onSuc
                       </Select>
                       {availableRegions.length === 0 && (
                         <p className="text-sm text-amber-600 mt-1">
-                          Please create a region for this customer first before adding sites.
+                          Please create a region for this company first before adding sites.
                         </p>
                       )}
                       <FormMessage />

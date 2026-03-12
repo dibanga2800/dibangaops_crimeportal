@@ -43,7 +43,7 @@ const sectionToCategory = (sectionId: string): string => {
 		'management': 'Management',
 		'compliance': 'Compliance',
 		'recruitment': 'Recruitment',
-		'customer': 'Customer',
+		'customer': 'Company',
 	}
 	return categoryMap[sectionId] || 'Other'
 }
@@ -104,7 +104,7 @@ const getCategoryBaseSortOrder = (category: string): number => {
 		'Management': 50,
 		'Compliance': 60,
 		'Recruitment': 70,
-		'Customer': 80,
+		'Company': 80,
 	}
 	return categorySortMap[category] || 100
 }
@@ -124,20 +124,12 @@ export const PAGE_DEFINITIONS: PageDefinition[] = [
 		sortOrder: 1,
 	},
 	{
-		pageId: 'action-calendar',
-		title: 'Action Calendar',
-		path: '/action-calendar',
-		category: 'Main',
-		description: 'Action calendar',
-		sortOrder: 2,
-	},
-	{
 		pageId: 'profile',
 		title: 'Profile',
 		path: '/profile',
 		category: 'Main',
 		description: 'User profile',
-		sortOrder: 3,
+		sortOrder: 2,
 	},
 	{
 		pageId: 'settings',
@@ -183,10 +175,10 @@ export const PAGE_DEFINITIONS: PageDefinition[] = [
 	},
 	{
 		pageId: 'customer-setup',
-		title: 'Customer Setup',
+		title: 'Company Setup',
 		path: '/administration/customer-setup',
 		category: 'Administration',
-		description: 'Customer management',
+		description: 'Company management',
 		sortOrder: 12,
 	},
 

@@ -60,19 +60,19 @@ import { useTheme } from "@/components/theme-provider"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from "@/components/ui/sheet"
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion"
-import { USER_DATA, BUTTON_STYLES, COMMON_CLASSES } from "@/constants/header";
+import { BUTTON_STYLES, COMMON_CLASSES } from "@/constants/header";
 import { NotificationBell } from "./header/NotificationBell";
 import { Logo } from "./header/Logo";
 import { SearchInput } from "./header/SearchInput";
 import { UserAvatar } from "./common/UserAvatar";
-import { logout, getUser } from "@/services/auth"
+import { useAuth } from "@/contexts/AuthContext"
 
 // Define navigation items structure
 interface NavItem {
   title: string;
   href: string;
   icon: React.ReactNode;
-  roles: string[]; // Which roles can access this item
+  roles: string[]; // Kept for compatibility, but visibility is driven by PageAccessContext.hasAccess
 }
 
 // Header props interface
@@ -83,6 +83,7 @@ interface HeaderProps {
 // UserProfileDropdown component
 const UserProfileDropdown = () => {
   const navigate = useNavigate();
+  const { logout } = useAuth();
   
   const handleLogout = () => {
     logout();
@@ -93,11 +94,11 @@ const UserProfileDropdown = () => {
     <DropdownMenuContent align="end" className="w-56">
       <DropdownMenuLabel>My Account</DropdownMenuLabel>
       <DropdownMenuSeparator />
-      <DropdownMenuItem>
+      <DropdownMenuItem onClick={() => navigate('/profile')}>
         <User className="mr-2 h-4 w-4" />
         <span>Profile</span>
       </DropdownMenuItem>
-      <DropdownMenuItem>
+      <DropdownMenuItem onClick={() => navigate('/settings')}>
         <Settings className="mr-2 h-4 w-4" />
         <span>Settings</span>
       </DropdownMenuItem>
@@ -176,12 +177,11 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
     );
   }
   
-	const { currentRole } = pageAccessContext;
+	const { currentRole, hasAccess: hasPageAccess } = pageAccessContext;
   
   const { theme } = useTheme();
 
-  // Get authenticated user info
-  const authenticatedUser = getUser();
+  const { user: authenticatedUser } = useAuth();
   const isAuthenticated = !!authenticatedUser;
 
   // Define navigation sections to match SidebarNavigation
@@ -193,25 +193,19 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
           title: "Dashboard",
           href: "/",
           icon: <LayoutGrid className="h-4 w-4" />,
-          roles: ['administrator', 'advantage-ho', 'advantage-officer', 'customer-ho', 'customer-site'],
-        },
-        {
-          title: "Action Calendar",
-          href: "/action-calendar",
-          icon: <Calendar className="h-4 w-4" />,
-          roles: ['administrator', 'advantage-ho', 'advantage-officer', 'customer-ho', 'customer-site'],
+          roles: ['administrator', 'manager', 'security-officer', 'store'],
         },
         {
           title: "Data Analytics Hub",
           href: "/analytics/data-analytics-hub",
           icon: <Brain className="h-4 w-4" />,
-          roles: ['administrator', 'advantage-ho', 'advantage-officer', 'customer-ho', 'customer-site'],
+          roles: ['administrator', 'manager', 'security-officer', 'store'],
         },
         {
           title: "Alert Rules",
           href: "/operations/alert-rules",
           icon: <Bell className="h-4 w-4" />,
-          roles: ['administrator', 'advantage-ho', 'advantage-officer', 'customer-ho', 'customer-site'],
+          roles: ['administrator', 'manager', 'security-officer', 'store'],
         }
       ]
     },
@@ -222,19 +216,19 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
           title: "User Setup",
           href: "/administration/user-setup",
           icon: <User className="h-4 w-4" />,
-          roles: ['administrator', 'advantage-ho'],
+          roles: ['administrator', 'manager'],
         },
         {
           title: "Employee Registration",
           href: "/administration/employee-registration",
           icon: <Users className="h-4 w-4" />,
-          roles: ['administrator', 'advantage-ho'],
+          roles: ['administrator', 'manager'],
         },
         {
-          title: "Customer Setup",
+          title: "Company Setup",
           href: "/administration/customer-setup",
           icon: <Building2 className="h-4 w-4" />,
-          roles: ['administrator', 'advantage-ho'],
+          roles: ['administrator', 'manager'],
         }
       ]
     },
@@ -245,19 +239,19 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
           title: "Incident Report",
           href: "/operations/incident-report",
           icon: <FileWarning className="h-4 w-4" />,
-          roles: ['administrator', 'advantage-ho', 'advantage-officer', 'customer-ho', 'customer-site'],
+          roles: ['administrator', 'manager', 'security-officer', 'store'],
         },
         {
           title: "Incident Graph",
           href: "/operations/incident-graph",
           icon: <BarChart2 className="h-4 w-4" />,
-          roles: ['administrator', 'advantage-ho', 'advantage-officer', 'customer-ho', 'customer-site'],
+          roles: ['administrator', 'manager', 'security-officer', 'store'],
         },
         {
           title: "Crime Intelligence",
           href: "/operations/crime-intelligence",
           icon: <TrendingUp className="h-4 w-4" />,
-          roles: ['administrator', 'advantage-ho', 'advantage-officer', 'customer-ho', 'customer-site'],
+          roles: ['administrator', 'manager', 'security-officer', 'store'],
         }
       ]
     }
@@ -277,8 +271,10 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
   
   // Check if user has access to a navigation item
   const hasAccess = (item: NavItem) => {
-		const roleId = getEffectiveRoleId();
-		return roleId ? item.roles.includes(roleId) : false;
+		// Use centralized PageAccessContext.hasAccess so behavior matches sidebar
+		// Normalize "/" to "/dashboard" for access checks
+		const path = item.href === '/' ? '/dashboard' : item.href;
+		return hasPageAccess(path);
   };
 
   // Handle navigation and close sheet
@@ -348,8 +344,8 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
         <div className="flex items-center gap-4">
           {!isSearchExpanded && (
             <img 
-              src="/central coop.png" 
-              alt="Central Coop"
+              src="/Heart_of_England_Co-operative.webp" 
+              alt="Heart of England Co-operative"
               className="h-12 w-auto" 
             />
           )}

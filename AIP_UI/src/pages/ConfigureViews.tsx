@@ -22,7 +22,7 @@ const initialConfigs: PageViewConfig[] = [
         name: "Statistics Panel",
         description: "Display key security metrics and trends",
         enabled: true,
-        permission: "admin"
+        permission: "administrator"
       }
     ]
   },

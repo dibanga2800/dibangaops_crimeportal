@@ -2,6 +2,7 @@ import React, { Suspense } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { 
@@ -41,7 +42,6 @@ import { TaskCard } from '@/components/dashboard/TaskCard'
 import { IncidentTable } from '@/components/dashboard/IncidentTable'
 import { OfficerPerformance } from '@/components/dashboard/OfficerPerformance'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar } from 'recharts'
-import { MOCK_INCIDENTS } from '@/data/mockIncidents'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -52,12 +52,17 @@ import { DashboardGreeting } from '@/components/dashboard/DashboardGreeting'
 import { analyticsService } from '@/services/analyticsService'
 import { customerDashboardService } from '@/services/dashboardService'
 import { incidentsApi } from '@/services/api/incidents'
+import { alertInstancesApi } from '@/services/api/alertInstances'
+import { classificationApi } from '@/services/api/classification'
 import type { AnalyticsHubData } from '@/types/analytics'
+import type { AlertSummary } from '@/types/alertInstances'
+import type { IncidentAnalyticsSummary, RiskIndicator } from '@/types/classification'
+import type { Incident } from '@/types/incidents'
 import { BASE_API_URL } from '@/config/api'
+import { sessionStore } from '@/state/sessionStore'
 
 // Lazy load the dashboard components
 const OfficerDashboard = React.lazy(() => import('@/pages/Dashboard/OfficerDashboard'))
-const CustomerDashboard = React.lazy(() => import('@/pages/Dashboard/CustomerDashboard'))
 
 // Customer-specific data
 const customerData = {
@@ -508,7 +513,11 @@ const formatCurrency = (value: number): string => {
   }
 }
 
-const AdminDashboard = () => {
+interface AdminDashboardProps {
+  viewRole?: 'administrator' | 'manager'
+}
+
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrator' }) => {
   const location = useLocation();
   const { currentRole, isTestMode, testRole, isLoading } = usePageAccess();
   const effectiveRole = isTestMode && testRole ? testRole : currentRole;
@@ -520,8 +529,42 @@ const AdminDashboard = () => {
   const [regionOptions, setRegionOptions] = React.useState<Array<{ id: string; name: string }>>([]);
   const [selectedRegion, setSelectedRegion] = React.useState<string>('all');
   const [activePeriod, setActivePeriod] = React.useState<'Daily' | 'Weekly' | 'Monthly' | 'Yearly'>('Monthly');
-  const [loadedIncidents, setLoadedIncidents] = React.useState<typeof MOCK_INCIDENTS>([]);
+  const [fromDate, setFromDate] = React.useState('');
+  const [toDate, setToDate] = React.useState('');
+  const [fromDateInput, setFromDateInput] = React.useState('');
+  const [toDateInput, setToDateInput] = React.useState('');
+  const [dateRangeError, setDateRangeError] = React.useState<string | null>(null);
+  const [loadedIncidents, setLoadedIncidents] = React.useState<Incident[]>([]);
   const [incidentsLoading, setIncidentsLoading] = React.useState(true);
+  const [alertSummary, setAlertSummary] = React.useState<AlertSummary | null>(null);
+  const [aiAnalytics, setAiAnalytics] = React.useState<IncidentAnalyticsSummary | null>(null);
+  const isDateRangeActive = Boolean(fromDate || toDate);
+
+  const handleApplyDateRange = () => {
+    if (!fromDateInput && !toDateInput) {
+      setFromDate('');
+      setToDate('');
+      setDateRangeError(null);
+      return;
+    }
+
+    if (fromDateInput && toDateInput && new Date(fromDateInput) > new Date(toDateInput)) {
+      setDateRangeError('Start date must be before end date.');
+      return;
+    }
+
+    setFromDate(fromDateInput);
+    setToDate(toDateInput);
+    setDateRangeError(null);
+  };
+
+  const handleClearDateRange = () => {
+    setFromDate('');
+    setToDate('');
+    setFromDateInput('');
+    setToDateInput('');
+    setDateRangeError(null);
+  };
 
   // Load incidents from API
   React.useEffect(() => {
@@ -534,12 +577,9 @@ const AdminDashboard = () => {
       try {
         setIncidentsLoading(true);
         
-        // Check if we have auth token
-        const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+        const token = sessionStore.getToken();
         if (!token) {
           console.warn('⚠️ No auth token found - incidents may not load');
-        } else {
-          console.log('✅ Auth token found:', token.substring(0, 20) + '...');
         }
         
         console.log('🔄 Loading incidents using incidentsApi service');
@@ -769,18 +809,83 @@ const AdminDashboard = () => {
     loadAnalytics();
   }, []);
 
+  // Load alert summary and AI analytics from new backend endpoints
+  React.useEffect(() => {
+    const loadEnhancedData = async () => {
+      try {
+        const [alertData, analyticsData] = await Promise.allSettled([
+          alertInstancesApi.getSummary(),
+          classificationApi.getAnalyticsSummary()
+        ])
+
+        if (alertData.status === 'fulfilled') {
+          setAlertSummary(alertData.value)
+        }
+        if (analyticsData.status === 'fulfilled') {
+          setAiAnalytics(analyticsData.value)
+        }
+      } catch (err) {
+        console.warn('Enhanced dashboard data not available:', err)
+      }
+    }
+
+    loadEnhancedData()
+  }, [])
+
   // Get regions for dropdown – use ONLY real regions from API for the current customer
   const regions = React.useMemo(() => {
     return regionOptions;
   }, [regionOptions]);
 
-  // Filter incidents by selected region
+  // Filter incidents by selected region and date range
   const filteredIncidents = React.useMemo(() => {
-    if (selectedRegion === 'all') {
-      return loadedIncidents
+    const regionFiltered = selectedRegion === 'all'
+      ? loadedIncidents
+      : loadedIncidents.filter(incident => {
+          const incidentRegionId = incident.regionId ? String(incident.regionId) : null
+          const incidentRegionName = (incident.regionName || '').toLowerCase().trim()
+          const selectedRegionName = regions.find(r => r.id === selectedRegion)?.name?.toLowerCase().trim()
+
+          if (incidentRegionId && incidentRegionId === String(selectedRegion)) {
+            return true
+          }
+
+          if (selectedRegionName && incidentRegionName && incidentRegionName === selectedRegionName) {
+            return true
+          }
+
+          return false
+        })
+
+    if (!isDateRangeActive) {
+      return regionFiltered
     }
-    return loadedIncidents.filter(inc => inc.regionId === selectedRegion)
-  }, [selectedRegion, loadedIncidents])
+
+    const startBoundary = fromDate ? new Date(`${fromDate}T00:00:00`) : null
+    const endBoundary = toDate ? new Date(`${toDate}T23:59:59`) : null
+
+    return regionFiltered.filter(incident => {
+      const incidentDateValue = incident.dateOfIncident || incident.date
+      if (!incidentDateValue) {
+        return false
+      }
+
+      const incidentDate = new Date(incidentDateValue)
+      if (Number.isNaN(incidentDate.getTime())) {
+        return false
+      }
+
+      if (startBoundary && incidentDate < startBoundary) {
+        return false
+      }
+
+      if (endBoundary && incidentDate > endBoundary) {
+        return false
+      }
+
+      return true
+    })
+  }, [selectedRegion, loadedIncidents, regions, isDateRangeActive, fromDate, toDate])
 
   // Use filtered incidents for all calculations
   const customerMetrics = React.useMemo(() => {
@@ -837,6 +942,10 @@ const AdminDashboard = () => {
         }))
     }
 
+    if (selectedRegion !== 'all' || isDateRangeActive) {
+      return []
+    }
+
     // Fallback: synthesize from analytics hub data if no real incidents loaded yet
     if (analyticsData) {
       const endDate = new Date(analyticsData.metadata.dateRange.end)
@@ -881,7 +990,7 @@ const AdminDashboard = () => {
     }
 
     return []
-  }, [filteredIncidents, analyticsData])
+  }, [filteredIncidents, analyticsData, selectedRegion, isDateRangeActive])
 
   // Get priority cases – use real backend data
   const priorityCases = React.useMemo(() => {
@@ -904,7 +1013,7 @@ const AdminDashboard = () => {
     }
 
     // Fallback: synthesize from analytics data if no real incidents loaded yet
-    if (analyticsData) {
+    if (!isDateRangeActive && analyticsData) {
       const stores = analyticsData.hotProducts.storeHeatmap
         .slice()
         .sort((a, b) => b.totalIncidents - a.totalIncidents)
@@ -955,45 +1064,39 @@ const AdminDashboard = () => {
     }
 
     return []
-  }, [filteredIncidents, analyticsData])
+  }, [filteredIncidents, analyticsData, isDateRangeActive])
 
-  // Generate alerts data
+  // Generate alerts data from live API when available
   const alerts = React.useMemo(() => {
+    if (alertSummary && alertSummary.recentAlerts.length > 0) {
+      return alertSummary.recentAlerts.map(alert => {
+        const createdDate = new Date(alert.createdAt)
+        const minutesAgo = Math.round((Date.now() - createdDate.getTime()) / 60000)
+        const timeLabel = minutesAgo < 60
+          ? `${minutesAgo} minutes ago`
+          : minutesAgo < 1440
+            ? `${Math.round(minutesAgo / 60)} hours ago`
+            : `${Math.round(minutesAgo / 1440)} days ago`
+
+        return {
+          id: alert.alertInstanceId.toString(),
+          type: alert.severity === 'high' ? 'error' as const : alert.severity === 'medium' ? 'warning' as const : 'info' as const,
+          title: alert.alertRuleName || 'Alert Triggered',
+          message: alert.message || 'An alert rule was matched',
+          time: timeLabel,
+          priority: alert.severity as 'high' | 'medium' | 'low',
+          status: alert.status
+        }
+      })
+    }
+
     return [
-      {
-        id: '1',
-        type: 'warning' as const,
-        title: 'High Priority Incident Reported',
-        message: 'New high-priority incident at Leicester City Centre requires immediate attention',
-        time: '15 minutes ago',
-        priority: 'high' as const
-      },
-      {
-        id: '2',
-        type: 'info' as const,
-        title: 'Alert Rule Triggered',
-        message: 'Bulk theft alert rule matched for Nottingham Victoria store',
-        time: '1 hour ago',
-        priority: 'medium' as const
-      },
-      {
-        id: '3',
-        type: 'error' as const,
-        title: 'Police Involvement Required',
-        message: 'Incident INC-000142 requires police assistance - URN assigned',
-        time: '2 hours ago',
-        priority: 'high' as const
-      },
-      {
-        id: '4',
-        type: 'warning' as const,
-        title: 'Repeat Offender Detected',
-        message: 'Known repeat offender identified at Birmingham Bull Ring',
-        time: '3 hours ago',
-        priority: 'medium' as const
-      }
+      { id: '1', type: 'warning' as const, title: 'High Priority Incident Reported', message: 'New high-priority incident requires immediate attention', time: '15 minutes ago', priority: 'high' as const, status: 'new' },
+      { id: '2', type: 'info' as const, title: 'Alert Rule Triggered', message: 'Bulk theft alert rule matched', time: '1 hour ago', priority: 'medium' as const, status: 'new' },
+      { id: '3', type: 'error' as const, title: 'Police Involvement Required', message: 'Incident requires police assistance — URN assigned', time: '2 hours ago', priority: 'high' as const, status: 'acknowledged' },
+      { id: '4', type: 'warning' as const, title: 'Repeat Offender Detected', message: 'Known repeat offender identified', time: '3 hours ago', priority: 'medium' as const, status: 'new' }
     ]
-  }, [])
+  }, [alertSummary])
 
   // Use real backend data for quick statistics
   const quickStats = React.useMemo(() => {
@@ -1021,7 +1124,7 @@ const AdminDashboard = () => {
     }
 
     // Fallback: use analytics hub data if no real incidents loaded yet
-    if (analyticsData && analyticsData.hotProducts.storeHeatmap.length > 0) {
+    if (!isDateRangeActive && analyticsData && analyticsData.hotProducts.storeHeatmap.length > 0) {
       return analyticsData.hotProducts.storeHeatmap
         .map(store => ({
           store: store.storeName,
@@ -1032,7 +1135,7 @@ const AdminDashboard = () => {
     }
 
     return []
-  }, [filteredIncidents, analyticsData])
+  }, [filteredIncidents, analyticsData, isDateRangeActive])
 
   // Log region selection and filtered data for debugging
   React.useEffect(() => {
@@ -1312,7 +1415,8 @@ const AdminDashboard = () => {
   }
 
   // Show appropriate dashboard based on role (after all hooks have been called)
-  if (effectiveRole === 'advantageoneofficer' || effectiveRole === 'advantageonehoofficer') {
+  // Store and security-officer use the officer dashboard; admin/manager use the management dashboard UI below.
+  if (effectiveRole === 'store' || effectiveRole === 'security-officer') {
     return (
       <Suspense fallback={
         <div className="flex items-center justify-center min-h-screen">
@@ -1325,26 +1429,14 @@ const AdminDashboard = () => {
         <OfficerDashboard />
       </Suspense>
     )
-  } else if (effectiveRole === 'customersitemanager' || effectiveRole === 'customerhomanager') {
-    return (
-      <Suspense fallback={
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="space-y-4 text-center">
-            <div className="text-lg font-medium">Loading Customer Dashboard...</div>
-            <div className="text-sm text-gray-500">Please wait</div>
-          </div>
-        </div>
-      }>
-        <CustomerDashboard userRole={effectiveRole === 'customersitemanager' ? 'customersitemanager' : 'customerhomanager'} />
-      </Suspense>
-    )
   }
 
-  // Admin dashboard UI (only reached if role is administrator)
+  // Management dashboard UI (admin/manager)
   return (
     <div className="min-h-screen bg-slate-50 p-6">
       <div className="space-y-6">
         <DashboardGreeting />
+        
         
         {/* Loading State */}
         {incidentsLoading && (
@@ -1358,7 +1450,9 @@ const AdminDashboard = () => {
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-2 md:gap-4">
           <div className="flex items-center gap-2 flex-wrap">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Dashboard Overview</h2>
-            <Badge variant="secondary" className="text-xs">Admin View</Badge>
+            <Badge variant="secondary" className="text-xs">
+              {viewRole === 'administrator' ? 'Admin View' : 'Manager View'}
+            </Badge>
             {selectedRegion !== 'all' && (
               <Badge variant="default" className="text-xs bg-blue-600">
                 <MapPin className="h-3 w-3 mr-1" />
@@ -1381,78 +1475,126 @@ const AdminDashboard = () => {
                 ))}
               </SelectContent>
             </Select>
+            <div className="flex flex-col gap-2 w-full md:w-auto">
+              <div className="flex flex-col sm:flex-row gap-2 w-full">
+                <Input
+                  type="date"
+                  value={fromDateInput}
+                  onChange={(event) => setFromDateInput(event.target.value)}
+                  className="w-full text-sm"
+                  aria-label="Filter incidents from date"
+                />
+                <Input
+                  type="date"
+                  value={toDateInput}
+                  onChange={(event) => setToDateInput(event.target.value)}
+                  className="w-full text-sm"
+                  aria-label="Filter incidents to date"
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleApplyDateRange}
+                  className="h-9 text-xs sm:text-sm"
+                >
+                  Apply Dates
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleClearDateRange}
+                  className="h-9 text-xs sm:text-sm"
+                  disabled={!isDateRangeActive && !fromDateInput && !toDateInput}
+                >
+                  Clear Dates
+                </Button>
+              </div>
+              {dateRangeError && (
+                <p className="text-xs text-red-600">{dateRangeError}</p>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Quick Statistics */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
           {/* Total Incidents */}
-          <Card className="min-w-[140px] bg-blue-600 text-white border-0 shadow-md overflow-hidden relative">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 md:p-4 pb-2 md:pb-3">
-              <CardTitle className="text-xs font-medium md:text-sm text-white">
-                Total Incidents
-              </CardTitle>
-              <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
-                <AlertCircle className="h-4 w-4 text-white" />
-              </div>
-            </CardHeader>
-            <CardContent className="p-3 md:p-4 pt-1 md:pt-2 z-10 relative">
-              <div className="text-xl font-bold md:text-2xl lg:text-3xl text-white">{quickStats.totalIncidents}</div>
-              <div className="text-xs text-white/60 mt-1">All time</div>
-            </CardContent>
-          </Card>
+          <Link to="/operations/incident-report" className="block" aria-label="View all incidents">
+            <Card className="min-w-[140px] bg-blue-600 text-white border-0 shadow-md overflow-hidden relative cursor-pointer transition-shadow hover:shadow-lg">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 md:p-4 pb-2 md:pb-3">
+                <CardTitle className="text-xs font-medium md:text-sm text-white">
+                  Total Incidents
+                </CardTitle>
+                <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
+                  <AlertCircle className="h-4 w-4 text-white" />
+                </div>
+              </CardHeader>
+              <CardContent className="p-3 md:p-4 pt-1 md:pt-2 z-10 relative">
+                <div className="text-xl font-bold md:text-2xl lg:text-3xl text-white">{quickStats.totalIncidents}</div>
+                <div className="text-xs text-white/60 mt-1">All time</div>
+              </CardContent>
+            </Card>
+          </Link>
 
           {/* Today's Incidents */}
-          <Card className="min-w-[140px] bg-emerald-600 text-white border-0 shadow-md overflow-hidden relative">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 md:p-4 pb-2 md:pb-3">
-              <CardTitle className="text-xs font-medium md:text-sm text-white">
-                Today
-              </CardTitle>
-              <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
-                <Calendar className="h-4 w-4 text-white" />
-              </div>
-            </CardHeader>
-            <CardContent className="p-3 md:p-4 pt-1 md:pt-2 z-10 relative">
-              <div className="text-xl font-bold md:text-2xl lg:text-3xl text-white">{quickStats.todayIncidents}</div>
-              <div className="text-xs text-white/60 mt-1">Incidents today</div>
-            </CardContent>
-          </Card>
+          <Link to="/operations/incident-report?preset=today" className="block" aria-label="View today's incidents">
+            <Card className="min-w-[140px] bg-emerald-600 text-white border-0 shadow-md overflow-hidden relative cursor-pointer transition-shadow hover:shadow-lg">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 md:p-4 pb-2 md:pb-3">
+                <CardTitle className="text-xs font-medium md:text-sm text-white">
+                  Today
+                </CardTitle>
+                <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
+                  <Calendar className="h-4 w-4 text-white" />
+                </div>
+              </CardHeader>
+              <CardContent className="p-3 md:p-4 pt-1 md:pt-2 z-10 relative">
+                <div className="text-xl font-bold md:text-2xl lg:text-3xl text-white">{quickStats.todayIncidents}</div>
+                <div className="text-xs text-white/60 mt-1">Incidents today</div>
+              </CardContent>
+            </Card>
+          </Link>
 
           {/* Total Value Recovered */}
-          <Card className="min-w-[140px] bg-amber-600 text-white border-0 shadow-md overflow-hidden relative">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 md:p-4 pb-2 md:pb-3">
-              <CardTitle className="text-xs font-medium md:text-sm text-white">
-                Value Recovered
-              </CardTitle>
-              <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
-                <Currency className="h-4 w-4 text-white" />
-              </div>
-            </CardHeader>
-            <CardContent className="p-3 md:p-4 pt-1 md:pt-2 z-10 relative">
-              <div className="text-xl font-bold md:text-2xl lg:text-3xl text-white">
-                {formatCurrency(quickStats.totalValue)}
-              </div>
-              <div className="text-xs text-white/60 mt-1">Total recovered</div>
-            </CardContent>
-          </Card>
+          <Link to="/operations/incident-report" className="block" aria-label="View incidents by value recovered">
+            <Card className="min-w-[140px] bg-amber-600 text-white border-0 shadow-md overflow-hidden relative cursor-pointer transition-shadow hover:shadow-lg">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 md:p-4 pb-2 md:pb-3">
+                <CardTitle className="text-xs font-medium md:text-sm text-white">
+                  Value Recovered
+                </CardTitle>
+                <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
+                  <Currency className="h-4 w-4 text-white" />
+                </div>
+              </CardHeader>
+              <CardContent className="p-3 md:p-4 pt-1 md:pt-2 z-10 relative">
+                <div className="text-xl font-bold md:text-2xl lg:text-3xl text-white">
+                  {formatCurrency(quickStats.totalValue)}
+                </div>
+                <div className="text-xs text-white/60 mt-1">Total recovered</div>
+              </CardContent>
+            </Card>
+          </Link>
 
           {/* Theft Incidents */}
-          <Card className="min-w-[140px] bg-red-600 text-white border-0 shadow-md overflow-hidden relative">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 md:p-4 pb-2 md:pb-3">
-              <CardTitle className="text-xs font-medium md:text-sm text-white">
-                Theft Incidents
-              </CardTitle>
-              <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
-                <Shield className="h-4 w-4 text-white" />
-              </div>
-            </CardHeader>
-            <CardContent className="p-3 md:p-4 pt-1 md:pt-2 z-10 relative">
-              <div className="text-xl font-bold md:text-2xl lg:text-3xl text-white">{quickStats.theftIncidents}</div>
-              <div className="text-xs text-white/60 mt-1">
-                {quickStats.theftPercentage}% of all incidents
-              </div>
-            </CardContent>
-          </Card>
+          <Link to="/operations/incident-report?incidentType=Theft" className="block" aria-label="View theft incidents">
+            <Card className="min-w-[140px] bg-red-600 text-white border-0 shadow-md overflow-hidden relative cursor-pointer transition-shadow hover:shadow-lg">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 md:p-4 pb-2 md:pb-3">
+                <CardTitle className="text-xs font-medium md:text-sm text-white">
+                  Theft Incidents
+                </CardTitle>
+                <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
+                  <Shield className="h-4 w-4 text-white" />
+                </div>
+              </CardHeader>
+              <CardContent className="p-3 md:p-4 pt-1 md:pt-2 z-10 relative">
+                <div className="text-xl font-bold md:text-2xl lg:text-3xl text-white">{quickStats.theftIncidents}</div>
+                <div className="text-xs text-white/60 mt-1">
+                  {quickStats.theftPercentage}% of all incidents
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
         </div>
 
         {/* Main Content Grid */}
@@ -1618,6 +1760,47 @@ const AdminDashboard = () => {
 
           {/* Sidebar Content */}
           <div className="lg:col-span-2 space-y-4">
+            {/* AI Risk Indicators */}
+            {aiAnalytics && aiAnalytics.riskIndicators.length > 0 && (
+              <Card>
+                <CardHeader className="p-2 md:p-4">
+                  <CardTitle className="text-base font-medium md:text-lg lg:text-xl flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4" />
+                    AI Risk Indicators
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="divide-y">
+                    {aiAnalytics.riskIndicators.map((indicator, idx) => (
+                      <div key={idx} className="p-3">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-medium">{indicator.indicator}</span>
+                          <Badge
+                            variant={indicator.level === 'high' ? 'destructive' : indicator.level === 'medium' ? 'secondary' : 'default'}
+                            className="text-xs"
+                          >
+                            {indicator.level}
+                          </Badge>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-1.5 mb-1">
+                          <div
+                            className={cn(
+                              'h-1.5 rounded-full transition-all',
+                              indicator.level === 'high' ? 'bg-red-500' : indicator.level === 'medium' ? 'bg-amber-500' : 'bg-emerald-500'
+                            )}
+                            style={{ width: `${Math.round(indicator.score * 100)}%` }}
+                          />
+                        </div>
+                        {indicator.description && (
+                          <p className="text-xs text-muted-foreground">{indicator.description}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Alerts */}
             <Card>
               <CardHeader className="p-2 md:p-4 flex flex-row items-center justify-between">
@@ -1626,7 +1809,7 @@ const AdminDashboard = () => {
                   Alerts
                 </CardTitle>
                 <Badge variant="destructive" className="text-xs">
-                  {alerts.filter(a => a.priority === 'high').length} New
+                  {alertSummary ? alertSummary.newCount : alerts.filter(a => a.priority === 'high').length} New
                 </Badge>
               </CardHeader>
               <CardContent className="p-0">

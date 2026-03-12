@@ -40,6 +40,11 @@ namespace AIPBackend.Data
         public DbSet<HolidayRequest> HolidayRequests { get; set; }
         public DbSet<BankHoliday> BankHolidays { get; set; }
         public DbSet<AlertRule> AlertRules { get; set; }
+        public DbSet<AlertInstance> AlertInstances { get; set; }
+        public DbSet<EvidenceItem> EvidenceItems { get; set; }
+        public DbSet<EvidenceCustodyEvent> EvidenceCustodyEvents { get; set; }
+        public DbSet<FaceEmbedding> FaceEmbeddings { get; set; }
+        public DbSet<StoreRiskScore> StoreRiskScores { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -552,6 +557,68 @@ namespace AIPBackend.Data
             modelBuilder.Entity<Employee>()
                 .Property(e => e.FullName)
                 .HasComputedColumnSql("CONCAT([FirstName], ' ', [Surname])");
+
+            // Configure EvidenceItem relationships
+            modelBuilder.Entity<EvidenceItem>()
+                .HasOne(e => e.Incident)
+                .WithMany()
+                .HasForeignKey(e => e.IncidentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<EvidenceItem>()
+                .HasMany(e => e.CustodyEvents)
+                .WithOne(c => c.EvidenceItem)
+                .HasForeignKey(c => c.EvidenceItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<EvidenceItem>()
+                .HasIndex(e => e.Barcode);
+
+            modelBuilder.Entity<EvidenceItem>()
+                .HasIndex(e => e.IncidentId);
+
+            modelBuilder.Entity<EvidenceCustodyEvent>()
+                .HasIndex(c => c.EvidenceItemId);
+
+            // Configure FaceEmbedding indexes to support efficient similarity lookup pivots
+            modelBuilder.Entity<FaceEmbedding>()
+                .HasIndex(f => f.OffenderId);
+
+            modelBuilder.Entity<FaceEmbedding>()
+                .HasIndex(f => f.IncidentId);
+
+            modelBuilder.Entity<FaceEmbedding>()
+                .HasIndex(f => f.FileName);
+
+            // Configure StoreRiskScore indexes for fast dashboard lookups
+            modelBuilder.Entity<StoreRiskScore>()
+                .HasIndex(s => new { s.CustomerId, s.ForDate });
+
+            modelBuilder.Entity<StoreRiskScore>()
+                .HasIndex(s => new { s.CustomerId, s.SiteId, s.ForDate })
+                .IsUnique();
+
+            // Configure AlertInstance relationships
+            modelBuilder.Entity<AlertInstance>()
+                .HasOne(a => a.AlertRule)
+                .WithMany()
+                .HasForeignKey(a => a.AlertRuleId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<AlertInstance>()
+                .HasOne(a => a.Incident)
+                .WithMany()
+                .HasForeignKey(a => a.IncidentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<AlertInstance>()
+                .HasIndex(a => a.Status);
+
+            modelBuilder.Entity<AlertInstance>()
+                .HasIndex(a => a.AlertRuleId);
+
+            modelBuilder.Entity<AlertInstance>()
+                .HasIndex(a => a.CreatedAt);
 
         }
     }

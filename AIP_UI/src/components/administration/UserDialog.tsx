@@ -24,20 +24,22 @@ export const UserDialog = ({
 }: UserDialogProps) => {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl">
+        <div className="max-h-[80vh] overflow-y-auto pr-2">
           <DialogHeader>
             <DialogTitle>
-            {user ? 'Edit User' : 'Create New User'}
-          </DialogTitle>
+              {user ? 'Edit User' : 'Create New User'}
+            </DialogTitle>
             <DialogDescription>
               Enter the user details below. All required fields must be completed.
             </DialogDescription>
-        </DialogHeader>
-        <UserForm
-          initialData={user}
-          onSubmit={onSubmit}
-          onCancel={() => onOpenChange(false)}
-        />
+          </DialogHeader>
+          <UserForm
+            initialData={user}
+            onSubmit={onSubmit}
+            onCancel={() => onOpenChange(false)}
+          />
+        </div>
       </DialogContent>
     </Dialog>
   )

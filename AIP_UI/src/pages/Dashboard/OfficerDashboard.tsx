@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { getUser } from '@/services/auth'
+import { useAuth } from '@/contexts/AuthContext'
 import { dashboardService } from '@/services/dashboardService'
 import { OfficerDashboardData, Activity, Task, RecentIncident } from '@/types/dashboard'
 import { DashboardGreeting } from '@/components/dashboard/DashboardGreeting'
@@ -255,7 +255,7 @@ const IncidentTable: React.FC<{ incidents: RecentIncident[] }> = ({ incidents })
 
 export default function OfficerDashboard() {
   // Get the logged-in user information
-  const loggedInUser = getUser()
+  const { user: loggedInUser } = useAuth()
 
   // Fetch dashboard data
   const { 
@@ -279,6 +279,92 @@ export default function OfficerDashboard() {
 
   const isLoading = isDashboardLoading || isIncidentsLoading
   const error = dashboardError || incidentsError
+
+  const computedStats = React.useMemo(() => {
+    if (!incidentsData || incidentsData.length === 0) {
+      return {
+        incidentsThisMonth: dashboardData?.stats.incidentsThisMonth ?? 0,
+        incidentsLastMonth: dashboardData?.stats.incidentsLastMonth ?? 0,
+        totalValueThisMonth: dashboardData?.stats.totalValueSaved ?? 0,
+        totalValueLastMonth: 0
+      }
+    }
+
+    const now = new Date()
+    const currentMonth = now.getMonth()
+    const currentYear = now.getFullYear()
+
+    const prevMonthDate = new Date(currentYear, currentMonth - 1, 1)
+    const prevMonth = prevMonthDate.getMonth()
+    const prevYear = prevMonthDate.getFullYear()
+
+    const parseDate = (value: string): Date | null => {
+      if (!value) return null
+      const d = new Date(value)
+      return isNaN(d.getTime()) ? null : d
+    }
+
+    let incidentsThisMonth = 0
+    let incidentsLastMonth = 0
+    let totalValueThisMonth = 0
+    let totalValueLastMonth = 0
+
+    for (const inc of incidentsData) {
+      const d = parseDate(inc.date)
+      if (!d) continue
+      const y = d.getFullYear()
+      const m = d.getMonth()
+
+      const value = typeof inc.value === 'number' && !isNaN(inc.value)
+        ? inc.value
+        : (typeof inc.amount === 'number' && !isNaN(inc.amount) ? inc.amount : 0)
+
+      if (y === currentYear && m === currentMonth) {
+        incidentsThisMonth += 1
+        totalValueThisMonth += value
+      } else if (y === prevYear && m === prevMonth) {
+        incidentsLastMonth += 1
+        totalValueLastMonth += value
+      }
+    }
+
+    // Fallback to backend values if present and non-zero
+    incidentsThisMonth = dashboardData?.stats.incidentsThisMonth || incidentsThisMonth
+    incidentsLastMonth = dashboardData?.stats.incidentsLastMonth || incidentsLastMonth
+
+    if (dashboardData?.stats.totalValueSaved && dashboardData.stats.totalValueSaved > 0) {
+      totalValueThisMonth = dashboardData.stats.totalValueSaved
+    }
+
+    return {
+      incidentsThisMonth,
+      incidentsLastMonth,
+      totalValueThisMonth,
+      totalValueLastMonth
+    }
+  }, [incidentsData, dashboardData])
+
+  const incidentsChangeLabel = React.useMemo(() => {
+    const { incidentsThisMonth, incidentsLastMonth } = computedStats
+    if (incidentsLastMonth <= 0) {
+      return incidentsThisMonth > 0 ? 'vs last month' : 'No data for last month'
+    }
+    const diff = incidentsThisMonth - incidentsLastMonth
+    const pct = (diff / Math.max(incidentsLastMonth, 1)) * 100
+    const sign = diff >= 0 ? '+' : ''
+    return `${sign}${diff} (${pct.toFixed(0)}%) vs last month`
+  }, [computedStats])
+
+  const valueChangeLabel = React.useMemo(() => {
+    const { totalValueThisMonth, totalValueLastMonth } = computedStats
+    if (totalValueLastMonth <= 0) {
+      return totalValueThisMonth > 0 ? 'vs last month' : 'No data for last month'
+    }
+    const diff = totalValueThisMonth - totalValueLastMonth
+    const pct = (diff / Math.max(totalValueLastMonth, 1)) * 100
+    const sign = diff >= 0 ? '+' : ''
+    return `${sign}£${Math.abs(diff).toFixed(0)} (${pct.toFixed(0)}%) vs last month`
+  }, [computedStats])
 
   if (error) {
     return (
@@ -325,9 +411,9 @@ export default function OfficerDashboard() {
           <section aria-label="Dashboard Statistics" className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <StatCard
               title="Incidents This Month"
-              value={dashboardData.stats.incidentsThisMonth}
-              change="+33% from last month"
-              trend="up"
+              value={computedStats.incidentsThisMonth}
+              change={incidentsChangeLabel}
+              trend={computedStats.incidentsThisMonth >= computedStats.incidentsLastMonth ? 'up' : 'down'}
               icon={Shield}
               gradient="bg-gradient-to-br from-blue-500 to-blue-700"
               subtitle={`Target: ${dashboardData.monthlyTarget.incidents}`}
@@ -335,30 +421,43 @@ export default function OfficerDashboard() {
             />
             <StatCard
               title="Value Saved"
-              value={`£${(dashboardData.stats.totalValueSaved / 1000).toFixed(1)}k`}
-              change="+£12k from last month"
-              trend="up"
+              value={`£${(computedStats.totalValueThisMonth / 1000).toFixed(1)}k`}
+              change={valueChangeLabel}
+              trend={computedStats.totalValueThisMonth >= computedStats.totalValueLastMonth ? 'up' : 'down'}
               icon={TrendingUp}
               gradient="bg-gradient-to-br from-emerald-500 to-emerald-700"
               subtitle="This month"
               link="/operations/incident-report"
             />
             <StatCard
-              title="Expenses YTD"
-              value={`£${dashboardData.stats.expensesYTD.toFixed(2)}`}
-              change="+£150 from last month"
-              trend="up"
-              icon={Wallet}
+              title="Sites in Scope"
+              value={
+                incidentsData && incidentsData.length > 0
+                  ? new Set(incidentsData.map((i) => i.siteId || i.siteName)).size
+                  : dashboardData.stats.sitesVisited || 0
+              }
+              icon={MapPin}
               gradient="bg-gradient-to-br from-purple-500 to-purple-700"
-              subtitle="Year to date"
-              link="/operations/officer-expenses"
+              subtitle="Based on your recent incidents"
             />
             <StatCard
-              title="Holiday Days Left"
-              value={28 - dashboardData.stats.holidayBooked}
-              icon={CalendarRange}
+              title="Incidents Today"
+              value={
+                incidentsData
+                  ? incidentsData.filter((i) => {
+                      const d = new Date(i.date)
+                      const now = new Date()
+                      return (
+                        d.getFullYear() === now.getFullYear() &&
+                        d.getMonth() === now.getMonth() &&
+                        d.getDate() === now.getDate()
+                      )
+                    }).length
+                  : 0
+              }
+              icon={Calendar}
               gradient="bg-gradient-to-br from-amber-500 to-orange-600"
-              subtitle="Year to date"
+              subtitle="For your current store scope"
             />
           </section>
 

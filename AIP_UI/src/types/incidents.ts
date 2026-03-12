@@ -8,6 +8,8 @@ export enum IncidentType {
   UNDERAGE_PURCHASE = 'Underage Purchase',
   CRIMINAL_DAMAGE = 'Criminal Damage',
   CREDIT_CARD_FRAUD = 'Credit Card Fraud',
+  COLLEAGUE_ASSAULT = 'Colleague Assault',
+  COLLEAGUE_ABUSE = 'Colleague Abuse',
   VIOLENT_BEHAVIOUR = 'Violent Behaviour',
   ABUSIVE_BEHAVIOUR = 'Abusive Behaviour',
   SHOPLIFTING = 'Shoplifting',
@@ -47,6 +49,7 @@ export interface OffenderAddress {
 
 export interface StolenItem {
   id: string;
+  barcode?: string;
   category?: string;
   description?: string;
   productName?: string;
@@ -127,9 +130,23 @@ export interface Incident {
   offenderPlaceOfBirth?: string;
   offenderMarks?: string;
   offenderAddress?: OffenderAddress;
+  offenderDetailsVerified?: boolean;
+  verificationMethod?: string;
+  verificationEvidenceImage?: string;
 
   // Special fields
   arrestSaveComment?: string;
+
+  // Offender analytics
+  offenderId?: string;
+  modusOperandi?: string[];
+
+  // AI-assisted classification
+  incidentCategory?: string;
+  incidentCategoryConfidence?: number;
+  riskLevel?: 'low' | 'medium' | 'high';
+  riskScore?: number;
+  classificationVersion?: string;
 
   // View configuration (for role-based access)
   viewConfig?: {
@@ -144,6 +161,9 @@ export interface RepeatOffenderIncidentSummary {
   incidentType: string;
   description?: string;
   offenderMarks?: string;
+	offenderDetailsVerified?: boolean;
+	verificationMethod?: string;
+	verificationEvidenceImage?: string;
 }
 
 export interface RepeatOffenderMatch {

@@ -2,7 +2,7 @@ import { UserRole } from './user';
 
 export type { UserRole };
 
-export type CustomerRole = 'administrator' | 'customersitemanager' | 'customerhomanager';
+export type CustomerRole = UserRole;
 
 export interface Metric {
   title: string;
@@ -45,8 +45,8 @@ export interface CustomerStoreData {
   name: string;
   customerId: number;
   metrics: {
-    customerhomanager: Metric[];
-    customersitemanager: Metric[];
+    manager: Metric[];
+    store: Metric[];
   };
   recentIncidents: RecentIncident[];
   incidentData: {

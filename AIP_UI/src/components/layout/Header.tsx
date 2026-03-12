@@ -1,11 +1,12 @@
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
-import { logout } from '@/services/auth';
+import { useAuth } from '@/contexts/AuthContext';
 
 export function Header() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { logout } = useAuth();
 
   const handleLogout = () => {
     try {

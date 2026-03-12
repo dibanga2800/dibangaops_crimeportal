@@ -34,7 +34,7 @@ export function ViewConfigList({ views, onPermissionChange, onToggleView }: View
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Users</SelectItem>
-                <SelectItem value="admin">Admin Only</SelectItem>
+                <SelectItem value="administrator">Admin Only</SelectItem>
                 <SelectItem value="manager">Managers</SelectItem>
               </SelectContent>
             </Select>

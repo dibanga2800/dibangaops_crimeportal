@@ -29,63 +29,17 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 	const pageAccess = useContext(PageAccessContext);
 	const location = useLocation();
 	const previousPathRef = useRef<string>('');
-	const mountTimeRef = useRef<number>(Date.now());
 
 	const pathToCheck = normalizePath(accessPath ?? location.pathname);
 	
-	// Track route changes and access checks
 	useEffect(() => {
-		const timestamp = Date.now();
-		const elapsed = timestamp - mountTimeRef.current;
-		
-		// Log route entry
-		console.group(`🛡️ [ProtectedRoute] Route Protection Check - ${pathToCheck}`);
-		console.log('📍 Route Info:', {
-			path: pathToCheck,
-			fullPath: location.pathname + location.search,
-			accessPath: accessPath,
-			enforcePageAccess,
-			elapsedFromMount: `${elapsed}ms`
-		});
-		console.log('👤 Auth State:', {
-			hasUser: !!user,
-			userRole: user?.role,
-			authLoading,
-			userId: user?.id
-		});
-		console.log('🔐 Page Access State:', {
-			hasContext: !!pageAccess,
-			currentRole: pageAccess?.currentRole,
-			status: pageAccess?.status,
-			isLoading: pageAccess?.isLoading,
-			availablePagesCount: pageAccess?.availablePages?.length || 0
-		});
-		console.log('✅ Route Config:', {
-			allowedRoles: allowedRoles || 'none specified',
-			enforcePageAccess
-		});
-		
-		// Track path changes
+		if (!import.meta.env.DEV) return;
+
 		if (previousPathRef.current && previousPathRef.current !== pathToCheck) {
-			console.log('🔄 Path Changed:', {
-				from: previousPathRef.current,
-				to: pathToCheck,
-				reason: 'location update'
-			});
+			console.log('🛡️ [ProtectedRoute] Path changed:', previousPathRef.current, '->', pathToCheck);
 		}
 		previousPathRef.current = pathToCheck;
-		
-		console.groupEnd();
-		
-		return () => {
-			// Cleanup logging on unmount
-			if (import.meta.env.DEV) {
-				const unmountTime = Date.now();
-				const totalTime = unmountTime - mountTimeRef.current;
-				console.log(`🛡️ [ProtectedRoute] Unmounting ${pathToCheck} after ${totalTime}ms`);
-			}
-		};
-	}, [pathToCheck, location.pathname, location.search, user, authLoading, pageAccess, allowedRoles, accessPath, enforcePageAccess]);
+	}, [pathToCheck]);
 	
 	// Show loading only during initial auth check (not page access loading to prevent loops)
 	if (authLoading) {
@@ -96,42 +50,17 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 		);
 	}
 
-	// Redirect to login if not authenticated
 	if (!user) {
-		console.group('🚫 [ProtectedRoute] REDIRECT: Not Authenticated');
-		console.log('📋 Redirect Details:', {
-			from: pathToCheck,
-			to: '/login',
-			reason: 'User not authenticated',
-			timestamp: new Date().toISOString()
-		});
-		console.groupEnd();
+		if (import.meta.env.DEV) {
+			console.warn('🚫 [ProtectedRoute] Not authenticated — redirecting to /login from', pathToCheck);
+		}
 		return <Navigate to="/login" state={{ from: location }} replace />;
 	}
 
-	// Check role-based access (from user object)
 	if (allowedRoles && !allowedRoles.includes(user.role)) {
-		console.group('🚫 [ProtectedRoute] REDIRECT: Role Blocked');
-		console.log('📋 Redirect Details:', {
-			from: pathToCheck,
-			to: '/dashboard',
-			reason: 'Role not in allowedRoles',
-			userRole: user.role,
-			requiredRoles: allowedRoles,
-			timestamp: new Date().toISOString()
-		});
-		console.log('🔍 Role Check:', {
-			userRole: user.role,
-			allowedRoles,
-			isIncluded: allowedRoles.includes(user.role),
-			matchDetails: allowedRoles.map(role => ({
-				role,
-				matches: role === user.role,
-				userRoleType: typeof user.role,
-				allowedRoleType: typeof role
-			}))
-		});
-		console.groupEnd();
+		if (import.meta.env.DEV) {
+			console.warn('🚫 [ProtectedRoute] Role blocked:', user.role, 'not in', allowedRoles, '— redirecting to /dashboard from', pathToCheck);
+		}
 		return <Navigate to="/dashboard" replace />;
 	}
 
@@ -140,7 +69,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 		// If still loading settings, allow access temporarily to prevent redirect loops
 		// The hasAccess function already handles this case
 		if (pageAccess.status === 'loading') {
-			console.log('⏳ [ProtectedRoute] Allowing access during loading:', pathToCheck);
 			return <>{children}</>;
 		}
 
@@ -156,35 +84,13 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 		const hasAccessResult = pageAccess.hasAccess(pathToCheck);
 		
 		if (!hasAccessResult) {
-			console.group('🚫 [ProtectedRoute] REDIRECT: Access Denied by Page Access');
-			console.log('📋 Redirect Details:', {
-				from: pathToCheck,
-				to: '/dashboard',
-				reason: 'PageAccess.hasAccess() returned false',
-				userRole: user.role,
-				currentRole: pageAccess.currentRole,
-				pageAccessStatus: pageAccess.status,
-				timestamp: new Date().toISOString()
-			});
-			console.log('🔍 Access Check Context:', {
-				enforcePageAccess,
-				pageAccessContextAvailable: !!pageAccess,
-				hasAccessResult: false,
-				availablePagesCount: pageAccess?.availablePages?.length || 0,
-				pageAccessByRoleKeys: Object.keys(pageAccess?.pageAccessByRole || {})
-			});
-			console.groupEnd();
+			if (import.meta.env.DEV) {
+				console.warn('🚫 [ProtectedRoute] Page access denied for', pathToCheck, '— redirecting to /dashboard');
+			}
 			return <Navigate to="/dashboard" replace />;
-		} else {
-			console.log('✅ [ProtectedRoute] Access granted:', {
-				path: pathToCheck,
-				userRole: user.role,
-				currentRole: pageAccess.currentRole
-			});
 		}
 	}
 
-	console.log('✅ [ProtectedRoute] Rendering children for:', pathToCheck);
 	return <>{children}</>;
 };
 

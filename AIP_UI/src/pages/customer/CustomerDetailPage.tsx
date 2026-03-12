@@ -62,7 +62,7 @@ export default function CustomerDetailPage() {
         } else {
           setPageState({
             isLoading: false,
-            error: 'Unable to load assigned pages for this customer.',
+            error: 'Unable to load assigned pages for this company.',
             pages: []
           });
         }
@@ -70,7 +70,7 @@ export default function CustomerDetailPage() {
         setError(err instanceof Error ? err.message : 'An error occurred');
         setPageState({
           isLoading: false,
-          error: err instanceof Error ? err.message : 'Failed to load customer pages',
+          error: err instanceof Error ? err.message : 'Failed to load company pages',
           pages: []
         });
       } finally {
@@ -117,7 +117,7 @@ export default function CustomerDetailPage() {
           className="mb-4"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Customer Reporting
+          Back to Company Reporting
         </Button>
         
         <div className="mb-4">
@@ -196,7 +196,7 @@ export default function CustomerDetailPage() {
 
           {!pageState.isLoading && !pageState.error && availablePages.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
-              <p>No pages assigned to this customer</p>
+              <p>No pages assigned to this company</p>
               <p className="text-sm">Contact administrator to configure page assignments</p>
             </div>
           )}

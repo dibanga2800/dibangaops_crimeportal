@@ -11,7 +11,8 @@ class Logger {
   private static instance: Logger;
   private logs: LogEntry[] = [];
   private readonly maxLogs: number = 1000;
-  private readonly shouldConsoleLog: boolean = true;
+  private readonly shouldConsoleLog: boolean = import.meta.env.DEV;
+  private readonly isProduction: boolean = import.meta.env.PROD;
 
   private constructor() {
     this.clearOldLogs();
@@ -47,7 +48,11 @@ class Logger {
     const logEntry = this.formatLogEntry(level, message, data);
     this.logs.push(logEntry);
 
-    if (this.shouldConsoleLog) {
+    // In production, only log errors and warnings to console
+    // In development, log everything
+    const shouldLog = this.shouldConsoleLog || (this.isProduction && (level === 'error' || level === 'warn'));
+    
+    if (shouldLog) {
       const consoleMethod = level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log';
       console[consoleMethod](`[${logEntry.timestamp}] [${level.toUpperCase()}] ${message}`, data || '');
     }
@@ -68,7 +73,7 @@ class Logger {
   }
 
   public debug(message: string, data?: any): void {
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       this.log('debug', message, data);
     }
   }

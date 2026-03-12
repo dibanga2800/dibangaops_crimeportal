@@ -102,8 +102,8 @@ namespace AIPBackend.Repositories
 			{
 				var searchLower = search.ToLower();
 				query = query.Where(i =>
-					i.SiteName.ToLower().Contains(searchLower) ||
-					i.OfficerName.ToLower().Contains(searchLower) ||
+			i.StoreName.ToLower().Contains(searchLower) ||
+				i.StaffMemberName.ToLower().Contains(searchLower) ||
 					(i.Description != null && i.Description.ToLower().Contains(searchLower)) ||
 					(i.IncidentType != null && i.IncidentType.ToLower().Contains(searchLower)) ||
 					(i.Customer != null && i.Customer.CompanyName.ToLower().Contains(searchLower)));
@@ -317,10 +317,13 @@ namespace AIPBackend.Repositories
 						{
 							IncidentId = i.IncidentId,
 							DateOfIncident = i.DateOfIncident,
-							SiteName = i.SiteName,
+							StoreName = i.StoreName,
 							IncidentType = i.IncidentType,
 							Description = i.Description,
-							OffenderMarks = i.OffenderMarks
+							OffenderMarks = i.OffenderMarks,
+							OffenderDetailsVerified = i.OffenderDetailsVerified,
+							VerificationMethod = i.VerificationMethod,
+							VerificationEvidenceImage = i.VerificationEvidenceImage
 						})
 						.ToList()
 				})

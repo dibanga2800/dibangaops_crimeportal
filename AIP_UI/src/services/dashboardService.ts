@@ -14,96 +14,6 @@ const getActiveUser = () => {
   }
   return activeUser
 }
-const FALLBACK_OFFICER_DASHBOARD: OfficerDashboardData = {
-  name: 'Advantage Officer',
-  badgeNumber: 'AIP-2045',
-  role: 'AdvantageOneOfficer',
-  avatar: 'https://api.dicebear.com/7.x/initials/svg?seed=AO',
-  shiftStatus: 'On Duty',
-  shiftStart: new Date().toISOString(),
-  shiftEnd: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
-  location: 'Central England COOP',
-  stats: {
-    incidentsThisMonth: 18,
-    incidentsLastMonth: 14,
-    totalValueSaved: 42000,
-    expensesYTD: 3850,
-    completionRate: 92,
-    holidayBooked: 12,
-    hoursWorked: 1420,
-    sitesVisited: 8
-  },
-  monthlyTarget: {
-    incidents: 20,
-    valueSaved: 50000,
-    current: {
-      incidents: 18,
-      valueSaved: 42000
-    }
-  },
-  recentActivities: [
-    {
-      id: 'activity-1',
-      type: 'incident',
-      title: 'High-value recovery',
-      location: 'Central England COOP',
-      time: '08:30',
-      value: 1800,
-      status: 'resolved'
-    },
-    {
-      id: 'activity-2',
-      type: 'patrol',
-      title: 'Early morning patrol',
-      location: 'Midcounties COOP',
-      time: '06:10',
-      status: 'completed'
-    },
-    {
-      id: 'activity-3',
-      type: 'report',
-      title: 'Incident report submitted',
-      location: 'Heart of England',
-      time: '07:55',
-      value: 0,
-      status: 'submitted'
-    }
-  ],
-  upcomingTasks: [
-    {
-      id: 'task-1',
-      type: 'Training',
-      title: 'Customer service refresher',
-      dueDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
-      priority: 'medium'
-    },
-    {
-      id: 'task-2',
-      type: 'Patrol',
-      title: 'Late shift perimeter patrol',
-      dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-      priority: 'high'
-    }
-  ]
-};
-
-const FALLBACK_RECENT_INCIDENTS: RecentIncident[] = Array.from({ length: 6 }).map((_, index) => ({
-  id: `incident-${index + 1}`,
-  customerId: 21,
-  date: new Date(Date.now() - index * 6 * 60 * 60 * 1000).toISOString(),
-  regionId: '1',
-  regionName: 'Central Region',
-  siteId: `site-${(index % 3) + 1}`,
-  siteName: ['Central England COOP', 'Heart of England', 'Midcounties COOP'][index % 3],
-  type: index % 2 === 0 ? 'Theft Prevention' : 'Patrol',
-  value: index % 2 === 0 ? 120 + index * 30 : 0,
-  assignedTo: 'AdvantageOneOfficer',
-  customerName: ['Central England COOP', 'Heart of England', 'Midcounties COOP'][index % 3],
-  store: ['Central England COOP', 'Heart of England', 'Midcounties COOP'][index % 3],
-  officerName: ['David Brown', 'Karen Walsh', 'Lee Richards'][index % 3],
-  amount: index % 2 === 0 ? 120 + index * 30 : 0,
-  incidentType: index % 2 === 0 ? 'Recovery' : 'Patrol'
-}));
 
 class APIError extends Error {
   constructor(
@@ -117,26 +27,120 @@ class APIError extends Error {
 }
 
 class DashboardService {
-  async getOfficerDashboard(): Promise<OfficerDashboardData> {
+  async getOfficerDashboard(): Promise<OfficerDashboardData | null> {
+    // Build a role-aware dashboard from real scoped data (daily activity reports),
+    // without relying on a dedicated /dashboard/officer backend endpoint.
+    const user = getActiveUser()
+    const now = new Date()
+
     try {
-      // TODO: Implement officer dashboard endpoint in backend at /dashboard/officer
-      // For now, return mock data since endpoint doesn't exist
-      console.info('ℹ️ [DashboardService] Officer dashboard endpoint not implemented, using mock data');
-      return FALLBACK_OFFICER_DASHBOARD;
-    } catch (error: any) {
-      console.warn('⚠️ [DashboardService] Error with officer dashboard, using fallback');
-      return FALLBACK_OFFICER_DASHBOARD;
+      // Use real Daily Activity Reports for activity & tasks (already scoped by customer/site)
+      const dailyActivities: DailyActivity[] = await customerDashboardService
+        .getDailyActivities()
+        .catch(() => [])
+
+      // Map DailyActivity → Activity (for "Recent Activity")
+      const recentActivities: Activity[] = dailyActivities.slice(0, 8).map((item, index) => ({
+        id: item.id || `activity-${index}`,
+        type: 'report',
+        title: item.type || 'Daily activity report',
+        location: item.location || 'Unspecified location',
+        time: item.time || '',
+        value: undefined,
+        status: item.status === 'completed' ? 'resolved' : 'in-progress'
+      }))
+
+      // Map DailyActivity → Task (for "Upcoming Tasks")
+      const upcomingTasks: Task[] = dailyActivities
+        .filter((item) => item.status === 'in_progress')
+        .slice(0, 6)
+        .map((item, index) => ({
+          id: item.id || `task-${index}`,
+          type: item.type || 'Activity',
+          title: item.location
+            ? `${item.type || 'Activity'} at ${item.location}`
+            : item.type || 'Activity',
+          dueDate: now.toLocaleDateString('en-GB', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric'
+          }),
+          priority: 'medium'
+        }))
+
+      const base: OfficerDashboardData = {
+        name: user.username || (user as any).fullName || user.email || 'Officer',
+        badgeNumber: (user as any).id ?? '',
+        role: (user.role || (user as any).pageAccessRole || 'security-officer').toString(),
+        avatar: (user as any).profilePicture || '',
+        shiftStatus: 'On Duty',
+        shiftStart: now.toISOString(),
+        shiftEnd: new Date(now.getTime() + 8 * 60 * 60 * 1000).toISOString(),
+        location: 'Current assigned store',
+        // Stats are mostly computed on the frontend from incidents; keep these minimal
+        stats: {
+          incidentsThisMonth: 0,
+          incidentsLastMonth: 0,
+          totalValueSaved: 0,
+          expensesYTD: 0,
+          completionRate: 0,
+          holidayBooked: 0,
+          hoursWorked: 0,
+          sitesVisited: 0
+        },
+        monthlyTarget: {
+          incidents: 10,
+          valueSaved: 5000,
+          current: {
+            incidents: 0,
+            valueSaved: 0
+          }
+        },
+        recentActivities,
+        upcomingTasks
+      }
+
+      return base
+    } catch {
+      // Fall back to a minimal, but valid, dashboard shape
+      return {
+        name: user.username || (user as any).fullName || user.email || 'Officer',
+        badgeNumber: (user as any).id ?? '',
+        role: (user.role || (user as any).pageAccessRole || 'security-officer').toString(),
+        avatar: (user as any).profilePicture || '',
+        shiftStatus: 'On Duty',
+        shiftStart: now.toISOString(),
+        shiftEnd: new Date(now.getTime() + 8 * 60 * 60 * 1000).toISOString(),
+        location: 'Current assigned store',
+        stats: {
+          incidentsThisMonth: 0,
+          incidentsLastMonth: 0,
+          totalValueSaved: 0,
+          expensesYTD: 0,
+          completionRate: 0,
+          holidayBooked: 0,
+          hoursWorked: 0,
+          sitesVisited: 0
+        },
+        monthlyTarget: {
+          incidents: 10,
+          valueSaved: 5000,
+          current: {
+            incidents: 0,
+            valueSaved: 0
+          }
+        },
+        recentActivities: [],
+        upcomingTasks: []
+      }
     }
   }
 
   async getRecentIncidents(): Promise<RecentIncident[]> {
     try {
-      // Use the existing incidents endpoint with pagination for recent incidents
-      const response = await api.get<ApiResponse<any>>('/incidents?page=1&pageSize=10');
-      const incidents = response.data?.data || [];
-
-      // Transform backend incident format to frontend RecentIncident format
-      const transformedIncidents: RecentIncident[] = incidents.map((inc: any) => ({
+      const response = await api.get<ApiResponse<any>>('/incidents?page=1&pageSize=10')
+      const incidents = response.data?.data || []
+      return incidents.map((inc: any) => ({
         id: inc.Id || inc.id?.toString() || '',
         customerId: inc.CustomerId || inc.customerId || 0,
         date: inc.DateOfIncident || inc.Date || inc.date || inc.incidentDate || '',
@@ -152,13 +156,9 @@ class DashboardService {
         officerName: inc.OfficerName || inc.officerName || '',
         amount: inc.TotalValueRecovered || inc.Amount || inc.amount || inc.value || 0,
         incidentType: inc.IncidentType || inc.incidentType || inc.type || ''
-      }));
-
-      return transformedIncidents;
-    } catch (error: any) {
-      const message = error?.response?.data?.message || error?.message || 'Failed to fetch recent incidents';
-      console.warn('⚠️ [DashboardService] Falling back to mock incidents:', message);
-      return FALLBACK_RECENT_INCIDENTS;
+      }))
+    } catch {
+      return []
     }
   }
 }
@@ -475,171 +475,6 @@ const calculateIncidentChartData = (incidents: Array<{ date: string; officerRole
   };
 };
 
-// --- Synthetic demo helpers for Customer Dashboard ---
-
-// Lightweight random helpers (non-cryptographic, demo only)
-const demoRandomInt = (min: number, max: number): number => {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-};
-
-const demoRandomFloat = (min: number, max: number): number => {
-  return Math.random() * (max - min) + min;
-};
-
-// Generate synthetic incident time‑series when there is no real data
-const generateSyntheticIncidentChartData = (): {
-  daily: IncidentDataPoint[];
-  weekly: IncidentDataPoint[];
-  monthly: IncidentDataPoint[];
-  yearly: IncidentDataPoint[];
-} => {
-  const now = new Date();
-
-  // Daily – last 30 days
-  const daily: IncidentDataPoint[] = [];
-  for (let i = 29; i >= 0; i--) {
-    const date = new Date(now);
-    date.setDate(date.getDate() - i);
-    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-    const baseUniform = isWeekend ? demoRandomInt(4, 10) : demoRandomInt(2, 7);
-    const baseDetective = isWeekend ? demoRandomInt(2, 6) : demoRandomInt(1, 4);
-    daily.push({
-      date: date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
-      uniformOfficers: baseUniform,
-      storeDetectives: baseDetective
-    });
-  }
-
-  // Weekly – last 12 weeks
-  const weekly: IncidentDataPoint[] = [];
-  for (let i = 11; i >= 0; i--) {
-    const startOfWeek = new Date(now);
-    startOfWeek.setDate(startOfWeek.getDate() - i * 7);
-    const weekLabel = `W${demoRandomInt(1, 52)}`;
-    weekly.push({
-      week: weekLabel,
-      uniformOfficers: demoRandomInt(15, 40),
-      storeDetectives: demoRandomInt(8, 25)
-    });
-  }
-
-  // Monthly – last 12 months
-  const monthly: IncidentDataPoint[] = [];
-  for (let i = 11; i >= 0; i--) {
-    const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const label = date.toLocaleDateString('en-GB', { month: 'short' });
-    monthly.push({
-      month: label,
-      uniformOfficers: demoRandomInt(40, 120),
-      storeDetectives: demoRandomInt(20, 70)
-    });
-  }
-
-  // Yearly – last 4 years
-  const yearly: IncidentDataPoint[] = [];
-  for (let i = 3; i >= 0; i--) {
-    const year = now.getFullYear() - i;
-    yearly.push({
-      year: year.toString(),
-      uniformOfficers: demoRandomInt(400, 1200),
-      storeDetectives: demoRandomInt(200, 700)
-    });
-  }
-
-  return { daily, weekly, monthly, yearly };
-};
-
-// Synthetic top‑level metric cards for Customer Dashboard
-const generateSyntheticStoreMetrics = (storeName: string): {
-  customerhomanager: Metric[];
-  customersitemanager: Metric[];
-} => {
-  const totalIncidents = demoRandomInt(80, 260);
-  const todayIncidents = demoRandomInt(0, 8);
-  const valueRecovered = Math.round(demoRandomFloat(15000, 85000));
-  const resolutionRate = demoRandomInt(70, 98);
-
-  const sharedMetrics: Metric[] = [
-    {
-      title: 'Total Incidents',
-      value: totalIncidents.toLocaleString('en-GB'),
-      change: `${demoRandomInt(5, 25)}% vs last period`,
-      trend: 'up',
-      icon: 'Activity',
-      color: 'blue'
-    },
-    {
-      title: 'Today',
-      value: todayIncidents.toString(),
-      change: `${demoRandomInt(-5, 10)}% vs avg`,
-      trend: todayIncidents >= 3 ? 'up' : 'down',
-      icon: 'AlertCircle',
-      color: 'green'
-    },
-    {
-      title: 'Value Recovered',
-      value: `£${valueRecovered.toLocaleString('en-GB', { maximumFractionDigits: 0 })}`,
-      change: `${demoRandomInt(5, 30)}% this month`,
-      trend: 'up',
-      icon: 'Star',
-      color: 'amber'
-    },
-    {
-      title: 'Resolution Rate',
-      value: `${resolutionRate}%`,
-      change: `${demoRandomInt(-5, 5)} pts vs last month`,
-      trend: resolutionRate >= 85 ? 'up' : 'down',
-      icon: 'Users',
-      color: 'purple'
-    }
-  ];
-
-  // For now both roles see the same synthetic set – can diverge later if needed
-  return {
-    customerhomanager: sharedMetrics,
-    customersitemanager: sharedMetrics
-  };
-};
-
-// Synthetic recent incidents when backend has none
-const generateSyntheticRecentIncidents = (
-  siteName: string,
-  customerId: number
-): RecentIncident[] => {
-  const incidentTypes = ['Theft', 'Shoplifting', 'Anti-social behaviour', 'Suspicious activity'];
-  const officers = ['Uniform Officer', 'Store Detective', 'LPM Officer'];
-
-  const results: RecentIncident[] = [];
-  const now = new Date();
-
-  for (let i = 0; i < 6; i++) {
-    const date = new Date(now);
-    date.setDate(now.getDate() - i * demoRandomInt(1, 3));
-    const value = Math.round(demoRandomFloat(200, 2500));
-    const type = incidentTypes[i % incidentTypes.length];
-    const officerName = officers[i % officers.length];
-
-    results.push({
-      id: `DEMO-${customerId}-${i + 1}`,
-      customerId,
-      date: date.toISOString(),
-      regionId: '',
-      regionName: '',
-      siteId: '',
-      siteName,
-      type,
-      value,
-      assignedTo: officerName,
-      customerName: '',
-      store: siteName,
-      officerName,
-      amount: value,
-      incidentType: type
-    });
-  }
-
-  return results;
-};
 
 const getSites = async (signal?: AbortSignal): Promise<Site[]> => {
   const response = await fetch(`${BASE_API_URL}/dashboard/sites`, { 
@@ -678,7 +513,7 @@ class CustomerDashboardService {
   private baseUrl = BASE_API_URL;
 
   private getHeaders() {
-    const token = localStorage.getItem('authToken');
+    const token = sessionStore.getToken();
     const user = getActiveUser();
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -703,12 +538,6 @@ class CustomerDashboardService {
     if (customerId) {
       headers['X-Customer-Id'] = customerId.toString();
       console.log('🔍 [DashboardService] Setting X-Customer-Id header:', customerId);
-    } else {
-      console.warn('⚠️ [DashboardService] No customerId found in user object:', {
-        user,
-        userRole: user.role || user.Role,
-        localStorageUserRole: sessionStore.getUser()?.role
-      });
     }
     
     return headers;
@@ -911,8 +740,8 @@ class CustomerDashboardService {
           name: siteName,
           customerId: customerId || userCustomerId || 0,
           metrics: {
-            customerhomanager: [],
-            customersitemanager: []
+            manager: [],
+            store: []
           },
           recentIncidents: [],
           incidentData: {
@@ -929,24 +758,12 @@ class CustomerDashboardService {
     
     const effectiveCustomerId = customerId || userCustomerId || 0;
 
-    // Calculate incident chart data – fall back to synthetic if there are no incidents
     const hasRealIncidents = allIncidentsForChart.length > 0;
     const incidentData = hasRealIncidents
       ? calculateIncidentChartData(allIncidentsForChart)
-      : generateSyntheticIncidentChartData();
+      : { daily: [], weekly: [], monthly: [], yearly: [] };
 
-    // Metrics: when we have no real incidents, generate synthetic demo metrics
-    const metrics = hasRealIncidents
-      ? {
-          customerhomanager: [] as Metric[],
-          customersitemanager: [] as Metric[]
-        }
-      : generateSyntheticStoreMetrics(siteName || `Site ${siteIdNum}`);
-
-    // Recent incidents: if backend returned none, generate a small realistic demo set
-    if (!hasRealIncidents && recentIncidents.length === 0) {
-      recentIncidents = generateSyntheticRecentIncidents(siteName || `Site ${siteIdNum}`, effectiveCustomerId);
-    }
+    const metrics = { manager: [] as Metric[], store: [] as Metric[] };
     
     // Transform to CustomerStoreData format
     return {
@@ -993,46 +810,7 @@ class CustomerDashboardService {
       }
       
       if (filteredItems.length === 0) {
-        // No real satisfaction data – generate synthetic scores for demo purposes
-        const sites = await this.getSites(signal);
-        const targetSites = (siteIds && siteIds.length > 0 && siteIds[0] !== 'all')
-          ? sites.filter(site => siteIds.includes(site.id))
-          : sites.slice(0, 6);
-        
-        if (targetSites.length === 0) {
-          return [];
-        }
-
-        const monthsToGenerate = 6;
-        const now = new Date();
-        const synthetic: SatisfactionDataPoint[] = [];
-
-        targetSites.forEach((site) => {
-          for (let i = 0; i < monthsToGenerate; i++) {
-            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-            const monthLabel = d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
-            const score = Math.round(demoRandomFloat(3.4, 4.8) * 10) / 10;
-
-            synthetic.push({
-              id: `${site.id}-${monthLabel}`,
-              customerId: customerId || 0,
-              month: monthLabel,
-              score,
-              siteName: site.locationName,
-              siteId: site.id
-            });
-          }
-        });
-
-        // Sort most recent first, then by site name
-        return synthetic.sort((a, b) => {
-          const dateA = new Date(a.month);
-          const dateB = new Date(b.month);
-          if (dateB.getTime() !== dateA.getTime()) {
-            return dateB.getTime() - dateA.getTime();
-          }
-          return (a.siteName || '').localeCompare(b.siteName || '');
-        });
+        return [];
       }
       
       // Transform CustomerSatisfactionSurvey to SatisfactionDataPoint format
@@ -1263,31 +1041,8 @@ class CustomerDashboardService {
         }
       });
       
-      // If no usable Be Safe data, generate a synthetic compliance trend
       if (items.length === 0 || monthlyData.size === 0) {
-        const monthsToGenerate = 12;
-        const now = new Date();
-        const synthetic: BeSafeDataPoint[] = [];
-
-        for (let i = monthsToGenerate - 1; i >= 0; i--) {
-          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-          const monthLabel = d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
-
-          const complianceBase = demoRandomFloat(78, 96);
-          const systemsBase = demoRandomFloat(82, 98);
-          const insecureBase = 100 - complianceBase + demoRandomFloat(-5, 5);
-
-          synthetic.push({
-            id: `${customerId || 0}-${monthLabel}`,
-            customerId: customerId || 0,
-            month: monthLabel,
-            insecureAreas: Math.max(0, Math.min(100, Math.round(insecureBase))),
-            compliance: Math.max(0, Math.min(100, Math.round(complianceBase))),
-            systems: Math.max(0, Math.min(100, Math.round(systemsBase)))
-          });
-        }
-
-        return synthetic;
+        return [];
       }
 
       // Convert to BeSafeDataPoint array
@@ -1432,8 +1187,8 @@ class CustomerDashboardService {
           name: `Aggregated (${sites.length} sites)`,
           customerId: customerId || 0,
           metrics: {
-            customerhomanager: [],
-            customersitemanager: []
+            manager: [],
+            store: []
           },
           recentIncidents: [],
           incidentData: {
@@ -1450,22 +1205,14 @@ class CustomerDashboardService {
     
     const effectiveCustomerId = customerId || 0;
 
-    // Calculate incident chart data – or fall back to synthetic when everything is empty
     const hasRealIncidents = allIncidentsForChart.length > 0;
     const incidentData = hasRealIncidents
       ? calculateIncidentChartData(allIncidentsForChart)
-      : generateSyntheticIncidentChartData();
+      : { daily: [], weekly: [], monthly: [], yearly: [] };
 
-    const metrics = hasRealIncidents
-      ? {
-          customerhomanager: [] as Metric[],
-          customersitemanager: [] as Metric[]
-        }
-      : generateSyntheticStoreMetrics(`Aggregated (${sites.length} sites)`);
+    const metrics = { manager: [] as Metric[], store: [] as Metric[] };
 
-    const recent = hasRealIncidents && allIncidents.length > 0
-      ? allIncidents.slice(0, 10)
-      : generateSyntheticRecentIncidents(`Aggregated (${sites.length} sites)`, effectiveCustomerId);
+    const recent = allIncidents.slice(0, 10);
     
     // Return aggregated data
     return {

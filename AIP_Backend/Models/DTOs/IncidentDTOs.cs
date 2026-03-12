@@ -3,6 +3,7 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System;
+using System.Text.Json.Serialization;
 
 namespace AIPBackend.Models.DTOs
 {
@@ -45,7 +46,8 @@ namespace AIPBackend.Models.DTOs
 		public string CustomerName { get; set; } = string.Empty;
 
 		// Location information
-		public string SiteName { get; set; } = string.Empty;
+		[JsonPropertyName("siteName")]
+		public string StoreName { get; set; } = string.Empty;
 		public string? SiteId { get; set; }
 		public string? RegionId { get; set; }
 		public string? RegionName { get; set; }
@@ -53,8 +55,10 @@ namespace AIPBackend.Models.DTOs
 		public string? Store { get; set; }
 
 		// Personnel information
-		public string OfficerName { get; set; } = string.Empty;
-		public string? OfficerRole { get; set; }
+		[JsonPropertyName("officerName")]
+		public string StaffMemberName { get; set; } = string.Empty;
+		[JsonPropertyName("officerRole")]
+		public string? StaffMemberRole { get; set; }
 		public string? OfficerType { get; set; }
 		public string? DutyManagerName { get; set; }
 		public string? AssignedTo { get; set; }
@@ -70,6 +74,13 @@ namespace AIPBackend.Models.DTOs
 		public string? Type { get; set; }
 		public string? ActionCode { get; set; }
 		public List<string>? IncidentInvolved { get; set; }
+
+		// AI-assisted classification
+		public string? IncidentCategory { get; set; }
+		public double? IncidentCategoryConfidence { get; set; }
+		public string? RiskLevel { get; set; }
+		public double? RiskScore { get; set; }
+		public string? ClassificationVersion { get; set; }
 
 		// Description and details
 		public string? Description { get; set; }
@@ -103,13 +114,19 @@ namespace AIPBackend.Models.DTOs
 		public string? ReportNumber { get; set; }
 
 		// Offender information
+		public string? OffenderId { get; set; }
 		public string? OffenderName { get; set; }
 		public string? OffenderSex { get; set; }
 		public string? Gender { get; set; }
 		public string? OffenderDOB { get; set; }
 		public string? OffenderPlaceOfBirth { get; set; }
 		public string? OffenderMarks { get; set; }
+		public bool? OffenderDetailsVerified { get; set; }
+		public string? VerificationMethod { get; set; }
+		public string? VerificationEvidenceImage { get; set; }
 		public OffenderAddressDto? OffenderAddress { get; set; }
+
+		public List<string>? ModusOperandi { get; set; }
 
 		// Special fields
 		public string? ArrestSaveComment { get; set; }
@@ -162,7 +179,8 @@ namespace AIPBackend.Models.DTOs
 		// Location information
 		[Required]
 		[MaxLength(200)]
-		public string SiteName { get; set; } = string.Empty;
+		[JsonPropertyName("siteName")]
+		public string StoreName { get; set; } = string.Empty;
 
 		public string? RegionName { get; set; }
 		public string? Location { get; set; }
@@ -170,10 +188,12 @@ namespace AIPBackend.Models.DTOs
 		// Personnel information
 		[Required]
 		[MaxLength(200)]
-		public string OfficerName { get; set; } = string.Empty;
+		[JsonPropertyName("officerName")]
+		public string StaffMemberName { get; set; } = string.Empty;
 
 		[MaxLength(100)]
-		public string? OfficerRole { get; set; }
+		[JsonPropertyName("officerRole")]
+		public string? StaffMemberRole { get; set; }
 
 		[MaxLength(50)]
 		public string? OfficerType { get; set; }
@@ -250,6 +270,9 @@ namespace AIPBackend.Models.DTOs
 		public string? ReportNumber { get; set; }
 
 		// Offender information
+		[MaxLength(100)]
+		public string? OffenderId { get; set; }
+
 		[MaxLength(200)]
 		public string? OffenderName { get; set; }
 
@@ -267,7 +290,16 @@ namespace AIPBackend.Models.DTOs
 		[MaxLength(500)]
 		public string? OffenderMarks { get; set; }
 
+		public bool OffenderDetailsVerified { get; set; } = false;
+
+		[MaxLength(100)]
+		public string? VerificationMethod { get; set; }
+
+		public string? VerificationEvidenceImage { get; set; }
+
 		public OffenderAddressDto? OffenderAddress { get; set; }
+
+		public List<string>? ModusOperandi { get; set; }
 
 		// Special fields
 		[MaxLength(2000)]
@@ -307,6 +339,9 @@ namespace AIPBackend.Models.DTOs
 		public string IncidentType { get; set; } = string.Empty;
 		public string? Description { get; set; }
 		public string? OffenderMarks { get; set; }
+		public bool? OffenderDetailsVerified { get; set; }
+		public string? VerificationMethod { get; set; }
+		public string? VerificationEvidenceImage { get; set; }
 	}
 
 	public class RepeatOffenderMatchDto
