@@ -82,6 +82,7 @@ namespace AIPBackend.Services
                     Host = smtpHost,
                     Port = port,
                     EnableSsl = enableSsl,
+                    UseDefaultCredentials = false,
                     Credentials = new NetworkCredential(
                         smtpUsername,
                         smtpPassword
