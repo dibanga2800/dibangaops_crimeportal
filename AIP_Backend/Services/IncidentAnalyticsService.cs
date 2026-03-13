@@ -27,8 +27,12 @@ namespace AIPBackend.Services
 			DateTime? from = null,
 			DateTime? to = null)
 		{
-			var effectiveFrom = from ?? DateTime.UtcNow.AddDays(-90);
-			var effectiveTo = to ?? DateTime.UtcNow;
+			// Treat 'from' and 'to' as whole-calendar-day bounds.
+			// 'from' is inclusive from midnight; 'to' is inclusive through the end of that day.
+			var fromDate = (from ?? DateTime.UtcNow.AddDays(-90)).Date;
+			var toDateInclusive = (to ?? DateTime.UtcNow).Date;
+			var effectiveFrom = fromDate;
+			var effectiveTo = toDateInclusive.AddDays(1).AddTicks(-1);
 
 			var incidents = await _repository.GetAllForStatsAsync(customerId, siteId, regionId);
 			var filtered = incidents
@@ -217,14 +221,17 @@ namespace AIPBackend.Services
 			DateTime? from = null,
 			DateTime? to = null)
 		{
-			var effectiveFrom = from ?? DateTime.UtcNow.AddDays(-90);
-			var effectiveTo = to ?? DateTime.UtcNow;
+			// Treat 'from' and 'to' as calendar dates; include the full 'to' day.
+			var fromDate = (from ?? DateTime.UtcNow.AddDays(-90)).Date;
+			var toDateInclusive = (to ?? DateTime.UtcNow).Date;
+			var effectiveFrom = fromDate;
+			var effectiveTo = toDateInclusive.AddDays(1).AddTicks(-1);
 
 			var filtered = await _repository.GetAllForStatsAsync(customerId, siteId, regionId, effectiveFrom, effectiveTo);
 
 			var total = filtered.Count;
-			var fromStr = effectiveFrom.ToString("yyyy-MM-dd");
-			var toStr = effectiveTo.ToString("yyyy-MM-dd");
+			var fromStr = fromDate.ToString("yyyy-MM-dd");
+			var toStr = toDateInclusive.ToString("yyyy-MM-dd");
 
 			var crimeTrends = BuildCrimeTrends(filtered, total, fromStr, toStr);
 			var hotProducts = BuildHotProducts(filtered, fromStr, toStr);

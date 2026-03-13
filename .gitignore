@@ -141,3 +141,7 @@ vite.config.ts.timestamp-*
 # Editor / AI assistant artefacts
 .cursor/
 assets/
+
+# Backend configuration (contains secrets per environment)
+AIP_Backend/appsettings.Development.json
+AIP_Backend/appsettings.Production.json

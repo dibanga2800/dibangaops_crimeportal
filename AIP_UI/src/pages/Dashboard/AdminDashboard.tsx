@@ -632,7 +632,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
         // Priority order for site name: SiteName > LocationName > siteName > locationName
         const transformedIncidents = incidents.map((inc: any) => {
           const siteName = inc.SiteName || inc.LocationName || inc.siteName || inc.locationName || inc.Location || '';
-          
+
           return {
             id: inc.Id || inc.id || '',
             customerId: inc.CustomerId || inc.customerId || 0,
@@ -676,6 +676,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
             offenderMarks: inc.OffenderMarks || inc.offenderMarks || '',
             offenderAddress: inc.OffenderAddress || inc.offenderAddress || undefined,
             dateInputted: inc.DateInputted || inc.dateInputted || '',
+            // AI-assisted classification (for AI Insight column)
+            incidentCategory: inc.IncidentCategory || inc.incidentCategory || undefined,
+            incidentCategoryConfidence:
+              typeof inc.IncidentCategoryConfidence === 'number'
+                ? inc.IncidentCategoryConfidence
+                : typeof inc.incidentCategoryConfidence === 'number'
+                ? inc.incidentCategoryConfidence
+                : undefined,
+            riskLevel: (inc.RiskLevel || inc.riskLevel || '').toLowerCase() || undefined,
+            riskScore:
+              typeof inc.RiskScore === 'number'
+                ? inc.RiskScore
+                : typeof inc.riskScore === 'number'
+                ? inc.riskScore
+                : undefined,
+            classificationVersion: inc.ClassificationVersion || inc.classificationVersion || undefined,
           };
         });
 
@@ -938,7 +954,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
           officerName: incident.officerName,
           date: incident.dateOfIncident,
           amount: incident.totalValueRecovered || incident.value || 0,
-          incidentType: incident.incidentType
+          incidentType: incident.incidentType,
+          incidentCategory: incident.incidentCategory,
+          incidentCategoryConfidence: incident.incidentCategoryConfidence,
+          riskLevel: incident.riskLevel,
+          riskScore: incident.riskScore,
         }))
     }
 

@@ -178,6 +178,60 @@ Build output is written to `AIP_UI/dist`.
 
 ---
 
+## System architecture
+
+At a high level the system is a **two-tier web application** with an opinionated AI services layer inside the backend:
+
+```text
+Browser (React + Vite SPA)
+    │
+    │  HTTPS / JSON (JWT-authenticated)
+    ▼
+ASP.NET Core API (AIP_Backend)
+    ├─ Controllers
+    │    ├─ Auth, Users, Incidents, Analytics
+    │    └─ AI endpoints (classification, analytics, offender recognition, evidence)
+    ├─ Services
+    │    ├─ Domain services (incidents, alerts, users, products, reports)
+    │    ├─ AI services
+    │    │    ├─ IIncidentClassifier → AzureOpenAiIncidentClassifier + RuleBasedIncidentClassifier
+    │    │    ├─ IIncidentAnalyticsService / IRiskScoringService / IIncidentPatternService
+    │    │    └─ IOffenderRecognitionService (computer-vision offender matching)
+    │    └─ Infrastructure (email, login protection, seeding, context)
++    ├─ Data
+    │    ├─ ApplicationDbContext (EF Core)
+    │    ├─ Migrations
+    │    └─ Repositories for complex queries
+    └─ MSSQL Database
+         ├─ Core tables (Incidents, Products, Users, Sites, Regions, etc.)
+         ├─ AI tables (StoreRiskScore, FaceEmbedding, AlertInstances, EvidenceItems)
+         └─ Lookup tables and audit fields
+```
+
+- **Frontend (`AIP_UI`)**
+  - React + TypeScript SPA built with Vite.
+  - Uses Axios + a typed API/config layer for all calls into `AIP_Backend`.
+  - Auth handled via `AuthContext` + `sessionStore` with JWTs and refresh tokens.
+  - Role- and page-based access enforced by `PageAccessContext`, `ProtectedRoute`, and server-side policies.
+  - AI outputs are surfaced via:
+    - AI badges (incident classification + risk) on dashboards/incident tables.
+    - AI Risk Engine and analytics widgets in the Data Analytics Hub.
+    - Visual offender search and repeat-offender intelligence inside the Incident form.
+
+- **Backend (`AIP_Backend`)**
+  - ASP.NET Core Web API with EF Core + MSSQL.
+  - Clean separation between:
+    - Controllers (HTTP boundary).
+    - Services (business logic and AI orchestration).
+    - Data layer (DbContext, repositories, migrations).
+  - AI service layer:
+    - `AzureOpenAiClient` and `AzureOpenAiIncidentClassifier` for incident classification (category, risk, confidence, actions).
+    - `IncidentAnalyticsService` / `RiskScoringService` / `IncidentPatternService` for pattern detection and store risk scores.
+    - `OffenderRecognitionService` for offender image indexing and matching (model-agnostic CV integration).
+  - All configuration (DB, email, AI providers, IIS/hosting) is driven via `appsettings.*.json` and environment variables.
+
+---
+
 ## Project structure (frontend)
 
 ```text
