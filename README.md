@@ -96,7 +96,7 @@ The frontend is a **React + Vite + TypeScript** SPA, backed by a **.NET + MSSQL*
 ### Clone
 
 ```bash
-git clone https://github.com/dibanga2800/COOP_AIP.git
+git clone https://github.com/dibanga2800/crime-portal-ai.git
 cd COOP_AIP
 ```
 
@@ -273,7 +273,7 @@ This is an actively developed production application; the README reflects the cu
 
 1. **Clone the repository:**
 ```bash
-git clone https://github.com/advantageonesecurity/COOP_AIP.git
+git clone https://github.com/dibanga2800/crime-portal-ai.git
 ```
 
 2. **Install Frontend Dependencies:**
