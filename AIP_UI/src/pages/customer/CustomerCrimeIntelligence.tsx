@@ -33,7 +33,7 @@ import {
 
 import { useAuth } from '@/contexts/AuthContext'
 import { useCustomerSelection } from '@/contexts/CustomerSelectionContext'
-import { findCustomerById } from '@/hooks/useAvailableCustomers'
+import { useAvailableCustomers, findCustomerById } from '@/hooks/useAvailableCustomers'
 import { siteService } from '@/services/siteService'
 import { incidentGraphService, type RegionOption } from '@/services/incidentGraphService'
 import { incidentsApi } from '@/services/api/incidents'
@@ -727,7 +727,8 @@ export default function CustomerCrimeIntelligence() {
 	const [searchParams] = useSearchParams()
 	const { toast } = useToast()
 	const { user, isLoading: authLoading } = useAuth()
-	const { isAdmin, selectedCustomerId: contextCustomerId } = useCustomerSelection()
+	const { isAdmin, selectedCustomerId: contextCustomerId, setSelectedCustomerId } = useCustomerSelection()
+	const { availableCustomers, isLoading: loadingCustomers } = useAvailableCustomers()
 
 	const [customer, setCustomer] = useState<{ id: number; name: string } | null>(null)
 	const [sites, setSites] = useState<Site[]>([])
@@ -746,6 +747,7 @@ export default function CustomerCrimeIntelligence() {
 	const [loadingInsights, setLoadingInsights] = useState(false)
 	const [pageError, setPageError] = useState<string | null>(null)
 	const [isResolvingCustomer, setIsResolvingCustomer] = useState(true)
+	const [selectedCustomerForAdmin, setSelectedCustomerForAdmin] = useState<number | null>(null)
 
 	const urlCustomerId = searchParams.get('customerId')
 	const urlSiteId = searchParams.get('siteId')
@@ -756,6 +758,12 @@ export default function CustomerCrimeIntelligence() {
 		if (user && 'customerId' in user) return (user as any).customerId ?? 1
 		return 1
 	}, [urlCustomerId, isAdmin, contextCustomerId, user])
+
+	useEffect(() => {
+		if (!isAdmin) return
+		if (!resolvedCustomerId) return
+		setSelectedCustomerForAdmin(resolvedCustomerId)
+	}, [isAdmin, resolvedCustomerId])
 
 	const loadCustomer = useCallback(async () => {
 		if (authLoading) return
@@ -933,6 +941,35 @@ export default function CustomerCrimeIntelligence() {
 						<p className="text-sm text-slate-500">
 							Live incident telemetry across stores, products, and time-of-day patterns.
 						</p>
+						{isAdmin && (
+							<div className="mt-3 max-w-xs">
+								<p className="text-xs font-medium text-slate-500 mb-1">Customer</p>
+								<Select
+									disabled={loadingCustomers || availableCustomers.length === 0}
+									value={selectedCustomerForAdmin?.toString() ?? ''}
+									onValueChange={value => {
+										const id = parseInt(value, 10)
+										setSelectedCustomerForAdmin(id)
+										setSelectedCustomerId(id)
+										const params = new URLSearchParams(searchParams)
+										params.set('customerId', value)
+										navigate({ search: params.toString() }, { replace: true })
+										setFiltersVersion(v => v + 1)
+									}}
+								>
+									<SelectTrigger className="h-9 text-sm">
+										<SelectValue placeholder={loadingCustomers ? 'Loading customers…' : 'Select customer'} />
+									</SelectTrigger>
+									<SelectContent>
+										{availableCustomers.map(c => (
+											<SelectItem key={c.id} value={c.id.toString()}>
+												{c.name}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+							</div>
+						)}
 					</div>
 					<Button
 						variant="outline"

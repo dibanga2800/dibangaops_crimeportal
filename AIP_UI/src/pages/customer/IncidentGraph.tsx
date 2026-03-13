@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -31,6 +31,8 @@ import {
 } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
+import { useCustomerSelection } from '@/contexts/CustomerSelectionContext'
+import { useAvailableCustomers } from '@/hooks/useAvailableCustomers'
 import {
 	incidentGraphService,
 	type IncidentGraphData,
@@ -163,15 +165,21 @@ const formatCurrency = (value: number, compact = false): string => {
 
 const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 	const { user } = useAuth()
-	const [searchParams] = useSearchParams()
+	const { isAdmin, selectedCustomerId: contextCustomerId, setSelectedCustomerId } = useCustomerSelection()
+	const { availableCustomers, isLoading: loadingCustomers } = useAvailableCustomers()
+	const [searchParams, setSearchParams] = useSearchParams()
+	const navigate = useNavigate()
 
 	const urlCustomerId = searchParams.get('customerId')
 	const userCustomerId = user && 'customerId' in user ? (user as any).customerId : undefined
-	const currentCustomerId = customerId
-		? parseInt(customerId)
-		: urlCustomerId
-			? parseInt(urlCustomerId)
-			: userCustomerId || 1
+
+	const currentCustomerId = useMemo(() => {
+		if (customerId) return parseInt(customerId)
+		if (urlCustomerId) return parseInt(urlCustomerId)
+		if (isAdmin && contextCustomerId) return contextCustomerId
+		if (userCustomerId) return typeof userCustomerId === 'string' ? parseInt(userCustomerId, 10) : userCustomerId
+		return 1
+	}, [customerId, urlCustomerId, isAdmin, contextCustomerId, userCustomerId])
 
 	// ── Responsive state ──────────────────────────────────────────────────────
 
@@ -198,6 +206,7 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 	const [customerName, setCustomerName] = useState<string>('')
 	const [totalSaved, setTotalSaved] = useState(0)
 	const [filteredTotal, setFilteredTotal] = useState(0)
+	const [selectedCustomerForAdmin, setSelectedCustomerForAdmin] = useState<number | null>(null)
 
 	// ── Loading / error state ─────────────────────────────────────────────────
 
@@ -249,6 +258,14 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 		window.addEventListener('resize', handleResize)
 		return () => window.removeEventListener('resize', handleResize)
 	}, [])
+
+	// ── Initial customer sync for admins ───────────────────────────────────────
+
+	useEffect(() => {
+		if (!isAdmin) return
+		if (!currentCustomerId) return
+		setSelectedCustomerForAdmin(currentCustomerId)
+	}, [isAdmin, currentCustomerId])
 
 	// ── Data fetching ─────────────────────────────────────────────────────────
 
@@ -456,16 +473,47 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 							<p className="text-slate-400 mt-1 text-sm sm:text-base">
 								Track and analyse security incidents across locations
 							</p>
-							{customerName && (
-								<div className="flex flex-wrap items-center gap-2 mt-3">
-									<span className="bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-sm font-medium px-3 py-1 rounded-full">
-										{customerName}
-									</span>
-									<span className="bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-sm font-medium px-3 py-1 rounded-full">
-										ID: {currentCustomerId}
-									</span>
-								</div>
-							)}
+							<div className="flex flex-wrap items-center gap-2 mt-3">
+								{isAdmin ? (
+									<Select
+										disabled={loadingCustomers || availableCustomers.length === 0}
+										value={selectedCustomerForAdmin?.toString() ?? ''}
+										onValueChange={value => {
+											const id = parseInt(value, 10)
+											setSelectedCustomerForAdmin(id)
+											setSelectedCustomerId(id)
+											const params = new URLSearchParams(searchParams)
+											params.set('customerId', value)
+											setSearchParams(params, { replace: true })
+											setFiltersVersion(v => v + 1)
+										}}
+									>
+										<SelectTrigger className="h-9 min-w-[200px] bg-slate-900/60 border-slate-700 text-slate-50 text-sm">
+											<SelectValue placeholder={loadingCustomers ? 'Loading customers…' : 'Select customer'} />
+										</SelectTrigger>
+										<SelectContent className="bg-slate-900 border-slate-700 text-slate-50 text-sm max-h-72">
+											{availableCustomers.map(c => (
+												<SelectItem key={c.id} value={c.id.toString()}>
+													{c.name}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								) : (
+									<>
+										{customerName && (
+											<span className="bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-sm font-medium px-3 py-1 rounded-full">
+												{customerName}
+											</span>
+										)}
+										{currentCustomerId && (
+											<span className="bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-sm font-medium px-3 py-1 rounded-full">
+												ID: {currentCustomerId}
+											</span>
+										)}
+									</>
+								)}
+							</div>
 						</div>
 						<div className="bg-slate-800/80 p-4 sm:p-6 rounded-xl border border-white/10 w-full lg:w-auto">
 							<h2 className="text-sm sm:text-base font-semibold text-slate-300 leading-tight">

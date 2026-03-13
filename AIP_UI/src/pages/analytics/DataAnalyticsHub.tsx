@@ -49,6 +49,7 @@ import { cn } from '@/lib/utils'
 import { customerDashboardService } from '@/services/dashboardService'
 import type { Region, Site } from '@/types/dashboard'
 import { useCustomerSelection } from '@/contexts/CustomerSelectionContext'
+import { useAvailableCustomers } from '@/hooks/useAvailableCustomers'
 import { MapPin, Building2 } from 'lucide-react'
 
 const DataAnalyticsHub = () => {
@@ -67,7 +68,9 @@ const DataAnalyticsHub = () => {
 	const [selectedRegionId, setSelectedRegionId] = useState<string>('all')
 	const [selectedStoreId, setSelectedStoreId] = useState<string>('all')
 	const [loadingFilters, setLoadingFilters] = useState(true)
-	const { selectedCustomerId } = useCustomerSelection()
+	const { isAdmin, selectedCustomerId, setSelectedCustomerId } = useCustomerSelection()
+	const { availableCustomers, isLoading: loadingCustomers } = useAvailableCustomers()
+	const [selectedCustomerForAdmin, setSelectedCustomerForAdmin] = useState<number | null>(null)
 
 	// Load filters (regions and sites)
 	useEffect(() => {
@@ -98,6 +101,26 @@ const DataAnalyticsHub = () => {
 		loadFilters()
 	}, [])
 
+	// Sync effective customer for admins based on URL or context
+	const urlCustomerId = searchParams.get('customerId')
+
+	const effectiveCustomerId = useMemo(() => {
+		if (urlCustomerId) {
+			const id = parseInt(urlCustomerId, 10)
+			return Number.isNaN(id) ? undefined : id
+		}
+		return selectedCustomerId ?? undefined
+	}, [urlCustomerId, selectedCustomerId])
+
+	useEffect(() => {
+		if (!isAdmin) return
+		if (!effectiveCustomerId) return
+		setSelectedCustomerForAdmin(effectiveCustomerId)
+		if (selectedCustomerId !== effectiveCustomerId) {
+			setSelectedCustomerId(effectiveCustomerId)
+		}
+	}, [isAdmin, effectiveCustomerId, selectedCustomerId, setSelectedCustomerId])
+
 	// Filter sites by selected region
 	const filteredSites = useMemo(() => {
 		if (selectedRegionId === 'all') {
@@ -119,7 +142,7 @@ const DataAnalyticsHub = () => {
 			const params = {
 				startDate: dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : undefined,
 				endDate: dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined,
-				customerId: selectedCustomerId || undefined,
+				customerId: effectiveCustomerId,
 				regionIds: selectedRegionId !== 'all' ? [Number(selectedRegionId)] : undefined,
 				storeIds: selectedStoreId !== 'all' ? [Number(selectedStoreId)] : undefined,
 			}
@@ -141,7 +164,7 @@ const DataAnalyticsHub = () => {
 		} finally {
 			setLoading(false)
 		}
-	}, [dateRange, selectedRegionId, selectedStoreId, selectedCustomerId, toast])
+	}, [dateRange, selectedRegionId, selectedStoreId, effectiveCustomerId, toast])
 
 	useEffect(() => {
 		// Load analytics data immediately; filters (regions/sites) load in parallel
@@ -251,19 +274,52 @@ const DataAnalyticsHub = () => {
 					<CardHeader className="p-4 sm:p-6 overflow-x-hidden">
 						<div className="flex flex-col gap-4 w-full">
 							<div className="min-w-0">
-								<CardTitle className="flex items-center gap-2 text-lg sm:text-xl md:text-2xl text-slate-900">
-									<BarChart3 className="h-5 w-5 sm:h-6 sm:w-6 text-indigo-500" />
-									Crime Analytics &amp; AI Hub
-								</CardTitle>
-								<CardDescription className="mt-1 sm:mt-2 text-xs sm:text-sm text-slate-600">
-									Comprehensive crime analytics, AI-driven risk insights, and repeat offender intelligence.
-									{(selectedRegionId !== 'all' || selectedStoreId !== 'all') && (
-										<span className="block mt-1 text-xs text-indigo-600">
-											Filters: {selectedRegionId !== 'all' && 'Region • '}
-											{selectedStoreId !== 'all' && 'Store'}
-										</span>
+								<div className="flex flex-col gap-2 sm:gap-3">
+									<CardTitle className="flex items-center gap-2 text-lg sm:text-xl md:text-2xl text-slate-900">
+										<BarChart3 className="h-5 w-5 sm:h-6 sm:w-6 text-indigo-500" />
+										Crime Analytics &amp; AI Hub
+									</CardTitle>
+									<CardDescription className="text-xs sm:text-sm text-slate-600">
+										Comprehensive crime analytics, AI-driven risk insights, and repeat offender intelligence.
+										{(selectedRegionId !== 'all' || selectedStoreId !== 'all') && (
+											<span className="block mt-1 text-xs text-indigo-600">
+												Filters: {selectedRegionId !== 'all' && 'Region • '}
+												{selectedStoreId !== 'all' && 'Store'}
+											</span>
+										)}
+									</CardDescription>
+									{isAdmin && (
+										<div className="mt-1 max-w-xs">
+											<p className="text-[11px] sm:text-xs font-medium text-slate-600 mb-1">
+												Customer
+											</p>
+											<Select
+												disabled={loadingCustomers || availableCustomers.length === 0}
+												value={selectedCustomerForAdmin?.toString() ?? ''}
+												onValueChange={value => {
+													const id = parseInt(value, 10)
+													setSelectedCustomerForAdmin(id)
+													setSelectedCustomerId(id)
+													const params = new URLSearchParams(searchParams)
+													params.set('customerId', value)
+													setSearchParams(params, { replace: true })
+													loadData()
+												}}
+											>
+												<SelectTrigger className="h-9 text-xs sm:text-sm w-full sm:w-64">
+													<SelectValue placeholder={loadingCustomers ? 'Loading customers…' : 'Select customer'} />
+												</SelectTrigger>
+												<SelectContent>
+													{availableCustomers.map(c => (
+														<SelectItem key={c.id} value={c.id.toString()}>
+															{c.name}
+														</SelectItem>
+													))}
+												</SelectContent>
+											</Select>
+										</div>
 									)}
-								</CardDescription>
+								</div>
 							</div>
 							
 							{/* Filters Section */}
