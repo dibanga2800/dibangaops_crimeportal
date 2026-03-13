@@ -335,7 +335,7 @@ export default function LoginPage() {
 											className="h-10 sm:h-11 w-auto drop-shadow-sm"
 										/>
 									</div>
-									<h2 className="text-[1.7rem] font-extrabold tracking-tight text-gray-900 text-center">
+									<h2 className="text-[1.4rem] font-extrabold tracking-tight text-gray-900 text-center">
 										Sign in to your crime intelligence workspace
 									</h2>
 									<p className="mt-2 text-[13.5px] text-gray-500 leading-relaxed text-center">
