@@ -408,14 +408,14 @@ namespace AIPBackend.Services
 			
 			// Action Note
 			sb.AppendLine("<div class=\"note\">");
-			sb.AppendLine("<strong>Recommended Action:</strong> Please review this incident in the DibangOps portal and take appropriate action based on your organisation's security protocols.");
+			sb.AppendLine("<strong>Recommended Action:</strong> Please review this incident in the Crime Portal and take appropriate action based on your organisation's security protocols.");
 			sb.AppendLine("</div>");
 			
 			sb.AppendLine("</div>");
 			
 			// Footer
 			sb.AppendLine("<div class=\"footer\">");
-			sb.AppendLine("<p>This is an automated notification from the <strong>DibangOps&trade;</strong> Alert System.</p>");
+			sb.AppendLine("<p>This is an automated notification from the <strong>Crime Portal Alert System</strong>.</p>");
 			sb.AppendLine("<p>Please do not reply to this message.</p>");
 			sb.AppendLine("<p>&copy; " + DateTime.Now.Year + " David Ibanga. All rights reserved.</p>");
 			sb.AppendLine("</div>");
@@ -434,7 +434,7 @@ namespace AIPBackend.Services
 				subject,
 				body,
 				isHtml: true,
-				fromName: "DibangOps Alert System");
+				fromName: "Crime Portal Alert System");
 
 			if (success)
 			{
