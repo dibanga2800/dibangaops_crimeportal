@@ -15,9 +15,9 @@ const POLL_START_DELAY_MS = 1200
 
 /**
  * Guided face capture: video with live overlay.
- * - Red oval when no face detected
- * - Green oval when face detected
- * - Auto-captures when face is detected for FACE_STABLE_FRAMES consecutive polls
+ * - Red oval when no face (or face not fully inside oval)
+ * - Green oval when face is fully inside the oval
+ * - Auto-captures when face is 100% inside oval for FACE_STABLE_FRAMES consecutive polls
  */
 export const FaceCaptureGuide: React.FC<FaceCaptureGuideProps> = ({
 	videoRef,
@@ -94,11 +94,11 @@ export const FaceCaptureGuide: React.FC<FaceCaptureGuideProps> = ({
 				ctx.font = '14px system-ui, sans-serif'
 				ctx.fillStyle = 'rgba(239, 68, 68, 0.9)'
 				ctx.textAlign = 'center'
-				ctx.fillText('Position face in oval', cx, cy + ry + 24)
+				ctx.fillText('Position face fully inside oval', cx, cy + ry + 24)
 			} else {
 				ctx.font = 'bold 14px system-ui, sans-serif'
 				ctx.fillStyle = '#22c55e'
-				ctx.fillText('Face detected – hold steady', cx, cy + ry + 24)
+				ctx.fillText('Face in oval – hold steady to capture', cx, cy + ry + 24)
 			}
 		}
 
@@ -140,9 +140,14 @@ export const FaceCaptureGuide: React.FC<FaceCaptureGuideProps> = ({
 				return
 			}
 
+			// Pass capture dimensions so backend can require face fully inside the guide oval (green + auto-snap)
+			const canvas = captureCanvasRef.current
+			const imageWidth = canvas?.width ?? 0
+			const imageHeight = canvas?.height ?? 0
+
 			let detected = false
 			try {
-				const result = await offenderRecognitionApi.detectOnly(dataUrl)
+				const result = await offenderRecognitionApi.detectOnly(dataUrl, imageWidth, imageHeight)
 				detected = result?.faceDetected === true || (result as { FaceDetected?: boolean })?.FaceDetected === true
 				if (import.meta.env.DEV) {
 					console.log('[FaceCaptureGuide] detect-only result:', { detected, raw: result })
@@ -240,8 +245,8 @@ export const FaceCaptureGuide: React.FC<FaceCaptureGuideProps> = ({
 			</div>
 			<p className="text-[11px] text-center text-gray-600">
 				{faceDetected
-					? 'Face detected – holding steady will capture automatically'
-					: 'Position your face in the red oval. Turn green to auto-capture.'}
+					? 'Face in oval – hold steady to auto-capture'
+					: 'Position your face fully inside the red oval. Green = ready; auto-snap when stable.'}
 			</p>
 			{import.meta.env.DEV && (
 				<p className="text-[10px] text-center text-amber-600">

@@ -65,9 +65,14 @@ namespace AIPBackend.Services
 		Task<ReindexResultDto> ReindexVerificationEvidenceAsync(CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Detect if a face is present in the image. Lightweight check for guided capture UX.
+		/// Detect if a face is present in the image. When imageWidth and imageHeight are provided,
+		/// returns true only when a detected face is fully inside the guide oval (green overlay / auto-capture).
 		/// </summary>
-		Task<OffenderMatchResultDto> DetectFaceOnlyAsync(byte[] imageBytes, CancellationToken cancellationToken = default);
+		Task<OffenderMatchResultDto> DetectFaceOnlyAsync(
+			byte[] imageBytes,
+			CancellationToken cancellationToken = default,
+			int? imageWidth = null,
+			int? imageHeight = null);
 	}
 }
 

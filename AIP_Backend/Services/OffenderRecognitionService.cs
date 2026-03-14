@@ -221,14 +221,62 @@ namespace AIPBackend.Services
 			_logger.LogInformation("OffenderRecognition: indexed face for incident {IncidentId}, PersonId {PersonId}", incidentId, personId);
 		}
 
-		public async Task<OffenderMatchResultDto> DetectFaceOnlyAsync(byte[] imageBytes, CancellationToken cancellationToken = default)
+		public async Task<OffenderMatchResultDto> DetectFaceOnlyAsync(
+			byte[] imageBytes,
+			CancellationToken cancellationToken = default,
+			int? imageWidth = null,
+			int? imageHeight = null)
 		{
 			if (!_options.Enabled)
 				return new OffenderMatchResultDto { FaceDetected = false, Candidates = new List<OffenderMatchCandidateDto>(), ClassifierVersion = "face-api-disabled" };
 			// Use detection_01 first for guided capture (more permissive for live camera)
 			var detectResult = await _faceClient.DetectFacesAsync(imageBytes, cancellationToken, preferPermissiveModel: true);
-			var faceDetected = detectResult != null && detectResult.Faces.Count > 0;
+			if (detectResult == null || detectResult.Faces.Count == 0)
+				return new OffenderMatchResultDto { FaceDetected = false, Candidates = new List<OffenderMatchCandidateDto>(), ClassifierVersion = "azure-face-v1" };
+
+			// When dimensions are provided, only report "face in oval" when a face is fully inside the guide oval
+			if (imageWidth is > 0 && imageHeight is > 0)
+			{
+				var cx = imageWidth.Value / 2.0;
+				var cy = imageHeight.Value / 2.0;
+				var rx = Math.Min(imageWidth.Value * 0.3, 120.0);
+				var ry = Math.Min(imageHeight.Value * 0.4, 180.0);
+				foreach (var face in detectResult.Faces)
+				{
+					var rect = face.FaceRectangle;
+					if (rect == null) continue;
+					if (IsFaceRectFullyInsideEllipse(rect.Left, rect.Top, rect.Width, rect.Height, cx, cy, rx, ry))
+					{
+						return new OffenderMatchResultDto { FaceDetected = true, Candidates = new List<OffenderMatchCandidateDto>(), ClassifierVersion = "azure-face-v1" };
+					}
+				}
+				return new OffenderMatchResultDto { FaceDetected = false, Candidates = new List<OffenderMatchCandidateDto>(), ClassifierVersion = "azure-face-v1" };
+			}
+
+			var faceDetected = detectResult.Faces.Count > 0;
 			return new OffenderMatchResultDto { FaceDetected = faceDetected, Candidates = new List<OffenderMatchCandidateDto>(), ClassifierVersion = "azure-face-v1" };
+		}
+
+		/// <summary>
+		/// Ellipse is centered at (cx, cy) with radii rx, ry (rotation -90° so ellipse is horizontal).
+		/// Point (x,y) is inside when (y-cy)²/rx² + (x-cx)²/ry² ≤ 1.
+		/// </summary>
+		private static bool IsFaceRectFullyInsideEllipse(double left, double top, double width, double height, double cx, double cy, double rx, double ry)
+		{
+			if (rx <= 0 || ry <= 0) return false;
+			var corners = new[]
+			{
+				(left, top),
+				(left + width, top),
+				(left, top + height),
+				(left + width, top + height)
+			};
+			foreach (var (x, y) in corners)
+			{
+				var term = (y - cy) * (y - cy) / (rx * rx) + (x - cx) * (x - cx) / (ry * ry);
+				if (term > 1.0) return false;
+			}
+			return true;
 		}
 
 		public async Task<ReindexResultDto> ReindexVerificationEvidenceAsync(CancellationToken cancellationToken = default)

@@ -164,7 +164,13 @@ builder.Services.AddScoped<ILoginProtectionService, LoginProtectionService>();
 builder.Services.Configure<AzureFaceOptions>(
 	builder.Configuration.GetSection("AzureFace"));
 builder.Services.AddHttpClient<IAzureFaceClient, AzureFaceClient>();
-builder.Services.AddScoped<IOffenderRecognitionService, OffenderRecognitionService>();
+builder.Services.Configure<InsightFaceOptions>(builder.Configuration.GetSection("InsightFace"));
+builder.Services.AddHttpClient<IInsightFaceClient, InsightFaceClient>();
+var useInsightFace = builder.Configuration.GetValue<bool>("InsightFace:Enabled");
+if (useInsightFace)
+	builder.Services.AddScoped<IOffenderRecognitionService, InsightFaceOffenderRecognitionService>();
+else
+	builder.Services.AddScoped<IOffenderRecognitionService, OffenderRecognitionService>();
 builder.Services.AddScoped<IIncidentPatternService, IncidentPatternService>();
 builder.Services.AddScoped<IRiskScoringService, RiskScoringService>();
 // Stock notifications removed with legacy stock module; configuration section reserved for future use.

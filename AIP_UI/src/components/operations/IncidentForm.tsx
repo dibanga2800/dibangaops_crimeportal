@@ -315,12 +315,24 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
       const result = await offenderRecognitionApi.searchByImage(dataUrl)
       // Support both camelCase (default .NET) and PascalCase
       const faceDetected = result?.faceDetected === true || (result as { FaceDetected?: boolean })?.FaceDetected === true
+      const serviceUnavailable = result?.serviceUnavailable === true || (result as { ServiceUnavailable?: boolean })?.ServiceUnavailable === true
+      const serviceErrorMessage = result?.serviceErrorMessage ?? (result as { ServiceErrorMessage?: string })?.ServiceErrorMessage
       const candidates = result?.candidates ?? (result as { Candidates?: typeof result.candidates })?.Candidates ?? []
       const matches = candidates.map((c: { offenderName?: string; incidentCount?: number; recentIncidents?: unknown[] }) => ({
         offenderName: c.offenderName,
         incidentCount: c.incidentCount,
         recentIncidents: c.recentIncidents ?? [],
       }))
+
+      if (serviceUnavailable) {
+        setOffenderSearchError(
+          serviceErrorMessage ?? 'Face recognition service is unavailable. Ensure the InsightFace service is running.'
+        )
+        setOffenderVerified(false)
+        setRepeatOffenderCount(0)
+        setOffenderHistory(null)
+        return
+      }
 
       if (!faceDetected) {
         setOffenderSearchError(

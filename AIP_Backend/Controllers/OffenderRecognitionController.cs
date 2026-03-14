@@ -31,6 +31,8 @@ namespace AIPBackend.Controllers
 		public async Task<ActionResult<OffenderMatchResultDto>> DetectOnly(CancellationToken cancellationToken)
 		{
 			byte[]? imageBytes = null;
+			int? imageWidth = null;
+			int? imageHeight = null;
 			if (Request.ContentType?.Contains("application/json", StringComparison.OrdinalIgnoreCase) == true)
 			{
 				using var reader = new StreamReader(Request.Body);
@@ -44,10 +46,14 @@ namespace AIPBackend.Controllers
 						try { imageBytes = Convert.FromBase64String(base64); } catch { return BadRequest(new { message = "Invalid base64 image data." }); }
 					}
 				}
+				if (json.TryGetProperty("imageWidth", out var wProp) && wProp.TryGetInt32(out var w))
+					imageWidth = w;
+				if (json.TryGetProperty("imageHeight", out var hProp) && hProp.TryGetInt32(out var h))
+					imageHeight = h;
 			}
 			if (imageBytes == null || imageBytes.Length == 0)
 				return BadRequest(new { message = "Provide JSON body with imageBase64." });
-			var result = await _offenderRecognitionService.DetectFaceOnlyAsync(imageBytes, cancellationToken);
+			var result = await _offenderRecognitionService.DetectFaceOnlyAsync(imageBytes, cancellationToken, imageWidth, imageHeight);
 			return Ok(result);
 		}
 
