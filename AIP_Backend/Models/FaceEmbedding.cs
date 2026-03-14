@@ -52,6 +52,13 @@ namespace AIPBackend.Models
 		/// </summary>
 		public double? BestMatchSimilarity { get; set; }
 
+		/// <summary>
+		/// Azure Face API Person ID when using Person Group for offender recognition.
+		/// Maps to the enrolled person in the Face API Person Group.
+		/// </summary>
+		[MaxLength(36)]
+		public string? AzurePersonId { get; set; }
+
 		[Required]
 		public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

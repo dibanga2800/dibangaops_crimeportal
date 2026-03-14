@@ -299,7 +299,7 @@ export const LPMAlertRuleForm = ({ initialData, onSubmit, onCancel }: LPMAlertRu
 						</SelectContent>
 					</Select>
 					<p className="text-sm text-muted-foreground">
-						Target region for LPM alerts (Central England COOP)
+						Target region for LPM alerts
 					</p>
 				</div>
 

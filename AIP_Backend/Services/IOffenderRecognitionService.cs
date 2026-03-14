@@ -37,6 +37,37 @@ namespace AIPBackend.Services
 			string embeddingId,
 			int maxResults = 10,
 			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Search for repeat offenders by capturing a new image and comparing against indexed faces in the DB.
+		/// Uses Azure Face API to detect face, identify against Person Group, and return matching incidents.
+		/// </summary>
+		/// <param name="imageBytes">Raw image bytes (e.g. from camera capture or file upload).</param>
+		/// <param name="cancellationToken">Cancellation token.</param>
+		Task<OffenderMatchResultDto> SearchByImageAsync(
+			byte[] imageBytes,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Index verification evidence image when an incident is saved. Adds face to Person Group for future search.
+		/// </summary>
+		Task IndexVerificationEvidenceAsync(
+			int incidentId,
+			byte[] imageBytes,
+			string offenderName,
+			string? offenderId,
+			CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Re-index all incidents that have verification evidence but no FaceEmbedding (e.g. created before indexing existed).
+		/// Call this to backfill faces for offenders like Pius Joan.
+		/// </summary>
+		Task<ReindexResultDto> ReindexVerificationEvidenceAsync(CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Detect if a face is present in the image. Lightweight check for guided capture UX.
+		/// </summary>
+		Task<OffenderMatchResultDto> DetectFaceOnlyAsync(byte[] imageBytes, CancellationToken cancellationToken = default);
 	}
 }
 

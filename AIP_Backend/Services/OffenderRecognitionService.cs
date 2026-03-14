@@ -1,33 +1,303 @@
 #nullable enable
 
+using System.Text.Json;
 using AIPBackend.Data;
 using AIPBackend.Models;
 using AIPBackend.Models.DTOs;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace AIPBackend.Services
 {
 	/// <summary>
-	/// Default implementation of <see cref="IOffenderRecognitionService"/> that
-	/// orchestrates image storage, embedding persistence and similarity search.
-	///
-	/// IMPORTANT: this class does not perform any computer-vision work by itself.
-	/// It is designed to call an external CV provider (Python microservice, Azure AI Vision, etc.).
-	/// The integration point is the protected <see cref="GenerateEmbeddingAsync"/> method which
-	/// can be overridden or adapted to your chosen model.
+	/// Offender recognition using Azure Face API. Indexes verification evidence on incident save
+	/// and searches by captured image against stored faces.
 	/// </summary>
 	public class OffenderRecognitionService : IOffenderRecognitionService
 	{
 		private readonly ApplicationDbContext _db;
+		private readonly IAzureFaceClient _faceClient;
+		private readonly AzureFaceOptions _options;
 		private readonly ILogger<OffenderRecognitionService> _logger;
+
+		private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+		{
+			PropertyNameCaseInsensitive = true
+		};
 
 		public OffenderRecognitionService(
 			ApplicationDbContext db,
+			IAzureFaceClient faceClient,
+			IOptions<AzureFaceOptions> options,
 			ILogger<OffenderRecognitionService> logger)
 		{
 			_db = db;
+			_faceClient = faceClient;
+			_options = options.Value;
 			_logger = logger;
+		}
+
+		public async Task<OffenderMatchResultDto> SearchByImageAsync(
+			byte[] imageBytes,
+			CancellationToken cancellationToken = default)
+		{
+			if (!_options.Enabled)
+			{
+				return new OffenderMatchResultDto
+				{
+					FaceDetected = false,
+					Candidates = new List<OffenderMatchCandidateDto>(),
+					ClassifierVersion = "face-api-disabled"
+				};
+			}
+
+			// Use detection_01 first (more permissive) for search-by-image so manual capture finds faces
+			var detectResult = await _faceClient.DetectFacesAsync(imageBytes, cancellationToken, preferPermissiveModel: true);
+			if (detectResult == null || detectResult.Faces.Count == 0)
+			{
+				_logger.LogInformation(
+					"OffenderRecognition: no face detected in search image (size: {Size} bytes). Tips: ensure face is clearly visible, centered, well-lit; image 1KB–6MB; face at least 36x36px.",
+					imageBytes.Length);
+				return new OffenderMatchResultDto
+				{
+					FaceDetected = false,
+					Candidates = new List<OffenderMatchCandidateDto>(),
+					ClassifierVersion = "azure-face-v1"
+				};
+			}
+
+			var faceIds = detectResult.Faces
+				.Where(f => !string.IsNullOrEmpty(f.FaceId))
+				.Select(f => f.FaceId!)
+				.ToList();
+			if (faceIds.Count == 0)
+			{
+				return new OffenderMatchResultDto
+				{
+					FaceDetected = true,
+					Candidates = new List<OffenderMatchCandidateDto>(),
+					ClassifierVersion = "azure-face-v1"
+				};
+			}
+
+			var candidates = await _faceClient.IdentifyAsync(faceIds, 10, cancellationToken);
+			var matches = new List<OffenderMatchCandidateDto>();
+			var seenIncidentIds = new HashSet<int>();
+
+			foreach (var c in candidates.OrderByDescending(x => x.Confidence))
+			{
+				if (string.IsNullOrEmpty(c.PersonId)) continue;
+
+				var person = await _faceClient.GetPersonAsync(c.PersonId, cancellationToken);
+				if (person?.UserData == null) continue;
+
+				int? incidentId = null;
+				try
+				{
+					using var doc = JsonDocument.Parse(person.UserData);
+					if (doc.RootElement.TryGetProperty("incidentId", out var pid))
+						incidentId = pid.TryGetInt32(out var id) ? id : null;
+				}
+				catch
+				{
+					continue;
+				}
+
+				if (!incidentId.HasValue || seenIncidentIds.Contains(incidentId.Value))
+					continue;
+				seenIncidentIds.Add(incidentId.Value);
+
+				var incident = await _db.Incidents
+					.AsNoTracking()
+					.Include(i => i.StolenItems)
+					.FirstOrDefaultAsync(i => i.IncidentId == incidentId.Value, cancellationToken);
+				if (incident == null) continue;
+
+				var relatedIncidents = await _db.Incidents
+					.AsNoTracking()
+					.Where(i => i.OffenderId == incident.OffenderId && !string.IsNullOrEmpty(incident.OffenderId))
+					.OrderByDescending(i => i.DateOfIncident)
+					.Take(5)
+					.ToListAsync(cancellationToken);
+				if (relatedIncidents.Count == 0)
+					relatedIncidents.Add(incident);
+
+				var totalValue = relatedIncidents.Sum(i =>
+					i.TotalValueRecovered ?? i.StolenItems?.Sum(s => s.TotalAmount) ?? 0);
+				var recentIncidents = relatedIncidents.Select(i => new OffenderMatchIncidentSummaryDto
+				{
+					IncidentId = i.IncidentId.ToString(),
+					DateOfIncident = i.DateOfIncident.ToString("yyyy-MM-dd"),
+					SiteName = i.StoreName ?? i.SiteId ?? "",
+					IncidentType = i.IncidentType ?? "",
+					Description = i.Description,
+					OffenderMarks = i.OffenderMarks,
+					OffenderDetailsVerified = i.OffenderDetailsVerified,
+					VerificationMethod = i.VerificationMethod,
+					VerificationEvidenceImage = i.VerificationEvidenceImage
+				}).ToList();
+
+				matches.Add(new OffenderMatchCandidateDto
+				{
+					OffenderId = 0,
+					OffenderName = person.Name ?? incident.OffenderName ?? "Unknown",
+					IncidentCount = relatedIncidents.Count,
+					TotalValue = totalValue,
+					Similarity = c.Confidence,
+					ThumbnailUrl = incident.VerificationEvidenceImage,
+					RecentIncidents = recentIncidents
+				});
+			}
+
+			return new OffenderMatchResultDto
+			{
+				FaceDetected = true,
+				Candidates = matches,
+				ClassifierVersion = "azure-face-v1"
+			};
+		}
+
+		public async Task IndexVerificationEvidenceAsync(
+			int incidentId,
+			byte[] imageBytes,
+			string offenderName,
+			string? offenderId,
+			CancellationToken cancellationToken = default)
+		{
+			if (!_options.Enabled) return;
+
+			var detected = await _faceClient.DetectFacesAsync(imageBytes, cancellationToken);
+			if (detected == null || detected.Faces.Count == 0)
+			{
+				_logger.LogDebug("OffenderRecognition: no face in verification evidence for incident {IncidentId}", incidentId);
+				return;
+			}
+
+			var ok = await _faceClient.EnsurePersonGroupExistsAsync(cancellationToken);
+			if (!ok)
+			{
+				_logger.LogWarning("OffenderRecognition: could not ensure Person Group exists");
+				return;
+			}
+
+			var userData = JsonSerializer.Serialize(new
+			{
+				incidentId,
+				offenderName = offenderName ?? "Unknown",
+				offenderId
+			}, JsonOptions);
+
+			var personId = await _faceClient.CreatePersonAndAddFaceAsync(
+				offenderName ?? $"Incident-{incidentId}",
+				imageBytes,
+				userData,
+				cancellationToken);
+			if (personId == null)
+			{
+				_logger.LogWarning("OffenderRecognition: failed to create person for incident {IncidentId}", incidentId);
+				return;
+			}
+
+			var trained = await _faceClient.TrainPersonGroupAsync(cancellationToken);
+			if (trained)
+			{
+				await _faceClient.WaitForTrainingCompletionAsync(TimeSpan.FromSeconds(60), cancellationToken);
+			}
+
+			var faceEmbedding = new FaceEmbedding
+			{
+				IncidentId = incidentId,
+				OffenderId = offenderId,
+				FileName = $"incident-{incidentId}-verification.jpg",
+				ModelId = "azure-face-v1",
+				Embedding = personId,
+				AzurePersonId = personId,
+				CreatedAt = DateTime.UtcNow
+			};
+			_db.FaceEmbeddings.Add(faceEmbedding);
+			await _db.SaveChangesAsync(cancellationToken);
+
+			_logger.LogInformation("OffenderRecognition: indexed face for incident {IncidentId}, PersonId {PersonId}", incidentId, personId);
+		}
+
+		public async Task<OffenderMatchResultDto> DetectFaceOnlyAsync(byte[] imageBytes, CancellationToken cancellationToken = default)
+		{
+			if (!_options.Enabled)
+				return new OffenderMatchResultDto { FaceDetected = false, Candidates = new List<OffenderMatchCandidateDto>(), ClassifierVersion = "face-api-disabled" };
+			// Use detection_01 first for guided capture (more permissive for live camera)
+			var detectResult = await _faceClient.DetectFacesAsync(imageBytes, cancellationToken, preferPermissiveModel: true);
+			var faceDetected = detectResult != null && detectResult.Faces.Count > 0;
+			return new OffenderMatchResultDto { FaceDetected = faceDetected, Candidates = new List<OffenderMatchCandidateDto>(), ClassifierVersion = "azure-face-v1" };
+		}
+
+		public async Task<ReindexResultDto> ReindexVerificationEvidenceAsync(CancellationToken cancellationToken = default)
+		{
+			var result = new ReindexResultDto();
+			if (!_options.Enabled)
+				return result;
+
+			var ok = await _faceClient.EnsurePersonGroupExistsAsync(cancellationToken);
+			if (!ok)
+			{
+				result.Errors.Add("Could not ensure Person Group exists");
+				return result;
+			}
+
+			var incidentIdsWithEvidence = await _db.Incidents
+				.AsNoTracking()
+				.Where(i => !string.IsNullOrWhiteSpace(i.VerificationEvidenceImage))
+				.Select(i => i.IncidentId)
+				.ToListAsync(cancellationToken);
+
+			var alreadyIndexed = await _db.FaceEmbeddings
+				.Where(f => f.IncidentId != null)
+				.Select(f => f.IncidentId!.Value)
+				.Distinct()
+				.ToListAsync(cancellationToken);
+			var alreadyIndexedSet = new HashSet<int>(alreadyIndexed);
+			var toIndex = incidentIdsWithEvidence.Where(id => !alreadyIndexedSet.Contains(id)).ToList();
+
+			foreach (var incidentId in toIndex)
+			{
+				var incident = await _db.Incidents
+					.AsNoTracking()
+					.FirstOrDefaultAsync(i => i.IncidentId == incidentId, cancellationToken);
+				if (incident == null || string.IsNullOrWhiteSpace(incident.VerificationEvidenceImage))
+				{
+					result.SkippedCount++;
+					continue;
+				}
+
+				var imageBytes = TryDecodeBase64DataUrl(incident.VerificationEvidenceImage);
+				if (imageBytes == null || imageBytes.Length == 0)
+				{
+					result.Errors.Add($"Incident {incidentId}: could not decode verification image");
+					result.FailedCount++;
+					continue;
+				}
+
+				try
+				{
+					await IndexVerificationEvidenceAsync(
+						incident.IncidentId,
+						imageBytes,
+						incident.OffenderName ?? $"Incident-{incidentId}",
+						incident.OffenderId,
+						cancellationToken);
+					result.IndexedCount++;
+					result.IndexedIncidentIds.Add(incidentId.ToString());
+				}
+				catch (Exception ex)
+				{
+					_logger.LogWarning(ex, "OffenderRecognition: reindex failed for incident {IncidentId}", incidentId);
+					result.Errors.Add($"Incident {incidentId}: {ex.Message}");
+					result.FailedCount++;
+				}
+			}
+
+			result.SkippedCount = incidentIdsWithEvidence.Count - result.IndexedCount - result.FailedCount;
+			return result;
 		}
 
 		public async Task<OffenderMatchResultDto> IndexAndMatchAsync(
@@ -36,45 +306,37 @@ namespace AIPBackend.Services
 		{
 			if (imageReference is null) throw new ArgumentNullException(nameof(imageReference));
 
-			// 1) Ask the CV provider to detect a face and generate an embedding for this image.
-			var (embeddingVector, modelId, faceDetected) = await GenerateEmbeddingAsync(imageReference, cancellationToken);
-
-			if (!faceDetected || string.IsNullOrWhiteSpace(embeddingVector))
+			byte[]? imageBytes = null;
+			if (!string.IsNullOrWhiteSpace(imageReference.Url))
 			{
-				_logger.LogWarning("OffenderRecognition: no face detected for {FileName}", imageReference.FileName);
+				imageBytes = TryDecodeBase64DataUrl(imageReference.Url);
+				if (imageBytes == null && imageReference.Url.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+				{
+					try
+					{
+						using var http = new HttpClient();
+						var resp = await http.GetAsync(imageReference.Url, cancellationToken);
+						if (resp.IsSuccessStatusCode)
+							imageBytes = await resp.Content.ReadAsByteArrayAsync(cancellationToken);
+					}
+					catch (Exception ex)
+					{
+						_logger.LogWarning(ex, "OffenderRecognition: could not fetch image from URL");
+					}
+				}
+			}
+
+			if (imageBytes == null || imageBytes.Length == 0)
+			{
 				return new OffenderMatchResultDto
 				{
 					FaceDetected = false,
-					EmbeddingId = null,
 					Candidates = new List<OffenderMatchCandidateDto>(),
-					ClassifierVersion = modelId
+					ClassifierVersion = "cv-not-configured"
 				};
 			}
 
-			// 2) Persist the embedding so it can be re-used for future searches.
-			var faceEmbedding = new FaceEmbedding
-			{
-				OffenderId = imageReference.OffenderId?.ToString(),
-				IncidentId = imageReference.IncidentId,
-				FileName = imageReference.FileName,
-				ModelId = modelId,
-				Embedding = embeddingVector,
-				CreatedAt = DateTime.UtcNow
-			};
-
-			_db.FaceEmbeddings.Add(faceEmbedding);
-			await _db.SaveChangesAsync(cancellationToken);
-
-			// 3) Run a similarity search against existing embeddings to propose matches.
-			var candidates = await FindCandidatesAsync(faceEmbedding, cancellationToken);
-
-			return new OffenderMatchResultDto
-			{
-				FaceDetected = true,
-				EmbeddingId = faceEmbedding.FaceEmbeddingId.ToString(),
-				Candidates = candidates,
-				ClassifierVersion = modelId
-			};
+			return await SearchByImageAsync(imageBytes, cancellationToken);
 		}
 
 		public async Task<OffenderMatchResultDto> FindMatchesByEmbeddingAsync(
@@ -82,105 +344,176 @@ namespace AIPBackend.Services
 			int maxResults = 10,
 			CancellationToken cancellationToken = default)
 		{
-			if (string.IsNullOrWhiteSpace(embeddingId))
-				throw new ArgumentException("Embedding id is required", nameof(embeddingId));
-
-			if (!int.TryParse(embeddingId, out var id))
-			{
-				throw new ArgumentException("Embedding id must be a valid integer primary key", nameof(embeddingId));
-			}
-
 			var embedding = await _db.FaceEmbeddings
-				.FirstOrDefaultAsync(f => f.FaceEmbeddingId == id, cancellationToken);
-
-			if (embedding is null)
+				.FirstOrDefaultAsync(f => f.FaceEmbeddingId.ToString() == embeddingId, cancellationToken);
+			if (embedding == null)
 			{
-				_logger.LogWarning("OffenderRecognition: embedding {EmbeddingId} not found", embeddingId);
 				return new OffenderMatchResultDto
 				{
 					FaceDetected = false,
-					EmbeddingId = null,
 					Candidates = new List<OffenderMatchCandidateDto>(),
 					ClassifierVersion = "embedding-not-found"
 				};
 			}
 
-			var candidates = await FindCandidatesAsync(embedding, cancellationToken, maxResults);
+			if (string.IsNullOrEmpty(embedding.AzurePersonId))
+			{
+				var heuristics = await FindCandidatesByHeuristicsAsync(embedding, maxResults, cancellationToken);
+				return new OffenderMatchResultDto
+				{
+					FaceDetected = true,
+					EmbeddingId = embeddingId,
+					Candidates = heuristics,
+					ClassifierVersion = embedding.ModelId
+				};
+			}
 
+			var person = await _faceClient.GetPersonAsync(embedding.AzurePersonId, cancellationToken);
+			if (person == null)
+			{
+				var heuristics = await FindCandidatesByHeuristicsAsync(embedding, maxResults, cancellationToken);
+				return new OffenderMatchResultDto
+				{
+					FaceDetected = true,
+					EmbeddingId = embeddingId,
+					Candidates = heuristics,
+					ClassifierVersion = embedding.ModelId
+				};
+			}
+
+			int? incidentId = null;
+			try
+			{
+				if (!string.IsNullOrEmpty(person.UserData))
+				{
+					using var doc = JsonDocument.Parse(person.UserData);
+					if (doc.RootElement.TryGetProperty("incidentId", out var pid))
+						incidentId = pid.TryGetInt32(out var id) ? id : null;
+				}
+			}
+			catch { }
+
+			if (incidentId.HasValue)
+			{
+				var incident = await _db.Incidents
+					.AsNoTracking()
+					.Include(i => i.StolenItems)
+					.FirstOrDefaultAsync(i => i.IncidentId == incidentId.Value, cancellationToken);
+				if (incident != null)
+				{
+					var relatedIncidents = await _db.Incidents
+						.AsNoTracking()
+						.Where(i => i.OffenderId == incident.OffenderId && !string.IsNullOrEmpty(incident.OffenderId))
+						.OrderByDescending(i => i.DateOfIncident)
+						.Take(5)
+						.ToListAsync(cancellationToken);
+					if (relatedIncidents.Count == 0) relatedIncidents.Add(incident);
+
+					var totalValue = relatedIncidents.Sum(i =>
+						i.TotalValueRecovered ?? i.StolenItems?.Sum(s => s.TotalAmount) ?? 0);
+					var recentIncidents = relatedIncidents.Select(i => new OffenderMatchIncidentSummaryDto
+					{
+						IncidentId = i.IncidentId.ToString(),
+						DateOfIncident = i.DateOfIncident.ToString("yyyy-MM-dd"),
+						SiteName = i.StoreName ?? i.SiteId ?? "",
+						IncidentType = i.IncidentType ?? "",
+						Description = i.Description,
+						OffenderMarks = i.OffenderMarks,
+						OffenderDetailsVerified = i.OffenderDetailsVerified,
+						VerificationMethod = i.VerificationMethod,
+						VerificationEvidenceImage = i.VerificationEvidenceImage
+					}).ToList();
+
+					return new OffenderMatchResultDto
+					{
+						FaceDetected = true,
+						EmbeddingId = embeddingId,
+						Candidates = new List<OffenderMatchCandidateDto>
+						{
+							new()
+							{
+								OffenderName = person.Name ?? incident.OffenderName ?? "Unknown",
+								IncidentCount = relatedIncidents.Count,
+								TotalValue = totalValue,
+								Similarity = 0.9,
+								ThumbnailUrl = incident.VerificationEvidenceImage,
+								RecentIncidents = recentIncidents
+							}
+						},
+						ClassifierVersion = embedding.ModelId
+					};
+				}
+			}
+
+			var fallback = await FindCandidatesByHeuristicsAsync(embedding, maxResults, cancellationToken);
 			return new OffenderMatchResultDto
 			{
 				FaceDetected = true,
 				EmbeddingId = embeddingId,
-				Candidates = candidates,
+				Candidates = fallback,
 				ClassifierVersion = embedding.ModelId
 			};
 		}
 
-		/// <summary>
-		/// Generate an embedding for the supplied image reference by calling the
-		/// underlying computer-vision provider.
-		///
-		/// The default implementation is intentionally a stub and must be replaced
-		/// with a concrete integration (e.g. HTTP call to a Python/ML service or Azure AI Vision).
-		/// </summary>
-		/// <returns>
-		/// Tuple of (embeddingVector, modelId, faceDetected).
-		/// When faceDetected is false, embeddingVector should be null or empty.
-		/// </returns>
-		protected virtual Task<(string? embeddingVector, string modelId, bool faceDetected)> GenerateEmbeddingAsync(
-			OffenderImageReferenceDto imageReference,
-			CancellationToken cancellationToken)
+		private static byte[]? TryDecodeBase64DataUrl(string url)
 		{
-			_logger.LogWarning(
-				"OffenderRecognition: GenerateEmbeddingAsync was called but no CV provider is configured. " +
-				"Configure a computer-vision integration to enable offender recognition.");
-
-			// For now we return a stub response so that the rest of the pipeline is safe to call in development.
-			return Task.FromResult<(string?, string, bool)>((null, "cv-not-configured", false));
+			if (string.IsNullOrWhiteSpace(url) || !url.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+				return null;
+			var comma = url.IndexOf(',');
+			if (comma < 0) return null;
+			try
+			{
+				return Convert.FromBase64String(url[(comma + 1)..]);
+			}
+			catch
+			{
+				return null;
+			}
 		}
 
-		private async Task<List<OffenderMatchCandidateDto>> FindCandidatesAsync(
+		private async Task<List<OffenderMatchCandidateDto>> FindCandidatesByHeuristicsAsync(
 			FaceEmbedding sourceEmbedding,
-			CancellationToken cancellationToken,
-			int maxResults = 10)
+			int maxResults,
+			CancellationToken cancellationToken)
 		{
-			// This method is designed for future enhancement with a proper vector similarity search.
-			// Initially we fall back to very simple heuristics: same offender id, same incident offender name, etc.
-
 			var candidates = new List<OffenderMatchCandidateDto>();
+			if (string.IsNullOrWhiteSpace(sourceEmbedding.OffenderId)) return candidates;
 
-			// Try to match by OffenderId first when present.
-			if (!string.IsNullOrWhiteSpace(sourceEmbedding.OffenderId))
+			var relatedIncidents = await _db.Incidents
+				.AsNoTracking()
+				.Include(i => i.StolenItems)
+				.Where(i => i.OffenderId == sourceEmbedding.OffenderId)
+				.OrderByDescending(i => i.DateOfIncident)
+				.Take(5)
+				.ToListAsync(cancellationToken);
+			if (relatedIncidents.Count == 0) return candidates;
+
+			var totalValue = relatedIncidents.Sum(i =>
+				i.TotalValueRecovered ?? i.StolenItems?.Sum(s => s.TotalAmount) ?? 0);
+			var recentIncidents = relatedIncidents.Select(i => new OffenderMatchIncidentSummaryDto
 			{
-				var offenderId = sourceEmbedding.OffenderId;
+				IncidentId = i.IncidentId.ToString(),
+				DateOfIncident = i.DateOfIncident.ToString("yyyy-MM-dd"),
+				SiteName = i.StoreName ?? i.SiteId ?? "",
+				IncidentType = i.IncidentType ?? "",
+				Description = i.Description,
+				OffenderMarks = i.OffenderMarks,
+				OffenderDetailsVerified = i.OffenderDetailsVerified,
+				VerificationMethod = i.VerificationMethod,
+				VerificationEvidenceImage = i.VerificationEvidenceImage
+			}).ToList();
 
-				var relatedIncidents = await _db.Incidents
-					.Where(i => i.OffenderId == offenderId)
-					.ToListAsync(cancellationToken);
+			candidates.Add(new OffenderMatchCandidateDto
+			{
+				OffenderName = relatedIncidents.First().OffenderName ?? sourceEmbedding.OffenderId!,
+				IncidentCount = relatedIncidents.Count,
+				TotalValue = totalValue,
+				Similarity = 0.9,
+				ThumbnailUrl = relatedIncidents.First().VerificationEvidenceImage,
+				RecentIncidents = recentIncidents
+			});
 
-				if (relatedIncidents.Count > 0)
-				{
-					var totalValue = relatedIncidents.Sum(i =>
-						i.TotalValueRecovered ?? i.StolenItems.Sum(s => s.TotalAmount));
-
-					candidates.Add(new OffenderMatchCandidateDto
-					{
-						OffenderId = 0, // logical offender id is a string in the Incident model
-						OffenderName = relatedIncidents.First().OffenderName ?? offenderId!,
-						IncidentCount = relatedIncidents.Count,
-						TotalValue = totalValue,
-						Similarity = 0.9, // placeholder score until a real similarity engine is integrated
-						ThumbnailUrl = null
-					});
-				}
-			}
-
-			// If we have no structured offender id, we still return an empty list rather than failing.
-			return candidates
-				.OrderByDescending(c => c.Similarity)
-				.Take(Math.Max(1, maxResults))
-				.ToList();
+			return candidates.Take(maxResults).ToList();
 		}
 	}
 }
-

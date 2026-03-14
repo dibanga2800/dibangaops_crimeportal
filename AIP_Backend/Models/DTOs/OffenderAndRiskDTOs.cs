@@ -26,6 +26,22 @@ namespace AIPBackend.Models.DTOs
 	}
 
 	/// <summary>
+	/// Summary of a single incident for offender match display.
+	/// </summary>
+	public sealed class OffenderMatchIncidentSummaryDto
+	{
+		public string IncidentId { get; set; } = string.Empty;
+		public string DateOfIncident { get; set; } = string.Empty;
+		public string SiteName { get; set; } = string.Empty;
+		public string IncidentType { get; set; } = string.Empty;
+		public string? Description { get; set; }
+		public string? OffenderMarks { get; set; }
+		public bool? OffenderDetailsVerified { get; set; }
+		public string? VerificationMethod { get; set; }
+		public string? VerificationEvidenceImage { get; set; }
+	}
+
+	/// <summary>
 	/// A single candidate returned from the offender recognition engine.
 	/// </summary>
 	public sealed class OffenderMatchCandidateDto
@@ -44,6 +60,23 @@ namespace AIPBackend.Models.DTOs
 		/// Optional thumbnail URL to show in the UI.
 		/// </summary>
 		public string? ThumbnailUrl { get; set; }
+
+		/// <summary>
+		/// Recent incidents linked to this offender for UI display.
+		/// </summary>
+		public List<OffenderMatchIncidentSummaryDto> RecentIncidents { get; set; } = new();
+	}
+
+	/// <summary>
+	/// Result of re-indexing verification evidence for incidents created before face indexing existed.
+	/// </summary>
+	public sealed class ReindexResultDto
+	{
+		public int IndexedCount { get; set; }
+		public int SkippedCount { get; set; }
+		public int FailedCount { get; set; }
+		public List<string> IndexedIncidentIds { get; set; } = new();
+		public List<string> Errors { get; set; } = new();
 	}
 
 	/// <summary>

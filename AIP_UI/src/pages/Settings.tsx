@@ -281,23 +281,21 @@ const Settings = () => {
     ? settings.availablePages 
     : availablePages;
 
+  // Exclude removed/legacy pages (e.g. Action Calendar – page no longer exists)
+  const excludedPageIds = ['action-calendar'];
+  const excludedPathPattern = /\/action-calendar/i;
+
   // Filter pages based on (debounced) search query
   const filteredPages = (pagesToUse || [])
-    // Remove legacy/retired pages from the Settings UI
     .filter(page => {
-      const id = page?.id?.toLowerCase() || '';
-      const path = page?.path?.toLowerCase() || '';
-      // Strip Action Calendar completely from Settings
-      if (id === 'action-calendar' || path.includes('/action-calendar')) {
-        return false;
-      }
-      return true;
-    })
-    .filter(page => {
+      const id = page?.id?.toLowerCase() ?? '';
+      const path = page?.path ?? '';
+      if (excludedPageIds.some(excluded => id === excluded || id.includes(excluded))) return false;
+      if (excludedPathPattern.test(path)) return false;
       if (!debouncedSearch) return true;
       const title = page?.title?.toLowerCase() || '';
-      const path = page?.path?.toLowerCase() || '';
-      return title.includes(debouncedSearch) || path.includes(debouncedSearch);
+      const pathLower = path.toLowerCase();
+      return title.includes(debouncedSearch) || pathLower.includes(debouncedSearch);
     });
 
   // Define category display names and order

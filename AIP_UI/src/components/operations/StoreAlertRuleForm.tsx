@@ -299,7 +299,7 @@ export const StoreAlertRuleForm = ({ initialData, onSubmit, onCancel }: StoreAle
 						</SelectContent>
 					</Select>
 					<p className="text-sm text-muted-foreground">
-						Alert stores within this region (Central England COOP)
+						Alert stores within this region
 					</p>
 				</div>
 

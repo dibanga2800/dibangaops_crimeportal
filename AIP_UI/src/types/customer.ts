@@ -109,13 +109,9 @@ export interface CustomerPage {
   icon: string
 }
 
-export type CustomerPageId = 
-  | 'daily-activity'
+export type CustomerPageId =
   | 'incident-graph'
   | 'incident-report'
-  | 'customer-satisfaction'
-  | 'be-safe-be-secure'
-  | 'site-visit-reports'
   | 'keyholding-logs'
   | 'event-briefings'
 

@@ -314,16 +314,6 @@ export const STOCK_ENDPOINTS = {
   TEST_EMAIL: '/Stock/test-email',
 } as const
 
-// Action Calendar endpoints
-export const ACTION_CALENDAR_ENDPOINTS = {
-  LIST: '/ActionCalendar',
-  DETAIL: (id: string) => `/ActionCalendar/${id}`,
-  CREATE: '/ActionCalendar',
-  UPDATE: (id: string) => `/ActionCalendar/${id}`,
-  DELETE: (id: string) => `/ActionCalendar/${id}`,
-  STATISTICS: '/ActionCalendar/statistics',
-} as const
-
 // Mystery Shopper endpoints
 export const MYSTERY_SHOPPER_ENDPOINTS = {
   OFFICERS: '/mystery-shopper/officers',

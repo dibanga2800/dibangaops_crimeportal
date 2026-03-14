@@ -38,6 +38,7 @@ import React from "react"
 import { Badge } from "@/components/ui/badge"
 import { incidentService } from "@/services/incidentService"
 import { offenderRecognitionApi, type OffenderMatchResult } from '@/services/api/offenderRecognition'
+import { FaceCaptureGuide } from '@/components/operations/FaceCaptureGuide'
 import { useAuth } from "@/hooks/useAuth"
 import { customerService } from "@/services/customerService"
 import { siteService } from "@/services/siteService"
@@ -194,6 +195,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
   const [verificationFileName, setVerificationFileName] = useState<string>('')
   const [imageSearchUrl, setImageSearchUrl] = useState<string>('')
   const [isImageSearching, setIsImageSearching] = useState(false)
+  const [isSearchCaptureMode, setIsSearchCaptureMode] = useState(false)
   const [isProcessingVerificationImage, setIsProcessingVerificationImage] = useState(false)
   const [isCameraActive, setIsCameraActive] = useState(false)
   const [cameraError, setCameraError] = useState<string | null>(null)
@@ -299,10 +301,10 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
     }
   };
 
-  const searchOffenderByImage = async () => {
-    const url = imageSearchUrl.trim() || verificationEvidencePreview.trim()
-    if (!url) {
-      setOffenderSearchError('Please provide an image URL or capture/upload verification evidence before searching by image.')
+  const searchOffenderByImage = async (imageDataUrl?: string) => {
+    const dataUrl = imageDataUrl || imageSearchUrl.trim() || verificationEvidencePreview.trim()
+    if (!dataUrl) {
+      setOffenderSearchError('Capture an image or use verification evidence to search.')
       return
     }
 
@@ -310,11 +312,28 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
     setOffenderSearchError(null)
 
     try {
-      const result: OffenderMatchResult = await offenderRecognitionApi.indexAndMatch({ url })
+      const result = await offenderRecognitionApi.searchByImage(dataUrl)
+      // Support both camelCase (default .NET) and PascalCase
+      const faceDetected = result?.faceDetected === true || (result as { FaceDetected?: boolean })?.FaceDetected === true
+      const candidates = result?.candidates ?? (result as { Candidates?: typeof result.candidates })?.Candidates ?? []
+      const matches = candidates.map((c: { offenderName?: string; incidentCount?: number; recentIncidents?: unknown[] }) => ({
+        offenderName: c.offenderName,
+        incidentCount: c.incidentCount,
+        recentIncidents: c.recentIncidents ?? [],
+      }))
 
-      const matches = result.matches || []
+      if (!faceDetected) {
+        setOffenderSearchError(
+          'No face detected in the image. Tips: ensure your face is clearly visible, centered, well-lit, and fills much of the frame. Stand closer if the face appears small.'
+        )
+        setOffenderVerified(false)
+        setRepeatOffenderCount(0)
+        setOffenderHistory(null)
+        return
+      }
 
       if (matches.length === 0) {
+        setOffenderSearchError('No matching offenders found in the database.')
         setOffenderVerified(false)
         setRepeatOffenderCount(0)
         setOffenderHistory(null)
@@ -337,6 +356,34 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
     } finally {
       setIsImageSearching(false)
     }
+  }
+
+  const startSearchCapture = () => {
+    setIsSearchCaptureMode(true)
+    setCameraError(null)
+    setIsCameraActive(true)
+  }
+
+  const captureForSearch = () => {
+    if (!videoRef.current || !canvasRef.current) return
+    const video = videoRef.current
+    const canvas = canvasRef.current
+    const context = canvas.getContext('2d')
+    if (!context) return
+
+    // Upscale if video is small – Azure Face API needs face at least 36×36px, ideally 200×200
+    const minW = 640, minH = 480
+    const w = video.videoWidth
+    const h = video.videoHeight
+    const scale = Math.max(minW / w, minH / h, 1)
+    canvas.width = Math.round(w * scale)
+    canvas.height = Math.round(h * scale)
+    context.drawImage(video, 0, 0, canvas.width, canvas.height)
+    // Use 0.92 quality for face detection – Azure Face API benefits from clearer detail
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.92)
+    stopCamera()
+    setIsSearchCaptureMode(false)
+    searchOffenderByImage(dataUrl)
   }
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -515,39 +562,12 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
     fetchSitesAndRegions()
   }, [customerId, form])
 
-  // Helper functions to get pre-filled data
-  const getCustomerNameFromId = (customerId: string): string => {
-    // Direct mapping based on actual database customer IDs
-    const customerMap: Record<string, string> = {
-      '21': 'Central England COOP',
-      '22': 'Heart of England COOP', 
-      '23': 'Midcounties COOP',
-      // Also support MOCK_CUSTOMERS IDs for backward compatibility
-      '1': 'Central England COOP',
-      '2': 'Midcounties COOP',
-      '3': 'Heart of England COOP',
-    };
-    
-    const customerName = customerMap[customerId];
-    return customerName || '';
-  };
+  // Resolve names from loaded API data (no static mapping)
+  const getCustomerNameFromId = (customerId: string): string =>
+    customers.find((c) => c.id.toString() === customerId)?.companyName ?? '';
 
-    const getSiteNameFromId = (siteId: string): string => {
-    // Map database site IDs to site names (consistent with database sites table)
-    const siteMap: Record<string, string> = {
-      'SITE001': 'Leicester Central',
-      'SITE002': 'Birmingham Store', 
-      'SITE003': 'Sheffield Branch',
-      'SITE004': 'Oxford City Centre',
-      'SITE005': 'Cheltenham Store',
-      'SITE006': 'Swindon Branch',
-      'SITE007': 'Coventry Central',
-      'SITE008': 'Nuneaton Main Store',
-      'SITE009': 'Rugby Store',
-    };
-    
-    return siteMap[siteId] || '';
-  };
+  const getSiteNameFromId = (siteId: string): string =>
+    sites.find((s) => s.siteID?.toString() === siteId)?.locationName ?? '';
 
   // Handle customer change
   const handleCustomerChange = (customerIdValue: string) => {
@@ -597,7 +617,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
     canvas.height = video.videoHeight
     context.drawImage(video, 0, 0, canvas.width, canvas.height)
 
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.92)
     form.setValue('verificationEvidenceImage', dataUrl, { shouldValidate: true })
     setVerificationEvidencePreview(dataUrl)
     setVerificationFileName('captured-image.jpg')
@@ -797,14 +817,26 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
 
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment' },
+          video: {
+            // Use front camera for scan-to-search (e.g. testing with own face), back for verification
+            facingMode: isSearchCaptureMode ? 'user' : 'environment',
+            width: { ideal: 1280, min: 640 },
+            height: { ideal: 720, min: 480 }
+          },
           audio: false
         })
         cameraStreamRef.current = stream
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream
-          await videoRef.current.play()
+        const attachToVideo = async (retries = 5) => {
+          for (let i = 0; i < retries; i++) {
+            if (videoRef.current) {
+              videoRef.current.srcObject = stream
+              await videoRef.current.play()
+              return
+            }
+            await new Promise((r) => setTimeout(r, 100))
+          }
         }
+        await attachToVideo()
       } catch (error) {
         console.error('Error accessing camera:', error)
         setCameraError('Unable to access camera. Please check permissions or HTTPS.')
@@ -815,7 +847,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
     }
 
     attachCameraStream()
-  }, [isCameraActive])
+  }, [isCameraActive, isSearchCaptureMode])
 
   useEffect(() => {
     return () => {
@@ -1632,30 +1664,47 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                               Visual offender search (optional)
                             </p>
                             <p className="text-[11px] text-gray-600">
-                              Paste an image URL or use the captured verification image to search for visually similar known offenders.
+                              Capture a new image to search against indexed verification evidence in the database.
                             </p>
-                            <div className="flex flex-col sm:flex-row gap-2">
-                              <Input
-                                value={imageSearchUrl}
-                                onChange={(e) => setImageSearchUrl(e.target.value)}
-                                placeholder="https://example.com/offender-face.jpg"
-                                className="h-10 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg shadow-sm text-xs sm:text-sm"
-                                aria-label="Offender image URL"
-                              />
-                              <Button
-                                type="button"
-                                variant="outline"
-                                className="h-10 whitespace-nowrap text-xs sm:text-sm"
-                                onClick={searchOffenderByImage}
-                                disabled={isImageSearching}
-                              >
-                                {isImageSearching ? 'Searching image…' : 'Search by image'}
-                              </Button>
-                            </div>
-                            {!imageSearchUrl && verificationEvidencePreview && (
-                              <p className="text-[11px] text-gray-500">
-                                No URL provided – the system will use the captured verification image instead.
-                              </p>
+                            {isSearchCaptureMode && isCameraActive ? (
+                              <div className="rounded-lg border border-gray-200 bg-white p-3">
+                                <FaceCaptureGuide
+                                  videoRef={videoRef}
+                                  onCapture={(dataUrl) => {
+                                    stopCamera()
+                                    setIsSearchCaptureMode(false)
+                                    searchOffenderByImage(dataUrl)
+                                  }}
+                                  onCancel={() => { stopCamera(); setIsSearchCaptureMode(false) }}
+                                  isSearching={isImageSearching}
+                                />
+                                <canvas ref={canvasRef} className="hidden" aria-hidden="true" />
+                              </div>
+                            ) : (
+                              <div className="flex flex-wrap gap-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={startSearchCapture}
+                                  disabled={isImageSearching}
+                                  className="h-9 text-xs sm:text-sm"
+                                >
+                                  Capture to search
+                                </Button>
+                                {verificationEvidencePreview && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => searchOffenderByImage(verificationEvidencePreview)}
+                                    disabled={isImageSearching}
+                                    className="h-9 text-xs sm:text-sm"
+                                  >
+                                    {isImageSearching ? 'Searching…' : 'Use verification image'}
+                                  </Button>
+                                )}
+                              </div>
                             )}
                           </div>
                         <FormField
@@ -2098,13 +2147,16 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                               <div className="space-y-3">
                                 {isCameraActive ? (
                                   <div className="space-y-3">
-                                    <div className="rounded-lg border border-gray-200 bg-white p-3">
-                                      <div className="mx-auto w-full max-w-sm sm:max-w-lg">
-                                        <video ref={videoRef} className="w-full rounded-md" playsInline muted />
-                                      </div>
-                                      <canvas ref={canvasRef} className="hidden" />
-                                    </div>
-                                    <div className="flex flex-wrap gap-2">
+                                <div className="rounded-lg border border-gray-200 bg-white p-3">
+                                  <div className="mx-auto w-full max-w-sm sm:max-w-lg">
+                                    <video ref={videoRef} className="w-full rounded-md" playsInline muted />
+                                  </div>
+                                  <canvas ref={canvasRef} className="hidden" />
+                                  <p className="mt-2 text-[11px] text-amber-700 bg-amber-50 rounded px-2 py-1">
+                                    Position your face centered, well-lit, and filling the frame. Avoid shadows and glare.
+                                  </p>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
                                       <Button
                                         type="button"
                                         variant="outline"

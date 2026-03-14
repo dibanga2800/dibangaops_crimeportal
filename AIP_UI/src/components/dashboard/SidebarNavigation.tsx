@@ -294,21 +294,7 @@ export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({ onNavigate
 	const topLevelLinks = React.useMemo(() => {
 		let filtered = SIDEBAR_TOP_LINKS.filter((link) => canDisplayLink(link, guardContext, pages, effectiveRole));
 
-		// Store & security-officer roles: always include a small default set of top-level links
-		// (currently just Action Calendar), but allow Settings to add more.
-		if (effectiveRole === 'store' || effectiveRole === 'security-officer') {
-			const defaultTopPaths = ['/action-calendar'];
-			const defaultLinks = SIDEBAR_TOP_LINKS.filter((link) =>
-				defaultTopPaths.includes(link.path)
-			);
-
-			// Merge defaults into the filtered list (avoid duplicates)
-			for (const defLink of defaultLinks) {
-				if (!filtered.some((l) => l.path === defLink.path)) {
-					filtered.push(defLink);
-				}
-			}
-		}
+		// Store & security-officer roles: top links come from SIDEBAR_TOP_LINKS and page access
 
 		// Dev-only: log filtering for store/officer to verify Settings-driven visibility
 		if (import.meta.env.DEV && (effectiveRole === 'store' || effectiveRole === 'security-officer')) {

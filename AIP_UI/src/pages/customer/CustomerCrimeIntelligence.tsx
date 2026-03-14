@@ -727,7 +727,7 @@ export default function CustomerCrimeIntelligence() {
 	const [searchParams] = useSearchParams()
 	const { toast } = useToast()
 	const { user, isLoading: authLoading } = useAuth()
-	const { isAdmin, selectedCustomerId: contextCustomerId, setSelectedCustomerId } = useCustomerSelection()
+	const { isAdmin, isManager, selectedCustomerId: contextCustomerId, setSelectedCustomerId, assignedCustomers } = useCustomerSelection()
 	const { availableCustomers, isLoading: loadingCustomers } = useAvailableCustomers()
 
 	const [customer, setCustomer] = useState<{ id: number; name: string } | null>(null)
@@ -755,28 +755,30 @@ export default function CustomerCrimeIntelligence() {
 	const resolvedCustomerId = useMemo(() => {
 		if (urlCustomerId) return parseInt(urlCustomerId, 10)
 		if (isAdmin && contextCustomerId) return contextCustomerId
-		if (user && 'customerId' in user) return (user as any).customerId ?? 1
-		return 1
-	}, [urlCustomerId, isAdmin, contextCustomerId, user])
+		if (isManager && contextCustomerId) return contextCustomerId
+		if (user && 'customerId' in user) return (user as any).customerId ?? null
+		return null
+	}, [urlCustomerId, isAdmin, isManager, contextCustomerId, user])
 
 	useEffect(() => {
-		if (!isAdmin) return
+		if (!isAdmin && !isManager) return
 		if (!resolvedCustomerId) return
 		setSelectedCustomerForAdmin(resolvedCustomerId)
-	}, [isAdmin, resolvedCustomerId])
+	}, [isAdmin, isManager, resolvedCustomerId])
 
 	const loadCustomer = useCallback(async () => {
 		if (authLoading) return
-		const id = resolvedCustomerId || 1
-		setCustomer({ id: 1, name: 'Central England COOP' })
+		const id = resolvedCustomerId ?? null
+		setCustomer(null)
 		setPageError(null)
 		setIsResolvingCustomer(false)
 		if (urlSiteId) setSelectedSiteId(urlSiteId)
+		if (!id) return
 		try {
 			const data = await findCustomerById(id)
 			if (data) setCustomer(data)
 		} catch {
-			// Keep default
+			setCustomer({ id, name: `Customer ${id}` })
 		}
 	}, [authLoading, resolvedCustomerId, urlSiteId])
 
@@ -785,7 +787,8 @@ export default function CustomerCrimeIntelligence() {
 	}, [loadCustomer])
 
 	const loadSites = useCallback(async () => {
-		const id = resolvedCustomerId || 1
+		const id = resolvedCustomerId
+		if (id == null) return
 		try {
 			const res = await siteService.getSitesByCustomer(id)
 			if (res.success && res.data?.length) {
@@ -799,7 +802,8 @@ export default function CustomerCrimeIntelligence() {
 	}, [resolvedCustomerId])
 
 	const loadRegions = useCallback(async () => {
-		const id = resolvedCustomerId || 1
+		const id = resolvedCustomerId
+		if (id == null) return
 		try {
 			const res = await incidentGraphService.fetchRegions(id)
 			if (res.success && res.data?.length) {
@@ -820,7 +824,8 @@ export default function CustomerCrimeIntelligence() {
 	}, [resolvedCustomerId, loadSites, loadRegions])
 
 	const fetchInsights = useCallback(async () => {
-		const customerId = resolvedCustomerId || 1
+		const customerId = resolvedCustomerId
+		if (customerId == null) return
 		setLoadingInsights(true)
 		setPageError(null)
 		try {
@@ -867,11 +872,11 @@ export default function CustomerCrimeIntelligence() {
 	}, [resolvedCustomerId, selectedSiteId, selectedRegionId, startDate, endDate, toast])
 
 	useEffect(() => {
-		if (!customer) {
-			setCustomer({ id: 1, name: 'Central England COOP' })
+		if (!customer && resolvedCustomerId) {
+			setCustomer({ id: resolvedCustomerId, name: `Customer ${resolvedCustomerId}` })
 			setIsResolvingCustomer(false)
 		}
-	}, [customer])
+	}, [customer, resolvedCustomerId])
 
 	useEffect(() => {
 		if (resolvedCustomerId) fetchInsights()
@@ -941,11 +946,11 @@ export default function CustomerCrimeIntelligence() {
 						<p className="text-sm text-slate-500">
 							Live incident telemetry across stores, products, and time-of-day patterns.
 						</p>
-						{isAdmin && (
+						{(isAdmin || (isManager && assignedCustomers.length > 1)) && (
 							<div className="mt-3 max-w-xs">
 								<p className="text-xs font-medium text-slate-500 mb-1">Customer</p>
 								<Select
-									disabled={loadingCustomers || availableCustomers.length === 0}
+									disabled={isAdmin && (loadingCustomers || availableCustomers.length === 0)}
 									value={selectedCustomerForAdmin?.toString() ?? ''}
 									onValueChange={value => {
 										const id = parseInt(value, 10)
@@ -957,15 +962,21 @@ export default function CustomerCrimeIntelligence() {
 										setFiltersVersion(v => v + 1)
 									}}
 								>
-									<SelectTrigger className="h-9 text-sm">
-										<SelectValue placeholder={loadingCustomers ? 'Loading customers…' : 'Select customer'} />
+									<SelectTrigger className="h-9 text-sm" aria-label="Select customer">
+										<SelectValue placeholder={isAdmin && loadingCustomers ? 'Loading customers…' : 'Select customer'} />
 									</SelectTrigger>
 									<SelectContent>
-										{availableCustomers.map(c => (
-											<SelectItem key={c.id} value={c.id.toString()}>
-												{c.name}
-											</SelectItem>
-										))}
+										{isAdmin
+											? availableCustomers.map(c => (
+												<SelectItem key={c.id} value={c.id.toString()}>
+													{c.name}
+												</SelectItem>
+											  ))
+											: assignedCustomers.map(c => (
+												<SelectItem key={c.id} value={c.id.toString()}>
+													{c.name}
+												</SelectItem>
+											  ))}
 									</SelectContent>
 								</Select>
 							</div>

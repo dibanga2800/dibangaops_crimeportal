@@ -1,8 +1,8 @@
-# DibangOps Multi-Organisation Tenancy Strategy
+# DibangOps Crime Portal Multi-Organisation Tenancy Strategy
 
 ## Tenancy Model: Shared Database with Per-Row Organisation Scoping
 
-DibangOps uses a **single shared database** with per-row `CustomerId` scoping. Every core entity carries a `CustomerId` foreign key that ties the record to a specific organisation. This approach balances operational simplicity with strong data isolation.
+DibangOps Crime Portal uses a **single shared database** with per-row `CustomerId` scoping. Every core entity carries a `CustomerId` foreign key that ties the record to a specific organisation. This approach balances operational simplicity with strong data isolation.
 
 ### Why Shared Database?
 
@@ -127,5 +127,5 @@ The `UserContextService` resolves the authenticated user's context from JWT clai
 
 ---
 
-*DibangOps™ — AI-Driven Enterprise Security Intelligence Platform*
+*DibangOps Crime Portal™ — AI-Driven Enterprise Security Intelligence Platform*
 *Founder & Lead Architect: David Ibanga*

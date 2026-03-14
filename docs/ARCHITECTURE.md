@@ -1,10 +1,10 @@
-# DibangOps™ System Architecture
+# DibangOps Crime Portal™ System Architecture
 
 ## 1. System Context
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                     DibangOps™ Platform                         │
+│                     DibangOps Crime Portal™ Platform                         │
 │                                                                 │
 │  ┌──────────────┐         ┌──────────────────┐                  │
 │  │  React/Vite  │◄───────►│  .NET 8 Web API  │                  │
@@ -192,5 +192,5 @@ User (Browser)
 
 ---
 
-*DibangOps™ — AI-Driven Enterprise Security Intelligence Platform*
+*DibangOps Crime Portal™ — AI-Driven Enterprise Security Intelligence Platform*
 *Founder & Lead Architect: David Ibanga*

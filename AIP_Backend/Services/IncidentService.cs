@@ -241,6 +241,21 @@ namespace AIPBackend.Services
 				{
 					await alertRuleService.CheckIncidentForAlertsAsync(created.IncidentId);
 				}
+
+				var offenderRecognition = scope.ServiceProvider.GetService<IOffenderRecognitionService>();
+				if (offenderRecognition != null && !string.IsNullOrWhiteSpace(created.VerificationEvidenceImage))
+				{
+					var imageBytes = TryDecodeBase64DataUrl(created.VerificationEvidenceImage);
+					if (imageBytes != null && imageBytes.Length > 0)
+					{
+						await offenderRecognition.IndexVerificationEvidenceAsync(
+							created.IncidentId,
+							imageBytes,
+							created.OffenderName ?? $"Incident-{created.IncidentId}",
+							created.OffenderId,
+							CancellationToken.None);
+					}
+				}
 			}
 			catch (Exception ex)
 			{
@@ -300,6 +315,21 @@ namespace AIPBackend.Services
 				if (alertRuleService != null)
 				{
 					await alertRuleService.CheckIncidentForAlertsAsync(updated.IncidentId);
+				}
+
+				var offenderRecognition = scope.ServiceProvider.GetService<IOffenderRecognitionService>();
+				if (offenderRecognition != null && !string.IsNullOrWhiteSpace(updated.VerificationEvidenceImage))
+				{
+					var imageBytes = TryDecodeBase64DataUrl(updated.VerificationEvidenceImage);
+					if (imageBytes != null && imageBytes.Length > 0)
+					{
+						await offenderRecognition.IndexVerificationEvidenceAsync(
+							updated.IncidentId,
+							imageBytes,
+							updated.OffenderName ?? $"Incident-{updated.IncidentId}",
+							updated.OffenderId,
+							CancellationToken.None);
+					}
 				}
 			}
 			catch (Exception ex)
@@ -962,6 +992,22 @@ namespace AIPBackend.Services
 					VerificationEvidenceImage = incident.VerificationEvidenceImage
 				}).ToList()
 			};
+		}
+
+		private static byte[]? TryDecodeBase64DataUrl(string? url)
+		{
+			if (string.IsNullOrWhiteSpace(url) || !url.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+				return null;
+			var comma = url.IndexOf(',');
+			if (comma < 0) return null;
+			try
+			{
+				return Convert.FromBase64String(url[(comma + 1)..]);
+			}
+			catch
+			{
+				return null;
+			}
 		}
 
 		private static decimal CalculateIncidentValue(Incident incident)

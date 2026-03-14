@@ -1,4 +1,4 @@
--- DibangOps: Add Evidence Chain-of-Custody and Alert Escalation tables
+-- DibangOps Crime Portal: Add Evidence Chain-of-Custody and Alert Escalation tables
 -- Run this after existing migrations are applied
 
 -- Evidence Items table
@@ -84,5 +84,5 @@ BEGIN
 END
 GO
 
-PRINT 'DibangOps evidence and alert instance tables created successfully.';
+PRINT 'DibangOps Crime Portal evidence and alert instance tables created successfully.';
 GO

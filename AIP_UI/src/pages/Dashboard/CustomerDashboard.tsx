@@ -26,6 +26,7 @@ import { customerDashboardService } from '@/services/dashboardService'
 import { CustomerRole, Region, CustomerStoreData, DailyActivity, SatisfactionDataPoint, BeSafeDataPoint, Site } from '@/types/dashboard'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { useAuth } from '@/hooks/useAuth'
+import { useCustomerSelection } from '@/contexts/CustomerSelectionContext'
 import { extractCustomerId } from '@/utils/customerId'
 import { getCustomerNameById } from '@/services/customerMappingService'
 
@@ -34,7 +35,14 @@ interface CustomerDashboardProps {
 }
 
 const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
-  const { user } = useAuth();
+  const { user } = useAuth()
+  const {
+    selectedCustomerId: contextCustomerId,
+    setSelectedCustomerId,
+    isManager,
+    needsCustomerSelection,
+    assignedCustomers,
+  } = useCustomerSelection()
   
   // State
   const [loading, setLoading] = useState(true);
@@ -53,26 +61,34 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
   const [selectedSatisfactionMonth, setSelectedSatisfactionMonth] = useState<string>('');
   const [satisfactionViewMode, setSatisfactionViewMode] = useState<'bySite' | 'byMonth'>('bySite');
 
-  const [customerName, setCustomerName] = useState<string>('Customer');
+  const [customerName, setCustomerName] = useState<string>('Customer')
 
-  // Fetch customer name dynamically from API
+  // Effective customer for API calls: manager uses context selection (fallback to first assigned so regions load before context updates)
+  const effectiveCustomerId = (() => {
+    const role = (user?.role ?? (user as any)?.Role ?? '').toLowerCase()
+    if (role === 'manager') {
+      return contextCustomerId ?? assignedCustomers[0]?.id ?? extractCustomerId(user ?? null)
+    }
+    return extractCustomerId(user ?? null)
+  })()
+
+  // Fetch customer name from effective customer
   useEffect(() => {
     const fetchCustomerName = async () => {
-      if (user?.customerId) {
+      if (effectiveCustomerId != null) {
         try {
-          const name = await getCustomerNameById(user.customerId);
-          setCustomerName(name || 'Customer');
-        } catch (error) {
-          console.error('Error fetching customer name:', error);
-          setCustomerName('Customer');
+          const name = await getCustomerNameById(effectiveCustomerId)
+          setCustomerName(name || 'Customer')
+        } catch {
+          const fromAssigned = isManager && assignedCustomers.find((c) => c.id === effectiveCustomerId)
+          setCustomerName(fromAssigned?.name ?? 'Customer')
         }
       } else {
-        setCustomerName('Customer');
+        setCustomerName('Customer')
       }
-    };
-
-    fetchCustomerName();
-  }, [user?.customerId]);
+    }
+    fetchCustomerName()
+  }, [effectiveCustomerId, isManager, assignedCustomers])
 
   // Helper to get the list of site IDs to aggregate
   const getSiteIdsToAggregate = () => {
@@ -97,103 +113,62 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
     return sites.filter(site => site.regionId === selectedRegion);
   }, [selectedRegion, sites]);
 
-  // Load initial data, filtered by customerId
+  // Load initial data for the effective customer (manager: selected in context; store: user's customer)
   useEffect(() => {
-    const abortController = new AbortController();
-    let isActive = true;
+    const abortController = new AbortController()
+    let isActive = true
 
     const loadInitialData = async () => {
       try {
-        if (!isActive) return;
-        
-        // Check if user is a customer role - try multiple sources
-        const userRoleRaw = user?.role || (user as any)?.Role || '';
-        const userRole = userRoleRaw.toLowerCase();
-        const isCustomerRole = userRole === 'store' || userRole === 'manager';
-        
-        // Log user object for debugging
-        console.log('🔍 [CustomerDashboard] User object:', {
-          hasUser: !!user,
-          userRole: user?.role,
-          userRoleRaw: userRoleRaw,
-          userRoleNormalized: userRole,
-          isCustomerRole,
-          userKeys: user ? Object.keys(user) : []
-        });
-        
+        if (!isActive) return
+        const userRoleRaw = user?.role ?? (user as any)?.Role ?? ''
+        const userRole = String(userRoleRaw).toLowerCase()
+        const isCustomerRole = userRole === 'store' || userRole === 'manager'
+
         if (!isCustomerRole) {
-          console.warn('⚠️ [CustomerDashboard] User is not a customer role:', {
-            userRole,
-            userRoleRaw,
-            userObject: user
-          });
-          setError('Access denied. This dashboard is only available for company users.');
-          setLoading(false);
-          return;
+          setError('Access denied. This dashboard is only available for company users.')
+          setLoading(false)
+          return
         }
-        
-        // Ensure user object has role set for extractCustomerId
-        const userWithRole = user ? { ...user, role: userRole as any } : null;
-        const customerId = extractCustomerId(userWithRole);
-        
-        if (!customerId) {
-          // Log detailed information for debugging
-          console.error('❌ [CustomerDashboard] Customer ID not found:', {
-            user: user ? {
-              id: user.id,
-              role: user.role,
-              customerId: user.customerId,
-              hasCustomerId: 'customerId' in user,
-              assignedCustomerIds: (user as any).assignedCustomerIds || (user as any).AssignedCustomerIds
-            } : null
-          });
-          
-          setError('Company ID not found. Please log out and log in again to refresh your session.');
-          setLoading(false);
-          return;
+        if (effectiveCustomerId == null) {
+          setError('Company ID not found. Please log out and log in again to refresh your session.')
+          setLoading(false)
+          return
         }
-        
-        setLoading(true);
-        setError(null);
 
-        // Load all data
+        setLoading(true)
+        setError(null)
+
         const [storesData, regionsData, sitesData] = await Promise.all([
-          customerDashboardService.getStores(abortController.signal),
-          customerDashboardService.getRegions(abortController.signal),
-          customerDashboardService.getSites(abortController.signal)
-        ]);
+          customerDashboardService.getStores(abortController.signal, effectiveCustomerId),
+          customerDashboardService.getRegions(abortController.signal, effectiveCustomerId),
+          customerDashboardService.getSites(abortController.signal, effectiveCustomerId),
+        ])
 
-        // Filter by customerId
-        const filteredRegions = regionsData.filter(r => r.customerId === customerId);
-        const filteredSites = sitesData.filter(s => s.customerId === customerId);
-
-        setRegions(filteredRegions);
-        setSites(filteredSites);
-
-        // Set initial selections
-        if (filteredRegions.length > 0) {
-          setSelectedRegion('all');
-        }
-        if (filteredSites.length > 0) {
-          setSelectedSite('all');
-        }
-        setLoading(false);
+        // API was already called with customerId; use response as-is (coerce filter only if backend returns multiple customers)
+        const effectiveNum = Number(effectiveCustomerId)
+        const filteredRegions = regionsData.filter((r: Region) => Number(r.customerId) === effectiveNum || r.customerId === effectiveCustomerId)
+        const filteredSites = sitesData.filter((s: Site) => Number(s.customerId) === effectiveNum || s.customerId === effectiveCustomerId)
+        setRegions(filteredRegions.length > 0 ? filteredRegions : regionsData)
+        setSites(filteredSites.length > 0 ? filteredSites : sitesData)
+        if (filteredRegions.length > 0) setSelectedRegion('all')
+        if (filteredSites.length > 0) setSelectedSite('all')
+        setLoading(false)
       } catch (err) {
         if (!(err instanceof Error && err.name === 'AbortError')) {
-          console.error('Error loading initial data:', err);
-          setError('Failed to load initial data');
+          console.error('Error loading initial data:', err)
+          setError('Failed to load initial data')
         }
-        setLoading(false);
+        setLoading(false)
       }
-    };
+    }
 
-    loadInitialData();
-
+    loadInitialData()
     return () => {
-      isActive = false;
-      abortController.abort();
-    };
-  }, [user]);
+      isActive = false
+      abortController.abort()
+    }
+  }, [user, effectiveCustomerId])
 
   // Reset site selection when region changes
   useEffect(() => {
@@ -208,27 +183,26 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
 
   // Load site or aggregate data when selection changes
   useEffect(() => {
-    const siteIds = getSiteIdsToAggregate();
-    
-    if (!siteIds.length) return;
+    const siteIds = getSiteIdsToAggregate()
+    if (!siteIds.length || effectiveCustomerId == null) return
 
-    let isActive = true;
-    const abortController = new AbortController();
+    let isActive = true
+    const abortController = new AbortController()
 
     const loadData = async () => {
       try {
-        setLoading(true);
-        setError(null);
-        setSiteData(null);
+        setLoading(true)
+        setError(null)
+        setSiteData(null)
 
         const [data, satisfaction, beSafe, activities] = await Promise.all([
           siteIds.length === 1
-            ? customerDashboardService.getSiteData(siteIds[0], abortController.signal)
-            : customerDashboardService.getAggregatedSitesData(siteIds, abortController.signal),
-          customerDashboardService.getSatisfactionData(siteIds, abortController.signal),
-          customerDashboardService.getBeSafeData(abortController.signal, getSiteIdsToAggregate()),
-          customerDashboardService.getDailyActivities(abortController.signal)
-        ]);
+            ? customerDashboardService.getSiteData(siteIds[0], abortController.signal, effectiveCustomerId)
+            : customerDashboardService.getAggregatedSitesData(siteIds, abortController.signal, effectiveCustomerId),
+          customerDashboardService.getSatisfactionData(siteIds, abortController.signal, effectiveCustomerId),
+          customerDashboardService.getBeSafeData(abortController.signal, getSiteIdsToAggregate(), effectiveCustomerId),
+          customerDashboardService.getDailyActivities(abortController.signal, effectiveCustomerId),
+        ])
         
         if (!isActive) return;
         setSiteData(data);
@@ -251,7 +225,7 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
       isActive = false;
       abortController.abort();
     };
-  }, [selectedRegion, selectedSite, sites]);
+  }, [selectedRegion, selectedSite, sites, effectiveCustomerId])
 
   // Get available months from satisfaction data
   const availableMonths = useMemo(() => {
@@ -481,9 +455,29 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
               <Building2 className="h-6 w-6 sm:h-7 sm:w-7 text-gray-500" aria-hidden="true" />
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto flex-wrap">
+              {isManager && needsCustomerSelection && assignedCustomers.length > 1 && (
+                <Select
+                  value={effectiveCustomerId?.toString() ?? ''}
+                  onValueChange={(value) => {
+                    const id = parseInt(value, 10)
+                    if (!isNaN(id)) setSelectedCustomerId(id)
+                  }}
+                >
+                  <SelectTrigger className="w-full sm:w-[220px] h-11" aria-label="Select customer">
+                    <SelectValue placeholder="Select customer" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {assignedCustomers.map((c) => (
+                      <SelectItem key={c.id} value={c.id.toString()}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               <Select value={selectedRegion} onValueChange={setSelectedRegion}>
-                <SelectTrigger className="w-full sm:w-[200px] h-11">
+                <SelectTrigger className="w-full sm:w-[200px] h-11" aria-label="Select region">
                   <SelectValue placeholder="Select Region" />
                 </SelectTrigger>
                 <SelectContent>
@@ -496,11 +490,8 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
                 </SelectContent>
               </Select>
 
-              <Select 
-                value={selectedSite} 
-                onValueChange={setSelectedSite}
-              >
-                <SelectTrigger className="w-full sm:w-[250px] h-11">
+              <Select value={selectedSite} onValueChange={setSelectedSite}>
+                <SelectTrigger className="w-full sm:w-[250px] h-11" aria-label="Select site">
                   <SelectValue placeholder="Select Site" />
                 </SelectTrigger>
                 <SelectContent>
