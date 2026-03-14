@@ -93,6 +93,12 @@ namespace AIPBackend.Models.DTOs
 
 		public List<OffenderMatchCandidateDto> Candidates { get; set; } = new();
 		public string ClassifierVersion { get; set; } = "cv-not-configured";
+
+		/// <summary>When true, the face service (e.g. InsightFace) could not be reached.</summary>
+		public bool ServiceUnavailable { get; set; }
+
+		/// <summary>User-safe message when ServiceUnavailable is true.</summary>
+		public string? ServiceErrorMessage { get; set; }
 	}
 
 	/// <summary>

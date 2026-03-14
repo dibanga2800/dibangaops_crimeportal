@@ -49,12 +49,11 @@ The frontend is a **React + Vite + TypeScript** SPA, backed by a **.NET + MSSQL*
   - Customer‑specific dashboards and crime intelligence views.
   - Role‑aware page access configuration so AI views (e.g. Analytics Hub, risk cards) are reserved for appropriate roles.
 
-- **Computer vision offender intelligence**
-  - Offender recognition API (`OffenderRecognitionController`) with an `index-and-match` endpoint for image‑based search.
-  - Incident form **Offender Details** section supports:
-    - **Search by details** (name, DOB, marks) for repeat‑offender detection.
-    - **Search by image** – passes an image URL or captured verification image to the offender recognition service and reuses the repeat‑offender matches UI.
-  - Designed to plug into a real CV provider (Azure AI Vision, custom service, etc.) without changing the UI.
+- **Facial recognition & offender intelligence**
+  - **InsightFace** (open-source) powers face detection and recognition: guided capture (red/green oval), auto-capture when face is in frame, and search-by-image against previously stored offender faces. No cloud approval required; runs as a local Python sidecar.
+  - Optional **Azure Face API** can be used instead by setting `InsightFace:Enabled = false` and configuring `AzureFace` in appsettings.
+  - Offender recognition API (`OffenderRecognitionController`): `detect-only`, `search-by-image`, `index-and-match`, and `reindex` for backfilling verification evidence.
+  - Incident form **Offender Details**: **Search by details** (name, DOB, marks) and **Search by image** (camera capture or verification image) with repeat-offender match results.
 
 
 ---
@@ -80,7 +79,7 @@ The frontend is a **React + Vite + TypeScript** SPA, backed by a **.NET + MSSQL*
 - **AI services layer**:
   - `IIncidentClassifier` with `AzureOpenAiIncidentClassifier` (Azure OpenAI + rule‑based classifier).
   - `AiAnalyticsController` for AI pattern summaries and store risk scores.
-  - `OffenderRecognitionController` for offender image indexing and matching.
+  - **Facial recognition**: `IOffenderRecognitionService` with **InsightFace** (default) or Azure Face API. InsightFace runs as a Python REST service (`AIP_Backend/InsightFaceService`) exposing `/detect` and `/embed`; the .NET backend stores embeddings in SQL and performs similarity search.
 
 ---
 
@@ -91,6 +90,7 @@ The frontend is a **React + Vite + TypeScript** SPA, backed by a **.NET + MSSQL*
 - Node.js **18+**
 - .NET SDK (matching backend project version)
 - MSSQL Server (local or remote)
+- **Python 3.8+** (for InsightFace facial recognition service when `InsightFace:Enabled` is true)
 - `npm` (or `pnpm`/`yarn` if you prefer)
 
 ### Clone
@@ -135,7 +135,10 @@ cp .env.example .env
 ### Backend (`AIP_Backend`)
 
 1. Configure MSSQL connection string in `appsettings.Development.json` / `appsettings.json`.
-2. Apply migrations:
+2. **Facial recognition (InsightFace)** – when `InsightFace:Enabled` is true (default in Development):
+   - `InsightFace:BaseUrl` – URL of the InsightFace Python service (e.g. `http://localhost:8000`).
+   - See [InsightFace service setup](#insightface-facial-recognition-service) below to run the Python sidecar.
+3. Apply migrations:
 
 ```bash
 cd AIP_Backend
@@ -165,6 +168,18 @@ dotnet run
 ```
 
 Runs at `http://localhost:5128` (or configured port).
+
+**InsightFace (facial recognition):** If using InsightFace, start the Python service first so the backend can call it:
+
+```bash
+cd AIP_Backend/InsightFaceService
+python -m venv .venv
+.venv\Scripts\activate    # Windows
+pip install -r requirements.txt
+uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+Leave it running; the .NET backend will use `http://localhost:8000` when `InsightFace:Enabled` is true. See [AIP_Backend/InsightFaceService/README.md](AIP_Backend/InsightFaceService/README.md) for details.
 
 ### Production build (frontend)
 
@@ -227,7 +242,7 @@ ASP.NET Core API (AIP_Backend)
   - AI service layer:
     - `AzureOpenAiClient` and `AzureOpenAiIncidentClassifier` for incident classification (category, risk, confidence, actions).
     - `IncidentAnalyticsService` / `RiskScoringService` / `IncidentPatternService` for pattern detection and store risk scores.
-    - `OffenderRecognitionService` for offender image indexing and matching (model-agnostic CV integration).
+    - **InsightFace** (Python REST service) for face detection and embedding; `InsightFaceOffenderRecognitionService` stores embeddings in SQL and performs cosine-similarity search. Optional Azure Face API can be used instead via config.
   - All configuration (DB, email, AI providers, IIS/hosting) is driven via `appsettings.*.json` and environment variables.
 
 ---
@@ -257,11 +272,27 @@ AIP_UI/
 AIP_Backend/
 ├── Controllers/         # API endpoints
 ├── Models/              # EF Core entities
-├── Services/            # Business logic & login protection
+├── Services/            # Business logic, AI services, InsightFace client
 ├── Data/                # DbContext & migrations
 ├── Repositories/        # Data access abstractions
-└── Models/DTOs/         # API DTOs
+├── Models/DTOs/         # API DTOs
+└── InsightFaceService/  # Python REST API for face detection & embedding (InsightFace)
+    ├── main.py          # FastAPI app: POST /detect, POST /embed
+    ├── requirements.txt
+    └── README.md
 ```
+
+---
+
+## InsightFace facial recognition service
+
+Facial recognition is provided by **[InsightFace](https://github.com/deepinsight/insightface)** (open-source, state-of-the-art face detection and recognition). It runs as a separate Python service that the .NET backend calls over HTTP.
+
+- **Endpoints:** `POST /detect` (face in image + bounding box), `POST /embed` (512-d normalized embedding for matching).
+- **Flow:** When an incident is saved with verification evidence, the backend sends the image to InsightFace, gets an embedding, and stores it in `FaceEmbeddings` with `ModelId = "insightface-v1"`. When a user searches by image (camera or upload), the backend gets an embedding from InsightFace, loads stored embeddings from the DB, computes cosine similarity, and returns the best-matching offenders.
+- **Config:** In `appsettings.Development.json` (or your environment), set `InsightFace:Enabled = true` and `InsightFace:BaseUrl` to the service URL (e.g. `http://localhost:8000`). To use Azure Face API instead, set `InsightFace:Enabled = false` and configure the `AzureFace` section.
+- **Run:** From `AIP_Backend/InsightFaceService`, create a venv, `pip install -r requirements.txt`, then `uvicorn main:app --host 0.0.0.0 --port 8000`. Full steps are in [AIP_Backend/InsightFaceService/README.md](AIP_Backend/InsightFaceService/README.md).
+- **License:** InsightFace code is MIT. For the recognition models (e.g. buffalo_l), see [InsightFace licensing](https://github.com/deepinsight/insightface#license); commercial use may require contacting the authors.
 
 ---
 
@@ -383,13 +414,21 @@ npm run dev
 
 The frontend will run on `http://localhost:5173` (or next available port)
 
-2. **Start the Backend (when ready):**
+2. **Start the InsightFace service** (when using facial recognition; optional):
+```bash
+cd AIP_Backend/InsightFaceService
+python -m venv .venv && .venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+3. **Start the Backend:**
 ```bash
 cd AIP_Backend
 dotnet run
 ```
 
-The backend API will run on `http://localhost:5128` (or configured port)
+The backend API will run on `http://localhost:5128` (or configured port). With `InsightFace:Enabled = true`, it will use the InsightFace service at `http://localhost:8000` for face detection and search.
 
 #### Production Build
 
@@ -436,9 +475,12 @@ AIP_UI/
 AIP_Backend/
 ├── Controllers/        # API endpoints
 ├── Models/            # Entity Framework models
-├── Services/          # Business logic
+├── Services/          # Business logic, AI services, InsightFace client
 ├── Data/              # Database context and migrations
-└── DTOs/              # Data transfer objects
+├── Models/DTOs/       # Data transfer objects
+└── InsightFaceService/  # Python face detection & embedding (InsightFace)
+    ├── main.py        # FastAPI: /detect, /embed
+    └── requirements.txt
 ```
 
 ## Available Scripts
@@ -531,6 +573,7 @@ For questions or support:
 - UI components from Radix UI and Shadcn
 - Backend powered by .NET and Entity Framework
 - Database management with MSSQL
+- Facial recognition by [InsightFace](https://github.com/deepinsight/insightface) (open-source face analysis)
 
 ---
 

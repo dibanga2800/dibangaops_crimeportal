@@ -52,11 +52,23 @@ namespace AIPBackend.Services
 	}
 
 	/// <summary>
+	/// Face rectangle from Azure Detect API (top, left, width, height in pixels).
+	/// </summary>
+	public class AzureFaceRectangle
+	{
+		public int Top { get; set; }
+		public int Left { get; set; }
+		public int Width { get; set; }
+		public int Height { get; set; }
+	}
+
+	/// <summary>
 	/// Single face from Detect API response.
 	/// </summary>
 	public class AzureFaceDetectItem
 	{
 		public string? FaceId { get; set; }
+		public AzureFaceRectangle? FaceRectangle { get; set; }
 	}
 
 	/// <summary>

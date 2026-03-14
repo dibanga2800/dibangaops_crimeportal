@@ -23,6 +23,11 @@ namespace AIPBackend.Services
 			PropertyNameCaseInsensitive = true
 		};
 
+		private static readonly JsonSerializerOptions DetectResponseOptions = new()
+		{
+			PropertyNameCaseInsensitive = true
+		};
+
 		public AzureFaceClient(
 			HttpClient httpClient,
 			IOptions<AzureFaceOptions> options,
@@ -84,7 +89,7 @@ namespace AIPBackend.Services
 			}
 
 			var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-			var faces = JsonSerializer.Deserialize<List<AzureFaceDetectItem>>(responseBody);
+			var faces = JsonSerializer.Deserialize<List<AzureFaceDetectItem>>(responseBody, DetectResponseOptions);
 			var result = new AzureFaceDetectResult { Faces = faces ?? new List<AzureFaceDetectItem>() };
 
 			// Fallback: try alternate model if no face found
@@ -97,7 +102,7 @@ namespace AIPBackend.Services
 				if (fallbackResponse.IsSuccessStatusCode)
 				{
 					var fallbackBody = await fallbackResponse.Content.ReadAsStringAsync(cancellationToken);
-					var fallbackFaces = JsonSerializer.Deserialize<List<AzureFaceDetectItem>>(fallbackBody);
+					var fallbackFaces = JsonSerializer.Deserialize<List<AzureFaceDetectItem>>(fallbackBody, DetectResponseOptions);
 					if (fallbackFaces != null && fallbackFaces.Count > 0)
 					{
 						_logger.LogDebug("Azure Face API: {Primary} found no face; {Fallback} found {Count}", primaryModel, fallbackModel, fallbackFaces.Count);
