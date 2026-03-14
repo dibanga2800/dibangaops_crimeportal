@@ -32,18 +32,18 @@ export const Footer = () => {
                   Incident Report
                 </Link>
                 <Link 
-                  to="/operations/site-visit" 
+                  to="/operations/incident-graph" 
                   className="block text-gray-300 text-sm sm:text-base hover:text-blue-400 transition-colors"
-                  aria-label="View Site Visits"
+                  aria-label="Incident Graph"
                 >
-                  Site Visits
+                  Incident Graph
                 </Link>
                 <Link 
-                  to="/operations/officer-support" 
+                  to="/operations/crime-intelligence" 
                   className="block text-gray-300 text-sm sm:text-base hover:text-blue-400 transition-colors"
-                  aria-label="Access Officer Support"
+                  aria-label="Crime Intelligence"
                 >
-                  Officer Support
+                  Crime Intelligence
                 </Link>
               </nav>
             </div>
@@ -71,7 +71,7 @@ export const Footer = () => {
         {/* Copyright */}
         <div className="mt-6 sm:mt-8 pt-4 sm:pt-8 border-t border-gray-800 pb-4">
           <p className="text-center text-gray-400 text-xs sm:text-sm">
-            © {new Date().getFullYear()} David Ibanga. All rights reserved.
+            © {new Date().getFullYear()} DibangaOps – Developed by David Ibanga
           </p>
         </div>
       </div>

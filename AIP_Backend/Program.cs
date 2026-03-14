@@ -142,8 +142,6 @@ builder.Services.AddScoped<IHolidayRequestService, HolidayRequestService>();
 builder.Services.AddScoped<IBankHolidayService, BankHolidayService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IHolidayEmailService, HolidayEmailService>();
-builder.Services.AddScoped<IStockService, StockService>();
-builder.Services.AddScoped<IStockEmailService, StockEmailService>();
 builder.Services.AddScoped<ICustomerAssignmentService, CustomerAssignmentService>();
 builder.Services.AddScoped<IUserSoftDeleteService, UserSoftDeleteService>();
 builder.Services.AddHttpContextAccessor();
@@ -152,7 +150,6 @@ builder.Services.AddScoped<IIncidentService, IncidentService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IExcelImportService, ExcelImportService>();
 builder.Services.AddScoped<IDailyActivityReportService, DailyActivityReportService>();
-builder.Services.AddScoped<IActionCalendarEmailService, ActionCalendarEmailService>();
 builder.Services.AddScoped<IAlertRuleService, AlertRuleService>();
 // AI classification: Azure OpenAI with rule-based fallback
 builder.Services.Configure<AzureOpenAiOptions>(
@@ -164,11 +161,13 @@ builder.Services.AddScoped<IIncidentAnalyticsService, IncidentAnalyticsService>(
 builder.Services.AddScoped<IEvidenceService, EvidenceService>();
 builder.Services.AddScoped<IAlertEscalationService, AlertEscalationService>();
 builder.Services.AddScoped<ILoginProtectionService, LoginProtectionService>();
+builder.Services.Configure<AzureFaceOptions>(
+	builder.Configuration.GetSection("AzureFace"));
+builder.Services.AddHttpClient<IAzureFaceClient, AzureFaceClient>();
 builder.Services.AddScoped<IOffenderRecognitionService, OffenderRecognitionService>();
 builder.Services.AddScoped<IIncidentPatternService, IncidentPatternService>();
 builder.Services.AddScoped<IRiskScoringService, RiskScoringService>();
-builder.Services.Configure<StockNotificationSettings>(
-	builder.Configuration.GetSection("StockNotifications"));
+// Stock notifications removed with legacy stock module; configuration section reserved for future use.
 
 // Configure CORS
 builder.Services.AddCors(options =>
@@ -247,9 +246,9 @@ builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo
     {
-        Title = "DibangOps API",
+        Title = "DibangOps Crime Portal API",
         Version = "v1",
-        Description = "DibangOps\u2122 \u2014 AI-Driven Enterprise Security Intelligence Platform API"
+        Description = "DibangOps Crime Portal\u2122 \u2014 AI-Driven Enterprise Security Intelligence Platform API"
     });
     
     // Add JWT Bearer token authentication to Swagger

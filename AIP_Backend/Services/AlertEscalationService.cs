@@ -166,7 +166,7 @@ namespace AIPBackend.Services
 			{
 				await _emailService.SendEmailAsync(
 					dto.EscalateTo,
-					$"[DibangOps] Escalated Alert: {alert.AlertRule?.Name ?? "Alert"}",
+					$"[DibangOps Crime Portal] Escalated Alert: {alert.AlertRule?.Name ?? "Alert"}",
 					BuildEscalationEmailBody(alert, dto.Notes),
 					isHtml: true);
 			}
@@ -288,7 +288,7 @@ namespace AIPBackend.Services
 					{(string.IsNullOrWhiteSpace(notes) ? "" : $@"<tr><td style='padding: 8px; border: 1px solid #e5e7eb; font-weight: bold;'>Notes</td>
 						<td style='padding: 8px; border: 1px solid #e5e7eb;'>{notes}</td></tr>")}
 				</table>
-				<p style='margin-top: 16px; color: #6b7280; font-size: 12px;'>DibangOps™ — AI-Driven Enterprise Security Intelligence Platform</p>
+				<p style='margin-top: 16px; color: #6b7280; font-size: 12px;'>DibangOps Crime Portal™ — AI-Driven Enterprise Security Intelligence Platform</p>
 			</body></html>";
 		}
 	}

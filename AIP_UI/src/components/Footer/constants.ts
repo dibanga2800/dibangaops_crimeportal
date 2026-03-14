@@ -21,13 +21,13 @@ export const QUICK_LINKS: QuickLink[] = [
     ariaLabel: 'Create Incident Report',
   },
   {
-    to: '/operations/site-visit',
-    label: 'Site Visits',
-    ariaLabel: 'View Site Visits',
+    to: '/operations/incident-graph',
+    label: 'Incident Graph',
+    ariaLabel: 'Incident Graph',
   },
   {
-    to: '/operations/officer-support',
-    label: 'Officer Support',
-    ariaLabel: 'Access Officer Support',
+    to: '/operations/crime-intelligence',
+    label: 'Crime Intelligence',
+    ariaLabel: 'Crime Intelligence',
   },
 ]; 

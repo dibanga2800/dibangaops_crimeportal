@@ -134,17 +134,10 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 				
 				// Check if this looks like default settings (has all default customer pages)
 				const defaultCustomerPages = [
-					'customer-daily-activity-report',
 					'customer-incident-graph',
 					'customer-incident-report',
-					'customer-satisfaction-report',
-					'customer-be-safe-be-secure',
-					'daily-occurrence-book',
-					'customer-officer-support',
 					'customer-views-config',
 					'customer-crime-intelligence',
-					'customer-site-visit-reports',
-					'customer-mystery-shopper-report'
 				];
 				const hasAllDefaultCustomerPages = defaultCustomerPages.every(pageId => 
 					officerPages.some(p => String(p).toLowerCase().trim() === pageId.toLowerCase().trim())
@@ -667,7 +660,7 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 					pagePath: page.path
 				});
 				// Check all customer pages to see which ones are in the allowed list
-				const customerPageIds = ['customer-incident-report', 'customer-incident-graph', 'customer-satisfaction-report', 'customer-daily-activity-report'];
+				const customerPageIds = ['customer-incident-report', 'customer-incident-graph', 'customer-satisfaction-report'];
 				const customerPageMatches = customerPageIds.map(customerPageId => {
 					const exactMatch = allowedPageIds.includes(customerPageId);
 					const caseInsensitiveMatch = allowedPageIds.some(id => String(id).toLowerCase().trim() === customerPageId.toLowerCase().trim());

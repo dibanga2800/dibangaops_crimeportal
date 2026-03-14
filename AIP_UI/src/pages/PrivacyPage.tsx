@@ -10,7 +10,7 @@ const PrivacyPage = () => {
 				</CardHeader>
 				<CardContent className="space-y-3 text-sm text-slate-700">
 					<p>
-						DibangOps is built with a security-first mindset. All customer data is handled according to
+						DibangOps Crime Portal is built with a security-first mindset. All customer data is handled according to
 						modern SaaS best practices, including strict access controls and separation between production
 						and development environments.
 					</p>

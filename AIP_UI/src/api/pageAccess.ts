@@ -303,8 +303,7 @@ export const pageAccessApi = {
 					const hasDefaultCustomerPages = [
 						'customer-incident-report',
 						'customer-incident-graph',
-						'customer-satisfaction-report',
-						'customer-daily-activity-report'
+						'customer-satisfaction-report'
 					].some(pageId => officerPages.includes(pageId));
 					
 					if (hasDefaultCustomerPages) {

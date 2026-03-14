@@ -3,16 +3,14 @@
 using AIPBackend.Models.DTOs;
 using AIPBackend.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AIPBackend.Controllers
 {
 	/// <summary>
-	/// AI offender recognition endpoints.
-	/// 
-	/// NOTE: The underlying OffenderRecognitionService currently exposes a stub
-	/// implementation for the computer-vision provider. Once a real CV model
-	/// is integrated, these endpoints will begin returning live matches.
+	/// AI offender recognition endpoints using Azure Face API.
+	/// Search by captured image against indexed verification evidence.
 	/// </summary>
 	[ApiController]
 	[Route("api/[controller]")]
@@ -27,9 +25,82 @@ namespace AIPBackend.Controllers
 		}
 
 		/// <summary>
-		/// Index an offender image and return potential matches.
-		/// The caller is responsible for ensuring that FileName/Url refer to a
-		/// valid image location that the computer-vision provider can access.
+		/// Lightweight face detection only. Returns faceDetected for guided capture UX (red/green overlay).
+		/// </summary>
+		[HttpPost("detect-only")]
+		public async Task<ActionResult<OffenderMatchResultDto>> DetectOnly(CancellationToken cancellationToken)
+		{
+			byte[]? imageBytes = null;
+			if (Request.ContentType?.Contains("application/json", StringComparison.OrdinalIgnoreCase) == true)
+			{
+				using var reader = new StreamReader(Request.Body);
+				var body = await reader.ReadToEndAsync(cancellationToken);
+				var json = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(body);
+				if (json.TryGetProperty("imageBase64", out var prop))
+				{
+					var base64 = prop.GetString();
+					if (!string.IsNullOrWhiteSpace(base64))
+					{
+						try { imageBytes = Convert.FromBase64String(base64); } catch { return BadRequest(new { message = "Invalid base64 image data." }); }
+					}
+				}
+			}
+			if (imageBytes == null || imageBytes.Length == 0)
+				return BadRequest(new { message = "Provide JSON body with imageBase64." });
+			var result = await _offenderRecognitionService.DetectFaceOnlyAsync(imageBytes, cancellationToken);
+			return Ok(result);
+		}
+
+		/// <summary>
+		/// Search for repeat offenders by captured image. Upload image bytes (multipart) or base64 JSON.
+		/// Searches against stored verification evidence indexed in the database.
+		/// </summary>
+		[HttpPost("search-by-image")]
+		public async Task<ActionResult<OffenderMatchResultDto>> SearchByImage(
+			CancellationToken cancellationToken)
+		{
+			byte[]? imageBytes = null;
+
+			if (Request.HasFormContentType && Request.Form.Files.Count > 0)
+			{
+				var file = Request.Form.Files[0];
+				await using var ms = new MemoryStream();
+				await file.CopyToAsync(ms, cancellationToken);
+				imageBytes = ms.ToArray();
+			}
+			else if (Request.ContentType?.Contains("application/json", StringComparison.OrdinalIgnoreCase) == true)
+			{
+				using var reader = new StreamReader(Request.Body);
+				var body = await reader.ReadToEndAsync(cancellationToken);
+				var json = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(body);
+				if (json.TryGetProperty("imageBase64", out var prop))
+				{
+					var base64 = prop.GetString();
+					if (!string.IsNullOrWhiteSpace(base64))
+					{
+						try
+						{
+							imageBytes = Convert.FromBase64String(base64);
+						}
+						catch
+						{
+							return BadRequest(new { message = "Invalid base64 image data." });
+						}
+					}
+				}
+			}
+
+			if (imageBytes == null || imageBytes.Length == 0)
+			{
+				return BadRequest(new { message = "Provide image via multipart/form-data (file) or JSON body with imageBase64." });
+			}
+
+			var result = await _offenderRecognitionService.SearchByImageAsync(imageBytes, cancellationToken);
+			return Ok(result);
+		}
+
+		/// <summary>
+		/// Index an offender image and return potential matches. Accepts URL or base64 data URL.
 		/// </summary>
 		[HttpPost("index-and-match")]
 		public async Task<ActionResult<OffenderMatchResultDto>> IndexAndMatch(
@@ -42,6 +113,18 @@ namespace AIPBackend.Controllers
 			}
 
 			var result = await _offenderRecognitionService.IndexAndMatchAsync(imageReference, cancellationToken);
+			return Ok(result);
+		}
+
+		/// <summary>
+		/// Re-index all incidents with verification evidence that were not previously indexed (e.g. Pius Joan).
+		/// Admin only. Call this to backfill faces so scan-to-search can find them.
+		/// </summary>
+		[HttpPost("reindex")]
+		[Authorize(Roles = "administrator")]
+		public async Task<ActionResult<ReindexResultDto>> Reindex(CancellationToken cancellationToken)
+		{
+			var result = await _offenderRecognitionService.ReindexVerificationEvidenceAsync(cancellationToken);
 			return Ok(result);
 		}
 

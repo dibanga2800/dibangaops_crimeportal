@@ -108,7 +108,21 @@ namespace AIPBackend.Services
 			if (!response.IsSuccessStatusCode)
 			{
 				var body = await response.Content.ReadAsStringAsync(cancellationToken);
-				_logger.LogWarning("Azure OpenAI returned {StatusCode}: {Body}", response.StatusCode, body);
+				var statusCode = (int)response.StatusCode;
+				// 401/403 typically indicate invalid API key or expired subscription
+				if (statusCode is 401 or 403)
+				{
+					_logger.LogWarning(
+						"Azure OpenAI authentication failed (HTTP {StatusCode}). Check ApiKey and subscription. " +
+						"This may indicate an expired subscription or invalid key. Falling back to rule-based classifier. Response: {Body}",
+						response.StatusCode,
+						body);
+				}
+				else
+				{
+					_logger.LogWarning("Azure OpenAI returned {StatusCode}: {Body}", response.StatusCode, body);
+				}
+
 				throw new InvalidOperationException($"Azure OpenAI call failed with status code {response.StatusCode}");
 			}
 

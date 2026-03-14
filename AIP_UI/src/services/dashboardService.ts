@@ -253,16 +253,18 @@ export const dashboardApi = {
   }
 };
 
-// Helper function to get customer ID from auth context
+// Helper function to get customer ID from auth context (no static fallback – production only)
 const getCustomerIdFromAuth = () => {
   const user = getActiveUser();
-  return user.customerId || 21; // Default to Central England COOP if no customerId found
+  return user.customerId ?? (user as any).CustomerId ?? undefined;
 };
 
-// Helper function to add customer ID to headers
-const getHeaders = () => ({
-  'X-Customer-Id': getCustomerIdFromAuth()
-});
+// Helper function to add customer ID to headers (only when present)
+const getHeaders = (): Record<string, string> => {
+  const customerId = getCustomerIdFromAuth();
+  if (customerId == null) return {};
+  return { 'X-Customer-Id': String(customerId) };
+};
 
 // Helper function to calculate incident chart data from incidents
 const calculateIncidentChartData = (incidents: Array<{ date: string; officerRole?: string; officerType?: string; value?: number; amount?: number }>): {
@@ -512,7 +514,7 @@ const getRegions = async (signal?: AbortSignal): Promise<Region[]> => {
 class CustomerDashboardService {
   private baseUrl = BASE_API_URL;
 
-  private getHeaders() {
+  private getHeaders(overrideCustomerId?: number | null) {
     const token = sessionStore.getToken();
     const user = getActiveUser();
     const headers: Record<string, string> = {
@@ -524,33 +526,32 @@ class CustomerDashboardService {
       headers['Authorization'] = `Bearer ${token}`;
     }
     
-    // Use extractCustomerId utility for consistent extraction
-    // Ensure user object has role if missing
-    if (!user.role && !user.Role) {
-      const storedRole = sessionStore.getUser()?.role || null;
-      if (storedRole) {
-        user.role = storedRole;
-      }
-    }
-    
-    const customerId = extractCustomerId(user);
+    const customerId = overrideCustomerId != null
+      ? overrideCustomerId
+      : (() => {
+          if (!user.role && !user.Role) {
+            const storedRole = sessionStore.getUser()?.role || null;
+            if (storedRole) (user as any).role = storedRole;
+          }
+          return extractCustomerId(user);
+        })();
     
     if (customerId) {
       headers['X-Customer-Id'] = customerId.toString();
-      console.log('🔍 [DashboardService] Setting X-Customer-Id header:', customerId);
+      if (import.meta.env.DEV) console.log('🔍 [DashboardService] Setting X-Customer-Id header:', customerId);
     }
     
     return headers;
   }
 
-  private async fetchWithSignal<T>(endpoint: string, signal?: AbortSignal): Promise<T> {
+  private async fetchWithSignal<T>(endpoint: string, signal?: AbortSignal, overrideCustomerId?: number | null): Promise<T> {
     try {
       const fullUrl = `${this.baseUrl}${endpoint}`;
-      console.log(`🔍 [DashboardService] Fetching: ${fullUrl}`);
+      if (import.meta.env.DEV) console.log(`🔍 [DashboardService] Fetching: ${fullUrl}`);
       
       const response = await fetch(fullUrl, {
         signal,
-        headers: this.getHeaders()
+        headers: this.getHeaders(overrideCustomerId)
       });
 
       if (!response.ok) {
@@ -590,9 +591,8 @@ class CustomerDashboardService {
     }
   }
 
-  async getStores(signal?: AbortSignal): Promise<StoreData[]> {
-    // Use sites endpoint since stores don't exist - sites serve as stores
-    const sites = await this.getSites(signal);
+  async getStores(signal?: AbortSignal, overrideCustomerId?: number | null): Promise<StoreData[]> {
+    const sites = await this.getSites(signal, overrideCustomerId);
     // Transform sites to StoreData format
     return sites.map(site => ({
       id: site.id,
@@ -612,16 +612,13 @@ class CustomerDashboardService {
     }));
   }
 
-  async getRegions(signal?: AbortSignal): Promise<Region[]> {
-    // Get all regions by requesting a large page size from real backend API
+  async getRegions(signal?: AbortSignal, overrideCustomerId?: number | null): Promise<Region[]> {
     const user = getActiveUser();
-    const customerId = user.customerId || user.CustomerId || user.companyId;
-    const url = customerId 
+    const customerId = overrideCustomerId ?? user.customerId ?? (user as any).CustomerId ?? (user as any).companyId;
+    const url = customerId
       ? `/region?page=1&pageSize=1000&customerId=${customerId}`
       : '/region?page=1&pageSize=1000';
-    
-    // fetchWithSignal already extracts the Data property from ApiResponseDto
-    const backendRegions = await this.fetchWithSignal<any[]>(url, signal);
+    const backendRegions = await this.fetchWithSignal<any[]>(url, signal, overrideCustomerId ?? customerId ?? undefined);
     
     // Ensure we have an array
     const regionsArray = Array.isArray(backendRegions) ? backendRegions : [];
@@ -638,16 +635,13 @@ class CustomerDashboardService {
     }));
   }
 
-  async getSites(signal?: AbortSignal): Promise<Site[]> {
-    // Get all sites by requesting a large page size from real backend API
+  async getSites(signal?: AbortSignal, overrideCustomerId?: number | null): Promise<Site[]> {
     const user = getActiveUser();
-    const customerId = user.customerId || user.CustomerId || user.companyId;
-    const url = customerId 
+    const customerId = overrideCustomerId ?? user.customerId ?? (user as any).CustomerId ?? (user as any).companyId;
+    const url = customerId
       ? `/site?page=1&pageSize=1000&customerId=${customerId}`
       : '/site?page=1&pageSize=1000';
-    
-    // fetchWithSignal already extracts the Data property from ApiResponseDto
-    const backendSites = await this.fetchWithSignal<any[]>(url, signal);
+    const backendSites = await this.fetchWithSignal<any[]>(url, signal, overrideCustomerId ?? customerId ?? undefined);
     
     // Ensure we have an array
     const sitesArray = Array.isArray(backendSites) ? backendSites : [];
@@ -672,14 +666,12 @@ class CustomerDashboardService {
     }));
   }
 
-  async getStoreData(storeId: string, signal?: AbortSignal): Promise<CustomerStoreData> {
-    // Use site endpoint since stores are represented as sites in the backend
-    return this.getSiteData(storeId, signal);
+  async getStoreData(storeId: string, signal?: AbortSignal, overrideCustomerId?: number | null): Promise<CustomerStoreData> {
+    return this.getSiteData(storeId, signal, overrideCustomerId);
   }
 
-  async getSiteData(siteId: string, signal?: AbortSignal): Promise<CustomerStoreData> {
-    // Get site data from real backend API
-    const siteResponse = await this.fetchWithSignal<{ Success: boolean; Data: any; Message?: string }>(`/site/${siteId}`, signal);
+  async getSiteData(siteId: string, signal?: AbortSignal, overrideCustomerId?: number | null): Promise<CustomerStoreData> {
+    const siteResponse = await this.fetchWithSignal<{ Success: boolean; Data: any; Message?: string }>(`/site/${siteId}`, signal, overrideCustomerId);
     const site = Array.isArray(siteResponse) ? siteResponse[0] : (siteResponse?.Data || siteResponse);
     
     // Map backend SiteDto fields to frontend format
@@ -687,17 +679,15 @@ class CustomerDashboardService {
     const customerId = site.fkCustomerID || site.customerId || site.CustomerId;
     const siteName = site.LocationName || site.locationName || site.name || '';
     
-    // Get incidents for this site - fetch more for chart data calculation
     const user = getActiveUser();
-    const userCustomerId = user.customerId || user.CustomerId || user.companyId || customerId;
-    
+    const userCustomerId = overrideCustomerId ?? user.customerId ?? (user as any).CustomerId ?? (user as any).companyId ?? customerId;
     let recentIncidents: RecentIncident[] = [];
     let allIncidentsForChart: Array<{ date: string; officerRole?: string; officerType?: string; value?: number; amount?: number }> = [];
     try {
-      // Fetch more incidents for chart calculation (last 2 years should be enough)
       const incidentsResponse = await this.fetchWithSignal<{ Success: boolean; Data: { items?: any[] } | any[]; Message?: string }>(
-        `/incidents?page=1&pageSize=500&siteId=${siteIdNum}${userCustomerId ? `&customerId=${userCustomerId}` : ''}`, 
-        signal
+        `/incidents?page=1&pageSize=500&siteId=${siteIdNum}${userCustomerId ? `&customerId=${userCustomerId}` : ''}`,
+        signal,
+        overrideCustomerId ?? userCustomerId ?? undefined
       );
       const incidentsData = Array.isArray(incidentsResponse) 
         ? incidentsResponse 
@@ -776,24 +766,20 @@ class CustomerDashboardService {
     };
   }
 
-  async getSatisfactionData(siteIds?: string[], signal?: AbortSignal): Promise<SatisfactionDataPoint[]> {
-    // Use real backend API for customer satisfaction from customerSatisfactionSurveys table
+  async getSatisfactionData(siteIds?: string[], signal?: AbortSignal, overrideCustomerId?: number | null): Promise<SatisfactionDataPoint[]> {
     const user = getActiveUser();
-    const customerId = user.customerId || user.CustomerId || user.companyId;
-    const url = customerId 
+    const customerId = overrideCustomerId ?? user.customerId ?? (user as any).CustomerId ?? (user as any).companyId;
+    const url = customerId
       ? `/customer-satisfaction?page=1&pageSize=1000&customerId=${customerId}`
       : '/customer-satisfaction?page=1&pageSize=1000';
-    
     try {
-      const response = await this.fetchWithSignal<any>(url, signal);
+      const response = await this.fetchWithSignal<any>(url, signal, overrideCustomerId ?? customerId ?? undefined);
       const items = extractApiResponseData(response);
       
       // Filter by site if siteIds are provided
       let filteredItems = items;
       if (siteIds && siteIds.length > 0 && items.length > 0) {
-        // Get site names for filtering (since API returns SiteName, not siteId)
-        // Normalize names for case-insensitive matching
-        const sites = await this.getSites(signal);
+        const sites = await this.getSites(signal, overrideCustomerId ?? customerId ?? undefined);
         const siteNames = sites
           .filter(site => siteIds.includes(site.id))
           .map(site => site.locationName.trim().toLowerCase());
@@ -914,30 +900,17 @@ class CustomerDashboardService {
     }
   }
 
-  async getBeSafeData(signal?: AbortSignal, siteIds?: string[]): Promise<BeSafeDataPoint[]> {
-    // Be Safe Be Secure data from DailyActivityReports table
-    // This data represents compliance metrics from daily activity reports
-    // Uses the same parameters as Daily Activity Reports for consistency
+  async getBeSafeData(signal?: AbortSignal, siteIds?: string[], overrideCustomerId?: number | null): Promise<BeSafeDataPoint[]> {
     const user = getActiveUser();
-    const customerId = user.customerId || user.CustomerId || user.companyId;
-    
-    // Build URL with same parameters as getDailyActivities
-    let url = customerId 
+    const customerId = overrideCustomerId ?? user.customerId ?? (user as any).CustomerId ?? (user as any).companyId;
+    let url = customerId
       ? `/daily-activity-reports?page=1&pageSize=1000&customerId=${customerId}`
       : '/daily-activity-reports?page=1&pageSize=1000';
-    
-    // Add siteId filter if provided (same as Daily Activities)
-    if (siteIds && siteIds.length > 0 && siteIds[0] !== 'all') {
-      // If multiple sites, we need to fetch for each site or use a different approach
-      // For now, if single site selected, filter by it
-      if (siteIds.length === 1) {
-        url += `&siteId=${siteIds[0]}`;
-      }
-      // For multiple sites, we'll filter in the frontend after fetching
+    if (siteIds && siteIds.length > 0 && siteIds[0] !== 'all' && siteIds.length === 1) {
+      url += `&siteId=${siteIds[0]}`;
     }
-    
     try {
-      const response = await this.fetchWithSignal<any>(url, signal);
+      const response = await this.fetchWithSignal<any>(url, signal, overrideCustomerId ?? customerId ?? undefined);
       const items = extractApiResponseData(response);
       
       // Group by month and calculate compliance metrics
@@ -1091,15 +1064,13 @@ class CustomerDashboardService {
     }
   }
 
-  async getDailyActivities(signal?: AbortSignal): Promise<DailyActivity[]> {
-    // Use real backend API for daily activity reports
+  async getDailyActivities(signal?: AbortSignal, overrideCustomerId?: number | null): Promise<DailyActivity[]> {
     const user = getActiveUser();
-    const customerId = user.customerId || user.CustomerId || user.companyId;
-    const url = customerId 
+    const customerId = overrideCustomerId ?? user.customerId ?? (user as any).CustomerId ?? (user as any).companyId;
+    const url = customerId
       ? `/daily-activity-reports?page=1&pageSize=1000&customerId=${customerId}`
       : '/daily-activity-reports?page=1&pageSize=1000';
-    
-    const response = await this.fetchWithSignal<{ Success: boolean; Data: { items?: any[] } | any[]; Message?: string }>(url, signal);
+    const response = await this.fetchWithSignal<{ Success: boolean; Data: { items?: any[] } | any[]; Message?: string }>(url, signal, overrideCustomerId ?? customerId ?? undefined);
     
     // Transform backend response to frontend format
     const responseData = Array.isArray(response) 
@@ -1119,15 +1090,11 @@ class CustomerDashboardService {
     }));
   }
 
-  async getAggregatedSitesData(siteIds: string[], signal?: AbortSignal): Promise<CustomerStoreData> {
-    // Aggregate data from multiple sites
-    // Fetch all sites and their incidents, then aggregate
+  async getAggregatedSitesData(siteIds: string[], signal?: AbortSignal, overrideCustomerId?: number | null): Promise<CustomerStoreData> {
     const user = getActiveUser();
-    const customerId = user.customerId || user.CustomerId || user.companyId;
-    
-    // Fetch all sites
-    const sitesPromises = siteIds.map(id => 
-      this.fetchWithSignal<{ Success: boolean; Data: any; Message?: string }>(`/site/${id}`, signal).catch(() => null)
+    const customerId = overrideCustomerId ?? user.customerId ?? (user as any).CustomerId ?? (user as any).companyId;
+    const sitesPromises = siteIds.map(id =>
+      this.fetchWithSignal<{ Success: boolean; Data: any; Message?: string }>(`/site/${id}`, signal, overrideCustomerId ?? customerId ?? undefined).catch(() => null)
     );
     const sitesResults = await Promise.all(sitesPromises);
     const sites = sitesResults
@@ -1140,8 +1107,9 @@ class CustomerDashboardService {
     try {
       const incidentsPromises = siteIds.map(id =>
         this.fetchWithSignal<{ Success: boolean; Data: { items?: any[] } | any[]; Message?: string }>(
-          `/incidents?page=1&pageSize=500&siteId=${id}${customerId ? `&customerId=${customerId}` : ''}`, 
-          signal
+          `/incidents?page=1&pageSize=500&siteId=${id}${customerId ? `&customerId=${customerId}` : ''}`,
+          signal,
+          overrideCustomerId ?? customerId ?? undefined
         ).catch(() => ({ Success: false, Data: [] }))
       );
       const incidentsResults = await Promise.all(incidentsPromises);

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import type { Customer, CustomerPageId } from "@/types/customer"
 import { CUSTOMER_PAGES } from "@/config/customerPages"
 import { cn } from "@/lib/utils"
-import { FileText, ClipboardList, Shield, Star, Calendar, Wrench, BarChart, FileCheck, Building, ArrowLeft } from "lucide-react"
+import { FileText, BarChart, Calendar, Wrench, FileCheck, Building, ArrowLeft } from "lucide-react"
 import { customerPageAccessCache } from "@/services/customerPageAccessCache"
 import type { CustomerPageAccessPage } from "@/api/customerPageAccess"
 
@@ -15,10 +15,7 @@ interface CustomerReportingSectionProps {
 
 const PAGE_ICONS = {
   'incident-report': FileText,
-  'daily-activity': ClipboardList,
   'incident-graph': BarChart,
-  'customer-satisfaction': Star,
-  'be-safe-be-secure': Shield,
 } as const
 
 export function CustomerReportingSection({ customers, onNavigate }: CustomerReportingSectionProps) {

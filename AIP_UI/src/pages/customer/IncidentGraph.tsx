@@ -165,7 +165,7 @@ const formatCurrency = (value: number, compact = false): string => {
 
 const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 	const { user } = useAuth()
-	const { isAdmin, selectedCustomerId: contextCustomerId, setSelectedCustomerId } = useCustomerSelection()
+	const { isAdmin, isManager, selectedCustomerId: contextCustomerId, setSelectedCustomerId, assignedCustomers } = useCustomerSelection()
 	const { availableCustomers, isLoading: loadingCustomers } = useAvailableCustomers()
 	const [searchParams, setSearchParams] = useSearchParams()
 	const navigate = useNavigate()
@@ -177,9 +177,10 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 		if (customerId) return parseInt(customerId)
 		if (urlCustomerId) return parseInt(urlCustomerId)
 		if (isAdmin && contextCustomerId) return contextCustomerId
+		if (isManager && contextCustomerId) return contextCustomerId
 		if (userCustomerId) return typeof userCustomerId === 'string' ? parseInt(userCustomerId, 10) : userCustomerId
 		return 1
-	}, [customerId, urlCustomerId, isAdmin, contextCustomerId, userCustomerId])
+	}, [customerId, urlCustomerId, isAdmin, isManager, contextCustomerId, userCustomerId])
 
 	// ── Responsive state ──────────────────────────────────────────────────────
 
@@ -259,13 +260,13 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 		return () => window.removeEventListener('resize', handleResize)
 	}, [])
 
-	// ── Initial customer sync for admins ───────────────────────────────────────
+	// ── Initial customer sync for admin/manager ─────────────────────────────────
 
 	useEffect(() => {
-		if (!isAdmin) return
+		if (!isAdmin && !isManager) return
 		if (!currentCustomerId) return
 		setSelectedCustomerForAdmin(currentCustomerId)
-	}, [isAdmin, currentCustomerId])
+	}, [isAdmin, isManager, currentCustomerId])
 
 	// ── Data fetching ─────────────────────────────────────────────────────────
 
@@ -488,11 +489,35 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 											setFiltersVersion(v => v + 1)
 										}}
 									>
-										<SelectTrigger className="h-9 min-w-[200px] bg-slate-900/60 border-slate-700 text-slate-50 text-sm">
+										<SelectTrigger className="h-9 min-w-[200px] bg-slate-900/60 border-slate-700 text-slate-50 text-sm" aria-label="Select customer">
 											<SelectValue placeholder={loadingCustomers ? 'Loading customers…' : 'Select customer'} />
 										</SelectTrigger>
 										<SelectContent className="bg-slate-900 border-slate-700 text-slate-50 text-sm max-h-72">
 											{availableCustomers.map(c => (
+												<SelectItem key={c.id} value={c.id.toString()}>
+													{c.name}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								) : isManager && assignedCustomers.length > 1 ? (
+									<Select
+										value={selectedCustomerForAdmin?.toString() ?? ''}
+										onValueChange={value => {
+											const id = parseInt(value, 10)
+											setSelectedCustomerForAdmin(id)
+											setSelectedCustomerId(id)
+											const params = new URLSearchParams(searchParams)
+											params.set('customerId', value)
+											setSearchParams(params, { replace: true })
+											setFiltersVersion(v => v + 1)
+										}}
+									>
+										<SelectTrigger className="h-9 min-w-[200px] bg-slate-900/60 border-slate-700 text-slate-50 text-sm" aria-label="Select customer">
+											<SelectValue placeholder="Select customer" />
+										</SelectTrigger>
+										<SelectContent className="bg-slate-900 border-slate-700 text-slate-50 text-sm max-h-72">
+											{assignedCustomers.map(c => (
 												<SelectItem key={c.id} value={c.id.toString()}>
 													{c.name}
 												</SelectItem>

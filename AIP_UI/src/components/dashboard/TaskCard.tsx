@@ -34,7 +34,7 @@ export const TaskCard = ({ task }: TaskCardProps) => {
   }
 
   return (
-    <Link to={`/action-calendar?taskId=${task.id}`} className="block">
+    <Link to="/dashboard" className="block">
       <Card className="hover:bg-accent/5 transition-colors cursor-pointer">
         <CardContent className="p-4">
           <div className="flex items-start justify-between">

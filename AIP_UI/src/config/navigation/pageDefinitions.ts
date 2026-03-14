@@ -55,7 +55,7 @@ const extractPagesFromSidebar = (): PageDefinition[] => {
 	const pages: PageDefinition[] = []
 	let sortOrder = 1
 
-	// Add top-level links (Action Calendar, Customer Reporting)
+	// Add top-level links from sidebar config
 	SIDEBAR_TOP_LINKS.forEach((link, index) => {
 		const pageId = pathToPageId(link.path)
 		const category = link.path.includes('/management/') ? 'Management' : 'Main'

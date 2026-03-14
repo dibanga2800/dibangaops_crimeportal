@@ -224,7 +224,7 @@ export default function LoginPage() {
 							</div>
 							<div className="leading-tight">
 								<span className="block text-[17px] font-bold text-white tracking-tight">
-									DibangOps<span className="align-top text-[11px] ml-0.5">™</span>
+									DibangOps Crime Portal<span className="align-top text-[11px] ml-0.5">™</span>
 								</span>
 								<span className="block text-[10px] font-semibold uppercase tracking-[0.25em] text-white/40 mt-0.5">
 									AI-Powered Retail Crime Intelligence Platform
@@ -302,7 +302,7 @@ export default function LoginPage() {
 									<ShieldCheck className="h-5 w-5 text-brand-400" />
 								</div>
 								<span className="text-sm font-bold text-white tracking-tight">
-								DibangOps<span className="align-top text-[10px] ml-0.5">™</span>
+								DibangOps Crime Portal<span className="align-top text-[10px] ml-0.5">™</span>
 								</span>
 							</div>
 						<h1 className="text-2xl sm:text-[1.7rem] font-extrabold text-white leading-snug tracking-tight">
@@ -516,10 +516,10 @@ export default function LoginPage() {
 					{/* Bottom branding & copyright */}
 					<div className="pb-5 text-center space-y-0.5">
 						<p className="text-[11px] font-semibold text-gray-300">
-							DibangOps<span className="align-top text-[9px] ml-0.5">™</span>
+							DibangOps Crime Portal<span className="align-top text-[9px] ml-0.5">™</span>
 						</p>
 						<p className="text-[11px] text-gray-400">
-							&copy; 2026 David Ibanga. All rights reserved.
+							&copy; {new Date().getFullYear()} DibangaOps – Developed by David Ibanga
 						</p>
 						<p className="text-[11px] text-gray-400">
 							Proprietary &amp; Confidential.

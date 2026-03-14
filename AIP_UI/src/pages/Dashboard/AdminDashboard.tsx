@@ -48,6 +48,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { usePageAccess } from "@/contexts/PageAccessContext"
+import { useCustomerSelection } from '@/contexts/CustomerSelectionContext'
 import { DashboardGreeting } from '@/components/dashboard/DashboardGreeting'
 import { analyticsService } from '@/services/analyticsService'
 import { customerDashboardService } from '@/services/dashboardService'
@@ -64,307 +65,6 @@ import { sessionStore } from '@/state/sessionStore'
 // Lazy load the dashboard components
 const OfficerDashboard = React.lazy(() => import('@/pages/Dashboard/OfficerDashboard'))
 
-// Customer-specific data
-const customerData = {
-  'customer1': {
-    metrics: [
-      { title: 'Total Saved YTD', value: '£196K', change: '+15%', trend: 'up', icon: Currency, color: 'green' },
-      { title: 'Customer Satisfaction', value: '4.8/5', change: '+0.3', trend: 'up', icon: Star, color: 'yellow' },
-      { title: 'Incidents Today', value: '8', change: '-3%', trend: 'down', icon: AlertCircle, color: 'red' },
-      { title: 'Active Guards', value: '342', change: '+12%', trend: 'up', icon: Users, color: 'blue' }
-    ],
-    dailyIncidents: [
-      { date: 'Mon', uniformOfficers: 12, storeDetectives: 8 },
-      { date: 'Tue', uniformOfficers: 19, storeDetectives: 14 },
-      { date: 'Wed', uniformOfficers: 15, storeDetectives: 11 },
-      { date: 'Thu', uniformOfficers: 20, storeDetectives: 17 },
-      { date: 'Fri', uniformOfficers: 25, storeDetectives: 20 },
-      { date: 'Sat', uniformOfficers: 22, storeDetectives: 19 },
-      { date: 'Sun', uniformOfficers: 18, storeDetectives: 15 }
-    ],
-    weeklyIncidents: [
-      { week: 'Week 1', uniformOfficers: 42, storeDetectives: 35 },
-      { week: 'Week 2', uniformOfficers: 38, storeDetectives: 30 },
-      { week: 'Week 3', uniformOfficers: 45, storeDetectives: 36 },
-      { week: 'Week 4', uniformOfficers: 40, storeDetectives: 32 }
-    ],
-    monthlyIncidents: [
-      { month: 'Jan', uniformOfficers: 40, storeDetectives: 32 },
-      { month: 'Feb', uniformOfficers: 30, storeDetectives: 24 },
-      { month: 'Mar', uniformOfficers: 45, storeDetectives: 36 },
-      { month: 'Apr', uniformOfficers: 25, storeDetectives: 20 },
-      { month: 'May', uniformOfficers: 35, storeDetectives: 28 },
-      { month: 'Jun', uniformOfficers: 20, storeDetectives: 16 },
-      { month: 'Jul', uniformOfficers: 28, storeDetectives: 22 },
-      { month: 'Aug', uniformOfficers: 32, storeDetectives: 26 },
-      { month: 'Sep', uniformOfficers: 38, storeDetectives: 30 },
-      { month: 'Oct', uniformOfficers: 42, storeDetectives: 34 },
-      { month: 'Nov', uniformOfficers: 36, storeDetectives: 29 },
-      { month: 'Dec', uniformOfficers: 30, storeDetectives: 24 }
-    ],
-    yearlyIncidents: [
-      { year: '2020', uniformOfficers: 280, storeDetectives: 224 },
-      { year: '2021', uniformOfficers: 320, storeDetectives: 256 },
-      { year: '2022', uniformOfficers: 350, storeDetectives: 280 },
-      { year: '2023', uniformOfficers: 375, storeDetectives: 300 },
-      { year: '2024', uniformOfficers: 401, storeDetectives: 321 }
-    ],
-    incidentReports: [
-      {
-        id: '1',
-        customerName: 'Central England COOP',
-        store: 'Store #1234',
-        officerName: 'John Smith',
-        date: '2025-01-30',
-        amount: 1250.00,
-        incidentType: 'Theft - Loss?'
-      },
-      {
-        id: '2',
-        customerName: 'Central England COOP',
-        store: 'Store #1235',
-        officerName: 'Jane Doe',
-        date: '2025-01-29',
-        amount: 850.00,
-        incidentType: 'Suspicious Behaviour?'
-      },
-      {
-        id: '3',
-        customerName: 'Central England COOP',
-        store: 'Store #1236',
-        officerName: 'Mike Johnson',
-        date: '2025-01-28',
-        amount: 2100.00,
-        incidentType: 'Theft - Loss?'
-      }
-    ]
-  },
-  'customer2': {
-    metrics: [
-      { title: 'Total Saved YTD', value: '£250K', change: '+20%', trend: 'up', icon: Currency, color: 'green' },
-      { title: 'Customer Satisfaction', value: '4.5/5', change: '+0.2', trend: 'up', icon: Star, color: 'yellow' },
-      { title: 'Incidents Today', value: '5', change: '-10%', trend: 'down', icon: AlertCircle, color: 'red' },
-      { title: 'Active Guards', value: '420', change: '+15%', trend: 'up', icon: Users, color: 'blue' }
-    ],
-    dailyIncidents: [
-      { date: 'Mon', uniformOfficers: 10, storeDetectives: 8 },
-      { date: 'Tue', uniformOfficers: 15, storeDetectives: 12 },
-      { date: 'Wed', uniformOfficers: 13, storeDetectives: 10 },
-      { date: 'Thu', uniformOfficers: 18, storeDetectives: 14 },
-      { date: 'Fri', uniformOfficers: 22, storeDetectives: 18 },
-      { date: 'Sat', uniformOfficers: 20, storeDetectives: 16 },
-      { date: 'Sun', uniformOfficers: 16, storeDetectives: 13 }
-    ],
-    weeklyIncidents: [
-      { week: 'Week 1', uniformOfficers: 38, storeDetectives: 30 },
-      { week: 'Week 2', uniformOfficers: 35, storeDetectives: 28 },
-      { week: 'Week 3', uniformOfficers: 40, storeDetectives: 32 },
-      { week: 'Week 4', uniformOfficers: 37, storeDetectives: 30 }
-    ],
-    monthlyIncidents: [
-      { month: 'Jan', uniformOfficers: 35, storeDetectives: 28 },
-      { month: 'Feb', uniformOfficers: 28, storeDetectives: 22 },
-      { month: 'Mar', uniformOfficers: 40, storeDetectives: 32 },
-      { month: 'Apr', uniformOfficers: 22, storeDetectives: 18 },
-      { month: 'May', uniformOfficers: 30, storeDetectives: 24 },
-      { month: 'Jun', uniformOfficers: 18, storeDetectives: 14 },
-      { month: 'Jul', uniformOfficers: 25, storeDetectives: 20 },
-      { month: 'Aug', uniformOfficers: 30, storeDetectives: 24 },
-      { month: 'Sep', uniformOfficers: 35, storeDetectives: 28 },
-      { month: 'Oct', uniformOfficers: 38, storeDetectives: 30 },
-      { month: 'Nov', uniformOfficers: 32, storeDetectives: 26 },
-      { month: 'Dec', uniformOfficers: 28, storeDetectives: 22 }
-    ],
-    yearlyIncidents: [
-      { year: '2020', uniformOfficers: 260, storeDetectives: 208 },
-      { year: '2021', uniformOfficers: 290, storeDetectives: 232 },
-      { year: '2022', uniformOfficers: 320, storeDetectives: 256 },
-      { year: '2023', uniformOfficers: 345, storeDetectives: 276 },
-      { year: '2024', uniformOfficers: 361, storeDetectives: 289 }
-    ],
-    incidentReports: [
-      {
-        id: '1',
-        customerName: 'Heart of England',
-        store: 'Store #5678',
-        officerName: 'Sarah Wilson',
-        date: '2025-01-30',
-        amount: 1500.00,
-        incidentType: 'Theft - Loss?'
-      },
-      {
-        id: '2',
-        customerName: 'Heart of England',
-        store: 'Store #5679',
-        officerName: 'Tom Brown',
-        date: '2025-01-29',
-        amount: 950.00,
-        incidentType: 'Credit Card Fraud?'
-      },
-      {
-        id: '3',
-        customerName: 'Heart of England',
-        store: 'Store #5680',
-        officerName: 'Lisa Chen',
-        date: '2025-01-28',
-        amount: 1800.00,
-        incidentType: 'Theft - Loss?'
-      }
-    ]
-  },
-  'customer3': {
-    metrics: [
-      { title: 'Total Saved YTD', value: '£175K', change: '+12%', trend: 'up', icon: Currency, color: 'green' },
-      { title: 'Customer Satisfaction', value: '4.9/5', change: '+0.4', trend: 'up', icon: Star, color: 'yellow' },
-      { title: 'Incidents Today', value: '3', change: '-15%', trend: 'down', icon: AlertCircle, color: 'red' },
-      { title: 'Active Guards', value: '280', change: '+8%', trend: 'up', icon: Users, color: 'blue' }
-    ],
-    dailyIncidents: [
-      { date: 'Mon', uniformOfficers: 8, storeDetectives: 6 },
-      { date: 'Tue', uniformOfficers: 12, storeDetectives: 10 },
-      { date: 'Wed', uniformOfficers: 10, storeDetectives: 8 },
-      { date: 'Thu', uniformOfficers: 14, storeDetectives: 11 },
-      { date: 'Fri', uniformOfficers: 18, storeDetectives: 14 },
-      { date: 'Sat', uniformOfficers: 16, storeDetectives: 13 },
-      { date: 'Sun', uniformOfficers: 13, storeDetectives: 10 }
-    ],
-    weeklyIncidents: [
-      { week: 'Week 1', uniformOfficers: 32, storeDetectives: 26 },
-      { week: 'Week 2', uniformOfficers: 30, storeDetectives: 24 },
-      { week: 'Week 3', uniformOfficers: 35, storeDetectives: 28 },
-      { week: 'Week 4', uniformOfficers: 33, storeDetectives: 26 }
-    ],
-    monthlyIncidents: [
-      { month: 'Jan', uniformOfficers: 30, storeDetectives: 24 },
-      { month: 'Feb', uniformOfficers: 25, storeDetectives: 20 },
-      { month: 'Mar', uniformOfficers: 35, storeDetectives: 28 },
-      { month: 'Apr', uniformOfficers: 20, storeDetectives: 16 },
-      { month: 'May', uniformOfficers: 28, storeDetectives: 22 },
-      { month: 'Jun', uniformOfficers: 15, storeDetectives: 12 },
-      { month: 'Jul', uniformOfficers: 22, storeDetectives: 18 },
-      { month: 'Aug', uniformOfficers: 26, storeDetectives: 21 },
-      { month: 'Sep', uniformOfficers: 32, storeDetectives: 26 },
-      { month: 'Oct', uniformOfficers: 36, storeDetectives: 29 },
-      { month: 'Nov', uniformOfficers: 30, storeDetectives: 24 },
-      { month: 'Dec', uniformOfficers: 25, storeDetectives: 20 }
-    ],
-    yearlyIncidents: [
-      { year: '2020', uniformOfficers: 220, storeDetectives: 176 },
-      { year: '2021', uniformOfficers: 250, storeDetectives: 200 },
-      { year: '2022', uniformOfficers: 280, storeDetectives: 224 },
-      { year: '2023', uniformOfficers: 300, storeDetectives: 240 },
-      { year: '2024', uniformOfficers: 324, storeDetectives: 259 }
-    ],
-    incidentReports: [
-      {
-        id: '1',
-        customerName: 'Midcounties COOP',
-        store: 'Store #9012',
-        officerName: 'David Lee',
-        date: '2025-01-30',
-        amount: 1750.00,
-        incidentType: 'Theft - Loss?'
-      },
-      {
-        id: '2',
-        customerName: 'Midcounties COOP',
-        store: 'Store #9013',
-        officerName: 'Emma White',
-        date: '2025-01-29',
-        amount: 1100.00,
-        incidentType: 'Suspicious Behaviour?'
-      },
-      {
-        id: '3',
-        customerName: 'Midcounties COOP',
-        store: 'Store #9014',
-        officerName: 'Chris Taylor',
-        date: '2025-01-28',
-        amount: 2300.00,
-        incidentType: 'Theft - Loss?'
-      },
-      {
-        id: '4',
-        customerName: 'Midcounties COOP',
-        store: 'Store #9015',
-        officerName: 'Rachel Parker',
-        date: '2025-01-27',
-        amount: 1850.00,
-        incidentType: 'Deter - Saved?'
-      },
-      {
-        id: '5',
-        customerName: 'Midcounties COOP',
-        store: 'Store #9016',
-        officerName: 'Mark Thompson',
-        date: '2025-01-26',
-        amount: 2100.00,
-        incidentType: 'Theft - Loss?'
-      },
-      {
-        id: '6',
-        customerName: 'Midcounties COOP',
-        store: 'Store #9017',
-        officerName: 'Sophie Anderson',
-        date: '2025-01-25',
-        amount: 1950.00,
-        incidentType: 'Credit Card Fraud?'
-      }
-    ]
-  }
-};
-
-const tasks = [
-  {
-    id: '1',
-    title: 'Review Security Protocols',
-    description: 'Conduct a comprehensive review of current security protocols and identify areas for improvement.',
-    assignee: 'John Smith',
-    dueDate: new Date(2025, 1, 15),
-    priority: 'high',
-    status: 'in-progress'
-  },
-  {
-    id: '2',
-    title: 'Staff Training Session',
-    description: 'Organize and conduct quarterly security training session for new staff members.',
-    assignee: 'Sarah Johnson',
-    dueDate: new Date(2025, 1, 20),
-    priority: 'medium',
-    status: 'pending'
-  }
-] as const;
-
-const equipmentData = [
-  { name: 'Laptops', value: 245, color: '#0ea5e9' },  // sky-500
-  { name: 'Phones', value: 180, color: '#22c55e' },   // green-500
-  { name: 'iPads', value: 120, color: '#f59e0b' },    // amber-500
-  { name: 'Radios', value: 95, color: '#ef4444' },    // red-500
-  { name: 'Other', value: 75, color: '#8b5cf6' }      // violet-500
-];
-
-const customers = [
-  { id: 'customer1', name: 'Central England COOP' },
-  { id: 'customer2', name: 'Heart of England' },
-  { id: 'customer3', name: 'Midcounties COOP' }
-] as const;
-
-const notifications = [
-  {
-    id: '1',
-    title: 'New Incident Report',
-    description: 'Location B reported unauthorized access attempt',
-    time: '10 minutes ago',
-    type: 'alert'
-  },
-  {
-    id: '2',
-    title: 'Guard Schedule Updated',
-    description: 'Changes to night shift rotation for next week',
-    time: '1 hour ago',
-    type: 'info'
-  }
-]
 
 const officerStats = [
   // Top Performers
@@ -521,6 +221,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
   const location = useLocation();
   const { currentRole, isTestMode, testRole, isLoading } = usePageAccess();
   const effectiveRole = isTestMode && testRole ? testRole : currentRole;
+  const { selectedCustomerId: contextCustomerId, assignedCustomers } = useCustomerSelection();
+
+  // For managers: use selected (or first assigned) customer so regions load for their assigned customer
+  const effectiveCustomerId = React.useMemo(() => {
+    if (viewRole !== 'manager') return null;
+    return contextCustomerId ?? assignedCustomers[0]?.id ?? null;
+  }, [viewRole, contextCustomerId, assignedCustomers]);
 
   // All state declarations must be at the top before any conditional returns
   const [analyticsData, setAnalyticsData] = React.useState<AnalyticsHubData | null>(null);
@@ -759,20 +466,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
     };
   }, []); // Load once on mount
 
-  // Load analytics data once for admin overview (reuse same source as Data Analytics Hub)
+  // Load analytics data for admin/manager overview; for managers use assigned customer so regions populate
   React.useEffect(() => {
+    const abortController = new AbortController();
     const loadAnalytics = async () => {
       try {
         setAnalyticsLoading(true);
         setAnalyticsError(null);
 
-        // Use real regions/sites from dashboard service to drive analytics mock generation
+        // Manager: pass assigned customer so API returns that customer's regions/sites; Admin: no override
         const [regions, sites] = await Promise.all([
-          customerDashboardService.getRegions(),
-          customerDashboardService.getSites(),
+          customerDashboardService.getRegions(abortController.signal, effectiveCustomerId ?? undefined),
+          customerDashboardService.getSites(abortController.signal, effectiveCustomerId ?? undefined),
         ]);
 
-        const storeOptions = sites.map((site: any) => ({
+        const storeOptions = (sites as any[]).map((site: any) => ({
           id: site.siteID || site.SiteID || site.id,
           name:
             site.locationName ||
@@ -781,29 +489,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
             `Store ${site.siteID || site.SiteID || site.id}`,
         }));
 
-        // Map backend regions to simple options and filter to Central England COOP only
-        const rawRegionOpts = regions.map((region: any) => ({
+        // Use all regions/sites from API – no static blocklist or customer filter; production data only
+        const regionOpts = (regions as any[]).map((region: any) => ({
           id: region.id,
           name: region.name,
-          customerId: region.customerId || region.CustomerId || region.fkCustomerID || region.FkCustomerID,
+          customerId: region.customerId ?? region.CustomerId ?? region.fkCustomerID ?? region.FkCustomerID,
         }));
 
-        // Filter to ONLY Central England COOP regions (customer ID 1)
-        const centralEnglandRegions = rawRegionOpts.filter((r) => {
-          const customerId = r.customerId;
-          return customerId === 1 || customerId === '1';
-        });
+        if (import.meta.env.DEV) {
+          console.log('🏢 Dashboard regions loaded:', regionOpts.length, viewRole === 'manager' ? `(customer ${effectiveCustomerId})` : '');
+        }
 
-        // Additional filtering: Exclude non-region items
-        const blockedRegionNames = ['Store Detective', 'Store Detectives', 'Retail', 'Eastbrook'];
-        const regionOpts = centralEnglandRegions.filter(
-          (r) => !blockedRegionNames.includes(r.name?.trim())
-        );
-
-        console.log('🏢 Central England COOP regions loaded:', regionOpts.length);
-        console.log('📍 Region names:', regionOpts.map(r => r.name).join(', '));
-
-        // Store region options for the dropdown
         setRegionOptions(regionOpts);
 
         const data = await analyticsService.getAnalyticsHub({
@@ -813,6 +509,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
 
         setAnalyticsData(data);
       } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') return;
         console.error('Failed to load admin analytics overview:', err);
         setAnalyticsError(
           err instanceof Error ? err.message : 'Failed to load analytics'
@@ -823,7 +520,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
     };
 
     loadAnalytics();
-  }, []);
+    return () => abortController.abort();
+  }, [viewRole, effectiveCustomerId]);
 
   // Load alert summary and AI analytics from new backend endpoints
   React.useEffect(() => {
@@ -995,7 +693,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
 
             incidents.push({
               id: `ANA-${store.storeId}-${product.barcode}-${productIndex}`,
-              customerName: 'Central England COOP',
+              customerName: filteredIncidents[0]?.customerName ?? store.storeName ?? 'Customer',
               store: store.storeName,
               siteName: store.storeName,
               officerName: productIndex % 2 === 0 ? 'Uniform Officer' : 'Store Detective',
@@ -1068,7 +766,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
 
         cases.push({
           id: `CASE-${store.storeId}`,
-          customerName: 'Central England COOP',
+          customerName: filteredIncidents[0]?.customerName ?? 'Customer',
           siteName: store.storeName,
           incidentType: topProduct
             ? `High loss risk – ${topProduct.productName}`

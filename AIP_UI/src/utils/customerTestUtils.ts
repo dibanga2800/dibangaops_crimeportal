@@ -74,8 +74,7 @@ export const testCompleteWorkflow = () => {
   }
 
   const expectedGatehousePages = [
-    'daily-activity-report',
-    'incident-graph', 
+    'incident-graph',
     'incident-report',
     'satisfaction-report',
     'be-safe-be-secure',

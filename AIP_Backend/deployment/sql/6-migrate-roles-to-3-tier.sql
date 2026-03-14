@@ -1,5 +1,5 @@
 -- =====================================================
--- DibangOps™ Role Migration: 5-role → 3-role model
+-- DibangOps Crime Portal™ Role Migration: 5-role → 3-role model
 -- Roles: administrator (kept), manager (new), store (new)
 -- Run this ONCE against the production database.
 -- Safe to re-run (idempotent via IF EXISTS checks).
