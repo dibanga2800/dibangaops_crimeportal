@@ -145,3 +145,6 @@ assets/
 # Backend configuration (contains secrets per environment)
 AIP_Backend/appsettings.Development.json
 AIP_Backend/appsettings.Production.json
+
+# InsightFace models (downloaded on first run; exceed GitHub 100 MB limit)
+AIP_Backend/InsightFaceService/models/
