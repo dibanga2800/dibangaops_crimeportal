@@ -1,0 +1,38 @@
+# Run .NET API + InsightFace service together.
+# Backend calls InsightFace at http://insightface:8000 (service name).
+# Override ConnectionStrings__DefaultDbConnection and other secrets via env or .env.
+
+services:
+  insightface:
+    build:
+      context: ./AIP_Backend/InsightFaceService
+      dockerfile: Dockerfile
+    container_name: insightface
+    ports:
+      - "8000:8000"
+    # Optional: persist downloaded models so restarts are faster
+    # volumes:
+    #   - insightface-models:/app/.insightface
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./AIP_Backend
+      dockerfile: Dockerfile
+    container_name: aip-backend
+    ports:
+      - "5128:8080"
+    environment:
+      # Point backend at InsightFace service by Docker service name
+      InsightFace__Enabled: "true"
+      InsightFace__BaseUrl: "http://insightface:8000"
+      InsightFace__TimeoutSeconds: "30"
+      # Override DB and other config via env (example; use secrets in production)
+      # ConnectionStrings__DefaultDbConnection: "Server=host.docker.internal,1433;Database=COOP;User Id=sa;Password=YourPassword;TrustServerCertificate=True;"
+      # ASPNETCORE_URLS: "http://+:8080"
+    depends_on:
+      - insightface
+    restart: unless-stopped
+
+# volumes:
+#   insightface-models:

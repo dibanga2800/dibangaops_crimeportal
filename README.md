@@ -193,6 +193,86 @@ Build output is written to `AIP_UI/dist`.
 
 ---
 
+## Hosting the backend (with InsightFace)
+
+The backend has two runtime parts when facial recognition is enabled:
+
+| Component | Role |
+|-----------|------|
+| **.NET API** (`AIP_Backend`) | Main API (IIS, Kestrel, Azure App Service, etc.). Calls InsightFace over HTTP. |
+| **InsightFace service** (Python) | Face detection and embedding. Must be reachable at the URL set in `InsightFace:BaseUrl`. |
+
+### Option 1: Same server (recommended for single-box deployment)
+
+Run both on one machine so the .NET backend can call InsightFace on localhost. **If you publish the .NET backend and host on IIS**, see **[AIP_Backend/deployment/PUBLISH_TO_SERVER_GUIDE.md](AIP_Backend/deployment/PUBLISH_TO_SERVER_GUIDE.md#insightface-on-the-same-iis-server)** for step-by-step instructions to run InsightFace on the same Windows server and configure production.
+
+1. **.NET backend** – Host as usual (IIS, Kestrel, or reverse proxy). Example with Kestrel:
+   ```bash
+   cd AIP_Backend
+   dotnet publish -c Release -o ./publish
+   dotnet ./publish/AIP_Backend.dll --urls "http://0.0.0.0:5128"
+   ```
+
+2. **InsightFace service** – Run as a separate process (same server). Use a process manager (e.g. Windows Service, NSSM, or systemd on Linux) so it restarts on failure:
+   ```bash
+   cd AIP_Backend/InsightFaceService
+   python -m venv .venv
+   .venv\Scripts\activate   # Windows
+   pip install -r requirements.txt
+   uvicorn main:app --host 0.0.0.0 --port 8000
+   ```
+
+3. **Config** – In production config (e.g. `appsettings.Production.json` or environment), set:
+   - `InsightFace:Enabled`: `true`
+   - `InsightFace:BaseUrl`: `http://127.0.0.1:8000` (or `http://localhost:8000` if both run on the same host)
+
+The API and InsightFace do not need to be exposed to the internet; only the .NET API needs to be public. Keep the InsightFace port (8000) bound to localhost only if possible.
+
+### Option 2: Separate hosts
+
+- Deploy the .NET API on one server (e.g. Azure App Service, VM, container).
+- Deploy the InsightFace app on another server or container (e.g. another VM, Azure Container Apps, or Kubernetes pod).
+- Set `InsightFace:BaseUrl` to the InsightFace service URL (e.g. `https://insightface.yourdomain.com` or `http://insightface-internal:8000`). Ensure the .NET host can reach that URL (network/firewall and TLS if over the internet).
+
+### Option 3: Docker Compose (both services)
+
+A `docker-compose.yml` at the repo root runs the .NET API and InsightFace in separate containers. The backend is configured to use `http://insightface:8000`. See [Deploy with Docker Compose](#deploy-with-docker-compose) below.
+
+### Option 4: Disable InsightFace
+
+To host only the .NET backend and not run Python:
+
+- Set `InsightFace:Enabled` to `false` in production config.
+- Configure the **Azure Face** section if you use Azure for face recognition instead. Face search will then use Azure; no InsightFace process is required.
+
+### Production checklist
+
+- [ ] InsightFace process is running and reachable at `InsightFace:BaseUrl` (or InsightFace is disabled).
+- [ ] `InsightFace:BaseUrl` uses `http://127.0.0.1:8000` when both run on the same machine, or the correct URL when InsightFace is on another host.
+- [ ] Firewall allows the .NET host to call the InsightFace URL; port 8000 does not need to be public if InsightFace is on the same server.
+- [ ] If you use a reverse proxy (e.g. nginx) in front of both, ensure the backend is configured with the internal URL to InsightFace (e.g. `http://127.0.0.1:8000`), not the public URL.
+
+---
+
+## Deploy with Docker Compose
+
+You can run the .NET API and the InsightFace service together using Docker Compose. The backend is configured to call InsightFace at `http://insightface:8000`.
+
+**Prerequisites:** Docker and Docker Compose installed.
+
+1. **Database:** The backend needs a MSSQL database. Set `ConnectionStrings__DefaultDbConnection` for the `backend` service (e.g. in a `.env` file or in `docker-compose.yml` under `backend.environment`). For a database on the host machine, use `host.docker.internal` as the server (e.g. `Server=host.docker.internal,1433;...`).
+
+2. **Build and run:**
+   ```bash
+   docker compose up -d --build
+   ```
+
+3. The API is exposed on port **5128**; InsightFace is on **8000** (optional to expose; the backend reaches it internally). Override ports in `docker-compose.yml` if needed.
+
+Files: `docker-compose.yml` (repo root), `AIP_Backend/Dockerfile`, `AIP_Backend/InsightFaceService/Dockerfile`.
+
+---
+
 ## System architecture
 
 At a high level the system is a **two-tier web application** with an opinionated AI services layer inside the backend:
