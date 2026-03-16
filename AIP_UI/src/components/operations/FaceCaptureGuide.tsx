@@ -14,10 +14,8 @@ const MIN_VIDEO_SIZE = 100
 const POLL_START_DELAY_MS = 1200
 
 /**
- * Guided face capture: video with live overlay.
- * - Red oval when no face (or face not fully inside oval)
- * - Green oval when face is fully inside the oval
- * - Auto-captures when face is 100% inside oval for FACE_STABLE_FRAMES consecutive polls
+ * Guided face capture: video with green oval overlay.
+ * User positions face in oval and taps Capture & search.
  */
 export const FaceCaptureGuide: React.FC<FaceCaptureGuideProps> = ({
 	videoRef,
@@ -70,7 +68,7 @@ export const FaceCaptureGuide: React.FC<FaceCaptureGuideProps> = ({
 		const overlay = overlayRef.current
 		if (!video || !overlay) return
 
-		const drawOverlay = (detected: boolean) => {
+		const drawOverlay = () => {
 			const ctx = overlay.getContext('2d')
 			if (!ctx) return
 			const w = overlay.width
@@ -84,22 +82,16 @@ export const FaceCaptureGuide: React.FC<FaceCaptureGuideProps> = ({
 			const ry = Math.min(h * 0.4, 180)
 			const rotation = -Math.PI / 2
 
-			ctx.strokeStyle = detected ? '#22c55e' : '#ef4444'
-			ctx.lineWidth = detected ? 4 : 3
+			ctx.strokeStyle = '#22c55e'
+			ctx.lineWidth = 4
 			ctx.beginPath()
 			ctx.ellipse(cx, cy, rx, ry, rotation, 0, 2 * Math.PI)
 			ctx.stroke()
 
-			if (!detected) {
-				ctx.font = '14px system-ui, sans-serif'
-				ctx.fillStyle = 'rgba(239, 68, 68, 0.9)'
-				ctx.textAlign = 'center'
-				ctx.fillText('Position face fully inside oval', cx, cy + ry + 24)
-			} else {
-				ctx.font = 'bold 14px system-ui, sans-serif'
-				ctx.fillStyle = '#22c55e'
-				ctx.fillText('Face in oval – hold steady to capture', cx, cy + ry + 24)
-			}
+			ctx.font = '14px system-ui, sans-serif'
+			ctx.fillStyle = '#22c55e'
+			ctx.textAlign = 'center'
+			ctx.fillText('Position face in oval, then tap Capture & search', cx, cy + ry + 24)
 		}
 
 		const syncOverlaySize = () => {
@@ -131,7 +123,7 @@ export const FaceCaptureGuide: React.FC<FaceCaptureGuideProps> = ({
 					doCaptureAndSearch()
 				}
 				pollInFlightRef.current = false
-				drawOverlay(true)
+				drawOverlay()
 				return
 			}
 
@@ -172,12 +164,12 @@ export const FaceCaptureGuide: React.FC<FaceCaptureGuideProps> = ({
 			} finally {
 				pollInFlightRef.current = false
 			}
-			drawOverlay(detected)
+			drawOverlay()
 		}
 
 		const drawLoop = () => {
 			syncOverlaySize()
-			drawOverlay(faceDetectedRef.current)
+			drawOverlay()
 		}
 
 		const raf = requestAnimationFrame(function loop() {
@@ -243,16 +235,6 @@ export const FaceCaptureGuide: React.FC<FaceCaptureGuideProps> = ({
 					</div>
 				)}
 			</div>
-			<p className="text-[11px] text-center text-gray-600">
-				{faceDetected
-					? 'Face in oval – hold steady to auto-capture'
-					: 'Position your face fully inside the red oval. Green = ready; auto-snap when stable.'}
-			</p>
-			{import.meta.env.DEV && (
-				<p className="text-[10px] text-center text-amber-600">
-					Dev: <code className="bg-amber-100 px-1 rounded">localStorage.setItem(&apos;FACE_CAPTURE_MOCK&apos;,&apos;true&apos;)</code> then refresh to test green overlay without backend.
-				</p>
-			)}
 			<div className="flex flex-wrap gap-2 justify-center">
 				<button
 					type="button"

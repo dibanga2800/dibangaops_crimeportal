@@ -523,13 +523,27 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
     return () => abortController.abort();
   }, [viewRole, effectiveCustomerId]);
 
-  // Load alert summary and AI analytics from new backend endpoints
+  // Load alert summary and AI analytics – use SAME filters as top cards (region, date) so values align
   React.useEffect(() => {
     const loadEnhancedData = async () => {
       try {
+        // Match analytics date range to what the top cards use: user-selected dates or last 90 days
+        const toDateObj = isDateRangeActive && toDate ? new Date(toDate) : new Date()
+        const fromDateObj = isDateRangeActive && fromDate
+          ? new Date(fromDate)
+          : new Date(toDateObj)
+            toDateObj.setDate(toDateObj.getDate() - 90)
+        const fromStr = fromDateObj.toISOString().slice(0, 10)
+        const toStr = toDateObj.toISOString().slice(0, 10)
+
         const [alertData, analyticsData] = await Promise.allSettled([
           alertInstancesApi.getSummary(),
-          classificationApi.getAnalyticsSummary()
+          classificationApi.getAnalyticsSummary({
+            from: fromStr,
+            to: toStr,
+            regionId: selectedRegion === 'all' ? undefined : selectedRegion,
+            customerId: effectiveCustomerId ?? undefined
+          })
         ])
 
         if (alertData.status === 'fulfilled') {
@@ -544,7 +558,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
     }
 
     loadEnhancedData()
-  }, [])
+  }, [selectedRegion, fromDate, toDate, isDateRangeActive, effectiveCustomerId])
 
   // Get regions for dropdown – use ONLY real regions from API for the current customer
   const regions = React.useMemo(() => {

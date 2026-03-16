@@ -1,6 +1,6 @@
 # Publish and Copy to Remote Server Guide
 
-This guide explains how to use the `publish-and-copy-to-server.ps1` script to publish your backend locally and copy it to a remote server.
+This guide explains how to use the `publish-and-copy-to-server.ps1` script to publish your backend locally and copy it to a remote server, and how to run the **InsightFace** facial-recognition service on the same IIS server.
 
 ## Quick Start
 
@@ -154,6 +154,86 @@ $password = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
   -RemoteServerPassword $password
 ```
 
+## InsightFace on the same IIS server
+
+When **facial recognition** is enabled (`InsightFace:Enabled = true`), the .NET API calls a separate **InsightFace** Python service over HTTP. You can run that service on the **same Windows server** as IIS so the API uses `http://127.0.0.1:8000`.
+
+### 1. Copy InsightFace service to the server
+
+Copy the `InsightFaceService` folder to the server (e.g. next to the API or in a dedicated path):
+
+- From your repo: `AIP_Backend\InsightFaceService\` (include `main.py`, `requirements.txt`; do **not** copy the `models` folder—it will be created on first run).
+
+Example (from your dev machine, if you use the same publish script style):
+
+```powershell
+# Copy InsightFace service to server (adjust paths)
+$insightFaceSource = "C:\Users\David Ibanga\COOP_AIP\AIP_Backend\InsightFaceService"
+$remoteInsightFace = "\\SERVERNAME\C$\inetpub\InsightFaceService"
+New-Item -ItemType Directory -Path $remoteInsightFace -Force
+Copy-Item "$insightFaceSource\main.py", "$insightFaceSource\requirements.txt" -Destination $remoteInsightFace
+```
+
+### 2. Install Python on the server
+
+- Install **Python 3.8+** on the Windows server (e.g. from [python.org](https://www.python.org/downloads/) or Windows Store).
+- Ensure `python` and `pip` are on the PATH (or use the full path in the steps below).
+
+### 3. Run InsightFace on the server
+
+On the **remote server** (RDP or PowerShell Remoting), run once to create the venv and install dependencies; then start the service:
+
+```powershell
+cd C:\inetpub\InsightFaceService
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+uvicorn main:app --host 127.0.0.1 --port 8000
+```
+
+- Binding to `127.0.0.1` keeps the service local; only the .NET API (IIS) needs to reach it.
+- Leave this window open, or run it as a **Windows Service** (see below) so it keeps running after logout/reboot.
+
+### 4. Backend config (production)
+
+On the server, ensure `appsettings.Production.json` (in the IIS-deployed API folder) has:
+
+```json
+"InsightFace": {
+  "Enabled": true,
+  "BaseUrl": "http://127.0.0.1:8000",
+  "TimeoutSeconds": 30
+}
+```
+
+Then publish/deploy the API as usual. The API will call InsightFace at `http://127.0.0.1:8000`.
+
+### 5. Run InsightFace as a Windows Service (optional)
+
+To have InsightFace start automatically and survive reboots, install it as a Windows Service using **NSSM** (Non-Sucking Service Manager) or a similar tool:
+
+1. Download [NSSM](https://nssm.cc/download).
+2. Install the service (run as Administrator on the server):
+
+```powershell
+nssm install InsightFaceService "C:\inetpub\InsightFaceService\.venv\Scripts\python.exe" "-m uvicorn main:app --host 127.0.0.1 --port 8000"
+nssm set InsightFaceService AppDirectory "C:\inetpub\InsightFaceService"
+nssm start InsightFaceService
+```
+
+Adjust paths if you placed InsightFace in a different folder. After that, the service starts with Windows and restarts on failure if configured in NSSM.
+
+### Summary
+
+| Step | Action |
+|------|--------|
+| 1 | Copy `InsightFaceService` (main.py, requirements.txt) to the server |
+| 2 | Install Python 3.8+ on the server |
+| 3 | On server: create venv, `pip install -r requirements.txt`, run `uvicorn main:app --host 127.0.0.1 --port 8000` (or install as Windows Service) |
+| 4 | Set `InsightFace:BaseUrl` to `http://127.0.0.1:8000` in production config and publish the .NET API to IIS as usual |
+
+---
+
 ## Post-Deployment Checklist
 
 After deployment, verify:
@@ -162,6 +242,7 @@ After deployment, verify:
 - [ ] Connection strings are correct
 - [ ] JWT secret key is set
 - [ ] SMTP credentials are configured
+- [ ] **InsightFace:** If using facial recognition, InsightFace service is running on the server and `InsightFace:BaseUrl` is `http://127.0.0.1:8000`
 - [ ] API responds to health check
 - [ ] Application logs show no errors
 - [ ] Alert rules are working correctly
