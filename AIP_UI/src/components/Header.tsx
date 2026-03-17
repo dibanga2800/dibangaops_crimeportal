@@ -51,7 +51,7 @@ import {
 	DollarSign,
 	GitBranch,
 	CheckSquare,
-	TrendingUp,
+  TrendingUp,
 	Brain
 } from "lucide-react"
 import { usePageAccess, PageAccessContext } from "@/contexts/PageAccessContext"
@@ -156,7 +156,7 @@ const NavigationMenu = ({
 export function Header({ onMobileMenuClick }: HeaderProps) {
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
-  
+
   // Try to get context, but handle gracefully if not available
   let pageAccessContext;
   try {
@@ -256,13 +256,6 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
       ]
     }
   ];
-
-	const getEffectiveRoleId = () => {
-		if (isAuthenticated && authenticatedUser?.pageAccessRole) {
-			return authenticatedUser.pageAccessRole.toLowerCase();
-		}
-		return currentRole?.toLowerCase() || null;
-	};
 
   // Toggle mobile search
   const toggleSearch = () => {

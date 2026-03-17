@@ -59,6 +59,7 @@ import type { AnalyticsHubData } from '@/types/analytics'
 import type { AlertSummary } from '@/types/alertInstances'
 import type { IncidentAnalyticsSummary, RiskIndicator } from '@/types/classification'
 import type { Incident } from '@/types/incidents'
+import type { IncidentsResponse } from '@/types/api'
 import { BASE_API_URL } from '@/config/api'
 import { sessionStore } from '@/state/sessionStore'
 
@@ -297,42 +298,38 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
           pageSize: 500
         });
         
-        console.log('📦 Incidents API response:', {
-          isArray: Array.isArray(response),
-          hasData: !!response.data,
-          hasItems: !!response.items,
-          keys: Object.keys(response)
-        });
-        
-        // Extract incidents from response (handle different response formats)
-        let incidents = [];
+        // Extract incidents from response (handle data, Data, items formats)
+        type ResWithAlternates = IncidentsResponse & { Data?: unknown[]; items?: unknown[] }
+        const res = response as ResWithAlternates
+        let incidents: unknown[] = []
         if (Array.isArray(response)) {
-          incidents = response;
-        } else if (response.Data && Array.isArray(response.Data)) {
-          incidents = response.Data;
-        } else if (response.data && Array.isArray(response.data)) {
-          incidents = response.data;
-        } else if (response.items && Array.isArray(response.items)) {
-          incidents = response.items;
+          incidents = response
+        } else if (res.data && Array.isArray(res.data)) {
+          incidents = res.data
+        } else if (res.Data && Array.isArray(res.Data)) {
+          incidents = res.Data
+        } else if (res.items && Array.isArray(res.items)) {
+          incidents = res.items
         }
 
         // Log the first raw incident to see actual backend field names
         if (incidents.length > 0) {
-          console.log('📋 Raw backend incident (first):', incidents[0]);
+          const first = incidents[0] as Record<string, unknown>
+          console.log('📋 Raw backend incident (first):', first)
           console.log('💰 Value fields check:', {
-            TotalValueRecovered: incidents[0].TotalValueRecovered,
-            totalValueRecovered: incidents[0].totalValueRecovered,
-            Value: incidents[0].Value,
-            value: incidents[0].value,
-            Amount: incidents[0].Amount,
-            amount: incidents[0].amount
-          });
+            TotalValueRecovered: first.TotalValueRecovered,
+            totalValueRecovered: first.totalValueRecovered,
+            Value: first.Value,
+            value: first.value,
+            Amount: first.Amount,
+            amount: first.amount
+          })
           console.log('✅ Status fields check:', {
-            Status: incidents[0].Status,
-            status: incidents[0].status,
-            Priority: incidents[0].Priority,
-            priority: incidents[0].priority
-          });
+            Status: first.Status,
+            status: first.status,
+            Priority: first.Priority,
+            priority: first.priority
+          })
         }
 
         // Transform backend format to frontend format
@@ -523,27 +520,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
     return () => abortController.abort();
   }, [viewRole, effectiveCustomerId]);
 
-  // Load alert summary and AI analytics – use SAME filters as top cards (region, date) so values align
+  // Load alert summary and AI analytics from backend (uses default: last 90 days, user's customer scope)
   React.useEffect(() => {
     const loadEnhancedData = async () => {
       try {
-        // Match analytics date range to what the top cards use: user-selected dates or last 90 days
-        const toDateObj = isDateRangeActive && toDate ? new Date(toDate) : new Date()
-        const fromDateObj = isDateRangeActive && fromDate
-          ? new Date(fromDate)
-          : new Date(toDateObj)
-            toDateObj.setDate(toDateObj.getDate() - 90)
-        const fromStr = fromDateObj.toISOString().slice(0, 10)
-        const toStr = toDateObj.toISOString().slice(0, 10)
-
         const [alertData, analyticsData] = await Promise.allSettled([
           alertInstancesApi.getSummary(),
-          classificationApi.getAnalyticsSummary({
-            from: fromStr,
-            to: toStr,
-            regionId: selectedRegion === 'all' ? undefined : selectedRegion,
-            customerId: effectiveCustomerId ?? undefined
-          })
+          classificationApi.getAnalyticsSummary()
         ])
 
         if (alertData.status === 'fulfilled') {
@@ -558,7 +541,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
     }
 
     loadEnhancedData()
-  }, [selectedRegion, fromDate, toDate, isDateRangeActive, effectiveCustomerId])
+  }, [])
 
   // Get regions for dropdown – use ONLY real regions from API for the current customer
   const regions = React.useMemo(() => {

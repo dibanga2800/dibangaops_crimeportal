@@ -70,6 +70,7 @@ import { regionService } from "@/services/regionService"
 import type { Region } from "@/types/customer"
 import { Toaster } from '@/components/ui/toaster'
 import { useSearchParams } from 'react-router-dom'
+import { useCustomerSelection } from '@/contexts/CustomerSelectionContext'
 
 interface IncidentReportPageProps {
   isCustomerView?: boolean;
@@ -77,8 +78,11 @@ interface IncidentReportPageProps {
   siteId?: string | null;
 }
 
-export default function IncidentReportPage({ isCustomerView = false, customerId, siteId }: IncidentReportPageProps) {
+export default function IncidentReportPage({ isCustomerView = false, customerId: propCustomerId, siteId: propSiteId }: IncidentReportPageProps) {
   const queryClient = useQueryClient()
+  const { selectedCustomerId, selectedSiteId } = useCustomerSelection()
+  const customerId = propCustomerId ?? (selectedCustomerId != null ? String(selectedCustomerId) : undefined)
+  const siteId = propSiteId ?? selectedSiteId
   const { toast } = useToast()
   const [open, setOpen] = useState(false)
   const [editingIncident, setEditingIncident] = useState<Incident | null>(null)
@@ -624,19 +628,19 @@ export default function IncidentReportPage({ isCustomerView = false, customerId,
   }
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-blue-50 via-slate-50 to-blue-50">
+    <div className="min-h-screen w-full min-w-0 overflow-x-hidden bg-gradient-to-br from-blue-50 via-slate-50 to-blue-50">
       <Toaster />
-      <div className="container mx-auto py-3 sm:py-4 md:py-6 lg:py-8 xl:py-10 2xl:py-12 px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12 max-w-screen-2xl">
+      <div className="w-full max-w-full mx-auto py-3 sm:py-4 md:py-6 lg:py-8 px-3 sm:px-4 md:px-6 lg:px-8">
         {/* Header Section */}
         <div className="flex flex-col space-y-3 sm:space-y-4 md:space-y-6 lg:space-y-8">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
-            <div className="flex items-center gap-2 sm:gap-3 xl:gap-4">
-              <div className="bg-blue-100 p-2 xl:p-3 rounded-lg">
-                <FileText className="w-5 h-5 sm:w-6 sm:h-6 xl:w-7 xl:h-7 text-blue-600" />
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 min-w-0">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+              <div className="bg-blue-100 p-2 sm:p-2.5 rounded-lg flex-shrink-0">
+                <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
               </div>
-              <div>
-                <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-bold text-gray-900">Incident Reports</h1>
-                <p className="text-xs sm:text-sm md:text-base xl:text-lg text-gray-500">Track and manage security incidents across all sites</p>
+              <div className="min-w-0">
+                <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 truncate">Incident Reports</h1>
+                <p className="text-xs sm:text-sm text-gray-500">Track and manage security incidents across all sites</p>
               </div>
             </div>
             <Button
@@ -645,50 +649,50 @@ export default function IncidentReportPage({ isCustomerView = false, customerId,
                 setOpen(true)
               }}
               size="default"
-              className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm flex items-center gap-2 w-full sm:w-auto text-sm sm:text-base xl:text-lg xl:h-12 xl:px-6"
+              className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm flex items-center gap-2 w-full sm:w-auto text-sm flex-shrink-0"
             >
-              <PlusCircle className="w-4 h-4 sm:w-5 sm:h-5 xl:w-6 xl:h-6" />
-              New Incident
+              <PlusCircle className="w-4 h-4 sm:w-5 sm:h-5" />
+              Incident Report
             </Button>
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 xl:gap-6">
-            <Card className="bg-gradient-to-br from-blue-800 to-blue-900 border-blue-700 shadow-md col-span-1">
-              <CardHeader className="flex flex-row items-center justify-between p-2 md:p-4 xl:p-6 pb-1 md:pb-2 xl:pb-3">
-                <CardTitle className="text-xs sm:text-sm lg:text-base xl:text-lg font-medium text-white">Total Amount Saved</CardTitle>
-                <PoundSterling className="h-3 w-3 sm:h-4 sm:w-4 xl:h-5 xl:w-5 text-blue-300" />
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 min-w-0">
+            <Card className="bg-gradient-to-br from-blue-800 to-blue-900 border-blue-700 shadow-md col-span-1 min-w-0">
+              <CardHeader className="flex flex-row items-center justify-between p-3 md:p-4 pb-1 md:pb-2">
+                <CardTitle className="text-xs sm:text-sm font-medium text-white">Total Amount Saved</CardTitle>
+                <PoundSterling className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-300 flex-shrink-0" />
               </CardHeader>
-              <CardContent className="p-2 md:p-4 xl:p-6 pt-0 md:pt-1 xl:pt-2">
-                <div className="text-lg sm:text-xl lg:text-2xl xl:text-3xl font-bold text-white">£{stats.totalAmountSaved.toFixed(2)}</div>
+              <CardContent className="p-3 md:p-4 pt-0 md:pt-1">
+                <div className="text-base sm:text-lg md:text-xl font-bold text-white truncate">£{stats.totalAmountSaved.toFixed(2)}</div>
               </CardContent>
             </Card>
-            <Card className="bg-gradient-to-br from-emerald-800 to-emerald-900 border-emerald-700 shadow-md col-span-1">
-              <CardHeader className="flex flex-row items-center justify-between p-2 md:p-4 xl:p-6 pb-1 md:pb-2 xl:pb-3">
-                <CardTitle className="text-xs sm:text-sm lg:text-base xl:text-lg font-medium text-white">Unique Stores</CardTitle>
-                <Store className="h-3 w-3 sm:h-4 sm:w-4 xl:h-5 xl:w-5 text-emerald-300" />
+            <Card className="bg-gradient-to-br from-emerald-800 to-emerald-900 border-emerald-700 shadow-md col-span-1 min-w-0">
+              <CardHeader className="flex flex-row items-center justify-between p-3 md:p-4 pb-1 md:pb-2">
+                <CardTitle className="text-xs sm:text-sm font-medium text-white">Unique Stores</CardTitle>
+                <Store className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-300 flex-shrink-0" />
               </CardHeader>
-              <CardContent className="p-2 md:p-4 xl:p-6 pt-0 md:pt-1 xl:pt-2">
-                <div className="text-lg sm:text-xl lg:text-2xl xl:text-3xl font-bold text-white">{stats.uniqueSites}</div>
+              <CardContent className="p-3 md:p-4 pt-0 md:pt-1">
+                <div className="text-base sm:text-lg md:text-xl font-bold text-white">{stats.uniqueSites}</div>
               </CardContent>
             </Card>
-            <Card className="bg-gradient-to-br from-purple-800 to-purple-900 border-purple-700 shadow-md col-span-2 md:col-span-1">
-              <CardHeader className="flex flex-row items-center justify-between p-2 md:p-4 xl:p-6 pb-1 md:pb-2 xl:pb-3">
-                <CardTitle className="text-xs sm:text-sm lg:text-base xl:text-lg font-medium text-white">Total Incidents</CardTitle>
-                <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 xl:h-5 xl:w-5 text-purple-300" />
+            <Card className="bg-gradient-to-br from-purple-800 to-purple-900 border-purple-700 shadow-md col-span-2 md:col-span-1 min-w-0">
+              <CardHeader className="flex flex-row items-center justify-between p-3 md:p-4 pb-1 md:pb-2">
+                <CardTitle className="text-xs sm:text-sm font-medium text-white">Total Incidents</CardTitle>
+                <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-300 flex-shrink-0" />
               </CardHeader>
-              <CardContent className="p-2 md:p-4 xl:p-6 pt-0 md:pt-1 xl:pt-2">
-                <div className="text-lg sm:text-xl lg:text-2xl xl:text-3xl font-bold text-white">{stats.totalIncidents}</div>
+              <CardContent className="p-3 md:p-4 pt-0 md:pt-1">
+                <div className="text-base sm:text-lg md:text-xl font-bold text-white">{stats.totalIncidents}</div>
               </CardContent>
             </Card>
           </div>
         </div>
 
         {/* Table Section */}
-        <div className="mt-3 sm:mt-4 md:mt-6 lg:mt-8 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="mt-3 sm:mt-4 md:mt-6 lg:mt-8 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-w-0">
           {/* Search Bar */}
-          <div className="p-3 sm:p-4 md:p-6 border-b border-gray-200 space-y-4">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div className="p-3 sm:p-4 md:p-6 border-b border-gray-200 space-y-4 min-w-0">
+            <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end lg:justify-between">
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant={datePreset === 'today' ? 'default' : 'outline'}
@@ -736,7 +740,7 @@ export default function IncidentReportPage({ isCustomerView = false, customerId,
                 </Button>
               </div>
 
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full lg:w-auto">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full xl:w-auto min-w-0 flex-shrink">
                 <Select value={regionFilter} onValueChange={(value) => {
                   setRegionFilter(value)
                   setCurrentPage(1)
@@ -780,13 +784,13 @@ export default function IncidentReportPage({ isCustomerView = false, customerId,
               </div>
             </div>
 
-            <div className="relative max-w-2xl">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 xl:w-5 xl:h-5" />
+            <div className="relative w-full max-w-xl min-w-0">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <Input
                 placeholder="Search incidents..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 xl:pl-10 border-gray-300 text-sm xl:text-base xl:h-12"
+                className="pl-9 border-gray-300 text-sm h-9"
               />
             </div>
           </div>
@@ -834,7 +838,7 @@ export default function IncidentReportPage({ isCustomerView = false, customerId,
                   }}
                   className="text-sm"
                 >
-                  Create New Incident
+                  Incident Report
                 </Button>
               )}
             </div>
@@ -923,42 +927,42 @@ export default function IncidentReportPage({ isCustomerView = false, customerId,
 
           {/* Desktop Table Layout - visible on medium screens and above */}
           {hasIncidents && (
-            <div className="hidden md:block overflow-x-auto">
+            <div className="hidden md:block overflow-x-auto min-w-0 -mx-px">
               <div className="min-w-[480px]">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-gray-50 hover:bg-gray-50">
-                      <TableHead className="font-medium text-sm lg:text-base xl:text-lg text-gray-900 py-3 xl:py-4 whitespace-nowrap">Company Name</TableHead>
-                      <TableHead className="font-medium text-sm lg:text-base xl:text-lg text-gray-900 py-3 xl:py-4 whitespace-nowrap">Store Name</TableHead>
-                      <TableHead className="font-medium text-sm lg:text-base xl:text-lg text-gray-900 py-3 xl:py-4 whitespace-nowrap">Staff Member Name</TableHead>
-                      <TableHead className="font-medium text-sm lg:text-base xl:text-lg text-gray-900 py-3 xl:py-4 whitespace-nowrap hidden lg:table-cell">
-                        <div className="flex items-center gap-2 xl:gap-3">
-                          <Calendar className="w-4 h-4 xl:w-5 xl:h-5 text-gray-500" />
+                      <TableHead className="font-medium text-sm text-gray-900 py-3 whitespace-nowrap">Company Name</TableHead>
+                      <TableHead className="font-medium text-sm text-gray-900 py-3 whitespace-nowrap">Store Name</TableHead>
+                      <TableHead className="font-medium text-sm text-gray-900 py-3 whitespace-nowrap">Staff Member Name</TableHead>
+                      <TableHead className="font-medium text-sm text-gray-900 py-3 whitespace-nowrap hidden lg:table-cell">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="w-4 h-4 text-gray-500" />
                           <span>Incident Date</span>
                         </div>
                       </TableHead>
-                      <TableHead className="font-medium text-sm lg:text-base xl:text-lg text-gray-900 py-3 xl:py-4 whitespace-nowrap">Total Amount</TableHead>
-                      <TableHead className="font-medium text-sm lg:text-base xl:text-lg text-gray-900 py-3 xl:py-4 whitespace-nowrap hidden lg:table-cell">Incident Type</TableHead>
-                      <TableHead className="font-medium text-sm lg:text-base xl:text-lg text-gray-900 py-3 xl:py-4 text-right">Actions</TableHead>
+                      <TableHead className="font-medium text-sm text-gray-900 py-3 whitespace-nowrap">Total Amount</TableHead>
+                      <TableHead className="font-medium text-sm text-gray-900 py-3 whitespace-nowrap hidden lg:table-cell">Incident Type</TableHead>
+                      <TableHead className="font-medium text-sm text-gray-900 py-3 text-right whitespace-nowrap">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {paginatedIncidents.map((incident) => (
                       <TableRow 
                         key={incident.id}
-                        className="hover:bg-gray-50 transition-colors text-sm lg:text-base xl:text-lg"
+                        className="hover:bg-gray-50 transition-colors text-sm"
                       >
-                        <TableCell className="py-3 xl:py-4 font-medium whitespace-nowrap">
+                        <TableCell className="py-3 font-medium whitespace-nowrap">
                           {incident.customerName || 'N/A'}
                         </TableCell>
-                        <TableCell className="py-3 xl:py-4 font-medium whitespace-nowrap">
+                        <TableCell className="py-3 font-medium whitespace-nowrap max-w-[140px] truncate" title={incident.siteName}>
                           {incident.siteName}
                         </TableCell>
-                        <TableCell className="py-3 xl:py-4 whitespace-nowrap">{incident.officerName || 'N/A'}</TableCell>
-                        <TableCell className="py-3 xl:py-4 hidden lg:table-cell whitespace-nowrap">
+                        <TableCell className="py-3 whitespace-nowrap max-w-[120px] truncate" title={incident.officerName || 'N/A'}>{incident.officerName || 'N/A'}</TableCell>
+                        <TableCell className="py-3 hidden lg:table-cell whitespace-nowrap">
                           {incident.date ? new Date(incident.date).toLocaleDateString() : 'N/A'}
                         </TableCell>
-                        <TableCell className="py-3 xl:py-4 whitespace-nowrap">
+                        <TableCell className="py-3 whitespace-nowrap">
                           £{(() => {
                             const value = incident?.totalValueRecovered
                             if (typeof value === 'number' && !isNaN(value)) {
@@ -974,34 +978,34 @@ export default function IncidentReportPage({ isCustomerView = false, customerId,
                             return '0.00'
                           })()}
                         </TableCell>
-                        <TableCell className="py-3 xl:py-4 hidden lg:table-cell whitespace-nowrap">{incident.incidentType}</TableCell>
-                        <TableCell className="py-3 xl:py-4">
-                          <div className="flex items-center justify-end gap-2 xl:gap-3">
+                        <TableCell className="py-3 hidden lg:table-cell whitespace-nowrap">{incident.incidentType}</TableCell>
+                        <TableCell className="py-3">
+                          <div className="flex items-center justify-end gap-1.5">
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={() => handleView(incident)}
-                              className="h-8 w-8 xl:h-10 xl:w-10 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
+                              className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
                             >
-                              <Eye className="w-4 h-4 xl:w-5 xl:h-5" />
+                              <Eye className="w-4 h-4" />
                               <span className="sr-only">View</span>
                             </Button>
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={() => handleEdit(incident)}
-                              className="h-8 w-8 xl:h-10 xl:w-10 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
+                              className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
                             >
-                              <Edit2 className="w-4 h-4 xl:w-5 xl:h-5" />
+                              <Edit2 className="w-4 h-4" />
                               <span className="sr-only">Edit</span>
                             </Button>
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={() => handleDelete(incident)}
-                              className="h-8 w-8 xl:h-10 xl:w-10 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                              className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
                             >
-                              <Trash2 className="w-4 h-4 xl:w-5 xl:h-5" />
+                              <Trash2 className="w-4 h-4" />
                               <span className="sr-only">Delete</span>
                             </Button>
                           </div>
@@ -1093,7 +1097,7 @@ export default function IncidentReportPage({ isCustomerView = false, customerId,
         <DialogContent className="w-[calc(100%-16px)] sm:w-[calc(100%-32px)] max-w-[95vw] sm:max-w-[92vw] md:max-w-[90vw] lg:max-w-[90vw] xl:max-w-[85vw] 2xl:max-w-[80vw] h-[90vh] p-0 bg-white">
           <DialogHeader className="px-4 py-3 border-b bg-white">
             <DialogTitle className="text-xl font-bold">
-              {editingIncident ? 'Edit Incident Report' : 'New Incident Report'}
+              {editingIncident ? 'Edit Incident Report' : 'Incident Report'}
             </DialogTitle>
             <DialogDescription className="text-sm text-gray-500">
               {editingIncident ? 'Update the incident details below' : 'Fill in the incident details below'}

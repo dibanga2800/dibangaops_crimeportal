@@ -7,7 +7,7 @@ export interface OffenderImageReferencePayload {
 }
 
 export interface OffenderMatchCandidate extends RepeatOffenderMatch {
-	similarityScore?: number
+	similarity: number
 	embeddingId?: string
 }
 

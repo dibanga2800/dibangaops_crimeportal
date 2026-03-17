@@ -1,71 +1,91 @@
 import React from 'react';
-import { CompanyInformation } from './CompanyInformation';
-import { ContactInformation } from './ContactInformation';
-import { QuickLinks } from './QuickLinks';
-import { Copyright } from './Copyright';
-import { COMPANY_INFO, CONTACT_INFO, QUICK_LINKS } from './constants';
+import { Link } from 'react-router-dom';
+import { COMPANY_INFO } from './constants';
 import { FooterProps } from './types';
 
 /**
- * Footer component that displays company information, contact details,
- * quick links, and copyright notice.
- * 
- * Responsive layout:
- * Mobile (< 640px):
- * - Company Info (50%) | Quick Links (50%)
- * - Contact Info (100%)
- * 
- * Tablet (640px - 1023px):
- * - Company Info (100%)
- * - Contact Info (50%) | Quick Links (50%)
- * 
- * Desktop (≥ 1024px):
- * - Company Info (33.33%) | Contact Info (33.33%) | Quick Links (33.33%)
- * 
- * @component
- * @example
- * return (
- *   <Footer
- *     companyInfo={COMPANY_INFO}
- *     contactInfo={CONTACT_INFO}
- *     quickLinks={QUICK_LINKS}
- *   />
- * )
+ * Application footer with product summary and support contact.
  */
 export const Footer: React.FC<Partial<FooterProps>> = ({
-  className = '',
-  companyInfo = COMPANY_INFO,
-  contactInfo = CONTACT_INFO,
-  quickLinks = QUICK_LINKS,
+	className = '',
+	companyInfo = COMPANY_INFO,
 }) => {
-  return (
-    <footer className={`w-full bg-[#334155] lg:bg-[#1A1A1A] text-white ${className}`}>
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Mobile: 2 columns for Company Info and Quick Links, Contact Info below */}
-        {/* Desktop: 3 equal columns */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-8">
-          {/* Company Info - 50% on mobile, 33.33% on desktop */}
-          <div className="col-span-1">
-            <CompanyInformation info={companyInfo} />
-          </div>
+	return (
+		<footer
+			className={`w-full bg-gradient-to-b from-black via-slate-950 to-black text-white ${className}`}
+		>
+			<div className="container mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14 space-y-8 sm:space-y-10">
+				<section className="relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/70 px-6 py-8 sm:px-10 sm:py-10">
+					<div className="absolute inset-0 pointer-events-none">
+						<div className="absolute -top-24 -right-10 h-40 w-40 rounded-full bg-blue-500/10 blur-3xl" />
+						<div className="absolute -bottom-24 -left-10 h-40 w-40 rounded-full bg-emerald-500/10 blur-3xl" />
+					</div>
 
-          {/* Quick Links - 50% on mobile, 33.33% on desktop */}
-          <div className="col-span-1">
-            <QuickLinks links={quickLinks} />
-          </div>
+					<div className="relative space-y-4 sm:space-y-5 text-center sm:text-left">
+						<h2 className="text-2xl sm:text-3xl lg:text-4xl font-semibold leading-tight">
+							DibangaOps Crime Portal –{' '}
+							<span className="text-emerald-300"> AI Incident Intelligence Platform</span>
+						</h2>
 
-          {/* Contact Info - 100% on mobile (new row), 33.33% on desktop */}
-          <div className="col-span-2 sm:col-span-1">
-            <ContactInformation info={contactInfo} />
-          </div>
-        </div>
+						<p className="text-sm sm:text-base text-slate-300">
+							Facial Recognition&nbsp;| Incident Analytics&nbsp;| Evidence Tracking
+						</p>
 
-        <div className="mt-8 pt-8 border-t border-gray-800">
-          <Copyright companyName={companyInfo.name} />
-        </div>
-      </div>
-    </footer>
-  );
+						<div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+							<div className="space-y-2 text-xs sm:text-sm text-slate-300">
+								<nav className="flex flex-wrap items-center justify-center sm:justify-start gap-x-3 gap-y-1">
+									<Link to="/about" className="hover:text-slate-50 underline-offset-4 hover:underline">
+										About
+									</Link>
+									<span aria-hidden>|</span>
+									<Link to="/privacy" className="hover:text-slate-50 underline-offset-4 hover:underline">
+										Privacy
+									</Link>
+									<span aria-hidden>|</span>
+									<Link to="/terms" className="hover:text-slate-50 underline-offset-4 hover:underline">
+										Terms
+									</Link>
+									<span aria-hidden>|</span>
+									<Link to="/privacy" className="hover:text-slate-50 underline-offset-4 hover:underline">
+										Security Policy
+									</Link>
+									<span aria-hidden>|</span>
+									<Link to="/contact" className="hover:text-slate-50 underline-offset-4 hover:underline">
+										Support
+									</Link>
+								</nav>
+								<p className="text-[11px] sm:text-xs text-slate-400">
+									Powered by AI Vision Engine
+								</p>
+								<p className="text-[11px] sm:text-xs text-slate-500">
+									System Version: 1.0.1
+								</p>
+							</div>
+
+							<div className="flex justify-center sm:justify-end">
+								<Link
+									to="/contact"
+									className="inline-flex items-center justify-center rounded-full bg-blue-500 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-blue-500/30 transition hover:bg-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+									aria-label="Open contact page to get support"
+								>
+									Contact Support
+									<span aria-hidden className="ml-2 text-base">
+										&gt;
+									</span>
+								</Link>
+							</div>
+						</div>
+					</div>
+				</section>
+
+				<section className="border-t border-slate-800 pt-4 sm:pt-6">
+					<p className="text-center text-xs sm:text-sm text-slate-400">
+						© 2026 {companyInfo.name}
+					</p>
+				</section>
+			</div>
+		</footer>
+	);
 };
 
 // Export all subcomponents and types

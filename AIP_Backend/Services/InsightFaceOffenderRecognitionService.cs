@@ -17,7 +17,8 @@ namespace AIPBackend.Services
 	public sealed class InsightFaceOffenderRecognitionService : IOffenderRecognitionService
 	{
 		private const string ModelId = "insightface-v1";
-		private const int MaxSearchResults = 10;
+		private const int DefaultMaxSearchResults = 3;
+		private const double DefaultMinSimilarity = 0.9;
 		private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { PropertyNameCaseInsensitive = true };
 
 		private readonly ApplicationDbContext _db;
@@ -99,6 +100,9 @@ namespace AIPBackend.Services
 				return new OffenderMatchResultDto { FaceDetected = true, Candidates = new List<OffenderMatchCandidateDto>(), ClassifierVersion = ModelId };
 
 			var searchEmb = embedResult.Embedding;
+			var minSimilarity = _options.MinSimilarity is > 0 and <= 1 ? _options.MinSimilarity.Value : DefaultMinSimilarity;
+			var maxResults = _options.MaxSearchResults is > 0 and <= 20 ? _options.MaxSearchResults.Value : DefaultMaxSearchResults;
+
 			var stored = await _db.FaceEmbeddings
 				.AsNoTracking()
 				.Where(f => f.ModelId == ModelId && !string.IsNullOrEmpty(f.Embedding))
@@ -113,12 +117,18 @@ namespace AIPBackend.Services
 				scored.Add((row, sim));
 			}
 
-			var top = scored.OrderByDescending(x => x.Similarity).Take(MaxSearchResults).ToList();
+			var top = scored
+				.OrderByDescending(x => x.Similarity)
+				.Take(maxResults * 2) // widen initial pool slightly before thresholding and deduplication
+				.ToList();
 			var matches = new List<OffenderMatchCandidateDto>();
 			var seenIncidentIds = new HashSet<int>();
 
 			foreach (var (embedding, similarity) in top)
 			{
+				if (similarity < minSimilarity)
+					continue;
+
 				if (embedding.IncidentId == null || seenIncidentIds.Contains(embedding.IncidentId.Value)) continue;
 				seenIncidentIds.Add(embedding.IncidentId.Value);
 
@@ -161,6 +171,9 @@ namespace AIPBackend.Services
 					ThumbnailUrl = incident.VerificationEvidenceImage,
 					RecentIncidents = recentIncidents
 				});
+
+				if (matches.Count >= maxResults)
+					break;
 			}
 
 			return new OffenderMatchResultDto
@@ -389,7 +402,7 @@ namespace AIPBackend.Services
 				OffenderName = relatedIncidents[0].OffenderName ?? sourceEmbedding.OffenderId!,
 				IncidentCount = relatedIncidents.Count,
 				TotalValue = totalValue,
-				Similarity = 0.9,
+				Similarity = 0.8,
 				ThumbnailUrl = relatedIncidents[0].VerificationEvidenceImage,
 				RecentIncidents = recentIncidents
 			});

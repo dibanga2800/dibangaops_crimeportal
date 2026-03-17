@@ -51,5 +51,23 @@ namespace AIPBackend.Services
         /// <param name="incidentDetails">Incident details</param>
         /// <returns>True if notifications were sent successfully</returns>
         Task<bool> SendSecurityIncidentNotificationAsync(IEnumerable<string> recipients, string incidentDetails);
+
+        /// <summary>
+        /// Sends contact form email to primary recipient with CC and optional attachment.
+        /// </summary>
+        /// <param name="to">Primary recipient email address</param>
+        /// <param name="cc">CC recipient email addresses</param>
+        /// <param name="subject">Email subject</param>
+        /// <param name="body">Email body (HTML)</param>
+        /// <param name="attachmentStream">Optional attachment stream</param>
+        /// <param name="attachmentFileName">Attachment file name (required if stream provided)</param>
+        /// <returns>True if email was sent successfully</returns>
+        Task<bool> SendContactFormEmailAsync(
+            string to,
+            IEnumerable<string> cc,
+            string subject,
+            string body,
+            Stream? attachmentStream = null,
+            string? attachmentFileName = null);
     }
 }

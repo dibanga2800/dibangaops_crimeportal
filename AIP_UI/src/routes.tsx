@@ -143,6 +143,7 @@ const BarcodeTestPage = lazy(() => import('./pages/test/BarcodeTestPage'));
 const AboutPage = lazy(() => import('@/pages/AboutPage'));
 const PrivacyPage = lazy(() => import('@/pages/PrivacyPage'));
 const TermsPage = lazy(() => import('@/pages/TermsPage'));
+const ContactPage = lazy(() => import('@/pages/ContactPage'));
 
 const router = createBrowserRouter([
   {
@@ -221,6 +222,16 @@ const router = createBrowserRouter([
             ),
           },
           {
+            path: 'contact',
+            element: (
+              <ProtectedRoute enforcePageAccess={false}>
+                <Suspense fallback={<LoadingFallback />}>
+                  <ContactPage />
+                </Suspense>
+              </ProtectedRoute>
+            ),
+          },
+          {
             path: 'settings',
             element: (
               <ProtectedRoute allowedRoles={['administrator'] as UserRole[]}>
@@ -271,7 +282,7 @@ const router = createBrowserRouter([
           {
             path: 'operations/incident-graph',
             element: (
-              <ProtectedRoute allowedRoles={['administrator', 'manager', 'store'] as UserRole[]}>
+              <ProtectedRoute allowedRoles={['administrator', 'manager', 'store', 'security-officer'] as UserRole[]}>
                 <Suspense fallback={<LoadingFallback />}>
                   <IncidentGraphPage />
                 </Suspense>
@@ -282,7 +293,7 @@ const router = createBrowserRouter([
             path: 'operations/crime-intelligence',
             element: (
               <ProtectedRoute 
-                allowedRoles={['administrator', 'manager', 'store'] as UserRole[]}
+                allowedRoles={['administrator', 'manager', 'store', 'security-officer'] as UserRole[]}
                 accessPath="/operations/crime-intelligence"
               >
                 <Suspense fallback={<LoadingFallback />}>
@@ -295,7 +306,7 @@ const router = createBrowserRouter([
             path: 'operations/alert-rules',
             element: (
               <ProtectedRoute 
-                allowedRoles={['administrator', 'manager'] as UserRole[]}
+                allowedRoles={['administrator', 'manager', 'store', 'security-officer'] as UserRole[]}
                 accessPath="/operations/alert-rules"
               >
                 <Suspense fallback={<LoadingFallback />}>
@@ -308,9 +319,8 @@ const router = createBrowserRouter([
             path: 'analytics/data-analytics-hub',
             element: (
               <ProtectedRoute
-                allowedRoles={['administrator', 'manager'] as UserRole[]}
+                allowedRoles={['administrator', 'manager', 'store', 'security-officer'] as UserRole[]}
                 accessPath="/analytics/data-analytics-hub"
-                enforcePageAccess={false}
               >
                 <Suspense fallback={<LoadingFallback />}>
                   <DataAnalyticsHub />
