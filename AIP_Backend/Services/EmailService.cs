@@ -247,6 +247,60 @@ namespace AIPBackend.Services
             }
         }
 
+        public async Task<bool> SendContactFormEmailAsync(
+            string to,
+            IEnumerable<string> cc,
+            string subject,
+            string body,
+            Stream? attachmentStream = null,
+            string? attachmentFileName = null)
+        {
+            try
+            {
+                if (string.Equals(_emailProvider, "Graph", StringComparison.OrdinalIgnoreCase))
+                {
+                    var toList = new List<string> { to };
+                    if (cc != null) toList.AddRange(cc.Where(c => !string.IsNullOrWhiteSpace(c)));
+                    return await SendGraphEmailAsync(toList, subject, body, isHtml: true, fromName: "Crime Portal");
+                }
+
+                if (_smtpClient == null)
+                {
+                    _logger.LogError("SMTP client is not configured.");
+                    return false;
+                }
+
+                using (var mailMessage = new MailMessage
+                {
+                    From = new MailAddress(_fromEmail, "Crime Portal"),
+                    Subject = subject,
+                    Body = body,
+                    IsBodyHtml = true
+                })
+                {
+                    mailMessage.To.Add(to);
+                    if (cc != null)
+                    {
+                        foreach (var addr in cc.Where(a => !string.IsNullOrWhiteSpace(a)))
+                            mailMessage.CC.Add(addr.Trim());
+                    }
+                    if (attachmentStream != null && !string.IsNullOrWhiteSpace(attachmentFileName))
+                    {
+                        attachmentStream.Position = 0;
+                        mailMessage.Attachments.Add(new Attachment(attachmentStream, attachmentFileName));
+                    }
+                    await _smtpClient.SendMailAsync(mailMessage);
+                    _logger.LogInformation("Contact form email sent successfully to {To}", to);
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send contact form email to {To}", to);
+                return false;
+            }
+        }
+
         #region Email Template Generators
 
         // Employee email template generators removed (Employee model deleted)

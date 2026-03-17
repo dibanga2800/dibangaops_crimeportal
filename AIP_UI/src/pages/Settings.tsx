@@ -36,12 +36,12 @@ const Settings = () => {
   const queryClient = useQueryClient();
   
   // Define user roles (stored in lowercase to match backend)
-  // Store: incident only (fixed). Officer: incident + admin-configurable. Manager/Admin: full access
+  // Store: admin-configurable. Officer: incident + admin-configurable. Manager/Admin: full access
   const userRoles: UserRole[] = [
     { 
       id: 'store', 
       name: 'Store User', 
-      description: 'Incident page only (fixed access)' 
+      description: 'Admin-configurable page access' 
     },
     { 
       id: 'security-officer', 
@@ -704,15 +704,12 @@ const Settings = () => {
                                 onCheckedChange={() => handleToggle(page.id, role.id)}
                                 disabled={
                                   role.id === 'administrator' ||
-                                  role.id === 'store' ||
                                   (role.id === 'manager' && mandatoryManagerPageIds.includes(page.id))
                                 }
                                 className="data-[state=checked]:bg-primary h-5 w-9"
                                 title={
                                   role.id === 'administrator'
                                     ? 'Admin access cannot be modified'
-                                    : role.id === 'store'
-                                    ? 'Store User has fixed access (Incident Report only)'
                                     : role.id === 'manager' && mandatoryManagerPageIds.includes(page.id)
                                     ? 'This page is mandatory for managers and cannot be disabled'
                                     : ''
@@ -772,7 +769,6 @@ const Settings = () => {
                               onCheckedChange={() => handleToggle(page.id, selectedRoleForMobile)}
                               disabled={
                                 selectedRoleForMobile === 'administrator' ||
-                                selectedRoleForMobile === 'store' ||
                                 (selectedRoleForMobile === 'manager' && mandatoryManagerPageIds.includes(page.id))
                               }
                               className="data-[state=checked]:bg-primary h-5 w-9"

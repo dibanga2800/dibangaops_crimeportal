@@ -5,18 +5,22 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { useAuth } from '@/contexts/AuthContext'
+import { usePageAccess } from '@/contexts/PageAccessContext'
+import { useCustomerSelection } from '@/contexts/CustomerSelectionContext'
 import { dashboardService } from '@/services/dashboardService'
-import { OfficerDashboardData, Activity, Task, RecentIncident } from '@/types/dashboard'
+import { classificationApi } from '@/services/api/classification'
+import { Activity, RecentIncident } from '@/types/dashboard'
 import { DashboardGreeting } from '@/components/dashboard/DashboardGreeting'
 import {
   FileWarning, FileSearch, Building, Calendar, CalendarRange,
   BadgeCheck, ClipboardCheck, Key, HelpCircle, Wallet, Shirt,
-  Bell, Clock, CheckCircle, Target, Award, TrendingUp, Shield,
+  Bell, Clock, Target, Award, TrendingUp, Shield,
   Users, Eye, MapPin, AlertTriangle, Activity as ActivityIcon,
   Star, Timer, ChevronRight, ArrowUpRight, ArrowDownRight,
-  Zap, ChevronLeft, ChevronRightIcon
+  Zap, ChevronLeft, ChevronRightIcon, Plus
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { cn } from '@/lib/utils'
 import {
   Table,
   TableBody,
@@ -254,8 +258,8 @@ const IncidentTable: React.FC<{ incidents: RecentIncident[] }> = ({ incidents })
 }
 
 export default function OfficerDashboard() {
-  // Get the logged-in user information
   const { user: loggedInUser } = useAuth()
+  const { selectedCustomerId, selectedSiteId } = useCustomerSelection()
 
   // Fetch dashboard data
   const { 
@@ -267,18 +271,37 @@ export default function OfficerDashboard() {
     queryFn: () => dashboardService.getOfficerDashboard()
   })
 
-  // Fetch incidents data
+  // Fetch incidents for assigned stores (scoped by customer/site)
   const {
     data: incidentsData,
     isLoading: isIncidentsLoading,
     error: incidentsError
   } = useQuery({
-    queryKey: ['recentIncidents'],
-    queryFn: () => dashboardService.getRecentIncidents()
+    queryKey: ['recentIncidents', selectedCustomerId ?? 'all', selectedSiteId ?? 'all'],
+    queryFn: () =>
+      dashboardService.getRecentIncidents({
+        customerId: selectedCustomerId ?? undefined,
+        siteId: selectedSiteId ?? undefined
+      })
+  })
+
+  // Fetch AI risk indicators for assigned stores
+  const { data: aiAnalytics } = useQuery({
+    queryKey: ['officerAnalytics', selectedCustomerId ?? 'all', selectedSiteId ?? 'all'],
+    queryFn: () =>
+      classificationApi.getAnalyticsSummary({
+        customerId: selectedCustomerId ?? undefined,
+        siteId: selectedSiteId ?? undefined
+      }),
+    enabled: selectedCustomerId != null || selectedSiteId != null
   })
 
   const isLoading = isDashboardLoading || isIncidentsLoading
   const error = dashboardError || incidentsError
+
+  // Always show Incident Report button on OfficerDashboard – this dashboard is for store/officer users
+  // whose primary workflow is reporting incidents. Route protection handles unauthorized access.
+  const showNewIncidentButton = true
 
   const computedStats = React.useMemo(() => {
     if (!incidentsData || incidentsData.length === 0) {
@@ -286,7 +309,9 @@ export default function OfficerDashboard() {
         incidentsThisMonth: dashboardData?.stats.incidentsThisMonth ?? 0,
         incidentsLastMonth: dashboardData?.stats.incidentsLastMonth ?? 0,
         totalValueThisMonth: dashboardData?.stats.totalValueSaved ?? 0,
-        totalValueLastMonth: 0
+        totalValueLastMonth: 0,
+        theftThisMonth: 0,
+        theftLastMonth: 0,
       }
     }
 
@@ -308,6 +333,8 @@ export default function OfficerDashboard() {
     let incidentsLastMonth = 0
     let totalValueThisMonth = 0
     let totalValueLastMonth = 0
+    let theftThisMonth = 0
+    let theftLastMonth = 0
 
     for (const inc of incidentsData) {
       const d = parseDate(inc.date)
@@ -319,12 +346,24 @@ export default function OfficerDashboard() {
         ? inc.value
         : (typeof inc.amount === 'number' && !isNaN(inc.amount) ? inc.amount : 0)
 
+      const incidentType = (inc.type || inc.incidentType || '').toLowerCase()
+      const isTheftIncident =
+        incidentType.includes('theft') ||
+        incidentType.includes('stolen') ||
+        incidentType.includes('shoplifting')
+
       if (y === currentYear && m === currentMonth) {
         incidentsThisMonth += 1
         totalValueThisMonth += value
+        if (isTheftIncident) {
+          theftThisMonth += 1
+        }
       } else if (y === prevYear && m === prevMonth) {
         incidentsLastMonth += 1
         totalValueLastMonth += value
+        if (isTheftIncident) {
+          theftLastMonth += 1
+        }
       }
     }
 
@@ -340,7 +379,9 @@ export default function OfficerDashboard() {
       incidentsThisMonth,
       incidentsLastMonth,
       totalValueThisMonth,
-      totalValueLastMonth
+      totalValueLastMonth,
+      theftThisMonth,
+      theftLastMonth,
     }
   }, [incidentsData, dashboardData])
 
@@ -355,16 +396,35 @@ export default function OfficerDashboard() {
     return `${sign}${diff} (${pct.toFixed(0)}%) vs last month`
   }, [computedStats])
 
-  const valueChangeLabel = React.useMemo(() => {
-    const { totalValueThisMonth, totalValueLastMonth } = computedStats
-    if (totalValueLastMonth <= 0) {
-      return totalValueThisMonth > 0 ? 'vs last month' : 'No data for last month'
+  const theftChangeLabel = React.useMemo(() => {
+    const { theftThisMonth, theftLastMonth } = computedStats
+    if (theftLastMonth <= 0) {
+      return theftThisMonth > 0 ? 'vs last month' : 'No data for last month'
     }
-    const diff = totalValueThisMonth - totalValueLastMonth
-    const pct = (diff / Math.max(totalValueLastMonth, 1)) * 100
+    const diff = theftThisMonth - theftLastMonth
+    const pct = (diff / Math.max(theftLastMonth, 1)) * 100
     const sign = diff >= 0 ? '+' : ''
-    return `${sign}£${Math.abs(diff).toFixed(0)} (${pct.toFixed(0)}%) vs last month`
+    return `${sign}${diff} (${pct.toFixed(0)}%) vs last month`
   }, [computedStats])
+
+  // Recent Activity: prefer incidents for assigned stores; fallback to dashboard activities
+  const recentActivities = React.useMemo((): Activity[] => {
+    if (incidentsData && incidentsData.length > 0) {
+      return incidentsData.map((inc) => ({
+        id: inc.id,
+        type: 'incident' as const,
+        title: inc.type || inc.incidentType || 'Incident reported',
+        location: inc.siteName || inc.store || 'Unknown site',
+        time: (() => {
+          const d = new Date(inc.date)
+          return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+        })(),
+        value: inc.value ?? inc.amount,
+        status: 'submitted' as const
+      }))
+    }
+    return dashboardData?.recentActivities ?? []
+  }, [incidentsData, dashboardData])
 
   if (error) {
     return (
@@ -399,12 +459,25 @@ export default function OfficerDashboard() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-      <div className="max-w-screen-2xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
-        <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
+    <main className="min-h-screen min-w-0 overflow-x-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      <div className="w-full max-w-full mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
+        <div className="w-full min-w-0 max-w-full mx-auto space-y-4 sm:space-y-6">
           {/* Header Section */}
-          <header className="space-y-1">
-            <DashboardGreeting />
+          <header className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <DashboardGreeting />
+            </div>
+            {showNewIncidentButton && (
+              <Button
+                asChild
+                className="flex-shrink-0 h-9 sm:h-10 px-3 sm:px-4 gap-2 bg-red-600 hover:bg-red-700"
+              >
+                <Link to="/operations/incident-report" className="flex items-center">
+                  <Plus className="h-4 w-4" aria-hidden />
+                  <span>Incident Report</span>
+                </Link>
+              </Button>
+            )}
           </header>
 
           {/* Stats Grid */}
@@ -420,10 +493,10 @@ export default function OfficerDashboard() {
               link="/operations/incident-report"
             />
             <StatCard
-              title="Value Saved"
-              value={`£${(computedStats.totalValueThisMonth / 1000).toFixed(1)}k`}
-              change={valueChangeLabel}
-              trend={computedStats.totalValueThisMonth >= computedStats.totalValueLastMonth ? 'up' : 'down'}
+              title="No. of Theft Reported"
+              value={computedStats.theftThisMonth}
+              change={theftChangeLabel}
+              trend={computedStats.theftThisMonth >= computedStats.theftLastMonth ? 'up' : 'down'}
               icon={TrendingUp}
               gradient="bg-gradient-to-br from-emerald-500 to-emerald-700"
               subtitle="This month"
@@ -474,14 +547,14 @@ export default function OfficerDashboard() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <ProgressCard
                     title="Incidents Handled"
-                    current={dashboardData.stats.incidentsThisMonth}
+                    current={computedStats.incidentsThisMonth}
                     target={dashboardData.monthlyTarget.incidents}
                     unit="incidents"
                     color="blue"
                   />
                   <ProgressCard
                     title="Value Saved"
-                    current={dashboardData.stats.totalValueSaved}
+                    current={Math.round(computedStats.totalValueThisMonth)}
                     target={dashboardData.monthlyTarget.valueSaved}
                     unit="£"
                     color="green"
@@ -517,38 +590,62 @@ export default function OfficerDashboard() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-3 sm:p-4 space-y-2">
-                    {dashboardData.recentActivities.map((activity) => (
-                      <ActivityItem key={activity.id} activity={activity} />
-                    ))}
+                    {recentActivities.length > 0 ? (
+                      recentActivities.map((activity) => (
+                        <ActivityItem key={activity.id} activity={activity} />
+                      ))
+                    ) : (
+                      <p className="text-xs text-gray-500 py-2">No recent activity for your assigned stores.</p>
+                    )}
                   </CardContent>
                 </Card>
               </section>
 
-              {/* Upcoming Tasks */}
-              <section aria-label="Upcoming Tasks">
+              {/* AI Risk Indicators (assigned stores) */}
+              <section aria-label="AI Risk Indicators">
                 <Card>
                   <CardHeader className="p-3 sm:p-4">
                     <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-                      <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
-                      Upcoming Tasks
+                      <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
+                      AI Risk Indicators
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="p-3 sm:p-4 space-y-2">
-                    {dashboardData.upcomingTasks.map((task) => (
-                      <div 
-                        key={task.id} 
-                        className="flex items-center gap-2 p-2 sm:p-3 rounded-lg border bg-gray-50 hover:bg-gray-100 transition-colors"
-                      >
-                        <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${
-                          task.priority === 'high' ? 'bg-red-500' : 
-                          task.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'
-                        }`} />
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-xs sm:text-sm truncate">{task.title}</p>
-                          <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5">{task.dueDate}</p>
-                        </div>
+                  <CardContent className="p-3 sm:p-4">
+                    {aiAnalytics && aiAnalytics.riskIndicators.length > 0 ? (
+                      <div className="divide-y space-y-0">
+                        {aiAnalytics.riskIndicators.map((indicator, idx) => (
+                          <div key={idx} className="py-3 first:pt-0 last:pb-0">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs sm:text-sm font-medium">{indicator.indicator}</span>
+                              <Badge
+                                variant={indicator.level === 'high' ? 'destructive' : indicator.level === 'medium' ? 'secondary' : 'default'}
+                                className="text-[10px] sm:text-xs"
+                              >
+                                {indicator.level}
+                              </Badge>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-1.5 mb-1">
+                              <div
+                                className={cn(
+                                  'h-1.5 rounded-full transition-all',
+                                  indicator.level === 'high' ? 'bg-red-500' : indicator.level === 'medium' ? 'bg-amber-500' : 'bg-emerald-500'
+                                )}
+                                style={{ width: `${Math.round(indicator.score * 100)}%` }}
+                              />
+                            </div>
+                            {indicator.description && (
+                              <p className="text-[10px] sm:text-xs text-gray-600 mt-1">{indicator.description}</p>
+                            )}
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    ) : (
+                      <p className="text-xs text-gray-500 py-2">
+                        {selectedCustomerId != null || selectedSiteId != null
+                          ? 'No AI risk indicators available for your assigned stores.'
+                          : 'Select a store to view AI risk indicators.'}
+                      </p>
+                    )}
                   </CardContent>
                 </Card>
               </section>

@@ -110,8 +110,13 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 		const match = Object.keys(pageAccessByRole).find(key => 
 			key.toLowerCase() === normalized.toLowerCase()
 		);
+		if (match) return match;
 
-		return match || normalized;
+		// Map security-officer <-> officer for backwards compatibility (backend/Settings may use either)
+		if (normalized === 'security-officer' && pageAccessByRole['officer']) return 'officer';
+		if (normalized === 'officer' && pageAccessByRole['security-officer']) return 'security-officer';
+
+		return normalized;
 	}, [pageAccessByRole, normalizeRoleName]);
 
 	// Load page access settings from API (AllowAnonymous endpoint - safe to call without token)
@@ -225,54 +230,8 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 	const hasAccess = useCallback((path: string): boolean => {
 		const startTime = performance.now();
 		try {
-			// #region agent log
-			fetch('http://127.0.0.1:7478/ingest/36db9966-faf2-4a30-a6e8-5fe60bf82961', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					'X-Debug-Session-Id': '1c2cf5',
-				},
-				body: JSON.stringify({
-					sessionId: '1c2cf5',
-					runId: 'pre-fix',
-					hypothesisId: 'H1-H4',
-					location: 'PageAccessContext.tsx:hasAccess:entry',
-					message: '[agent] hasAccess entry',
-					data: {
-						path,
-						status,
-						currentRole,
-						availablePagesCount: availablePages.length,
-					},
-					timestamp: Date.now(),
-				}),
-			}).catch(() => {});
-			// #endregion
-
 			// During loading, allow all to prevent redirect loops. Once ready, filter strictly by Settings.
 			if (status === 'loading') {
-				// #region agent log
-				fetch('http://127.0.0.1:7478/ingest/36db9966-faf2-4a30-a6e8-5fe60bf82961', {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-						'X-Debug-Session-Id': '1c2cf5',
-					},
-					body: JSON.stringify({
-						sessionId: '1c2cf5',
-						runId: 'pre-fix',
-						hypothesisId: 'H1',
-						location: 'PageAccessContext.tsx:hasAccess:loading-early-return',
-						message: '[agent] hasAccess early return due to loading status',
-						data: {
-							path,
-							status,
-							currentRole,
-						},
-						timestamp: Date.now(),
-					}),
-				}).catch(() => {});
-				// #endregion
 				return true;
 			}
 			// Without availablePages we cannot resolve paths. Deny by default; allow only minimal fallback for store/officer.
@@ -308,9 +267,8 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 			// Treat root as dashboard for access checks
 			if (normalizedPath === '/') normalizedPath = '/dashboard';
 
-			// Store and security-officer users: always allow a small, safe default set of pages,
-			// but still allow additional pages that are enabled via Settings.
-			// This keeps the defaults static while making everything else dynamic.
+			// Store and security-officer users: always allow dashboard and profile (prevents lockout).
+			// Operations pages (incident-report, etc.) are controlled by Settings - no hardcoded bypass.
 			if (currentRole) {
 				const roleLower = currentRole.toLowerCase();
 				const isStoreOrOfficer = roleLower === 'store' || roleLower === 'security-officer';
@@ -318,34 +276,8 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 					const allowedDefaultPaths = [
 						'/dashboard',
 						'/profile',
-						'/operations/incident-report',
 					];
 					const isAllowedDefaultPath = allowedDefaultPaths.includes(normalizedPath);
-
-					// #region agent log
-					fetch('http://127.0.0.1:7478/ingest/36db9966-faf2-4a30-a6e8-5fe60bf82961', {
-						method: 'POST',
-						headers: {
-							'Content-Type': 'application/json',
-							'X-Debug-Session-Id': '1c2cf5',
-						},
-						body: JSON.stringify({
-							sessionId: '1c2cf5',
-							runId: 'pre-fix',
-							hypothesisId: 'H2',
-							location: 'PageAccessContext.tsx:hasAccess:store-officer-defaults',
-							message: '[agent] hasAccess store/officer default decision',
-							data: {
-								path,
-								normalizedPath,
-								currentRole,
-								isAllowedDefaultPath,
-								allowedDefaultPaths,
-							},
-							timestamp: Date.now(),
-						}),
-					}).catch(() => {});
-					// #endregion
 
 					// For these default pages, short‑circuit to ALLOW even if Settings are misconfigured.
 					// For all other pages, fall through to the Settings-based logic below.
@@ -358,29 +290,6 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 			// Dashboard is always accessible for administrators and managers
 			if (normalizedPath === '/dashboard') {
 				if (currentRole && (currentRole.toLowerCase() === 'administrator' || currentRole.toLowerCase() === 'manager')) {
-					// #region agent log
-					fetch('http://127.0.0.1:7478/ingest/36db9966-faf2-4a30-a6e8-5fe60bf82961', {
-						method: 'POST',
-						headers: {
-							'Content-Type': 'application/json',
-							'X-Debug-Session-Id': '1c2cf5',
-						},
-						body: JSON.stringify({
-							sessionId: '1c2cf5',
-							runId: 'pre-fix',
-							hypothesisId: 'H3',
-							location: 'PageAccessContext.tsx:hasAccess:admin-manager-dashboard',
-							message: '[agent] hasAccess admin/manager dashboard auto-allow',
-							data: {
-								path,
-								normalizedPath,
-								currentRole,
-							},
-							timestamp: Date.now(),
-						}),
-					}).catch(() => {});
-					// #endregion
-
 					return true;
 				}
 				// For store and security-officer, fall through to Settings-based check below
@@ -451,8 +360,9 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 			}
 
 			let allowedPageIds = pageAccessByRole[roleKey];
-			// Fallback for store when no pages configured: prevent lockout with minimal safe set
-			if ((!allowedPageIds || allowedPageIds.length === 0) && currentRole.toLowerCase() === 'store') {
+			// Fallback for store and security-officer when no pages configured: prevent lockout with minimal safe set
+			const roleLower = currentRole.toLowerCase();
+			if ((!allowedPageIds || allowedPageIds.length === 0) && (roleLower === 'store' || roleLower === 'security-officer')) {
 				allowedPageIds = ['dashboard', 'profile', 'incident-report'];
 			}
 			if (!allowedPageIds || allowedPageIds.length === 0) {
@@ -559,8 +469,8 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 			if (!hasRoleAccess && isOfficer) {
 				// Officers can access customer pages if granted in Settings (pageAccessByRole)
 				if (isCustomerPage || isManagementCustomerReporting) {
-					// Re-check allowedPageIds - officer gets extras from Settings
-					const officerPages = pageAccessByRole['officer'] || [];
+					// Re-check using resolved allowedPageIds (Settings uses 'security-officer' key)
+					const officerPages = allowedPageIds || [];
 					const hasOfficerAccess = officerPages.some(allowedId => {
 						const allowedIdStr = String(allowedId).toLowerCase().trim();
 						return allowedIdStr === pageIdLower || 

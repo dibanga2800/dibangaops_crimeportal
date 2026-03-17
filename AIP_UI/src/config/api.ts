@@ -372,14 +372,40 @@ export interface ApiResponse<T> {
 
 // Error handling utilities
 export const handleApiError = (error: any): string => {
-  if (error.response?.data?.message) {
-    return error.response.data.message
+  const data = error?.response?.data
+
+  if (data?.message && typeof data.message === 'string') {
+    return data.message
   }
-  if (error.response?.data?.errors) {
-    return error.response.data.errors.join(', ')
+
+  if (data?.errors) {
+    const errors = data.errors
+
+    // If it's already a string, just return it
+    if (typeof errors === 'string') {
+      return errors
+    }
+
+    // If it's an array, join it
+    if (Array.isArray(errors)) {
+      return errors.join(', ')
+    }
+
+    // If it's a dictionary (e.g. ModelState errors), flatten values
+    if (typeof errors === 'object') {
+      const flattened = Object.values(errors)
+        .flat()
+        .filter((e: unknown): e is string => typeof e === 'string')
+
+      if (flattened.length > 0) {
+        return flattened.join(', ')
+      }
+    }
   }
-  if (error.message) {
+
+  if (error?.message && typeof error.message === 'string') {
     return error.message
   }
+
   return 'An unexpected error occurred'
-} 
+}

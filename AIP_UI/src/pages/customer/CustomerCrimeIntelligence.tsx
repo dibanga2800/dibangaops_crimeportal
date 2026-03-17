@@ -727,7 +727,7 @@ export default function CustomerCrimeIntelligence() {
 	const [searchParams] = useSearchParams()
 	const { toast } = useToast()
 	const { user, isLoading: authLoading } = useAuth()
-	const { isAdmin, isManager, selectedCustomerId: contextCustomerId, setSelectedCustomerId, assignedCustomers } = useCustomerSelection()
+	const { isAdmin, isManager, selectedCustomerId: contextCustomerId, setSelectedCustomerId, assignedCustomers, selectedSiteId: contextSiteId } = useCustomerSelection()
 	const { availableCustomers, isLoading: loadingCustomers } = useAvailableCustomers()
 
 	const [customer, setCustomer] = useState<{ id: number; name: string } | null>(null)
@@ -752,12 +752,14 @@ export default function CustomerCrimeIntelligence() {
 	const urlCustomerId = searchParams.get('customerId')
 	const urlSiteId = searchParams.get('siteId')
 
+	// Resolve customer ID: URL > admin/manager context > user.customerId/CustomerId > selection context
 	const resolvedCustomerId = useMemo(() => {
 		if (urlCustomerId) return parseInt(urlCustomerId, 10)
 		if (isAdmin && contextCustomerId) return contextCustomerId
 		if (isManager && contextCustomerId) return contextCustomerId
-		if (user && 'customerId' in user) return (user as any).customerId ?? null
-		return null
+		const userCustomerId = (user as any)?.customerId ?? (user as any)?.CustomerId ?? (user as any)?.companyId ?? (user as any)?.CompanyId
+		if (userCustomerId != null) return typeof userCustomerId === 'string' ? parseInt(userCustomerId, 10) : userCustomerId
+		return contextCustomerId ?? null
 	}, [urlCustomerId, isAdmin, isManager, contextCustomerId, user])
 
 	useEffect(() => {
@@ -786,42 +788,59 @@ export default function CustomerCrimeIntelligence() {
 		loadCustomer()
 	}, [loadCustomer])
 
-	const loadSites = useCallback(async () => {
-		const id = resolvedCustomerId
-		if (id == null) return
-		try {
-			const res = await siteService.getSitesByCustomer(id)
-			if (res.success && res.data?.length) {
-				setSites(res.data)
-			} else {
-				setSites([])
-			}
-		} catch {
-			setSites([])
-		}
-	}, [resolvedCustomerId])
-
 	const loadRegions = useCallback(async () => {
 		const id = resolvedCustomerId
 		if (id == null) return
 		try {
 			const res = await incidentGraphService.fetchRegions(id)
-			if (res.success && res.data?.length) {
-				setRegions(res.data)
-			} else {
-				setRegions([])
-			}
+			const regionsList = res.success && res.data?.length ? res.data : []
+			setRegions(regionsList)
 		} catch {
 			setRegions([])
 		}
 	}, [resolvedCustomerId])
 
-	useEffect(() => {
-		if (resolvedCustomerId) {
-			loadSites()
-			loadRegions()
+	// Sites depend on region selection: fetch by region when selected, or by customer when "All regions"
+	const loadSites = useCallback(async () => {
+		const id = resolvedCustomerId
+		if (id == null) return
+		const role = (user?.role ?? (user as any)?.pageAccessRole ?? '').toString().toLowerCase()
+		const isOfficerOrStore = role === 'security-officer' || role === 'store'
+		const assignedSiteIds = (user as any)?.assignedSiteIds ?? (user as any)?.AssignedSiteIds
+		const primarySiteId = (user as any)?.primarySiteId ?? (user as any)?.PrimarySiteId
+		const assignedIds = Array.isArray(assignedSiteIds)
+			? assignedSiteIds.map((s: string | number) => String(s))
+			: primarySiteId
+				? [String(primarySiteId)]
+				: null
+
+		try {
+			const sitesRes =
+				selectedRegionId !== 'all'
+					? await siteService.getSitesByRegion(parseInt(selectedRegionId, 10))
+					: await siteService.getSitesByCustomer(id)
+			let sitesList: Site[] = sitesRes.success && sitesRes.data?.length ? sitesRes.data : []
+
+			if (isOfficerOrStore && assignedIds && assignedIds.length > 0) {
+				sitesList = sitesList.filter((s) => {
+					const sid = String(s.siteID ?? (s as any).SiteID ?? (s as any).id ?? '')
+					return assignedIds.includes(sid)
+				})
+			}
+
+			setSites(sitesList)
+		} catch {
+			setSites([])
 		}
-	}, [resolvedCustomerId, loadSites, loadRegions])
+	}, [resolvedCustomerId, selectedRegionId, user])
+
+	useEffect(() => {
+		if (resolvedCustomerId) loadRegions()
+	}, [resolvedCustomerId, loadRegions])
+
+	useEffect(() => {
+		if (resolvedCustomerId) loadSites()
+	}, [resolvedCustomerId, selectedRegionId, loadSites])
 
 	const fetchInsights = useCallback(async () => {
 		const customerId = resolvedCustomerId
@@ -884,6 +903,25 @@ export default function CustomerCrimeIntelligence() {
 	}, [resolvedCustomerId, filtersVersion])
 
 	const analystNotes = useMemo(() => (insights ? buildAnalystNotes(insights) : []), [insights])
+
+	// Sites filtered by selected region (cascading: region selection drives site options)
+	const sitesForSelectedRegion = useMemo(() => {
+		if (selectedRegionId === 'all') return sites
+		return sites.filter(
+			(s) =>
+				String(s.fkRegionID ?? (s as any).fkRegionId ?? (s as any).regionId ?? (s as any).FkRegionID ?? '') ===
+				selectedRegionId
+		)
+	}, [sites, selectedRegionId])
+
+	// Reset site selection when region changes and current site is not in the new region
+	useEffect(() => {
+		if (selectedRegionId === 'all' || selectedSiteId === 'all') return
+		const siteInRegion = sitesForSelectedRegion.some(
+			(s) => String(s.siteID ?? (s as any).SiteID ?? (s as any).id ?? '') === selectedSiteId
+		)
+		if (!siteInRegion) setSelectedSiteId('all')
+	}, [selectedRegionId, selectedSiteId, sitesForSelectedRegion])
 
 	// ──────────────────────────────────────────────────────────────────────────
 	// Loading / Error states
@@ -1017,6 +1055,7 @@ export default function CustomerCrimeIntelligence() {
 								value={selectedRegionId}
 								onValueChange={value => {
 									setSelectedRegionId(value)
+									setSelectedSiteId('all')
 									setFiltersVersion(v => v + 1)
 								}}
 							>

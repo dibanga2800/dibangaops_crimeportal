@@ -339,21 +339,8 @@ export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({ onNavigate
 				return canDisplay
 			})
 
-			// Store & security-officer roles: always include a small default set of links inside Operations,
-			// but allow Settings to add more links (in any section).
-			if ((effectiveRole === 'store' || effectiveRole === 'security-officer') && section.id === 'operations') {
-				const defaultOpsPaths = ['/operations/incident-report'];
-				const defaultOpsLinks = section.links.filter((link) =>
-					defaultOpsPaths.includes(link.path)
-				);
+			// No override: store and security-officer links come only from page access settings (hasAccess via canDisplayLink).
 
-				for (const defLink of defaultOpsLinks) {
-					if (!links.some((l) => l.path === defLink.path)) {
-						links.push(defLink);
-					}
-				}
-			}
-			
 			// Debug logging
 			if (import.meta.env.DEV && false) {
 				console.log(`🔍 [Sidebar] Section filtered:`, {

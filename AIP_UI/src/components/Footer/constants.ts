@@ -1,17 +1,13 @@
 import { CompanyInfo, ContactInfo, QuickLink } from './types';
 
 export const COMPANY_INFO: CompanyInfo = {
-  name: 'Security Operations Centre',
-  address: [
-    '1 Madeley Road',
-    'Moons Moat North Industrial Estate',
-    'Redditch B98 9NB',
-  ],
+  name: 'DibangOps Crime Portal',
+  address: [],
 };
 
 export const CONTACT_INFO: ContactInfo = {
-  phone: '0121 820 2973',
-  supportText: 'For Support Call Scott or James at Head Office',
+  phone: '',
+  supportText: 'For product support or deployment help, contact David Ibanga using the secure in-app contact form.',
 };
 
 export const QUICK_LINKS: QuickLink[] = [

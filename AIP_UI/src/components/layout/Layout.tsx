@@ -90,8 +90,8 @@ export const Layout = ({ children }: LayoutProps) => {
           />
         )}
 
-        {/* Main Content Area - full width on mobile, adjusted on desktop */}
-        <div className="flex-1 flex flex-col w-full lg:ml-64">
+        {/* Main Content Area - full width on mobile, adjusted on desktop. min-w-0 allows flex child to shrink and prevent overflow. */}
+        <div className="flex-1 flex flex-col min-w-0 w-full lg:ml-64 overflow-x-hidden">
           {/* Header */}
           <Header onMobileMenuClick={() => setIsMobileOpen(!isMobileOpen)} />
 
@@ -102,9 +102,9 @@ export const Layout = ({ children }: LayoutProps) => {
           />
 
           {/* Page Content */}
-          <main className="flex-1 bg-white flex flex-col">
-            <div className="flex-1 w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 md:py-8">
-              <div className="grid gap-4 sm:gap-6 md:gap-8">
+          <main className="flex-1 bg-white flex flex-col min-w-0 overflow-x-hidden">
+            <div className="flex-1 w-full min-w-0 max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 md:py-8">
+              <div className="grid gap-4 sm:gap-6 md:gap-8 min-w-0">
                 <AnimatePresence mode="wait" initial={false}>
                   <motion.div
                     key={location.pathname}
@@ -112,7 +112,7 @@ export const Layout = ({ children }: LayoutProps) => {
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.15 }}
-                    className="h-full"
+                    className="h-full min-w-0"
                   >
                     {children || <Outlet />}
                   </motion.div>

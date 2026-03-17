@@ -57,13 +57,30 @@ export const CustomerSelectionProvider: React.FC<CustomerSelectionProviderProps>
 			const firstId = assignedCustomers[0].id
 			setSelectedCustomerIdState((prev) => (prev !== null && assignedCustomers.some((c) => c.id === prev) ? prev : firstId))
 		} else {
-			const customerId = user && 'customerId' in user ? (user as any).customerId : null
-			if (customerId) {
-				setSelectedCustomerIdState(typeof customerId === 'string' ? parseInt(customerId, 10) : customerId)
+			// Store and security-officer: resolve customer from backend fields (camelCase or PascalCase)
+			const rawId =
+				(user as any)?.customerId ??
+				(user as any)?.CustomerId ??
+				(user as any)?.companyId ??
+				(user as any)?.CompanyId
+			const customerId =
+				rawId != null
+					? typeof rawId === 'string'
+						? parseInt(rawId, 10)
+						: Number(rawId)
+					: null
+			const numericId = customerId != null && !Number.isNaN(customerId) ? customerId : null
+			if (numericId) {
+				setSelectedCustomerIdState(numericId)
+			} else if (assignedCustomers.length > 0) {
+				// Officers may have assignedCustomerIds instead of customerId
+				setSelectedCustomerIdState((prev) =>
+					prev !== null && assignedCustomers.some((c) => c.id === prev) ? prev : assignedCustomers[0].id
+				)
 			}
-			// For store users, also fix the site from primarySiteId if available
-			const primarySiteId = user && 'primarySiteId' in user ? (user as any).primarySiteId : null
-			if (primarySiteId) {
+			// For store/officer users, also set site from primarySiteId if available
+			const primarySiteId = (user as any)?.primarySiteId ?? (user as any)?.PrimarySiteId
+			if (primarySiteId != null) {
 				setSelectedSiteIdState(String(primarySiteId))
 			}
 		}

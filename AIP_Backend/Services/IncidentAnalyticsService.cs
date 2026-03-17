@@ -194,7 +194,7 @@ namespace AIPBackend.Services
 				Indicator = "Value at Risk",
 				Level = valueScore >= 0.7 ? "high" : valueScore >= 0.4 ? "medium" : "low",
 				Score = valueScore,
-				Description = $"Total value impact: {totalValue.ToString("C0", CultureInfo.CreateSpecificCulture("en-GB"))}"
+				Description = $"Total value impact (last 90 days): {totalValue.ToString("C0", CultureInfo.CreateSpecificCulture("en-GB"))}"
 			});
 
 			var policeRate = incidents.Count > 0
