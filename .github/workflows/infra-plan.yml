@@ -1,0 +1,60 @@
+name: Infrastructure Plan
+
+on:
+  pull_request:
+    paths:
+      - 'Infrastructure/**'
+      - '.github/workflows/infra-plan.yml'
+      - '.github/workflows/deploy-main.yml'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  terraform-plan:
+    name: Terraform Validate and Plan
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Infrastructure
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.13.4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Terraform Init (remote backend)
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ secrets.TF_STATE_RESOURCE_GROUP }}" \
+            -backend-config="storage_account_name=${{ secrets.TF_STATE_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=${{ secrets.TF_STATE_CONTAINER }}" \
+            -backend-config="key=${{ secrets.TF_STATE_KEY }}"
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        env:
+          TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
+        run: |
+          terraform plan \
+            -var-file="terraform.dev.tfvars" \
+            -var="backend_image=mcr.microsoft.com/azuredocs/containerapps-helloworld:latest" \
+            -var="ai_image=mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
