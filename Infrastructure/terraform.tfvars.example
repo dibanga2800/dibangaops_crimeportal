@@ -1,0 +1,33 @@
+backend_image = "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
+ai_image      = "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
+
+# Optional overrides
+# resource_group                 = "crimeportal-rg-dev"
+# location                       = "UK South"
+# static_web_app_location        = "westeurope"
+# frontend_name                  = "crimeportal-frontend-dev"
+# sql_admin_username             = "sqladminuser"
+# sql_admin_password             = "BobTheBuilder2026!"
+# enable_application_insights    = true
+# acr_name_prefix                = "crimeportalacr"
+# log_analytics_retention_days   = 30
+# backend_container_cpu          = 0.5
+# backend_container_memory       = "1Gi"
+# backend_min_replicas           = 1
+# backend_max_replicas           = 3
+# ai_container_cpu               = 0.5
+# ai_container_memory            = "1Gi"
+# ai_min_replicas                = 0
+# ai_max_replicas                = 2
+# sql_max_size_gb                = 5
+# monthly_budget_amount          = 40
+# budget_alert_emails            = ["crimeportalai@gmail.com"]
+# enable_budget_alert            = true
+# budget_start_date              = "2026-01-01T00:00:00Z"
+
+# Example lower-cost non-production profile:
+# enable_application_insights    = false
+# log_analytics_retention_days   = 7
+# backend_min_replicas           = 0
+# backend_max_replicas           = 1
+# ai_max_replicas                = 1
