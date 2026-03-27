@@ -22,13 +22,27 @@ locals {
   acr_name               = substr("${var.acr_name_prefix}${local.suffix}", 0, 50)
   key_vault_name         = substr("${var.keyvault_name_prefix}-${local.suffix}", 0, 24)
   sql_admin_password     = coalesce(var.sql_admin_password, random_password.sql_admin.result)
+  backend_target_port    = var.backend_target_port == null ? (strcontains(var.backend_image, "azuredocs/containerapps-helloworld") ? 80 : 8080) : var.backend_target_port
+  ai_target_port         = var.ai_target_port == null ? (strcontains(var.ai_image, "azuredocs/containerapps-helloworld") ? 80 : 8000) : var.ai_target_port
+  backend_uses_acr       = strcontains(var.backend_image, ".azurecr.io/")
+  ai_uses_acr            = strcontains(var.ai_image, ".azurecr.io/")
   backend_container_fqdn = "https://${azurerm_container_app.backend.latest_revision_fqdn}"
-  ai_container_fqdn      = "https://${azurerm_container_app.ai.latest_revision_fqdn}"
+  ai_container_fqdn      = "https://${var.ai_name}.internal.${azurerm_container_app_environment.env.default_domain}"
 }
 
 resource "azurerm_resource_group" "rg" {
   name     = var.resource_group
   location = var.location
+}
+
+resource "null_resource" "register_microsoft_app" {
+  triggers = {
+    subscription_id = data.azurerm_client_config.current.subscription_id
+  }
+
+  provisioner "local-exec" {
+    command = "az provider register -n Microsoft.App --wait"
+  }
 }
 
 resource "azurerm_log_analytics_workspace" "logs" {
@@ -140,13 +154,13 @@ resource "azurerm_storage_account" "storage" {
 
 resource "azurerm_storage_container" "images" {
   name                  = "images"
-  storage_account_name  = azurerm_storage_account.storage.name
+  storage_account_id    = azurerm_storage_account.storage.id
   container_access_type = "private"
 }
 
 resource "azurerm_storage_container" "evidence" {
   name                  = "evidence"
-  storage_account_name  = azurerm_storage_account.storage.name
+  storage_account_id    = azurerm_storage_account.storage.id
   container_access_type = "private"
 }
 
@@ -167,6 +181,8 @@ resource "azurerm_container_app_environment" "env" {
   location                   = azurerm_resource_group.rg.location
   resource_group_name        = azurerm_resource_group.rg.name
   log_analytics_workspace_id = azurerm_log_analytics_workspace.logs.id
+
+  depends_on = [null_resource.register_microsoft_app]
 }
 
 resource "azurerm_container_app" "backend" {
@@ -240,7 +256,7 @@ resource "azurerm_container_app" "backend" {
 
   ingress {
     external_enabled = true
-    target_port      = 8080
+    target_port      = local.backend_target_port
     transport        = "auto"
     traffic_weight {
       latest_revision = true
@@ -248,9 +264,12 @@ resource "azurerm_container_app" "backend" {
     }
   }
 
-  registry {
-    server   = azurerm_container_registry.acr.login_server
-    identity = "System"
+  dynamic "registry" {
+    for_each = local.backend_uses_acr ? [1] : []
+    content {
+      server   = azurerm_container_registry.acr.login_server
+      identity = "System"
+    }
   }
 }
 
@@ -278,7 +297,7 @@ resource "azurerm_container_app" "ai" {
 
   ingress {
     external_enabled = false
-    target_port      = 8000
+    target_port      = local.ai_target_port
     transport        = "auto"
     traffic_weight {
       latest_revision = true
@@ -286,9 +305,12 @@ resource "azurerm_container_app" "ai" {
     }
   }
 
-  registry {
-    server   = azurerm_container_registry.acr.login_server
-    identity = "System"
+  dynamic "registry" {
+    for_each = local.ai_uses_acr ? [1] : []
+    content {
+      server   = azurerm_container_registry.acr.login_server
+      identity = "System"
+    }
   }
 }
 
@@ -305,12 +327,14 @@ resource "azurerm_role_assignment" "ai_keyvault_secrets_user" {
 }
 
 resource "azurerm_role_assignment" "backend_acr_pull" {
+  count                = local.backend_uses_acr ? 1 : 0
   scope                = azurerm_container_registry.acr.id
   role_definition_name = "AcrPull"
   principal_id         = azurerm_container_app.backend.identity[0].principal_id
 }
 
 resource "azurerm_role_assignment" "ai_acr_pull" {
+  count                = local.ai_uses_acr ? 1 : 0
   scope                = azurerm_container_registry.acr.id
   role_definition_name = "AcrPull"
   principal_id         = azurerm_container_app.ai.identity[0].principal_id
@@ -321,7 +345,7 @@ resource "azurerm_role_assignment" "ai_acr_pull" {
 resource "azurerm_consumption_budget_subscription" "monthly" {
   count           = var.enable_budget_alert && length(var.budget_alert_emails) > 0 ? 1 : 0
   name            = "${var.resource_group}-monthly-budget"
-  subscription_id = data.azurerm_client_config.current.subscription_id
+  subscription_id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}"
 
   amount     = var.monthly_budget_amount
   time_grain = "Monthly"

@@ -72,6 +72,18 @@ variable "ai_image" {
   type        = string
 }
 
+variable "backend_target_port" {
+  description = "Backend container ingress target port. Set null to auto-detect based on image."
+  type        = number
+  default     = null
+}
+
+variable "ai_target_port" {
+  description = "AI container ingress target port. Set null to auto-detect based on image."
+  type        = number
+  default     = null
+}
+
 variable "sql_admin_username" {
   description = "Azure SQL administrator username"
   type        = string

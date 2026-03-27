@@ -53,12 +53,17 @@ jobs:
             -backend-config="container_name=${{ secrets.TF_STATE_CONTAINER }}" \
             -backend-config="key=${{ secrets.TF_STATE_KEY }}"
 
+      - name: Compute budget start date (current month UTC)
+        id: budget-date
+        run: echo "value=$(date -u +%Y-%m-01T00:00:00Z)" >> "$GITHUB_OUTPUT"
+
       - name: Terraform Apply (create infra and ACR)
         env:
           TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
         run: |
           terraform apply -auto-approve \
             -var-file="terraform.prod.tfvars" \
+            -var="budget_start_date=${{ steps.budget-date.outputs.value }}" \
             -var="backend_image=mcr.microsoft.com/azuredocs/containerapps-helloworld:latest" \
             -var="ai_image=mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
 
@@ -150,12 +155,32 @@ jobs:
             -backend-config="container_name=${{ secrets.TF_STATE_CONTAINER }}" \
             -backend-config="key=${{ secrets.TF_STATE_KEY }}"
 
+      - name: Compute budget start date (current month UTC)
+        id: budget-date
+        run: echo "value=$(date -u +%Y-%m-01T00:00:00Z)" >> "$GITHUB_OUTPUT"
+
+      - name: Terraform Apply (ACR pull role assignments first)
+        env:
+          TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
+        run: |
+          terraform apply -auto-approve \
+            -target="azurerm_role_assignment.backend_acr_pull" \
+            -target="azurerm_role_assignment.ai_acr_pull" \
+            -var-file="terraform.prod.tfvars" \
+            -var="budget_start_date=${{ steps.budget-date.outputs.value }}" \
+            -var="backend_image=${{ needs.build-and-push-images.outputs.backend_image }}" \
+            -var="ai_image=${{ needs.build-and-push-images.outputs.ai_image }}"
+
+      - name: Wait for RBAC propagation
+        run: sleep 30
+
       - name: Terraform Apply (release images)
         env:
           TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
         run: |
           terraform apply -auto-approve \
             -var-file="terraform.prod.tfvars" \
+            -var="budget_start_date=${{ steps.budget-date.outputs.value }}" \
             -var="backend_image=${{ needs.build-and-push-images.outputs.backend_image }}" \
             -var="ai_image=${{ needs.build-and-push-images.outputs.ai_image }}"
 
