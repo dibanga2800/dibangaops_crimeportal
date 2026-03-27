@@ -28,6 +28,7 @@ jobs:
       acr_name: ${{ steps.tf-output.outputs.acr_name }}
       acr_login_server: ${{ steps.tf-output.outputs.acr_login_server }}
       backend_url: ${{ steps.tf-output.outputs.backend_url }}
+      key_vault_name: ${{ steps.tf-output.outputs.key_vault_name }}
 
     steps:
       - name: Checkout
@@ -53,11 +54,18 @@ jobs:
             -backend-config="container_name=${{ secrets.TF_STATE_CONTAINER }}" \
             -backend-config="key=${{ secrets.TF_STATE_KEY }}"
 
+      - name: Detect existing infrastructure
+        id: infra-check
+        run: |
+          EXISTS="$(az group exists --name "crimeportal-rg")"
+          echo "resource_group_exists=${EXISTS}" >> "$GITHUB_OUTPUT"
+
       - name: Compute budget start date (current month UTC)
         id: budget-date
         run: echo "value=$(date -u +%Y-%m-01T00:00:00Z)" >> "$GITHUB_OUTPUT"
 
       - name: Terraform Apply (create infra and ACR)
+        if: ${{ steps.infra-check.outputs.resource_group_exists != 'true' }}
         env:
           TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
         run: |
@@ -74,6 +82,7 @@ jobs:
           echo "acr_name=$(terraform output -raw acr_name)" >> "$GITHUB_OUTPUT"
           echo "acr_login_server=$(terraform output -raw acr_login_server)" >> "$GITHUB_OUTPUT"
           echo "backend_url=$(terraform output -raw backend_url)" >> "$GITHUB_OUTPUT"
+          echo "key_vault_name=$(terraform output -raw key_vault_name)" >> "$GITHUB_OUTPUT"
 
   build-and-push-images:
     name: Build and Push Containers
@@ -155,6 +164,16 @@ jobs:
             -backend-config="storage_account_name=${{ secrets.TF_STATE_STORAGE_ACCOUNT }}" \
             -backend-config="container_name=${{ secrets.TF_STATE_CONTAINER }}" \
             -backend-config="key=${{ secrets.TF_STATE_KEY }}"
+
+      - name: Ensure GitHub principal can read Key Vault secrets
+        run: |
+          KV_SCOPE="$(az keyvault show --name "${{ needs.terraform-bootstrap.outputs.key_vault_name }}" --query id -o tsv)"
+          SP_OBJECT_ID="$(az ad sp show --id "${{ secrets.AZURE_CLIENT_ID }}" --query id -o tsv)"
+          az role assignment create \
+            --assignee-object-id "${SP_OBJECT_ID}" \
+            --assignee-principal-type ServicePrincipal \
+            --role "Key Vault Administrator" \
+            --scope "${KV_SCOPE}" || true
 
       - name: Compute budget start date (current month UTC)
         id: budget-date
