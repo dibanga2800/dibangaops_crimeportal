@@ -1,18 +1,21 @@
-# Full stack: Terraform (bootstrap + release), container images, and Static Web App.
-# For day-to-day work use:
-#   - Deploy Frontend (.github/workflows/deploy-frontend.yml) for AIP_UI-only changes
-#   - Deploy Backend (.github/workflows/deploy-backend.yml) for AIP_Backend/Infrastructure changes
+# Backend + AI containers and Terraform release (updates Container Apps with new images).
+# Does not deploy the Static Web App — use Deploy Frontend for that.
 
-name: Deploy Full Stack
+name: Deploy Backend
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'AIP_Backend/**'
+      - 'Infrastructure/**'
+      - '.github/workflows/deploy-backend.yml'
   workflow_dispatch:
 
 permissions:
   id-token: write
   contents: read
 
-# One deploy at a time so two workflows do not fight over the same remote state lease.
 concurrency:
   group: crimeportal-terraform-deploy-${{ github.ref }}
   cancel-in-progress: false
@@ -249,7 +252,6 @@ jobs:
           TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
         run: |
           set -euo pipefail
-          # Azure listAppSettings / ARM can intermittently reset; retry a few times.
           for attempt in 1 2 3 4 5; do
             if terraform apply -auto-approve \
               -lock-timeout=10m \
@@ -291,50 +293,3 @@ jobs:
       - name: Capture backend URL
         id: tf-output
         run: echo "backend_url=$(terraform output -raw backend_url)" >> "$GITHUB_OUTPUT"
-
-  deploy-frontend:
-    name: Build and Deploy Frontend
-    runs-on: ubuntu-latest
-    needs: terraform-release
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: AIP_UI/package-lock.json
-
-      - name: Install dependencies
-        working-directory: AIP_UI
-        run: npm ci
-
-      - name: Build frontend
-        working-directory: AIP_UI
-        env:
-          VITE_APP_ENV: production
-          VITE_API_BASE_URL: ${{ needs.terraform-release.outputs.backend_url }}/api
-          VITE_ENABLE_MSW: 'false'
-        run: npm run build:production
-
-      # Copy only Vite output into a clean folder at repo root. The SWA deploy client has been observed
-      # validating/packaging AIP_UI (including node_modules) even when app_location pointed at dist; this avoids that.
-      - name: Stage Static Web App artifact
-        run: |
-          set -euo pipefail
-          rm -rf swa-publish
-          mkdir -p swa-publish
-          cp -a AIP_UI/dist/. swa-publish/
-          du -sh swa-publish
-
-      - name: Deploy to Azure Static Web Apps
-        uses: Azure/static-web-apps-deploy@v1
-        with:
-          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          action: upload
-          app_location: swa-publish
-          skip_app_build: true
