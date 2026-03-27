@@ -1,0 +1,122 @@
+# Frontend-only: build AIP_UI and deploy to Azure Static Web Apps.
+# Does not build container images or run Terraform apply (only reads backend_url from state).
+
+name: Deploy Frontend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'AIP_UI/**'
+      - '.github/workflows/deploy-frontend.yml'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: crimeportal-frontend-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TERRAFORM_VERSION: '1.13.4'
+  NODE_VERSION: '20'
+
+jobs:
+  terraform-output:
+    name: Terraform output (backend URL)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Infrastructure
+    outputs:
+      backend_url: ${{ steps.tf-out.outputs.backend_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Break orphaned Terraform state blob lease (if any)
+        run: |
+          set -euo pipefail
+          SA="${{ secrets.TF_STATE_STORAGE_ACCOUNT }}"
+          RG="${{ secrets.TF_STATE_RESOURCE_GROUP }}"
+          CONTAINER="${{ secrets.TF_STATE_CONTAINER }}"
+          BLOB="${{ secrets.TF_STATE_KEY }}"
+          KEY="$(az storage account keys list --resource-group "${RG}" --account-name "${SA}" --query '[0].value' -o tsv)"
+          az storage blob lease break \
+            --blob-name "${BLOB}" \
+            --container-name "${CONTAINER}" \
+            --account-name "${SA}" \
+            --account-key "${KEY}" \
+            || true
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ secrets.TF_STATE_RESOURCE_GROUP }}" \
+            -backend-config="storage_account_name=${{ secrets.TF_STATE_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=${{ secrets.TF_STATE_CONTAINER }}" \
+            -backend-config="key=${{ secrets.TF_STATE_KEY }}"
+
+      - name: Capture backend URL
+        id: tf-out
+        run: echo "backend_url=$(terraform output -raw backend_url)" >> "$GITHUB_OUTPUT"
+
+  deploy-frontend:
+    name: Build and Deploy Frontend
+    runs-on: ubuntu-latest
+    needs: terraform-output
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: AIP_UI/package-lock.json
+
+      - name: Install dependencies
+        working-directory: AIP_UI
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: AIP_UI
+        env:
+          VITE_APP_ENV: production
+          VITE_API_BASE_URL: ${{ needs.terraform-output.outputs.backend_url }}/api
+          VITE_ENABLE_MSW: 'false'
+        run: npm run build:production
+
+      - name: Stage Static Web App artifact
+        run: |
+          set -euo pipefail
+          rm -rf swa-publish
+          mkdir -p swa-publish
+          cp -a AIP_UI/dist/. swa-publish/
+          du -sh swa-publish
+
+      - name: Deploy to Azure Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: upload
+          app_location: swa-publish
+          skip_app_build: true
