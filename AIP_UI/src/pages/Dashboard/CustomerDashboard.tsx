@@ -426,15 +426,15 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
     const normalizedTitle = title.toLowerCase()
 
     if (normalizedTitle.includes('total incidents')) {
-      return '/operations/incident-report'
+      return '/operations/incident-report?open=new'
     }
 
     if (normalizedTitle.includes('incidents today') || normalizedTitle.includes('today incidents')) {
-      return '/operations/incident-report?preset=today'
+      return '/operations/incident-report?open=new&preset=today'
     }
 
     if (normalizedTitle.includes('theft')) {
-      return '/operations/incident-report?incidentType=Theft'
+      return '/operations/incident-report?open=new&incidentType=Theft'
     }
 
     return null

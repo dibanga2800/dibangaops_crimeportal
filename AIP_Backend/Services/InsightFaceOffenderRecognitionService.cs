@@ -247,7 +247,7 @@ namespace AIPBackend.Services
 					continue;
 				}
 
-				var imageBytes = TryDecodeBase64DataUrl(incident.VerificationEvidenceImage);
+				var imageBytes = await ResolveImageBytesAsync(incident.VerificationEvidenceImage, cancellationToken);
 				if (imageBytes == null || imageBytes.Length == 0)
 				{
 					result.Errors.Add($"Incident {incidentId}: could not decode verification image");
@@ -367,6 +367,38 @@ namespace AIPBackend.Services
 			if (comma < 0) return null;
 			try { return Convert.FromBase64String(url[(comma + 1)..]); }
 			catch { return null; }
+		}
+
+		private async Task<byte[]?> ResolveImageBytesAsync(string? imageReference, CancellationToken cancellationToken)
+		{
+			var inlineBytes = TryDecodeBase64DataUrl(imageReference ?? string.Empty);
+			if (inlineBytes != null && inlineBytes.Length > 0)
+			{
+				return inlineBytes;
+			}
+
+			if (string.IsNullOrWhiteSpace(imageReference) ||
+				!Uri.TryCreate(imageReference, UriKind.Absolute, out var uri) ||
+				(uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+			{
+				return null;
+			}
+
+			try
+			{
+				using var http = new HttpClient();
+				var response = await http.GetAsync(uri, cancellationToken);
+				if (!response.IsSuccessStatusCode)
+				{
+					return null;
+				}
+				return await response.Content.ReadAsByteArrayAsync(cancellationToken);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogWarning(ex, "InsightFace: could not fetch verification image from URL.");
+				return null;
+			}
 		}
 
 		private async Task<List<OffenderMatchCandidateDto>> FindCandidatesByHeuristicsAsync(FaceEmbedding sourceEmbedding, int maxResults, CancellationToken cancellationToken)

@@ -17,7 +17,7 @@ import {
   Bell, Clock, Target, Award, TrendingUp, Shield,
   Users, Eye, MapPin, AlertTriangle, Activity as ActivityIcon,
   Star, Timer, ChevronRight, ArrowUpRight, ArrowDownRight,
-  Zap, ChevronLeft, ChevronRightIcon, Plus
+  Zap, ChevronLeft, ChevronRightIcon, PlusCircle
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { cn } from '@/lib/utils'
@@ -470,10 +470,10 @@ export default function OfficerDashboard() {
             {showNewIncidentButton && (
               <Button
                 asChild
-                className="flex-shrink-0 h-9 sm:h-10 px-3 sm:px-4 gap-2 bg-red-600 hover:bg-red-700"
+                className="flex-shrink-0 h-9 sm:h-10 px-3 sm:px-4 gap-2 bg-blue-600 hover:bg-blue-700"
               >
-                <Link to="/operations/incident-report" className="flex items-center">
-                  <Plus className="h-4 w-4" aria-hidden />
+                <Link to="/operations/incident-report?open=new" className="flex items-center">
+                  <PlusCircle className="h-4 w-4" aria-hidden />
                   <span>Incident Report</span>
                 </Link>
               </Button>

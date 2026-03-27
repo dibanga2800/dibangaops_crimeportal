@@ -6,6 +6,8 @@ interface FaceCaptureGuideProps {
 	onCapture: (dataUrl: string) => void
 	onCancel: () => void
 	isSearching?: boolean
+	facingMode: 'user' | 'environment'
+	onToggleFacingMode?: () => void
 }
 
 const POLL_INTERVAL_MS = 800
@@ -22,6 +24,8 @@ export const FaceCaptureGuide: React.FC<FaceCaptureGuideProps> = ({
 	onCapture,
 	onCancel,
 	isSearching = false,
+	facingMode,
+	onToggleFacingMode,
 }) => {
 	const overlayRef = useRef<HTMLCanvasElement | null>(null)
 	const captureCanvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -76,22 +80,44 @@ export const FaceCaptureGuide: React.FC<FaceCaptureGuideProps> = ({
 			ctx.clearRect(0, 0, w, h)
 
 			const cx = w / 2
-			const cy = h / 2
-			// Oval: wider than tall for face framing (rotate 90° CW from vertical)
-			const rx = Math.min(w * 0.3, 120)
-			const ry = Math.min(h * 0.4, 180)
-			const rotation = -Math.PI / 2
+			// Put the oval near the top so it frames a face in the camera
+			// preview (object-cover tends to push the face upward).
+			const cy = h * 0.33
+
+			// Radii scale with preview size and are clamped so the oval
+			// doesn't overflow the canvas on small screens.
+			const base = Math.min(w, h)
+			const rx = Math.min(w * 0.44, base * 0.52, 190)
+			const ry = Math.min(h * 0.32, base * 0.42, 150)
+
+			// Ensure it never overflows the canvas.
+			const safeRx = Math.min(rx, w * 0.49)
+			const safeRy = Math.min(ry, h * 0.49)
+
+			const rotation = 0
 
 			ctx.strokeStyle = '#22c55e'
-			ctx.lineWidth = 4
+			ctx.lineWidth = Math.max(2.5, Math.min(5, base * 0.012))
 			ctx.beginPath()
-			ctx.ellipse(cx, cy, rx, ry, rotation, 0, 2 * Math.PI)
+			ctx.ellipse(cx, cy, safeRx, safeRy, rotation, 0, 2 * Math.PI)
 			ctx.stroke()
 
-			ctx.font = '14px system-ui, sans-serif'
+			const fontSize = Math.max(12, Math.min(16, base * 0.05))
+			ctx.font = `${fontSize}px system-ui, sans-serif`
 			ctx.fillStyle = '#22c55e'
 			ctx.textAlign = 'center'
-			ctx.fillText('Position face in oval, then tap Capture & search', cx, cy + ry + 24)
+
+			const text = 'Position face in oval, then tap Capture & search'
+			// Prefer placing the helper text below the oval, but if there's
+			// not enough space (small/short previews), place it above.
+			const padding = 8
+			const desiredBelow = cy + safeRy + fontSize + 12
+			const desiredAbove = cy - safeRy - 10
+			const textY =
+				desiredBelow <= h - padding
+					? desiredBelow
+					: Math.max(fontSize + padding, desiredAbove)
+			ctx.fillText(text, cx, textY)
 		}
 
 		const syncOverlaySize = () => {
@@ -216,11 +242,11 @@ export const FaceCaptureGuide: React.FC<FaceCaptureGuideProps> = ({
 	}, [videoRef, isVideoReady])
 
 	return (
-		<div className="space-y-3">
-			<div className="relative mx-auto w-full max-w-sm sm:max-w-lg">
+		<div className="flex flex-col gap-2">
+			<div className="relative mx-auto w-full max-w-sm sm:max-w-lg h-48 sm:h-60">
 				<video
 					ref={videoRef}
-					className="w-full rounded-md bg-black object-cover"
+					className="w-full h-full rounded-md bg-black object-cover"
 					playsInline
 					muted
 				/>
@@ -235,6 +261,19 @@ export const FaceCaptureGuide: React.FC<FaceCaptureGuideProps> = ({
 					</div>
 				)}
 			</div>
+			{onToggleFacingMode && (
+				<div className="flex justify-center">
+					<button
+						type="button"
+						onClick={onToggleFacingMode}
+						disabled={!isVideoReady}
+						aria-label="Toggle front and back camera"
+						className="inline-flex h-8 items-center justify-center rounded-md border border-input bg-background px-3 text-xs font-medium shadow-sm hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
+					>
+						{facingMode === 'user' ? 'Use back camera' : 'Use front camera'}
+					</button>
+				</div>
+			)}
 			<div className="flex flex-wrap gap-2 justify-center">
 				<button
 					type="button"

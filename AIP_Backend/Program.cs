@@ -50,13 +50,24 @@ else
 // Add services to the container.
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultDbConnection"));
+    var defaultConnection =
+        builder.Configuration.GetConnectionString("DefaultConnection") ??
+        builder.Configuration.GetConnectionString("DefaultDbConnection");
+
+    if (string.IsNullOrWhiteSpace(defaultConnection))
+    {
+        throw new InvalidOperationException("Missing SQL connection string. Configure ConnectionStrings:DefaultConnection (or legacy DefaultDbConnection).");
+    }
+
+    options.UseSqlServer(defaultConnection);
 });
 
 builder.Services.AddSingleton(u => new BlobServiceClient(
     builder.Configuration.GetConnectionString("StorageAccount")));
 builder.Services.AddSingleton<IBlobService, BlobService>();
 builder.Services.AddScoped<IFileStorageService, FileStorageService>();
+builder.Services.Configure<IncidentImageStorageOptions>(builder.Configuration.GetSection("IncidentImageStorage"));
+builder.Services.AddScoped<IIncidentImageStorageService, IncidentImageStorageService>();
 builder.Services.AddHttpClient();
 
 builder.Services.AddIdentity<ApplicationUser, ApplicationRole>(options =>

@@ -11,10 +11,13 @@ export const BUTTON_STYLES = {
 
 // Common class names
 export const COMMON_CLASSES = {
-  mobileHeader: "flex h-18 items-center justify-between px-5 bg-header-bg text-header-text lg:hidden border-b border-header-border",
-  desktopHeader: "hidden lg:flex h-20 items-center px-4 bg-header-bg text-header-text border-b border-header-border",
+  mobileHeader:
+    "flex h-18 items-center justify-between px-5 bg-header-bg text-header-text lg:hidden border-b border-header-border dark:bg-gray-900 dark:text-white dark:border-gray-800",
+  desktopHeader:
+    "hidden lg:flex h-20 items-center px-4 bg-header-bg text-header-text border-b border-header-border dark:bg-gray-900 dark:text-white dark:border-gray-800",
   sheetContent: "w-[340px] sm:w-[400px] p-0 flex flex-col h-full bg-blue-950 text-white border-r border-blue-900",
-  searchInput: "w-full pl-9 h-10 rounded-full bg-white text-gray-900 placeholder:text-gray-500 border border-gray-200 focus-visible:ring-2 focus-visible:ring-accent-teal/60 focus-visible:ring-offset-0 focus-visible:border-accent-teal"
+  searchInput:
+    "w-full pl-9 h-10 rounded-full bg-white text-gray-900 placeholder:text-gray-500 border border-gray-200 focus-visible:ring-2 focus-visible:ring-accent-teal/60 focus-visible:ring-offset-0 focus-visible:border-accent-teal dark:bg-[#1A1A1A] dark:text-gray-100 dark:placeholder:text-gray-400 dark:border-gray-700"
 } as const;
 
 // Navigation related constants

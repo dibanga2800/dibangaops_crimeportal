@@ -18,8 +18,9 @@ namespace AIPBackend.Filters
 
             if (fileParameters.Any())
             {
-                // Clear existing parameters that are IFormFile
-                operation.Parameters = operation.Parameters?
+                // Clear existing parameters that are IFormFile (Parameters can be null before assignment).
+                var existing = operation.Parameters ?? new List<OpenApiParameter>();
+                operation.Parameters = existing
                     .Where(p => !fileParameters.Any(fp => fp.Name == p.Name))
                     .ToList();
 

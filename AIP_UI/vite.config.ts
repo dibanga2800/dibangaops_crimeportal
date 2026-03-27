@@ -152,7 +152,9 @@ export default defineConfig(({ mode }) => ({
     sourcemap: mode === 'production' ? false : true,
     target: 'esnext',
     minify: 'terser',
-    cssMinify: true,
+    // Disable CSS minification to avoid build-time css-syntax warnings.
+    // (Vite/cssnano/esbuild warnings are non-fatal but noisy in CI logs.)
+    cssMinify: false,
     reportCompressedSize: true,
     chunkSizeWarningLimit: 1000,
     terserOptions: {
