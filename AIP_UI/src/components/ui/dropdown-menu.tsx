@@ -83,7 +83,7 @@ export function DropdownMenuContent({
   return (
     <div
       className={cn(
-        "absolute z-50 min-w-[8rem] overflow-hidden rounded-md border bg-white p-1 shadow-md",
+        "absolute z-50 min-w-[8rem] overflow-hidden rounded-md border border-gray-200 bg-white text-gray-900 p-1 shadow-md dark:border-slate-700 dark:bg-slate-900 dark:text-gray-100",
         {
           "right-0": align === "end",
           "left-0": align === "start",
@@ -118,7 +118,7 @@ export function DropdownMenuItem({
   return (
     <div
       className={cn(
-        "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-gray-100",
+        "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-gray-100 dark:hover:bg-slate-800",
         className
       )}
       {...props}
@@ -135,7 +135,7 @@ export function DropdownMenuLabel({
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("px-2 py-1.5 text-sm font-semibold", className)}
+      className={cn("px-2 py-1.5 text-sm font-semibold text-gray-900 dark:text-gray-100", className)}
       {...props}
     >
       {children}
@@ -149,7 +149,7 @@ export function DropdownMenuSeparator({
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("-mx-1 my-1 h-px bg-gray-100", className)}
+      className={cn("-mx-1 my-1 h-px bg-gray-100 dark:bg-slate-700", className)}
       {...props}
     />
   );
@@ -193,8 +193,8 @@ export function DropdownMenuRadioItem({
   return (
     <div
       className={cn(
-        "relative flex cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none hover:bg-gray-100",
-        checked && "bg-gray-100",
+        "relative flex cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none hover:bg-gray-100 dark:hover:bg-slate-800",
+        checked && "bg-gray-100 dark:bg-slate-800",
         className
       )}
       {...props}
