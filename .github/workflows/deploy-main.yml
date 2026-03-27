@@ -9,6 +9,11 @@ permissions:
   id-token: write
   contents: read
 
+# One deploy at a time so two workflows do not fight over the same remote state lease.
+concurrency:
+  group: crimeportal-terraform-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   TERRAFORM_VERSION: '1.13.4'
   DOTNET_VERSION: '8.0.x'
@@ -45,6 +50,21 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Break orphaned Terraform state blob lease (if any)
+        run: |
+          set -euo pipefail
+          SA="${{ secrets.TF_STATE_STORAGE_ACCOUNT }}"
+          RG="${{ secrets.TF_STATE_RESOURCE_GROUP }}"
+          CONTAINER="${{ secrets.TF_STATE_CONTAINER }}"
+          BLOB="${{ secrets.TF_STATE_KEY }}"
+          KEY="$(az storage account keys list --resource-group "${RG}" --account-name "${SA}" --query '[0].value' -o tsv)"
+          az storage blob lease break \
+            --blob-name "${BLOB}" \
+            --container-name "${CONTAINER}" \
+            --account-name "${SA}" \
+            --account-key "${KEY}" \
+            || true
 
       - name: Terraform Init
         run: |
@@ -156,6 +176,21 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Break orphaned Terraform state blob lease (if any)
+        run: |
+          set -euo pipefail
+          SA="${{ secrets.TF_STATE_STORAGE_ACCOUNT }}"
+          RG="${{ secrets.TF_STATE_RESOURCE_GROUP }}"
+          CONTAINER="${{ secrets.TF_STATE_CONTAINER }}"
+          BLOB="${{ secrets.TF_STATE_KEY }}"
+          KEY="$(az storage account keys list --resource-group "${RG}" --account-name "${SA}" --query '[0].value' -o tsv)"
+          az storage blob lease break \
+            --blob-name "${BLOB}" \
+            --container-name "${CONTAINER}" \
+            --account-name "${SA}" \
+            --account-key "${KEY}" \
+            || true
 
       - name: Terraform Init
         run: |
