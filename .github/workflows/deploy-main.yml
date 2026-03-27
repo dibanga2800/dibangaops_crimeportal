@@ -165,19 +165,46 @@ jobs:
             -backend-config="container_name=${{ secrets.TF_STATE_CONTAINER }}" \
             -backend-config="key=${{ secrets.TF_STATE_KEY }}"
 
-      - name: Ensure GitHub principal can read Key Vault secrets
-        run: |
-          KV_SCOPE="$(az keyvault show --name "${{ needs.terraform-bootstrap.outputs.key_vault_name }}" --query id -o tsv)"
-          SP_OBJECT_ID="$(az ad sp show --id "${{ secrets.AZURE_CLIENT_ID }}" --query id -o tsv)"
-          az role assignment create \
-            --assignee-object-id "${SP_OBJECT_ID}" \
-            --assignee-principal-type ServicePrincipal \
-            --role "Key Vault Administrator" \
-            --scope "${KV_SCOPE}" || true
-
       - name: Compute budget start date (current month UTC)
         id: budget-date
         run: echo "value=$(date -u +%Y-%m-01T00:00:00Z)" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure Key Vault admin role assignment is in Terraform state
+        env:
+          TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
+        run: |
+          set -euo pipefail
+          if terraform state show azurerm_role_assignment.terraform_kv_admin >/dev/null 2>&1; then
+            echo "terraform_kv_admin already in state"
+            exit 0
+          fi
+          KV_SCOPE="$(az keyvault show \
+            --name "${{ needs.terraform-bootstrap.outputs.key_vault_name }}" \
+            --resource-group "crimeportal-rg" \
+            --query id -o tsv)"
+          SP_OID="$(az ad sp show --id "${{ secrets.AZURE_CLIENT_ID }}" --query id -o tsv)"
+          RA_ID="$(az role assignment list \
+            --assignee "${SP_OID}" \
+            --scope "${KV_SCOPE}" \
+            --query "[?roleDefinitionName=='Key Vault Administrator'] | [0].id" -o tsv)"
+          if [ -n "${RA_ID}" ] && [ "${RA_ID}" != "null" ]; then
+            echo "Importing existing Key Vault Administrator assignment into Terraform state"
+            terraform import -lock-timeout=10m \
+              -var-file="terraform.prod.tfvars" \
+              -var="budget_start_date=${{ steps.budget-date.outputs.value }}" \
+              -var="backend_image=${{ needs.build-and-push-images.outputs.backend_image }}" \
+              -var="ai_image=${{ needs.build-and-push-images.outputs.ai_image }}" \
+              azurerm_role_assignment.terraform_kv_admin \
+              "${RA_ID}"
+          else
+            echo "Creating Key Vault Administrator assignment via targeted apply (no refresh)"
+            terraform apply -auto-approve -refresh=false -lock-timeout=10m \
+              -target="azurerm_role_assignment.terraform_kv_admin" \
+              -var-file="terraform.prod.tfvars" \
+              -var="budget_start_date=${{ steps.budget-date.outputs.value }}" \
+              -var="backend_image=${{ needs.build-and-push-images.outputs.backend_image }}" \
+              -var="ai_image=${{ needs.build-and-push-images.outputs.ai_image }}"
+          fi
 
       - name: Terraform Apply (ACR pull role assignments first)
         env:
