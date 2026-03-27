@@ -292,12 +292,14 @@ builder.Services.AddSwaggerGen(options =>
             Array.Empty<string>()
         }
     });
-    
-    // Handle nullable reference types and schema generation
+
+    // Stable schema IDs (avoids collisions from duplicate short type names across namespaces).
+    options.CustomSchemaIds(type => type.FullName!.Replace('+', '.'));
+
+    // Avoid aggressive polymorphism/inheritance expansion — it frequently throws during
+    // swagger.json generation for real-world DTO graphs (500 on GET /swagger/v1/swagger.json).
     options.UseAllOfToExtendReferenceSchemas();
-    options.UseOneOfForPolymorphism();
-    options.UseAllOfForInheritance();
-    
+
     // Add custom operation filter for file uploads
     options.OperationFilter<AIPBackend.Filters.FileUploadOperationFilter>();
 });
