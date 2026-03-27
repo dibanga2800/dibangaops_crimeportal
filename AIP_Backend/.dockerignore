@@ -1,0 +1,12 @@
+bin/
+obj/
+publish/
+.vs/
+.vscode/
+.venv/
+venv/
+**/*.user
+**/*.suo
+**/*.cache
+**/*.pdb
+**/*.log
