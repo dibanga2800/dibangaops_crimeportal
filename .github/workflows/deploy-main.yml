@@ -62,6 +62,7 @@ jobs:
           TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
         run: |
           terraform apply -auto-approve \
+            -lock-timeout=10m \
             -var-file="terraform.prod.tfvars" \
             -var="budget_start_date=${{ steps.budget-date.outputs.value }}" \
             -var="backend_image=mcr.microsoft.com/azuredocs/containerapps-helloworld:latest" \
@@ -164,6 +165,7 @@ jobs:
           TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
         run: |
           terraform apply -auto-approve \
+            -lock-timeout=10m \
             -target="azurerm_role_assignment.backend_acr_pull" \
             -target="azurerm_role_assignment.ai_acr_pull" \
             -var-file="terraform.prod.tfvars" \
@@ -179,6 +181,7 @@ jobs:
           TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
         run: |
           terraform apply -auto-approve \
+            -lock-timeout=10m \
             -var-file="terraform.prod.tfvars" \
             -var="budget_start_date=${{ steps.budget-date.outputs.value }}" \
             -var="backend_image=${{ needs.build-and-push-images.outputs.backend_image }}" \
