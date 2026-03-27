@@ -169,9 +169,9 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
   // If context is not available, return minimal header
   if (!pageAccessContext) {
     return (
-      <header className="h-[var(--header-height)] border-b border-gray-200 dark:border-gray-800 bg-header-bg dark:bg-gray-900" style={{ backgroundColor: '#F9F9F9' }}>
+      <header className="h-[var(--header-height)] border-b border-gray-200 dark:border-gray-800 bg-header-bg dark:bg-gray-900 text-header-text dark:text-white">
         <div className="flex items-center justify-between h-full px-4">
-          <div className="text-sm text-gray-500">Loading...</div>
+          <div className="text-sm text-gray-500 dark:text-gray-300">Loading...</div>
         </div>
       </header>
     );
@@ -276,16 +276,16 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full bg-header-bg border-b border-header-border shadow-sm text-header-text" style={{ backgroundColor: '#F9F9F9' }}>
+    <header className="sticky top-0 z-50 w-full bg-header-bg dark:bg-gray-900 border-b border-header-border dark:border-gray-800 shadow-sm text-header-text dark:text-white">
       {/* Mobile Header */}
-      <div className="w-full h-[80px] bg-header-bg flex lg:hidden justify-between items-center px-5 py-4" style={{ backgroundColor: '#F9F9F9' }}>
+      <div className="w-full h-[80px] bg-header-bg dark:bg-gray-900 flex lg:hidden justify-between items-center px-5 py-4">
         {/* Left: Hamburger Menu */}
         <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
           <SheetTrigger asChild>
             <Button 
               variant="ghost" 
               size="icon" 
-              className="p-0 text-header-text hover:bg-white/10"
+              className="p-0 text-header-text dark:text-white hover:bg-white/10"
               aria-label="Menu"
             >
               <Menu className="h-10 w-10" />
@@ -346,7 +346,7 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
             variant="ghost"
             size="icon"
             onClick={toggleSearch}
-            className="text-header-text hover:bg-white/10"
+            className="text-header-text dark:text-white hover:bg-white/10"
             aria-label="Search"
           >
             <Search className="h-6 w-6" />
@@ -354,7 +354,7 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
         </div>
 
         {/* Right: Notifications and User Profile */}
-        <div className="flex items-center gap-3 text-header-text">
+        <div className="flex items-center gap-3 text-header-text dark:text-white">
           <NotificationBell />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -369,9 +369,9 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
       </div>
 
       {/* Desktop Header */}
-      <div className={COMMON_CLASSES.desktopHeader} style={{ backgroundColor: '#F9F9F9' }}>
+      <div className={COMMON_CLASSES.desktopHeader}>
         {/* Left: Logo */}
-        <div className="flex items-center text-header-text">
+        <div className="flex items-center text-header-text dark:text-white">
           <Logo variant="desktop" />
         </div>
         
@@ -383,21 +383,21 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
         </div>
         
 		{/* Right: Notifications and User Profile */}
-				<div className="flex items-center gap-4 text-header-text">
+				<div className="flex items-center gap-4 text-header-text dark:text-white">
           <NotificationBell />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <div className="flex items-center gap-2 cursor-pointer">
                 <UserAvatar size="md" showBorder={true} />
                 <div className="text-sm">
-                  <p className="font-medium text-header-text">
+                  <p className="font-medium text-header-text dark:text-white">
                     {isAuthenticated ? `${authenticatedUser.firstName} ${authenticatedUser.lastName}` : 'David Ibanga'}
                   </p>
-                  <p className="text-xs text-header-text/70">
+                  <p className="text-xs text-header-text/70 dark:text-white/70">
                     {isAuthenticated ? authenticatedUser.role : 'IT manager'}
                   </p>
                 </div>
-								<ChevronDown className="h-4 w-4 text-header-text/70" />
+								<ChevronDown className="h-4 w-4 text-header-text/70 dark:text-white/70" />
               </div>
             </DropdownMenuTrigger>
             <UserProfileDropdown />
@@ -407,7 +407,7 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
 
       {/* Mobile Search Overlay */}
       {isSearchExpanded && (
-        <div className="lg:hidden absolute top-full left-0 right-0 bg-header-bg border-b border-header-border p-4 z-40" style={{ backgroundColor: '#F9F9F9' }}>
+        <div className="lg:hidden absolute top-full left-0 right-0 bg-header-bg dark:bg-gray-900 border-b border-header-border dark:border-gray-800 p-4 z-40">
           <SearchInput />
         </div>
       )}

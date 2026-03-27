@@ -21,6 +21,7 @@ namespace AIPBackend.Services
 		private readonly IUserContextService _userContext;
 		private readonly IServiceProvider _serviceProvider;
 		private readonly IIncidentClassifier _classifier;
+		private readonly IIncidentImageStorageService _incidentImageStorageService;
 
 		public IncidentService(
 			IIncidentRepository repository,
@@ -28,7 +29,8 @@ namespace AIPBackend.Services
 			ILogger<IncidentService> logger,
 			IUserContextService userContext,
 			IServiceProvider serviceProvider,
-			IIncidentClassifier classifier)
+			IIncidentClassifier classifier,
+			IIncidentImageStorageService incidentImageStorageService)
 		{
 			_repository = repository;
 			_siteRepository = siteRepository;
@@ -36,6 +38,7 @@ namespace AIPBackend.Services
 			_userContext = userContext;
 			_serviceProvider = serviceProvider;
 			_classifier = classifier;
+			_incidentImageStorageService = incidentImageStorageService;
 		}
 
 		public async Task<IncidentResponseDto> GetByIdAsync(string id)
@@ -176,6 +179,8 @@ namespace AIPBackend.Services
 			var context = _userContext.GetCurrentContext();
 
 			await EnrichLocationMetadataAsync(dto);
+			var storedImage = await _incidentImageStorageService.PersistVerificationImageAsync(dto.VerificationEvidenceImage);
+			dto.VerificationEvidenceImage = storedImage.StoredReference;
 
 			var incident = MapToEntity(dto);
 			incident.CreatedBy = context.UserId;
@@ -245,7 +250,7 @@ namespace AIPBackend.Services
 				var offenderRecognition = scope.ServiceProvider.GetService<IOffenderRecognitionService>();
 				if (offenderRecognition != null && !string.IsNullOrWhiteSpace(created.VerificationEvidenceImage))
 				{
-					var imageBytes = TryDecodeBase64DataUrl(created.VerificationEvidenceImage);
+					var imageBytes = storedImage.ImageBytes ?? await ResolveImageBytesAsync(created.VerificationEvidenceImage, CancellationToken.None);
 					if (imageBytes != null && imageBytes.Length > 0)
 					{
 						await offenderRecognition.IndexVerificationEvidenceAsync(
@@ -288,6 +293,8 @@ namespace AIPBackend.Services
 			_userContext.EnsureCanAccessCustomer(dto.CustomerId);
 
 			await EnrichLocationMetadataAsync(dto);
+			var storedImage = await _incidentImageStorageService.PersistVerificationImageAsync(dto.VerificationEvidenceImage);
+			dto.VerificationEvidenceImage = storedImage.StoredReference;
 
 			// Update entity from DTO
 			UpdateEntityFromDto(existing, dto);
@@ -320,7 +327,7 @@ namespace AIPBackend.Services
 				var offenderRecognition = scope.ServiceProvider.GetService<IOffenderRecognitionService>();
 				if (offenderRecognition != null && !string.IsNullOrWhiteSpace(updated.VerificationEvidenceImage))
 				{
-					var imageBytes = TryDecodeBase64DataUrl(updated.VerificationEvidenceImage);
+					var imageBytes = storedImage.ImageBytes ?? await ResolveImageBytesAsync(updated.VerificationEvidenceImage, CancellationToken.None);
 					if (imageBytes != null && imageBytes.Length > 0)
 					{
 						await offenderRecognition.IndexVerificationEvidenceAsync(
@@ -1006,6 +1013,33 @@ namespace AIPBackend.Services
 			}
 			catch
 			{
+				return null;
+			}
+		}
+
+		private async Task<byte[]?> ResolveImageBytesAsync(string? imageReference, CancellationToken cancellationToken)
+		{
+			var inlineBytes = TryDecodeBase64DataUrl(imageReference);
+			if (inlineBytes != null && inlineBytes.Length > 0)
+			{
+				return inlineBytes;
+			}
+
+			if (string.IsNullOrWhiteSpace(imageReference) ||
+				!Uri.TryCreate(imageReference, UriKind.Absolute, out var uri) ||
+				(uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+			{
+				return null;
+			}
+
+			try
+			{
+				using var httpClient = new HttpClient();
+				return await httpClient.GetByteArrayAsync(uri, cancellationToken);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogWarning(ex, "Could not fetch verification image bytes from URL.");
 				return null;
 			}
 		}

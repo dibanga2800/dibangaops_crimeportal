@@ -245,14 +245,23 @@ jobs:
         env:
           TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
         run: |
-          terraform apply -auto-approve \
-            -lock-timeout=10m \
-            -target="azurerm_role_assignment.backend_acr_pull" \
-            -target="azurerm_role_assignment.ai_acr_pull" \
-            -var-file="terraform.prod.tfvars" \
-            -var="budget_start_date=${{ steps.budget-date.outputs.value }}" \
-            -var="backend_image=${{ needs.build-and-push-images.outputs.backend_image }}" \
-            -var="ai_image=${{ needs.build-and-push-images.outputs.ai_image }}"
+          set -euo pipefail
+          # Azure listAppSettings / ARM can intermittently reset; retry a few times.
+          for attempt in 1 2 3 4 5; do
+            if terraform apply -auto-approve \
+              -lock-timeout=10m \
+              -target="azurerm_role_assignment.backend_acr_pull" \
+              -target="azurerm_role_assignment.ai_acr_pull" \
+              -var-file="terraform.prod.tfvars" \
+              -var="budget_start_date=${{ steps.budget-date.outputs.value }}" \
+              -var="backend_image=${{ needs.build-and-push-images.outputs.backend_image }}" \
+              -var="ai_image=${{ needs.build-and-push-images.outputs.ai_image }}"; then
+              exit 0
+            fi
+            echo "Terraform apply (ACR pull targets) failed (attempt ${attempt}/5); retrying in 45s..."
+            sleep 45
+          done
+          exit 1
 
       - name: Wait for RBAC propagation
         run: sleep 30
@@ -261,12 +270,20 @@ jobs:
         env:
           TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
         run: |
-          terraform apply -auto-approve \
-            -lock-timeout=10m \
-            -var-file="terraform.prod.tfvars" \
-            -var="budget_start_date=${{ steps.budget-date.outputs.value }}" \
-            -var="backend_image=${{ needs.build-and-push-images.outputs.backend_image }}" \
-            -var="ai_image=${{ needs.build-and-push-images.outputs.ai_image }}"
+          set -euo pipefail
+          for attempt in 1 2 3 4 5; do
+            if terraform apply -auto-approve \
+              -lock-timeout=10m \
+              -var-file="terraform.prod.tfvars" \
+              -var="budget_start_date=${{ steps.budget-date.outputs.value }}" \
+              -var="backend_image=${{ needs.build-and-push-images.outputs.backend_image }}" \
+              -var="ai_image=${{ needs.build-and-push-images.outputs.ai_image }}"; then
+              exit 0
+            fi
+            echo "Terraform apply (release images) failed (attempt ${attempt}/5); retrying in 45s..."
+            sleep 45
+          done
+          exit 1
 
       - name: Capture backend URL
         id: tf-output

@@ -102,7 +102,7 @@ export const Layout = ({ children }: LayoutProps) => {
           />
 
           {/* Page Content */}
-          <main className="flex-1 bg-white flex flex-col min-w-0 overflow-x-hidden">
+          <main className="flex-1 bg-background text-foreground flex flex-col min-w-0 overflow-x-hidden">
             <div className="flex-1 w-full min-w-0 max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 md:py-8">
               <div className="grid gap-4 sm:gap-6 md:gap-8 min-w-0">
                 <AnimatePresence mode="wait" initial={false}>
