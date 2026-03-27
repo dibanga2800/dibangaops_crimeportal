@@ -82,6 +82,9 @@ out
 .nuxt
 dist
 
+# CI-only folder for Azure Static Web Apps deploy (copy of AIP_UI/dist)
+swa-publish/
+
 # Gatsby files
 .cache/
 # Comment in the public line in if your project uses Gatsby and not Next.js
@@ -148,3 +151,39 @@ AIP_Backend/appsettings.Production.json
 
 # InsightFace models (downloaded on first run; exceed GitHub 100 MB limit)
 AIP_Backend/InsightFaceService/models/
+
+# Terraform artifacts and local state
+**/.terraform/*
+**/.terraform.lock.hcl
+!Infrastructure/.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Infrastructure local variable values (may contain secrets)
+Infrastructure/terraform.tfvars
+
+# Secret files and credentials
+**/secrets.json
+**/secrets.*.json
+**/*.secrets.json
+**/*.secret
+**/*-secret.*
+**/*_secret.*
+**/local.settings.json
+**/appsettings.Local.json
+**/appsettings.*.local.json
+**/*.pfx
+**/*.p12
+**/*.pem
+**/*.key
+**/*.crt
+**/*.cer
+**/*.jks
