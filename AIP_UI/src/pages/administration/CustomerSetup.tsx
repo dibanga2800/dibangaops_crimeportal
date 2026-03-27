@@ -57,10 +57,10 @@ export default function CustomerSetup() {
   }
 
   return (
-    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden" style={{ backgroundColor: '#F4F8FE' }}>
+    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-[#F4F8FE] dark:bg-slate-950">
       <div className="container mx-auto px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12 py-3 sm:py-4 md:py-6 lg:py-8 xl:py-10 2xl:py-12 space-y-3 sm:space-y-4 md:space-y-6 xl:space-y-8 max-w-screen-2xl">
         <div className="flex items-center justify-between">
-          <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl 2xl:text-5xl font-bold text-[#324053]">Company Setup</h1>
+          <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl 2xl:text-5xl font-bold text-[#324053] dark:text-gray-100">Company Setup</h1>
         </div>
 
         <CustomerStats 
