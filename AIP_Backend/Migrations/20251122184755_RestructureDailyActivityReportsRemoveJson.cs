@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
@@ -38,9 +38,17 @@ namespace AIPBackend.Migrations
                 name: "VisitorLogJson",
                 table: "DailyActivityReports");
 
-            migrationBuilder.DropColumn(
-                name: "UserCompany",
-                table: "AspNetUsers");
+            // Azure / fresh DBs may never have had UserCompany (e.g. already replaced by CustomerId).
+            migrationBuilder.Sql(@"
+DECLARE @dc sysname;
+SELECT @dc = [d].[name]
+FROM [sys].[default_constraints] [d]
+INNER JOIN [sys].[columns] [c] ON [d].[parent_column_id] = [c].[column_id] AND [d].[parent_object_id] = [c].[object_id]
+WHERE [d].[parent_object_id] = OBJECT_ID(N'[AspNetUsers]') AND [c].[name] = N'UserCompany';
+IF @dc IS NOT NULL EXEC(N'ALTER TABLE [AspNetUsers] DROP CONSTRAINT [' + @dc + N'];');
+IF COL_LENGTH(N'dbo.AspNetUsers', N'UserCompany') IS NOT NULL
+    ALTER TABLE [AspNetUsers] DROP COLUMN [UserCompany];
+");
 
             migrationBuilder.AddColumn<string>(
                 name: "AtmAbuse",
