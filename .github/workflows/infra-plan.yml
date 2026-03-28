@@ -53,6 +53,7 @@ jobs:
       - name: Terraform Plan
         env:
           TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
+          TF_VAR_sql_admin_password: ${{ secrets.TF_VAR_SQL_ADMIN_PASSWORD }}
         run: |
           terraform plan \
             -var-file="terraform.dev.tfvars" \
