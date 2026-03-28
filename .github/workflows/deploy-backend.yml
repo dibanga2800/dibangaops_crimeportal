@@ -94,6 +94,7 @@ jobs:
         if: ${{ steps.infra-check.outputs.resource_group_exists != 'true' }}
         env:
           TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
+          TF_VAR_sql_admin_password: ${{ secrets.TF_VAR_SQL_ADMIN_PASSWORD }}
         run: |
           terraform apply -auto-approve \
             -lock-timeout=10m \
@@ -213,6 +214,7 @@ jobs:
       - name: Ensure Key Vault admin role assignment is in Terraform state
         env:
           TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
+          TF_VAR_sql_admin_password: ${{ secrets.TF_VAR_SQL_ADMIN_PASSWORD }}
         run: |
           set -euo pipefail
           if terraform state show azurerm_role_assignment.terraform_kv_admin >/dev/null 2>&1; then
@@ -258,6 +260,7 @@ jobs:
       - name: Terraform Apply (release images)
         env:
           TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
+          TF_VAR_sql_admin_password: ${{ secrets.TF_VAR_SQL_ADMIN_PASSWORD }}
         run: |
           set -euo pipefail
           for attempt in 1 2 3 4 5; do

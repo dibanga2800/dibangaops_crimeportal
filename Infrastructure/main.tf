@@ -7,6 +7,8 @@ resource "random_string" "suffix" {
 }
 
 resource "random_password" "sql_admin" {
+  count = var.sql_admin_password == null || var.sql_admin_password == "" ? 1 : 0
+
   length           = 24
   special          = true
   override_special = "!@#$%^&*()_-+=?"
@@ -27,7 +29,7 @@ locals {
   storage_account_name   = substr("${var.blob_storage_name_prefix}${local.suffix}", 0, 24)
   acr_name               = substr("${var.acr_name_prefix}${local.suffix}", 0, 50)
   key_vault_name         = substr("${var.keyvault_name_prefix}-${local.suffix}", 0, 24)
-  sql_admin_password     = coalesce(var.sql_admin_password, random_password.sql_admin.result)
+  sql_admin_password     = var.sql_admin_password != null && var.sql_admin_password != "" ? var.sql_admin_password : random_password.sql_admin[0].result
   backend_target_port    = var.backend_target_port == null ? (strcontains(var.backend_image, "azuredocs/containerapps-helloworld") ? 80 : 8080) : var.backend_target_port
   ai_target_port         = var.ai_target_port == null ? (strcontains(var.ai_image, "azuredocs/containerapps-helloworld") ? 80 : 8000) : var.ai_target_port
   backend_uses_acr       = strcontains(var.backend_image, ".azurecr.io/")

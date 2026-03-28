@@ -22,3 +22,6 @@ budget_alert_emails   = ["crimeportalai@gmail.com"]
 # Set via TF_VAR_budget_alert_emails in CI/CLI.
 # Example:
 # export TF_VAR_budget_alert_emails='["team@yourcompany.com","finance@yourcompany.com"]'
+
+# SQL admin password you manage (never commit real values). GitHub Actions: repository secret TF_VAR_SQL_ADMIN_PASSWORD
+# Local CLI: set TF_VAR_sql_admin_password before terraform apply/plan

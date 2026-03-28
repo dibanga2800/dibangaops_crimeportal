@@ -91,10 +91,20 @@ variable "sql_admin_username" {
 }
 
 variable "sql_admin_password" {
-  description = "Optional Azure SQL administrator password. Leave null to auto-generate."
+  description = <<-EOT
+    Azure SQL server administrator password. Set this (or TF_VAR_sql_admin_password) to a strong value you keep
+    outside the repo (Key Vault will still store a copy for apps). Leave null/empty to auto-generate once via random_password.
+    Changing this after deploy updates the SQL admin login and Key Vault secrets on the next apply.
+  EOT
   type        = string
   default     = null
   sensitive   = true
+  nullable    = true
+
+  validation {
+    condition = var.sql_admin_password == null || var.sql_admin_password == "" || length(var.sql_admin_password) >= 8
+    error_message = "sql_admin_password must be at least 8 characters (Azure SQL minimum) when set."
+  }
 }
 
 variable "jwt_signing_key" {
