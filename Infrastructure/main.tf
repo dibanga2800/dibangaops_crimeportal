@@ -15,6 +15,12 @@ resource "random_password" "sql_admin" {
   min_numeric      = 2
 }
 
+# HS256 signing key for ASP.NET JWT (must match Program.cs Jwt:Key configuration binding).
+resource "random_password" "jwt_signing_key" {
+  length  = 64
+  special = false
+}
+
 locals {
   suffix                 = random_string.suffix.result
   sql_server_name        = substr("${var.sql_server_name_prefix}${local.suffix}", 0, 63)
@@ -138,6 +144,13 @@ resource "azurerm_key_vault_secret" "storage_connection_string" {
   depends_on   = [azurerm_role_assignment.terraform_kv_admin]
 }
 
+resource "azurerm_key_vault_secret" "jwt_signing_key" {
+  name         = "jwt-signing-key"
+  value        = var.jwt_signing_key != null && var.jwt_signing_key != "" ? var.jwt_signing_key : random_password.jwt_signing_key.result
+  key_vault_id = azurerm_key_vault.kv.id
+  depends_on   = [azurerm_role_assignment.terraform_kv_admin]
+}
+
 # ---------------- STORAGE ----------------
 
 resource "azurerm_storage_account" "storage" {
@@ -222,6 +235,21 @@ resource "azurerm_container_app" "backend" {
       env {
         name        = "ConnectionStrings__StorageAccount"
         secret_name = "storage-connection-string"
+      }
+
+      env {
+        name        = "Jwt__Key"
+        secret_name = "jwt-signing-key"
+      }
+
+      env {
+        name  = "Jwt__Issuer"
+        value = var.jwt_issuer
+      }
+
+      env {
+        name  = "Jwt__Audience"
+        value = var.jwt_audience
       }
 
       env {

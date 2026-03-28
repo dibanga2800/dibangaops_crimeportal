@@ -97,6 +97,26 @@ variable "sql_admin_password" {
   sensitive   = true
 }
 
+variable "jwt_signing_key" {
+  description = "Optional JWT HMAC signing key (long random string). Leave null to auto-generate and store in Key Vault."
+  type        = string
+  default     = null
+  nullable    = true
+  sensitive   = true
+}
+
+variable "jwt_issuer" {
+  description = "JWT issuer claim (must match backend configuration)"
+  type        = string
+  default     = "AIPBackend"
+}
+
+variable "jwt_audience" {
+  description = "JWT audience claim (must match backend configuration)"
+  type        = string
+  default     = "AIPFrontend"
+}
+
 variable "container_app_environment_name" {
   description = "Container Apps environment name"
   type        = string
