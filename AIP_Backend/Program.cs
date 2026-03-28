@@ -296,6 +296,9 @@ builder.Services.AddSwaggerGen(options =>
     // Stable schema IDs (avoids collisions from duplicate short type names across namespaces).
     options.CustomSchemaIds(type => type.FullName!.Replace('+', '.'));
 
+    // Required for IFormFile / IFormFile? in [FromForm] DTOs (e.g. contact form) so swagger.json generates.
+    options.MapType<IFormFile>(() => new OpenApiSchema { Type = "string", Format = "binary" });
+
     // Avoid aggressive polymorphism/inheritance expansion — it frequently throws during
     // swagger.json generation for real-world DTO graphs (500 on GET /swagger/v1/swagger.json).
     options.UseAllOfToExtendReferenceSchemas();
@@ -305,6 +308,24 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 var app = builder.Build();
+
+// Apply pending EF migrations (Azure SQL and local DBs are often empty until this runs).
+using (var scope = app.Services.CreateScope())
+{
+    var migrateLogger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    try
+    {
+        migrateLogger.LogInformation("Applying database migrations if needed...");
+        db.Database.Migrate();
+        migrateLogger.LogInformation("Database migrations complete.");
+    }
+    catch (Exception ex)
+    {
+        migrateLogger.LogError(ex, "Database migration failed.");
+        throw;
+    }
+}
 
 // Ensure page access is initialized on startup (database-first approach)
 // Run initialization in background after app starts

@@ -27,8 +27,24 @@ namespace AIPBackend.Controllers
 		/// Submit contact form. Sends email to david.ibanga@advantage1.co.uk with CC to dibanga2800@gmail.com.
 		/// </summary>
 		[HttpPost]
-		public async Task<ActionResult<ApiResponseDto<object>>> Submit([FromForm] string name, [FromForm] string email, [FromForm] string jobRole, [FromForm] string description, [FromForm] IFormFile? attachment)
+		[Consumes("multipart/form-data")]
+		public async Task<ActionResult<ApiResponseDto<object>>> Submit([FromForm] ContactSubmitFormDto form)
 		{
+			if (form == null)
+			{
+				return BadRequest(new ApiResponseDto<object>
+				{
+					Success = false,
+					Message = "Request body is required."
+				});
+			}
+
+			var name = form.Name;
+			var email = form.Email;
+			var jobRole = form.JobRole;
+			var description = form.Description;
+			var attachment = form.Attachment;
+
 			if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(description))
 			{
 				return BadRequest(new ApiResponseDto<object>
