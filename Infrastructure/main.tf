@@ -144,13 +144,6 @@ resource "azurerm_key_vault_secret" "storage_connection_string" {
   depends_on   = [azurerm_role_assignment.terraform_kv_admin]
 }
 
-resource "azurerm_key_vault_secret" "jwt_signing_key" {
-  name         = "jwt-signing-key"
-  value        = var.jwt_signing_key != null && var.jwt_signing_key != "" ? var.jwt_signing_key : random_password.jwt_signing_key.result
-  key_vault_id = azurerm_key_vault.kv.id
-  depends_on   = [azurerm_role_assignment.terraform_kv_admin]
-}
-
 # ---------------- STORAGE ----------------
 
 resource "azurerm_storage_account" "storage" {
@@ -220,6 +213,13 @@ resource "azurerm_container_app" "backend" {
     identity            = "System"
   }
 
+  # Inline value so the secret is always registered on the Container App in the same API update
+  # (Key Vault–only refs were omitted from an earlier edit, causing ContainerAppSecretRefNotFound).
+  secret {
+    name  = "jwt-signing-key"
+    value = var.jwt_signing_key != null && var.jwt_signing_key != "" ? var.jwt_signing_key : random_password.jwt_signing_key.result
+  }
+
   template {
     container {
       name   = "backend"
@@ -227,6 +227,8 @@ resource "azurerm_container_app" "backend" {
       cpu    = var.backend_container_cpu
       memory = var.backend_container_memory
 
+      # Keep env order aligned with what is already deployed so Terraform does not match by index
+      # and rewrite unrelated variables (see azurerm_container_app env block ordering).
       env {
         name        = "ConnectionStrings__DefaultConnection"
         secret_name = "sql-connection-string"
@@ -235,21 +237,6 @@ resource "azurerm_container_app" "backend" {
       env {
         name        = "ConnectionStrings__StorageAccount"
         secret_name = "storage-connection-string"
-      }
-
-      env {
-        name        = "Jwt__Key"
-        secret_name = "jwt-signing-key"
-      }
-
-      env {
-        name  = "Jwt__Issuer"
-        value = var.jwt_issuer
-      }
-
-      env {
-        name  = "Jwt__Audience"
-        value = var.jwt_audience
       }
 
       env {
@@ -275,6 +262,21 @@ resource "azurerm_container_app" "backend" {
       env {
         name  = "IncidentImageStorage__BlobPathPrefix"
         value = "verification"
+      }
+
+      env {
+        name        = "Jwt__Key"
+        secret_name = "jwt-signing-key"
+      }
+
+      env {
+        name  = "Jwt__Issuer"
+        value = var.jwt_issuer
+      }
+
+      env {
+        name  = "Jwt__Audience"
+        value = var.jwt_audience
       }
     }
 
