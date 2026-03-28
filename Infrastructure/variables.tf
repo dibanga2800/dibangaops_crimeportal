@@ -98,7 +98,7 @@ variable "sql_admin_password" {
 }
 
 variable "jwt_signing_key" {
-  description = "Optional JWT HMAC signing key (long random string). Leave null to auto-generate and store in Key Vault."
+  description = "Optional JWT HMAC signing key (long random string). Leave null to auto-generate; value is stored in Key Vault and injected into the backend Container App."
   type        = string
   default     = null
   nullable    = true
