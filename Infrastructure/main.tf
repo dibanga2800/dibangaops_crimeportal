@@ -32,6 +32,7 @@ locals {
   ai_target_port         = var.ai_target_port == null ? (strcontains(var.ai_image, "azuredocs/containerapps-helloworld") ? 80 : 8000) : var.ai_target_port
   backend_uses_acr       = strcontains(var.backend_image, ".azurecr.io/")
   ai_uses_acr            = strcontains(var.ai_image, ".azurecr.io/")
+  jwt_signing_key_value  = var.jwt_signing_key != null && var.jwt_signing_key != "" ? var.jwt_signing_key : random_password.jwt_signing_key.result
   backend_container_fqdn = "https://${azurerm_container_app.backend.latest_revision_fqdn}"
   ai_container_fqdn      = "https://${var.ai_name}.internal.${azurerm_container_app_environment.env.default_domain}"
 }
@@ -144,6 +145,13 @@ resource "azurerm_key_vault_secret" "storage_connection_string" {
   depends_on   = [azurerm_role_assignment.terraform_kv_admin]
 }
 
+resource "azurerm_key_vault_secret" "jwt_signing_key" {
+  name         = "jwt-signing-key"
+  value        = local.jwt_signing_key_value
+  key_vault_id = azurerm_key_vault.kv.id
+  depends_on   = [azurerm_role_assignment.terraform_kv_admin]
+}
+
 # ---------------- STORAGE ----------------
 
 resource "azurerm_storage_account" "storage" {
@@ -213,11 +221,10 @@ resource "azurerm_container_app" "backend" {
     identity            = "System"
   }
 
-  # Inline value so the secret is always registered on the Container App in the same API update
-  # (Key Vault–only refs were omitted from an earlier edit, causing ContainerAppSecretRefNotFound).
   secret {
-    name  = "jwt-signing-key"
-    value = var.jwt_signing_key != null && var.jwt_signing_key != "" ? var.jwt_signing_key : random_password.jwt_signing_key.result
+    name                = "jwt-signing-key"
+    key_vault_secret_id = azurerm_key_vault_secret.jwt_signing_key.versionless_id
+    identity            = "System"
   }
 
   template {
