@@ -39,8 +39,20 @@ export interface StoreDrilldownData {
 	storeName: string
 	incidents: number
 	incidentTypes: IncidentTypeData[]
+	totalStolenValue: number
+	totalRecoveredValue: number
+	totalLostValue: number
+	recoveryRate: number
 	peakDay: string
 	peakHour: number
+}
+
+export interface RecoveryTrendPoint {
+	period: string
+	incidentCount: number
+	stolenValue: number
+	recoveredValue: number
+	lostValue: number
 }
 
 export interface CrimeTrendData {
@@ -48,6 +60,7 @@ export interface CrimeTrendData {
 	timeOfDay: TimeOfDayData[]
 	incidentTypes: IncidentTypeData[]
 	storeDrilldown: Record<string, StoreDrilldownData>
+	recoveryTrend: RecoveryTrendPoint[]
 	totalIncidents: number
 	dateRange: {
 		start: string
@@ -64,30 +77,70 @@ export interface ProductFrequencyData {
 	productName: string
 	frequency: number
 	totalValue: number
+	stolenValue: number
+	recoveredValue: number
+	lostValue: number
+	recoveryRate: number
 	storesAffected: number
+}
+
+export interface StoreProductItemData {
+	barcode: string
+	productName: string
+	frequency: number
+	value: number
+	stolenValue: number
+	recoveredValue: number
+	lostValue: number
+	recoveryRate: number
 }
 
 export interface StoreProductHeatmapData {
 	storeId: number
 	storeName: string
-	products: {
-		barcode: string
-		productName: string
-		frequency: number
-		value: number
-	}[]
+	products: StoreProductItemData[]
 	totalIncidents: number
+	totalValueStolen: number
+	totalValueRecovered: number
+	totalValueLost: number
+	recoveryRate: number
 	riskLevel: 'low' | 'medium' | 'high' | 'critical'
 }
 
 export interface HotProductsData {
 	topProducts: ProductFrequencyData[]
+	topRecoveredProducts: ProductFrequencyData[]
+	worstRecoveryProducts: ProductFrequencyData[]
 	storeHeatmap: StoreProductHeatmapData[]
+	totalValueStolen: number
+	totalValueRecovered: number
 	totalValueLost: number
+	recoveryRate: number
 	period: {
 		start: string
 		end: string
 	}
+}
+
+export interface AnalyticsFinancialSummary {
+	totalStolenValue: number
+	totalRecoveredValue: number
+	totalLostValue: number
+	recoveryRate: number
+	totalRecoveredQuantity: number
+	totalLostQuantity: number
+}
+
+export interface StoreRecoveryComparison {
+	storeId: number
+	storeName: string
+	incidentCount: number
+	totalStolenValue: number
+	totalRecoveredValue: number
+	totalLostValue: number
+	recoveryRate: number
+	totalRecoveredQuantity: number
+	totalLostQuantity: number
 }
 
 // ============================================================================
@@ -244,6 +297,8 @@ export interface CrimeLinkingData {
 export interface AnalyticsHubData {
 	crimeTrends: CrimeTrendData
 	hotProducts: HotProductsData
+	financialSummary: AnalyticsFinancialSummary
+	storeRecoveryComparisons: StoreRecoveryComparison[]
 	repeatOffenders: RepeatOffenderData
 	deploymentRecommendations: DeploymentRecommendation
 	crimeLinking: CrimeLinkingData

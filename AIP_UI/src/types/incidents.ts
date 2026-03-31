@@ -56,6 +56,10 @@ export interface StolenItem {
   cost: number;
   quantity: number;
   totalAmount: number;
+  wasRecovered?: boolean;
+  recoveredQuantity?: number;
+  recoveredAmount?: number;
+  lostAmount?: number;
 }
 
 export interface Incident {
@@ -97,6 +101,10 @@ export interface Incident {
   storeComments?: string;
 
   // Financial information
+  totalStolenValue?: number;
+  totalRecoveredValue?: number;
+  totalLostValue?: number;
+  totalRecoveredQuantity?: number;
   totalValueRecovered?: number;
   value?: number; // Legacy field for graph compatibility
   valueRecovered?: number; // Legacy field for graph compatibility

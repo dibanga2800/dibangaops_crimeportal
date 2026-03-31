@@ -6,6 +6,21 @@ interface IncidentDetailViewProps {
 }
 
 export const IncidentDetailView = ({ incident }: IncidentDetailViewProps) => {
+	const totalStolenValue =
+		typeof incident.totalStolenValue === 'number' && !isNaN(incident.totalStolenValue)
+			? incident.totalStolenValue
+			: (incident.stolenItems ?? []).reduce((sum, item) => sum + (item.totalAmount || 0), 0)
+	const totalRecoveredValue =
+		typeof incident.totalRecoveredValue === 'number' && !isNaN(incident.totalRecoveredValue)
+			? incident.totalRecoveredValue
+			: typeof incident.totalValueRecovered === 'number' && !isNaN(incident.totalValueRecovered)
+				? incident.totalValueRecovered
+				: (incident.stolenItems ?? []).reduce((sum, item) => sum + (item.recoveredAmount || 0), 0)
+	const totalLostValue =
+		typeof incident.totalLostValue === 'number' && !isNaN(incident.totalLostValue)
+			? incident.totalLostValue
+			: Math.max(totalStolenValue - totalRecoveredValue, 0)
+
 	return (
 		<div className="bg-[#F8F3F1]">
 			<div className="w-full max-w-[98%] mx-auto px-4 py-4">
@@ -75,13 +90,16 @@ export const IncidentDetailView = ({ incident }: IncidentDetailViewProps) => {
 							<p className="mt-1 text-sm text-gray-900">{incident.incidentType || 'N/A'}</p>
 						</div>
 						<div>
-							<label className="text-sm font-medium text-gray-500">Total Value Recovered</label>
-							<p className="mt-1 text-sm text-gray-900">
-								£
-								{typeof incident.totalValueRecovered === 'number' && !isNaN(incident.totalValueRecovered)
-									? incident.totalValueRecovered.toFixed(2)
-									: '0.00'}
-							</p>
+							<label className="text-sm font-medium text-gray-500">Total Value Stolen</label>
+							<p className="mt-1 text-sm text-gray-900">£{totalStolenValue.toFixed(2)}</p>
+						</div>
+						<div>
+							<label className="text-sm font-medium text-gray-500">Value Saved</label>
+							<p className="mt-1 text-sm text-emerald-700">£{totalRecoveredValue.toFixed(2)}</p>
+						</div>
+						<div>
+							<label className="text-sm font-medium text-gray-500">Value Lost</label>
+							<p className="mt-1 text-sm text-rose-700">£{totalLostValue.toFixed(2)}</p>
 						</div>
 						{incident.regionName && (
 							<div>
@@ -263,6 +281,10 @@ export const IncidentDetailView = ({ incident }: IncidentDetailViewProps) => {
 										<th className="text-right py-2 text-sm font-medium text-gray-500">Cost</th>
 										<th className="text-right py-2 text-sm font-medium text-gray-500">Qty</th>
 										<th className="text-right py-2 text-sm font-medium text-gray-500">Total</th>
+										<th className="text-center py-2 text-sm font-medium text-gray-500">Recovered</th>
+										<th className="text-right py-2 text-sm font-medium text-gray-500">Recovered Qty</th>
+										<th className="text-right py-2 text-sm font-medium text-gray-500">Saved</th>
+										<th className="text-right py-2 text-sm font-medium text-gray-500">Lost</th>
 									</tr>
 								</thead>
 								<tbody>
@@ -274,6 +296,18 @@ export const IncidentDetailView = ({ incident }: IncidentDetailViewProps) => {
 											typeof item.totalAmount === 'number' && !isNaN(item.totalAmount)
 												? item.totalAmount
 												: cost * quantity
+										const recoveredQuantity =
+											typeof item.recoveredQuantity === 'number' && !isNaN(item.recoveredQuantity)
+												? item.recoveredQuantity
+												: 0
+										const recoveredAmount =
+											typeof item.recoveredAmount === 'number' && !isNaN(item.recoveredAmount)
+												? item.recoveredAmount
+												: cost * recoveredQuantity
+										const lostAmount =
+											typeof item.lostAmount === 'number' && !isNaN(item.lostAmount)
+												? item.lostAmount
+												: totalAmount - recoveredAmount
 										return (
 											<tr key={index} className="border-b">
 												<td className="py-2 text-sm text-gray-900">{item.category || 'N/A'}</td>
@@ -284,36 +318,35 @@ export const IncidentDetailView = ({ incident }: IncidentDetailViewProps) => {
 												<td className="py-2 text-sm text-gray-900 text-right">
 													£{totalAmount.toFixed(2)}
 												</td>
+												<td className="py-2 text-sm text-gray-900 text-center">
+													{item.wasRecovered ? 'Yes' : 'No'}
+												</td>
+												<td className="py-2 text-sm text-gray-900 text-right">{recoveredQuantity}</td>
+												<td className="py-2 text-sm text-emerald-700 text-right">
+													£{recoveredAmount.toFixed(2)}
+												</td>
+												<td className="py-2 text-sm text-rose-700 text-right">
+													£{lostAmount.toFixed(2)}
+												</td>
 											</tr>
 										)
 									})}
 									<tr className="bg-gray-50">
-										<td colSpan={5} className="py-2 text-sm font-medium text-gray-900">
-											Total Value
+										<td colSpan={6} className="py-2 text-sm font-medium text-gray-900">
+											Totals
 										</td>
 										<td className="py-2 text-sm font-medium text-gray-900 text-right">
-											£
-											{Array.isArray(incident.stolenItems)
-												? (() => {
-														const total = incident.stolenItems.reduce(
-															(sum, item) => {
-																const cost =
-																	typeof item.cost === 'number' && !isNaN(item.cost) ? item.cost : 0
-																const quantity =
-																	typeof item.quantity === 'number' && !isNaN(item.quantity)
-																		? item.quantity
-																		: 0
-																const totalAmount =
-																	typeof item.totalAmount === 'number' && !isNaN(item.totalAmount)
-																		? item.totalAmount
-																		: cost * quantity
-																return sum + totalAmount
-															},
-															0
-														)
-														return typeof total === 'number' && !isNaN(total) ? total.toFixed(2) : '0.00'
-												  })()
-												: '0.00'}
+											£{totalStolenValue.toFixed(2)}
+										</td>
+										<td className="py-2 text-sm font-medium text-gray-900 text-center">-</td>
+										<td className="py-2 text-sm font-medium text-gray-900 text-right">
+											{incident.totalRecoveredQuantity ?? 0}
+										</td>
+										<td className="py-2 text-sm font-medium text-emerald-700 text-right">
+											£{totalRecoveredValue.toFixed(2)}
+										</td>
+										<td className="py-2 text-sm font-medium text-rose-700 text-right">
+											£{totalLostValue.toFixed(2)}
 										</td>
 									</tr>
 								</tbody>

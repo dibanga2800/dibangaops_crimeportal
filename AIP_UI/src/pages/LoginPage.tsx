@@ -199,7 +199,7 @@ export default function LoginPage() {
 				}
 			`}</style>
 
-			<div className="min-h-screen flex flex-col lg:flex-row bg-gray-50">
+			<div className="min-h-screen flex flex-col lg:flex-row bg-background text-foreground">
 
 				{/* ─── LEFT PANEL: hero image + branding (desktop) ─── */}
 				<div className="relative hidden lg:flex lg:w-[55%] xl:w-[58%] 2xl:w-[60%] flex-col justify-between overflow-hidden">
@@ -269,7 +269,7 @@ export default function LoginPage() {
 						<div className="mt-10 pt-8 border-t border-white/10 login-animate-up-3">
 							<div className="flex items-center gap-8">
 								<div>
-									<span className="block text-2xl font-bold text-white">99.9%</span>
+									<span className="block text-2xl font-bold text-white">97.9%</span>
 									<span className="block text-[11px] text-white/40 mt-0.5">Uptime SLA</span>
 								</div>
 								<div className="h-8 w-px bg-white/10" />
@@ -295,7 +295,7 @@ export default function LoginPage() {
 						aria-hidden="true"
 						className="absolute inset-0 h-full w-full object-cover object-center"
 					/>
-					<div className="absolute inset-0 bg-gradient-to-t from-gray-50 via-slate-900/60 to-slate-900/40" />
+					<div className="absolute inset-0 bg-gradient-to-t from-background via-slate-900/60 to-slate-900/40" />
 						<div className="relative z-10 w-full px-6 pb-6">
 							<div className="flex items-center gap-2.5 mb-3">
 								<div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/15 backdrop-blur-sm border border-white/20">
@@ -316,7 +316,7 @@ export default function LoginPage() {
 				</div>
 
 				{/* ─── RIGHT PANEL: login form ─── */}
-				<div className="flex flex-1 flex-col bg-white lg:bg-gray-50/80">
+				<div className="flex flex-1 flex-col bg-background lg:bg-muted/40">
 					{/* Animated brand bar at the top of form panel */}
 					<div className="login-gradient-bar h-1 w-full lg:hidden" />
 
@@ -324,21 +324,21 @@ export default function LoginPage() {
 						<div className="mx-auto w-full max-w-[400px]">
 
 							{/* Card wrapper (desktop gets elevated card, mobile is flat) */}
-							<div className="lg:bg-white lg:rounded-2xl lg:shadow-xl lg:shadow-gray-200/60 lg:border lg:border-gray-100 lg:px-10 lg:py-12">
+							<div className="lg:bg-card lg:text-card-foreground lg:rounded-2xl lg:shadow-xl lg:shadow-black/10 dark:lg:shadow-black/40 lg:border lg:border-border lg:px-10 lg:py-12">
 
 								{/* Logo + heading */}
 								<div className="mb-9 login-animate-up">
 									<div className="flex items-center justify-center mb-5">
 										<img
-											src="/Heart_of_England_Co-operative.webp"
+											src="/HOEnbg.png"
 											alt="Heart of England Co-operative"
 											className="h-10 sm:h-11 w-auto drop-shadow-sm"
 										/>
 									</div>
-									<h2 className="text-[1.4rem] font-extrabold tracking-tight text-gray-900 text-center">
+									<h2 className="text-[1.4rem] font-extrabold tracking-tight text-foreground text-center">
 										Sign in to your crime intelligence workspace
 									</h2>
-									<p className="mt-2 text-[13.5px] text-gray-500 leading-relaxed text-center">
+									<p className="mt-2 text-[13.5px] text-muted-foreground leading-relaxed text-center">
 										Enter your credentials to access AI-assisted incident reporting and security analytics.
 									</p>
 								</div>
@@ -346,20 +346,20 @@ export default function LoginPage() {
 								{/* Error banner */}
 								{effectiveError && (
 									<div
-										className={`mb-6 flex items-start gap-3 rounded-xl border border-red-100 bg-red-50/70 p-4 login-animate-up ${shakeError ? 'login-shake' : ''}`}
+										className={`mb-6 flex items-start gap-3 rounded-xl border border-red-200/70 bg-red-50/80 dark:border-red-900/70 dark:bg-red-950/40 p-4 login-animate-up ${shakeError ? 'login-shake' : ''}`}
 									>
-										<div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-100">
-											<AlertCircle className="h-4 w-4 text-red-500" />
+										<div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-100 dark:bg-red-900/60">
+											<AlertCircle className="h-4 w-4 text-red-500 dark:text-red-300" />
 										</div>
 										<div className="text-sm leading-snug pt-0.5">
-											<p className="font-semibold text-red-800">
+											<p className="font-semibold text-red-800 dark:text-red-200">
 												{effectiveError.type === 'credentials'
 													? 'Authentication failed'
 													: effectiveError.type === 'validation'
 														? 'Check your input'
 														: 'Something went wrong'}
 											</p>
-											<p className="mt-0.5 text-red-600/80">{effectiveError.message}</p>
+											<p className="mt-0.5 text-red-600/80 dark:text-red-300/90">{effectiveError.message}</p>
 										</div>
 									</div>
 								)}
@@ -374,19 +374,19 @@ export default function LoginPage() {
 										<div className="space-y-1.5">
 											<label
 												htmlFor="username"
-												className="block text-[13px] font-semibold text-gray-700"
+												className="block text-[13px] font-semibold text-foreground/90"
 											>
 												Email address
 											</label>
 											<div className="group relative">
-												<Mail className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-[17px] w-[17px] text-gray-400 transition-colors group-focus-within:text-brand-500" />
+												<Mail className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-[17px] w-[17px] text-muted-foreground transition-colors group-focus-within:text-brand-500" />
 												<input
 													id="username"
 													name="username"
 													autoComplete="username"
 													value={username}
 													onChange={e => setUsername(e.target.value)}
-													className="block w-full h-12 rounded-xl border border-gray-200 bg-gray-50/50 pl-11 pr-4 text-sm text-gray-900 placeholder:text-gray-400 transition-all duration-200 focus:bg-white focus:border-brand-400 focus:ring-2 focus:ring-brand-400/20 focus:outline-none hover:border-gray-300 disabled:opacity-50"
+													className="block w-full h-12 rounded-xl border border-border bg-muted/40 pl-11 pr-4 text-sm text-foreground placeholder:text-muted-foreground transition-all duration-200 focus:bg-background focus:border-brand-400 focus:ring-2 focus:ring-brand-400/20 focus:outline-none hover:border-brand-300/60 disabled:opacity-50"
 													placeholder="you@company.com"
 													disabled={authLoading || isVerifying2FA}
 												/>
@@ -398,28 +398,28 @@ export default function LoginPage() {
 									<div className="space-y-1.5">
 										<label
 											htmlFor={twoFactorEmail ? 'twofactor' : 'password'}
-											className="block text-[13px] font-semibold text-gray-700"
+											className="block text-[13px] font-semibold text-foreground/90"
 										>
 											{twoFactorEmail ? 'Verification code' : 'Password'}
 										</label>
 										<div className="group relative">
 											{twoFactorEmail ? (
 												<>
-													<ShieldCheck className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-[17px] w-[17px] text-gray-400 transition-colors group-focus-within:text-brand-500" />
+													<ShieldCheck className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-[17px] w-[17px] text-muted-foreground transition-colors group-focus-within:text-brand-500" />
 													<input
 														id="twofactor"
 														name="twofactor"
 														type="text"
 														value={twoFactorCode}
 														onChange={e => setTwoFactorCode(e.target.value)}
-														className="block w-full h-12 rounded-xl border border-gray-200 bg-gray-50/50 pl-11 pr-4 text-sm text-gray-900 placeholder:text-gray-400 transition-all duration-200 focus:bg-white focus:border-brand-400 focus:ring-2 focus:ring-brand-400/20 focus:outline-none hover:border-gray-300 disabled:opacity-50"
+														className="block w-full h-12 rounded-xl border border-border bg-muted/40 pl-11 pr-4 text-sm text-foreground placeholder:text-muted-foreground transition-all duration-200 focus:bg-background focus:border-brand-400 focus:ring-2 focus:ring-brand-400/20 focus:outline-none hover:border-brand-300/60 disabled:opacity-50"
 														placeholder="Enter the 6-digit code sent to your email"
 														disabled={isVerifying2FA}
 													/>
 												</>
 											) : (
 												<>
-													<Lock className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-[17px] w-[17px] text-gray-400 transition-colors group-focus-within:text-brand-500" />
+													<Lock className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-[17px] w-[17px] text-muted-foreground transition-colors group-focus-within:text-brand-500" />
 													<input
 														id="password"
 														name="password"
@@ -427,14 +427,14 @@ export default function LoginPage() {
 														autoComplete="current-password"
 														value={password}
 														onChange={e => setPassword(e.target.value)}
-														className="block w-full h-12 rounded-xl border border-gray-200 bg-gray-50/50 pl-11 pr-11 text-sm text-gray-900 placeholder:text-gray-400 transition-all duration-200 focus:bg-white focus:border-brand-400 focus:ring-2 focus:ring-brand-400/20 focus:outline-none hover:border-gray-300 disabled:opacity-50"
+														className="block w-full h-12 rounded-xl border border-border bg-muted/40 pl-11 pr-11 text-sm text-foreground placeholder:text-muted-foreground transition-all duration-200 focus:bg-background focus:border-brand-400 focus:ring-2 focus:ring-brand-400/20 focus:outline-none hover:border-brand-300/60 disabled:opacity-50"
 														placeholder="Enter your password"
 														disabled={authLoading}
 													/>
 													<button
 														type="button"
 														onClick={() => setShowPassword(!showPassword)}
-														className="absolute right-3.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-gray-400 transition-colors hover:text-gray-600 focus:text-gray-600 focus:outline-none touch-manipulation"
+														className="absolute right-3.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-muted-foreground transition-colors hover:text-foreground focus:text-foreground focus:outline-none touch-manipulation"
 														disabled={authLoading}
 														tabIndex={-1}
 														aria-label={showPassword ? 'Hide password' : 'Show password'}
@@ -475,35 +475,35 @@ export default function LoginPage() {
 								{/* Divider + footer */}
 								<div className="mt-10 space-y-4 login-animate-up-2">
 									<div className="relative">
-										<div className="absolute inset-0 flex items-center">
-											<div className="w-full border-t border-gray-100" />
+											<div className="absolute inset-0 flex items-center">
+												<div className="w-full border-t border-border" />
 										</div>
 										<div className="relative flex justify-center">
-											<span className="bg-white lg:bg-white px-3 text-[11px] text-gray-400">
+											<span className="bg-background lg:bg-card px-3 text-[11px] text-muted-foreground">
 												SECURED PLATFORM
 											</span>
 										</div>
 									</div>
 									<div className="mt-5 flex items-center justify-center gap-2">
-										<div className="flex h-6 w-6 items-center justify-center rounded-md bg-gray-100">
-											<ShieldCheck className="h-3.5 w-3.5 text-gray-500" />
+										<div className="flex h-6 w-6 items-center justify-center rounded-md bg-muted">
+											<ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" />
 										</div>
-										<span className="text-xs text-gray-400">
+										<span className="text-xs text-muted-foreground">
 											AI-powered retail crime intelligence for modern loss prevention teams
 										</span>
 									</div>
 
 									{/* Legal links under card (SaaS-style) */}
-									<div className="flex items-center justify-center gap-4 text-[11px] text-gray-400">
-										<a href="/about" className="hover:text-gray-600 underline-offset-4 hover:underline">
+									<div className="flex items-center justify-center gap-4 text-[11px] text-muted-foreground">
+										<a href="/about" className="hover:text-foreground underline-offset-4 hover:underline">
 											About
 										</a>
-										<span className="h-3 w-px bg-gray-300" aria-hidden="true" />
-										<a href="/privacy" className="hover:text-gray-600 underline-offset-4 hover:underline">
+										<span className="h-3 w-px bg-border" aria-hidden="true" />
+										<a href="/privacy" className="hover:text-foreground underline-offset-4 hover:underline">
 											Privacy
 										</a>
-										<span className="h-3 w-px bg-gray-300" aria-hidden="true" />
-										<a href="/terms" className="hover:text-gray-600 underline-offset-4 hover:underline">
+										<span className="h-3 w-px bg-border" aria-hidden="true" />
+										<a href="/terms" className="hover:text-foreground underline-offset-4 hover:underline">
 											Terms
 										</a>
 									</div>
@@ -515,13 +515,13 @@ export default function LoginPage() {
 
 					{/* Bottom branding & copyright */}
 					<div className="pb-5 text-center space-y-0.5">
-						<p className="text-[11px] font-semibold text-gray-300">
+						<p className="text-[11px] font-semibold text-muted-foreground">
 							DibangOps Crime Portal<span className="align-top text-[9px] ml-0.5">™</span>
 						</p>
-						<p className="text-[11px] text-gray-400">
+						<p className="text-[11px] text-muted-foreground">
 							&copy; {new Date().getFullYear()} DibangaOps – Developed by David Ibanga
 						</p>
-						<p className="text-[11px] text-gray-400">
+						<p className="text-[11px] text-muted-foreground">
 							Proprietary &amp; Confidential.
 						</p>
 					</div>

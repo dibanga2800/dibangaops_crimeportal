@@ -270,6 +270,200 @@ namespace AIPBackend.Services
             if (customer == null)
                 throw new ArgumentException("Customer not found");
 
+            var blockingReasons = new List<string>();
+
+            var linkedUsers = await _context.ApplicationUsers.CountAsync(
+                u => u.CustomerId == id && !u.RecordIsDeletedYN
+            );
+            if (linkedUsers > 0)
+            {
+                blockingReasons.Add($"{linkedUsers} linked user account{(linkedUsers == 1 ? string.Empty : "s")}");
+            }
+
+            var linkedIncidents = await _context.Incidents.CountAsync(
+                i => i.CustomerId == id && !i.RecordIsDeletedYN
+            );
+            if (linkedIncidents > 0)
+            {
+                blockingReasons.Add($"{linkedIncidents} incident record{(linkedIncidents == 1 ? string.Empty : "s")}");
+            }
+
+            var customerAssignments = await _context.UserCustomerAssignments
+                .Where(assignment => assignment.CustomerId == id)
+                .ToListAsync();
+            if (customerAssignments.Count > 0)
+            {
+                _context.UserCustomerAssignments.RemoveRange(customerAssignments);
+            }
+
+            var customerPageAccesses = await _context.CustomerPageAccesses
+                .Where(access => access.CustomerId == id)
+                .ToListAsync();
+            if (customerPageAccesses.Count > 0)
+            {
+                _context.CustomerPageAccesses.RemoveRange(customerPageAccesses);
+            }
+
+            var customerSites = await _context.Sites.CountAsync(
+                site => site.fkCustomerID == id && !site.RecordIsDeletedYN
+            );
+            if (customerSites > 0)
+            {
+                blockingReasons.Add($"{customerSites} site record{(customerSites == 1 ? string.Empty : "s")}");
+            }
+
+            var customerRegions = await _context.Regions.CountAsync(
+                region => region.fkCustomerID == id && !region.RecordIsDeletedYN
+            );
+            if (customerRegions > 0)
+            {
+                blockingReasons.Add($"{customerRegions} region record{(customerRegions == 1 ? string.Empty : "s")}");
+            }
+
+            // These modules are no longer used in the current app flow, so clean their rows up
+            // during customer deletion instead of letting old foreign keys block admin cleanup.
+            var legacyDailyActivityReports = await _context.DailyActivityReports
+                .Where(report => report.CustomerId == id)
+                .ToListAsync();
+            if (legacyDailyActivityReports.Count > 0)
+            {
+                _context.DailyActivityReports.RemoveRange(legacyDailyActivityReports);
+            }
+
+            var legacyOccurrenceBooks = await _context.DailyOccurrenceBooks
+                .Where(book => book.CustomerId == id)
+                .ToListAsync();
+            if (legacyOccurrenceBooks.Count > 0)
+            {
+                _context.DailyOccurrenceBooks.RemoveRange(legacyOccurrenceBooks);
+            }
+
+            var legacyRiskScores = await _context.StoreRiskScores
+                .Where(score => score.CustomerId == id)
+                .ToListAsync();
+            if (legacyRiskScores.Count > 0)
+            {
+                _context.StoreRiskScores.RemoveRange(legacyRiskScores);
+            }
+
+            var customerAlertRules = await _context.AlertRules
+                .Where(rule => rule.CustomerId == id)
+                .ToListAsync();
+            if (customerAlertRules.Count > 0)
+            {
+                _context.AlertRules.RemoveRange(customerAlertRules);
+            }
+
+            if (blockingReasons.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    $"Cannot delete customer '{customer.CompanyName}' because it still has {string.Join(" and ", blockingReasons)}. " +
+                    "Remove or reassign those records first.");
+            }
+
+            // Inactive rows can still keep SQL foreign keys alive even though the UI
+            // no longer shows them. Clean those up so an admin can remove a retired customer.
+            var softDeletedUsers = await _context.ApplicationUsers
+                .Where(u => u.CustomerId == id && u.RecordIsDeletedYN)
+                .ToListAsync();
+            foreach (var user in softDeletedUsers)
+            {
+                user.CustomerId = null;
+            }
+
+            var softDeletedIncidents = await _context.Incidents
+                .Where(i => i.CustomerId == id && i.RecordIsDeletedYN)
+                .ToListAsync();
+            if (softDeletedIncidents.Count > 0)
+            {
+                var softDeletedIncidentIds = softDeletedIncidents
+                    .Select(i => i.IncidentId)
+                    .ToList();
+
+                var evidenceItems = await _context.EvidenceItems
+                    .Where(item => softDeletedIncidentIds.Contains(item.IncidentId))
+                    .ToListAsync();
+                if (evidenceItems.Count > 0)
+                {
+                    var evidenceItemIds = evidenceItems
+                        .Select(item => item.EvidenceItemId)
+                        .ToList();
+
+                    var custodyEvents = await _context.EvidenceCustodyEvents
+                        .Where(evt => evidenceItemIds.Contains(evt.EvidenceItemId))
+                        .ToListAsync();
+                    if (custodyEvents.Count > 0)
+                    {
+                        _context.EvidenceCustodyEvents.RemoveRange(custodyEvents);
+                    }
+
+                    _context.EvidenceItems.RemoveRange(evidenceItems);
+                }
+
+                var alertInstances = await _context.AlertInstances
+                    .Where(instance => instance.IncidentId.HasValue && softDeletedIncidentIds.Contains(instance.IncidentId.Value))
+                    .ToListAsync();
+                if (alertInstances.Count > 0)
+                {
+                    _context.AlertInstances.RemoveRange(alertInstances);
+                }
+
+                _context.Incidents.RemoveRange(softDeletedIncidents);
+            }
+
+            var softDeletedSites = await _context.Sites
+                .Where(site => site.fkCustomerID == id && site.RecordIsDeletedYN)
+                .ToListAsync();
+            if (softDeletedSites.Count > 0)
+            {
+                _context.Sites.RemoveRange(softDeletedSites);
+            }
+
+            var softDeletedRegions = await _context.Regions
+                .Where(region => region.fkCustomerID == id && region.RecordIsDeletedYN)
+                .ToListAsync();
+            if (softDeletedRegions.Count > 0)
+            {
+                _context.Regions.RemoveRange(softDeletedRegions);
+            }
+
+            // These legacy survey tables still exist in older databases even though
+            // the entities are no longer part of the active EF model.
+            await _context.Database.ExecuteSqlRawAsync(
+                @"
+                IF OBJECT_ID(N'[dbo].[SiteVisits]', N'U') IS NOT NULL
+                BEGIN
+                    DELETE FROM [dbo].[SiteVisits]
+                    WHERE [CustomerId] = {0};
+                END
+
+                IF OBJECT_ID(N'[dbo].[CustomerSatisfactionSurveys]', N'U') IS NOT NULL
+                BEGIN
+                    IF OBJECT_ID(N'[dbo].[CustomerSatisfactionSurveyFollowUpActions]', N'U') IS NOT NULL
+                    BEGIN
+                        DELETE followUps
+                        FROM [dbo].[CustomerSatisfactionSurveyFollowUpActions] AS followUps
+                        INNER JOIN [dbo].[CustomerSatisfactionSurveys] AS surveys
+                            ON followUps.[SurveyId] = CONVERT(nvarchar(50), surveys.[Id])
+                        WHERE surveys.[CustomerId] = {0};
+                    END
+
+                    IF OBJECT_ID(N'[dbo].[CustomerSatisfactionSurveyDatesToBeCompleted]', N'U') IS NOT NULL
+                    BEGIN
+                        DELETE dueDates
+                        FROM [dbo].[CustomerSatisfactionSurveyDatesToBeCompleted] AS dueDates
+                        INNER JOIN [dbo].[CustomerSatisfactionSurveys] AS surveys
+                            ON dueDates.[SurveyId] = CONVERT(nvarchar(50), surveys.[Id])
+                        WHERE surveys.[CustomerId] = {0};
+                    END
+
+                    DELETE FROM [dbo].[CustomerSatisfactionSurveys]
+                    WHERE [CustomerId] = {0};
+                END
+                ",
+                id
+            );
+
             _context.Customers.Remove(customer);
             await _context.SaveChangesAsync();
         }

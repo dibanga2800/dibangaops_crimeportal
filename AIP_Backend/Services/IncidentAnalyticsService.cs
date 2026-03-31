@@ -40,7 +40,7 @@ namespace AIPBackend.Services
 				.Where(i => i.DateOfIncident >= effectiveFrom && i.DateOfIncident <= effectiveTo)
 				.ToList();
 
-			var totalValue = filtered.Sum(i => i.TotalValueRecovered ?? i.StolenItems?.Sum(s => s.TotalAmount) ?? 0);
+			var totalValue = filtered.Sum(GetIncidentLostValue);
 
 			var repeatOffenders = filtered
 				.Where(i => !string.IsNullOrWhiteSpace(i.OffenderName))
@@ -54,7 +54,7 @@ namespace AIPBackend.Services
 				.Select(g =>
 				{
 					var siteIncidents = g.ToList();
-					var siteValue = siteIncidents.Sum(i => i.TotalValueRecovered ?? i.StolenItems?.Sum(s => s.TotalAmount) ?? 0);
+					var siteValue = siteIncidents.Sum(GetIncidentLostValue);
 					return new HotLocationDto
 					{
 						SiteName = g.Key.StoreName!,
@@ -92,7 +92,7 @@ namespace AIPBackend.Services
 		private static double CalculateLocationRiskScore(List<Incident> incidents)
 		{
 			var countWeight = Math.Min(incidents.Count / 20.0, 0.4);
-			var valueWeight = Math.Min((double)(incidents.Sum(i => i.TotalValueRecovered ?? 0) / 5000m), 0.3);
+			var valueWeight = Math.Min((double)(incidents.Sum(GetIncidentLostValue) / 5000m), 0.3);
 			var policeWeight = incidents.Any(i => i.PoliceInvolvement) ? 0.2 : 0;
 			var recencyWeight = incidents.Any(i => i.DateOfIncident >= DateTime.UtcNow.AddDays(-7)) ? 0.1 : 0;
 
@@ -110,7 +110,7 @@ namespace AIPBackend.Services
 					{
 						Period = g.Key.ToString("yyyy-MM-dd"),
 						Count = g.Count(),
-						Value = g.Sum(i => i.TotalValueRecovered ?? 0)
+						Value = g.Sum(GetIncidentLostValue)
 					})
 					.OrderBy(t => t.Period)
 					.ToList();
@@ -126,7 +126,7 @@ namespace AIPBackend.Services
 				{
 					Period = $"W/C {startOfWeek:dd MMM}",
 					Count = weekIncidents.Count,
-					Value = weekIncidents.Sum(i => i.TotalValueRecovered ?? 0)
+					Value = weekIncidents.Sum(GetIncidentLostValue)
 				});
 				startOfWeek = endOfWeek;
 			}
@@ -146,7 +146,7 @@ namespace AIPBackend.Services
 					Category = g.Key,
 					Count = g.Count(),
 					Percentage = Math.Round((double)g.Count() / total * 100, 1),
-					TotalValue = g.Sum(i => i.TotalValueRecovered ?? 0)
+					TotalValue = g.Sum(GetIncidentLostValue)
 				})
 				.OrderByDescending(c => c.Count)
 				.ToList();
@@ -236,6 +236,8 @@ namespace AIPBackend.Services
 
 			var crimeTrends = BuildCrimeTrends(filtered, total, fromStr, toStr);
 			var hotProducts = BuildHotProducts(filtered, fromStr, toStr);
+			var financialSummary = BuildFinancialSummary(filtered);
+			var storeRecoveryComparisons = BuildStoreRecoveryComparisons(filtered);
 			var repeatOffenders = BuildRepeatOffenders(filtered);
 			var hotLocations = BuildHotLocationsForDeployment(filtered);
 			var deployment = BuildDeploymentRecommendations(filtered, hotLocations);
@@ -249,6 +251,8 @@ namespace AIPBackend.Services
 			{
 				CrimeTrends = crimeTrends,
 				HotProducts = hotProducts,
+				FinancialSummary = financialSummary,
+				StoreRecoveryComparisons = storeRecoveryComparisons,
 				RepeatOffenders = repeatOffenders,
 				DeploymentRecommendations = deployment,
 				CrimeLinking = crimeLinking,
@@ -311,7 +315,7 @@ namespace AIPBackend.Services
 					Type = g.Key,
 					Count = g.Count(),
 					Percentage = total > 0 ? Math.Round((double)g.Count() / total * 100, 1) : 0,
-					TotalValue = g.Sum(i => i.TotalValueRecovered ?? i.StolenItems?.Sum(s => s.TotalAmount) ?? 0)
+					TotalValue = g.Sum(GetIncidentLostValue)
 				})
 				.OrderByDescending(t => t.Count)
 				.ToList();
@@ -343,6 +347,12 @@ namespace AIPBackend.Services
 						StoreId = siteIdInt,
 						StoreName = g.Key,
 						Incidents = storeTotal,
+						TotalStolenValue = storeIncidents.Sum(GetIncidentStolenValue),
+						TotalRecoveredValue = storeIncidents.Sum(GetIncidentRecoveredValue),
+						TotalLostValue = storeIncidents.Sum(GetIncidentLostValue),
+						RecoveryRate = CalculateRecoveryRate(
+							storeIncidents.Sum(GetIncidentRecoveredValue),
+							storeIncidents.Sum(GetIncidentStolenValue)),
 						IncidentTypes = storeIncidents
 							.GroupBy(i => string.IsNullOrWhiteSpace(i.IncidentType) ? "Unspecified" : i.IncidentType)
 							.Select(t => new IncidentTypeDataDto
@@ -350,7 +360,7 @@ namespace AIPBackend.Services
 								Type = t.Key,
 								Count = t.Count(),
 								Percentage = storeTotal > 0 ? Math.Round((double)t.Count() / storeTotal * 100, 1) : 0,
-								TotalValue = t.Sum(i => i.TotalValueRecovered ?? i.StolenItems?.Sum(s => s.TotalAmount) ?? 0)
+								TotalValue = t.Sum(GetIncidentLostValue)
 							})
 							.OrderByDescending(t => t.Count)
 							.ToList(),
@@ -359,12 +369,15 @@ namespace AIPBackend.Services
 					};
 				});
 
+			var recoveryTrend = BuildRecoveryTrend(incidents, fromStr, toStr);
+
 			return new CrimeTrendDataDto
 			{
 				DayOfWeek = dayOfWeek,
 				TimeOfDay = timeOfDay,
 				IncidentTypes = incidentTypes,
 				StoreDrilldown = storeDrilldown,
+				RecoveryTrend = recoveryTrend,
 				TotalIncidents = total,
 				DateRange = new DateRangeDto { Start = fromStr, End = toStr }
 			};
@@ -376,9 +389,11 @@ namespace AIPBackend.Services
 				.SelectMany(i => i.StolenItems.Select(si => new { Incident = i, Item = si }))
 				.ToList();
 
-			var totalValueLost = allItems.Sum(x => x.Item.TotalAmount);
+			var totalValueStolen = allItems.Sum(x => GetItemStolenValue(x.Item));
+			var totalValueRecovered = allItems.Sum(x => GetItemRecoveredValue(x.Item));
+			var totalValueLost = allItems.Sum(x => GetItemLostValue(x.Item));
 
-			var topProducts = allItems
+			var productGroups = allItems
 				.GroupBy(x =>
 				{
 					var key = !string.IsNullOrWhiteSpace(x.Item.Barcode)
@@ -391,10 +406,34 @@ namespace AIPBackend.Services
 					Barcode = g.Key,
 					ProductName = g.Select(x => x.Item.ProductName ?? x.Item.Description ?? g.Key).First(s => !string.IsNullOrWhiteSpace(s)) ?? g.Key,
 					Frequency = g.Count(),
-					TotalValue = g.Sum(x => x.Item.TotalAmount),
+					TotalValue = g.Sum(x => GetItemLostValue(x.Item)),
+					StolenValue = g.Sum(x => GetItemStolenValue(x.Item)),
+					RecoveredValue = g.Sum(x => GetItemRecoveredValue(x.Item)),
+					LostValue = g.Sum(x => GetItemLostValue(x.Item)),
+					RecoveryRate = CalculateRecoveryRate(
+						g.Sum(x => GetItemRecoveredValue(x.Item)),
+						g.Sum(x => GetItemStolenValue(x.Item))),
 					StoresAffected = g.Select(x => x.Incident.StoreName).Distinct().Count()
 				})
-				.OrderByDescending(p => p.Frequency)
+				.ToList();
+
+			var topProducts = productGroups
+				.OrderByDescending(p => p.LostValue)
+				.ThenByDescending(p => p.Frequency)
+				.Take(20)
+				.ToList();
+
+			var topRecoveredProducts = productGroups
+				.Where(p => p.RecoveredValue > 0)
+				.OrderByDescending(p => p.RecoveredValue)
+				.ThenByDescending(p => p.Frequency)
+				.Take(20)
+				.ToList();
+
+			var worstRecoveryProducts = productGroups
+				.Where(p => p.StolenValue > 0)
+				.OrderBy(p => p.RecoveryRate)
+				.ThenByDescending(p => p.LostValue)
 				.Take(20)
 				.ToList();
 
@@ -419,7 +458,13 @@ namespace AIPBackend.Services
 							Barcode = pg.Key,
 							ProductName = pg.Select(x => x.Item.ProductName ?? x.Item.Description ?? pg.Key).First(s => !string.IsNullOrWhiteSpace(s)) ?? pg.Key,
 							Frequency = pg.Count(),
-							Value = pg.Sum(x => x.Item.TotalAmount)
+							Value = pg.Sum(x => GetItemLostValue(x.Item)),
+							StolenValue = pg.Sum(x => GetItemStolenValue(x.Item)),
+							RecoveredValue = pg.Sum(x => GetItemRecoveredValue(x.Item)),
+							LostValue = pg.Sum(x => GetItemLostValue(x.Item)),
+							RecoveryRate = CalculateRecoveryRate(
+								pg.Sum(x => GetItemRecoveredValue(x.Item)),
+								pg.Sum(x => GetItemStolenValue(x.Item)))
 						})
 						.OrderByDescending(p => p.Frequency)
 						.Take(5)
@@ -436,6 +481,12 @@ namespace AIPBackend.Services
 						StoreName = g.Key,
 						Products = products,
 						TotalIncidents = storeIncidentCount,
+						TotalValueStolen = g.Sum(x => GetItemStolenValue(x.Item)),
+						TotalValueRecovered = g.Sum(x => GetItemRecoveredValue(x.Item)),
+						TotalValueLost = g.Sum(x => GetItemLostValue(x.Item)),
+						RecoveryRate = CalculateRecoveryRate(
+							g.Sum(x => GetItemRecoveredValue(x.Item)),
+							g.Sum(x => GetItemStolenValue(x.Item))),
 						RiskLevel = riskLevel
 					};
 				})
@@ -445,8 +496,13 @@ namespace AIPBackend.Services
 			return new HotProductsDataDto
 			{
 				TopProducts = topProducts,
+				TopRecoveredProducts = topRecoveredProducts,
+				WorstRecoveryProducts = worstRecoveryProducts,
 				StoreHeatmap = storeHeatmap,
+				TotalValueStolen = totalValueStolen,
+				TotalValueRecovered = totalValueRecovered,
 				TotalValueLost = totalValueLost,
+				RecoveryRate = CalculateRecoveryRate(totalValueRecovered, totalValueStolen),
 				Period = new DateRangeDto { Start = fromStr, End = toStr }
 			};
 		}
@@ -499,8 +555,7 @@ namespace AIPBackend.Services
 				.Select(g =>
 				{
 					var offenderIncidents = g.OrderBy(i => i.DateOfIncident).ToList();
-					var totalVal = offenderIncidents.Sum(i =>
-						i.TotalValueRecovered ?? i.StolenItems?.Sum(s => s.TotalAmount) ?? 0);
+					var totalVal = offenderIncidents.Sum(GetIncidentLostValue);
 					var storesTargeted = offenderIncidents
 						.Where(i => !string.IsNullOrWhiteSpace(i.StoreName))
 						.Select(i => i.StoreName!)
@@ -646,7 +701,7 @@ namespace AIPBackend.Services
 				.Select(g =>
 				{
 					var siteIncidents = g.ToList();
-					var siteValue = siteIncidents.Sum(i => i.TotalValueRecovered ?? i.StolenItems?.Sum(s => s.TotalAmount) ?? 0);
+					var siteValue = siteIncidents.Sum(GetIncidentLostValue);
 					return new HotLocationDto
 					{
 						SiteName = g.Key.StoreName!,
@@ -922,8 +977,157 @@ namespace AIPBackend.Services
 			return $"{displayH}{period}";
 		}
 
+		private static AnalyticsFinancialSummaryDto BuildFinancialSummary(List<Incident> incidents)
+		{
+			var totalStolenValue = incidents.Sum(GetIncidentStolenValue);
+			var totalRecoveredValue = incidents.Sum(GetIncidentRecoveredValue);
+			var totalLostValue = incidents.Sum(GetIncidentLostValue);
+			var totalRecoveredQuantity = incidents.Sum(GetIncidentRecoveredQuantity);
+			var totalLostQuantity = incidents.Sum(GetIncidentLostQuantity);
+
+			return new AnalyticsFinancialSummaryDto
+			{
+				TotalStolenValue = totalStolenValue,
+				TotalRecoveredValue = totalRecoveredValue,
+				TotalLostValue = totalLostValue,
+				RecoveryRate = CalculateRecoveryRate(totalRecoveredValue, totalStolenValue),
+				TotalRecoveredQuantity = totalRecoveredQuantity,
+				TotalLostQuantity = totalLostQuantity
+			};
+		}
+
+		private static List<StoreRecoveryComparisonDto> BuildStoreRecoveryComparisons(List<Incident> incidents)
+		{
+			return incidents
+				.Where(i => !string.IsNullOrWhiteSpace(i.StoreName))
+				.GroupBy(i => i.StoreName!)
+				.Select(g =>
+				{
+					int.TryParse(g.First().SiteId, out var siteId);
+					var storeIncidents = g.ToList();
+					var stolenValue = storeIncidents.Sum(GetIncidentStolenValue);
+					var recoveredValue = storeIncidents.Sum(GetIncidentRecoveredValue);
+					var lostValue = storeIncidents.Sum(GetIncidentLostValue);
+
+					return new StoreRecoveryComparisonDto
+					{
+						StoreId = siteId,
+						StoreName = g.Key,
+						IncidentCount = storeIncidents.Count,
+						TotalStolenValue = stolenValue,
+						TotalRecoveredValue = recoveredValue,
+						TotalLostValue = lostValue,
+						RecoveryRate = CalculateRecoveryRate(recoveredValue, stolenValue),
+						TotalRecoveredQuantity = storeIncidents.Sum(GetIncidentRecoveredQuantity),
+						TotalLostQuantity = storeIncidents.Sum(GetIncidentLostQuantity)
+					};
+				})
+				.OrderByDescending(x => x.TotalLostValue)
+				.ThenByDescending(x => x.IncidentCount)
+				.ToList();
+		}
+
+		private static List<RecoveryTrendPointDto> BuildRecoveryTrend(List<Incident> incidents, string fromStr, string toStr)
+		{
+			var startDate = DateTime.Parse(fromStr);
+			var endDate = DateTime.Parse(toStr);
+			var daySpan = (endDate - startDate).TotalDays;
+
+			if (daySpan <= 14)
+			{
+				return incidents
+					.GroupBy(i => i.DateOfIncident.Date)
+					.Select(g => new RecoveryTrendPointDto
+					{
+						Period = g.Key.ToString("yyyy-MM-dd"),
+						IncidentCount = g.Count(),
+						StolenValue = g.Sum(GetIncidentStolenValue),
+						RecoveredValue = g.Sum(GetIncidentRecoveredValue),
+						LostValue = g.Sum(GetIncidentLostValue)
+					})
+					.OrderBy(x => x.Period)
+					.ToList();
+			}
+
+			var trends = new List<RecoveryTrendPointDto>();
+			var cursor = startDate.Date;
+			while (cursor <= endDate.Date)
+			{
+				var next = cursor.AddDays(7);
+				var windowIncidents = incidents
+					.Where(i => i.DateOfIncident >= cursor && i.DateOfIncident < next)
+					.ToList();
+
+				trends.Add(new RecoveryTrendPointDto
+				{
+					Period = $"W/C {cursor:dd MMM}",
+					IncidentCount = windowIncidents.Count,
+					StolenValue = windowIncidents.Sum(GetIncidentStolenValue),
+					RecoveredValue = windowIncidents.Sum(GetIncidentRecoveredValue),
+					LostValue = windowIncidents.Sum(GetIncidentLostValue)
+				});
+
+				cursor = next;
+			}
+
+			return trends;
+		}
+
 		private static decimal SumIncidentValue(List<Incident> incidents) =>
-			incidents.Sum(i => i.TotalValueRecovered ?? i.StolenItems?.Sum(s => s.TotalAmount) ?? 0);
+			incidents.Sum(GetIncidentLostValue);
+
+		private static decimal GetIncidentStolenValue(Incident incident) =>
+			(incident.TotalStolenValue ?? 0) > 0
+				? incident.TotalStolenValue ?? 0
+				: incident.StolenItems?.Sum(GetItemStolenValue) ?? 0;
+
+		private static decimal GetIncidentRecoveredValue(Incident incident) =>
+			(incident.TotalRecoveredValue ?? 0) > 0
+				? incident.TotalRecoveredValue ?? 0
+				: incident.StolenItems?.Sum(GetItemRecoveredValue) ?? 0;
+
+		private static decimal GetIncidentLostValue(Incident incident)
+		{
+			if ((incident.TotalLostValue ?? 0) > 0)
+			{
+				return incident.TotalLostValue ?? 0;
+			}
+
+			var stolenValue = GetIncidentStolenValue(incident);
+			var recoveredValue = GetIncidentRecoveredValue(incident);
+			var calculatedLostValue = stolenValue - recoveredValue;
+			return calculatedLostValue > 0 ? calculatedLostValue : 0;
+		}
+
+		private static int GetIncidentRecoveredQuantity(Incident incident) =>
+			(incident.TotalRecoveredQuantity ?? 0) > 0
+				? incident.TotalRecoveredQuantity ?? 0
+				: incident.StolenItems?.Sum(item => item.RecoveredQuantity) ?? 0;
+
+		private static int GetIncidentLostQuantity(Incident incident)
+		{
+			var totalQuantity = incident.StolenItems?.Sum(item => item.Quantity) ?? 0;
+			var recoveredQuantity = GetIncidentRecoveredQuantity(incident);
+			return Math.Max(totalQuantity - recoveredQuantity, 0);
+		}
+
+		private static decimal GetItemStolenValue(StolenItem item) =>
+			item.TotalAmount > 0 ? item.TotalAmount : item.Cost * item.Quantity;
+
+		private static decimal GetItemRecoveredValue(StolenItem item) =>
+			item.RecoveredAmount > 0 ? item.RecoveredAmount : item.Cost * item.RecoveredQuantity;
+
+		private static decimal GetItemLostValue(StolenItem item)
+		{
+			var calculatedLostValue = GetItemStolenValue(item) - GetItemRecoveredValue(item);
+			return calculatedLostValue > 0 ? calculatedLostValue : 0;
+		}
+
+		private static double CalculateRecoveryRate(decimal recoveredValue, decimal stolenValue)
+		{
+			if (stolenValue <= 0) return 0;
+			return Math.Round((double)(recoveredValue / stolenValue) * 100, 1);
+		}
 
 		private static List<string> BuildCommonFeatures(List<Incident> incidents)
 		{
@@ -945,7 +1149,7 @@ namespace AIPBackend.Services
 				IncidentType = incident.IncidentType,
 				OffenderId = incident.OffenderId,
 				OffenderName = incident.OffenderName,
-				Value = incident.TotalValueRecovered ?? incident.StolenItems?.Sum(s => s.TotalAmount) ?? 0,
+				Value = GetIncidentLostValue(incident),
 				SimilarityScore = similarityScore,
 				MatchingFeatures = matchingFeatures
 			};

@@ -16,6 +16,17 @@ using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
+static bool IsMissingOrPlaceholderStorageConnectionString(string? value)
+{
+	return string.IsNullOrWhiteSpace(value) ||
+		value.Contains("YOUR_STORAGE_ACCOUNT_KEY", StringComparison.OrdinalIgnoreCase);
+}
+
+static bool RequiresBlobStorage(string? mode)
+{
+	return mode?.Trim().ToLowerInvariant() is "blob" or "both";
+}
+
 // Configure for IIS deployment
 // When running under IIS, the ASP.NET Core Module handles port binding
 // Check if running under IIS by looking for the IIS environment variables
@@ -62,11 +73,33 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(defaultConnection);
 });
 
-builder.Services.AddSingleton(u => new BlobServiceClient(
-    builder.Configuration.GetConnectionString("StorageAccount")));
+builder.Services.Configure<IncidentImageStorageOptions>(builder.Configuration.GetSection("IncidentImageStorage"));
+
+var incidentImageStorageOptions =
+	builder.Configuration.GetSection("IncidentImageStorage").Get<IncidentImageStorageOptions>()
+	?? new IncidentImageStorageOptions();
+
+var rawStorageConnectionString = builder.Configuration.GetConnectionString("StorageAccount");
+string effectiveStorageConnectionString;
+
+if (IsMissingOrPlaceholderStorageConnectionString(rawStorageConnectionString))
+{
+	if (RequiresBlobStorage(incidentImageStorageOptions.Mode) && !builder.Environment.IsDevelopment())
+	{
+		throw new InvalidOperationException(
+			"Blob storage is enabled but ConnectionStrings:StorageAccount is missing or still uses a placeholder value.");
+	}
+
+	effectiveStorageConnectionString = "UseDevelopmentStorage=true";
+}
+else
+{
+	effectiveStorageConnectionString = rawStorageConnectionString!;
+}
+
+builder.Services.AddSingleton(u => new BlobServiceClient(effectiveStorageConnectionString));
 builder.Services.AddSingleton<IBlobService, BlobService>();
 builder.Services.AddScoped<IFileStorageService, FileStorageService>();
-builder.Services.Configure<IncidentImageStorageOptions>(builder.Configuration.GetSection("IncidentImageStorage"));
 builder.Services.AddScoped<IIncidentImageStorageService, IncidentImageStorageService>();
 builder.Services.AddHttpClient();
 

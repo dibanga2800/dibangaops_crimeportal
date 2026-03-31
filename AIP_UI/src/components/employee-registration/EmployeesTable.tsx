@@ -69,34 +69,34 @@ export function EmployeesTable({ employees, onNewEmployee, onEditEmployee, onDel
       <div className="block md:hidden space-y-3">
         {paginatedEmployees.length > 0 ? (
           paginatedEmployees.map((employee, index) => (
-            <div key={employee.id || `employee-${index}`} className="rounded-lg border bg-white/50 backdrop-blur-sm shadow-sm p-4 space-y-3">
+            <div key={employee.id || `employee-${index}`} className="rounded-lg border border-border bg-card/80 text-card-foreground backdrop-blur-sm shadow-sm p-4 space-y-3">
               {/* Header with name and status */}
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-sm truncate">
                     {`${employee.firstName || ''} ${employee.surname || ''}`}
                   </div>
-                  <div className="text-xs text-gray-500 mt-0.5">
+                  <div className="text-xs text-muted-foreground mt-0.5">
                     {employee.employeeNumber}
                   </div>
                 </div>
                 <span className={`flex-shrink-0 px-2 py-1 rounded-full text-xs font-medium ${
                   employee.employeeStatus === 'Active' 
-                    ? 'bg-green-100 text-green-700' 
-                    : 'bg-red-100 text-red-700'
+                    ? 'bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-200'
+                    : 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-200'
                 }`}>
                   {employee.employeeStatus}
                 </span>
               </div>
 
               {/* Details Grid */}
-              <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t">
+              <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-border">
                 <div>
-                  <span className="text-gray-500 block mb-0.5">Position</span>
+                  <span className="text-muted-foreground block mb-0.5">Position</span>
                   <div className="font-medium truncate">{employee.position}</div>
                 </div>
                 <div className="col-span-2">
-                  <span className="text-gray-500 block mb-0.5">Start Date</span>
+                  <span className="text-muted-foreground block mb-0.5">Start Date</span>
                   <div className="font-medium">
                     {employee.startDate ? new Date(employee.startDate).toLocaleDateString() : '-'}
                   </div>
@@ -104,7 +104,7 @@ export function EmployeesTable({ employees, onNewEmployee, onEditEmployee, onDel
               </div>
 
               {/* Actions */}
-              <div className="flex gap-2 pt-2 border-t">
+              <div className="flex gap-2 pt-2 border-t border-border">
                 <Button
                   variant="outline"
                   size="sm"
@@ -118,7 +118,7 @@ export function EmployeesTable({ employees, onNewEmployee, onEditEmployee, onDel
                   variant="outline"
                   size="sm"
                   onClick={() => setEmployeeToDelete(employee)}
-                  className="h-9 px-3 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                  className="h-9 px-3 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:text-red-200 dark:hover:bg-red-950/40"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
@@ -126,14 +126,14 @@ export function EmployeesTable({ employees, onNewEmployee, onEditEmployee, onDel
             </div>
           ))
         ) : (
-          <div className="rounded-lg border bg-white/50 backdrop-blur-sm shadow-sm p-8 text-center">
+          <div className="rounded-lg border border-border bg-card/80 backdrop-blur-sm shadow-sm p-8 text-center">
             <p className="text-sm text-muted-foreground">No employees found.</p>
           </div>
         )}
       </div>
 
       {/* Desktop Table Layout - visible on medium screens and above */}
-      <div className="hidden md:block rounded-lg border bg-white/50 backdrop-blur-sm shadow-sm overflow-hidden">
+      <div className="hidden md:block rounded-lg border border-border bg-card/80 text-card-foreground backdrop-blur-sm shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -149,7 +149,7 @@ export function EmployeesTable({ employees, onNewEmployee, onEditEmployee, onDel
             <TableBody>
               {paginatedEmployees.length > 0 ? (
                 paginatedEmployees.map((employee, index) => (
-                  <TableRow key={employee.id || `employee-${index}`} className="hover:bg-purple-50/50 text-sm">
+                  <TableRow key={employee.id || `employee-${index}`} className="text-sm transition-colors hover:bg-accent/60">
                     <TableCell className="font-medium py-3">{`${employee.firstName || ''} ${employee.surname || ''}`}</TableCell>
                     <TableCell className="py-3">{employee.employeeNumber}</TableCell>
                     <TableCell className={`py-3 ${getResponsiveClasses('position')}`}>{employee.position}</TableCell>
@@ -159,8 +159,8 @@ export function EmployeesTable({ employees, onNewEmployee, onEditEmployee, onDel
                     <TableCell className="py-3">
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                         employee.employeeStatus === 'Active' 
-                          ? 'bg-green-100 text-green-700' 
-                          : 'bg-red-100 text-red-700'
+                          ? 'bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-200'
+                          : 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-200'
                       }`}>
                         {employee.employeeStatus}
                       </span>
@@ -171,7 +171,7 @@ export function EmployeesTable({ employees, onNewEmployee, onEditEmployee, onDel
                           variant="ghost"
                           size="icon"
                           onClick={() => onEditEmployee(employee)}
-                          className="h-8 w-8 p-0 hover:bg-purple-100"
+                          className="h-8 w-8 p-0 hover:bg-purple-100 dark:hover:bg-purple-950/40"
                         >
                           <Pencil className="h-4 w-4 text-purple-600" />
                           <span className="sr-only">Edit</span>
@@ -180,7 +180,7 @@ export function EmployeesTable({ employees, onNewEmployee, onEditEmployee, onDel
                           variant="ghost"
                           size="icon"
                           onClick={() => setEmployeeToDelete(employee)}
-                          className="h-8 w-8 p-0 hover:bg-red-100"
+                          className="h-8 w-8 p-0 hover:bg-red-100 dark:hover:bg-red-950/40"
                         >
                           <Trash2 className="h-4 w-4 text-red-600" />
                           <span className="sr-only">Delete</span>

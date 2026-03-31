@@ -34,7 +34,7 @@ export function CustomerTableRow({
 
   return (
     <TableRow 
-      className={`cursor-pointer text-xs md:text-sm hover:bg-gray-50/80 transition-colors ${isSelected ? 'bg-purple-50/80' : ''}`}
+      className={`cursor-pointer text-xs md:text-sm transition-colors hover:bg-accent/40 ${isSelected ? 'bg-purple-50/80 dark:bg-purple-950/30' : ''}`}
       onClick={onSelect}
     >
       <TableCell className="py-2 md:py-3 font-medium">{customer.id}</TableCell>
@@ -44,14 +44,14 @@ export function CustomerTableRow({
       <TableCell className="py-2 md:py-3">
         <span className={`inline-flex px-2 py-0.5 md:py-1 rounded-full text-[10px] md:text-xs font-medium ${
           status === 'active' 
-            ? 'bg-green-100 text-green-700' 
-            : 'bg-red-100 text-red-700'
+            ? 'bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-200' 
+            : 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-200'
         }`}>
           {status === 'active' ? 'Active' : 'Inactive'}
         </span>
       </TableCell>
       <TableCell className="py-2 md:py-3">
-        <span className="inline-flex px-2 py-0.5 md:py-1 rounded-full text-[10px] md:text-xs font-medium bg-blue-100 text-blue-700">
+        <span className="inline-flex px-2 py-0.5 md:py-1 rounded-full text-[10px] md:text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-200">
           {typeLabel}
         </span>
       </TableCell>
@@ -76,7 +76,7 @@ export function CustomerTableRow({
               e.stopPropagation()
               onDelete(customer)
             }}
-            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:text-red-200 dark:hover:bg-red-950/40"
           >
             <Trash2 className="h-4 w-4" />
             <span className="sr-only">Delete customer</span>

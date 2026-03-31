@@ -19,6 +19,9 @@ namespace AIPBackend.Models.DTOs
 		public decimal Cost { get; set; }
 		public int Quantity { get; set; }
 		public decimal TotalAmount { get; set; }
+		public bool WasRecovered { get; set; }
+		public int RecoveredQuantity { get; set; }
+		public decimal RecoveredAmount { get; set; }
 		public string? Barcode { get; set; }
 	}
 
@@ -88,6 +91,10 @@ namespace AIPBackend.Models.DTOs
 		public string? StoreComments { get; set; }
 
 		// Financial information
+		public decimal? TotalStolenValue { get; set; }
+		public decimal? TotalRecoveredValue { get; set; }
+		public decimal? TotalLostValue { get; set; }
+		public int? TotalRecoveredQuantity { get; set; }
 		public decimal? TotalValueRecovered { get; set; }
 		public decimal? Value { get; set; }
 		public decimal? ValueRecovered { get; set; }
@@ -232,6 +239,10 @@ namespace AIPBackend.Models.DTOs
 		public string? StoreComments { get; set; }
 
 		// Financial information
+		public decimal? TotalStolenValue { get; set; }
+		public decimal? TotalRecoveredValue { get; set; }
+		public decimal? TotalLostValue { get; set; }
+		public int? TotalRecoveredQuantity { get; set; }
 		public decimal? TotalValueRecovered { get; set; }
 		public decimal? ValueRecovered { get; set; }
 		public int? QuantityRecovered { get; set; }

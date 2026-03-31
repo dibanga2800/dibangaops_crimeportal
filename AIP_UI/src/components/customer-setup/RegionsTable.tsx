@@ -140,9 +140,9 @@ export function RegionsTable({ customerId, onEdit, onDataChange, updateTrigger }
     return (
       <div className="space-y-4">
         <div className="flex justify-between items-center">
-          <h2 className="text-lg font-semibold">Regions</h2>
+          <h2 className="text-lg font-semibold text-foreground">Regions</h2>
         </div>
-        <div className="text-center py-8 text-gray-500">
+        <div className="text-center py-8 text-muted-foreground">
           Please select a customer to view regions
         </div>
       </div>
@@ -165,11 +165,11 @@ export function RegionsTable({ customerId, onEdit, onDataChange, updateTrigger }
       </div>
 
       {safeRegions.length === 0 ? (
-        <div className="text-center py-8 text-sm text-gray-500">
+        <div className="text-center py-8 text-sm text-muted-foreground">
           No regions found for this company. Click "Add Region" to create one.
         </div>
       ) : filteredRegions.length === 0 ? (
-        <div className="text-center py-8 text-sm text-gray-500">
+        <div className="text-center py-8 text-sm text-muted-foreground">
           No regions match your search criteria.
         </div>
       ) : (
@@ -177,28 +177,28 @@ export function RegionsTable({ customerId, onEdit, onDataChange, updateTrigger }
           {/* Mobile Card Layout */}
           <div className="block md:hidden space-y-3">
             {currentRegionsTable.map((region) => (
-              <div key={region.regionID} className="rounded-lg border bg-white shadow-sm p-4 space-y-3">
+              <div key={region.regionID} className="rounded-lg border border-border bg-card text-card-foreground shadow-sm p-4 space-y-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-sm truncate">{region.regionName}</div>
-                    <div className="text-xs text-gray-500 mt-1 line-clamp-2">
+                    <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
                       {region.regionDescription || "No description"}
                     </div>
                   </div>
                   <span className={`flex-shrink-0 px-2 py-1 rounded-full text-xs ${
                     region.recordIsDeletedYN 
-                      ? 'bg-red-100 text-red-800' 
-                      : 'bg-green-100 text-green-800'
+                      ? 'bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200' 
+                      : 'bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-200'
                   }`}>
                     {region.recordIsDeletedYN ? 'Deleted' : 'Active'}
                   </span>
                 </div>
 
-                <div className="text-xs text-gray-500 pt-2 border-t">
+                <div className="text-xs text-muted-foreground pt-2 border-t border-border">
                   <span className="block">Created: {new Date(region.dateCreated).toLocaleDateString()}</span>
                 </div>
 
-                <div className="flex gap-2 pt-2 border-t">
+                <div className="flex gap-2 pt-2 border-t border-border">
                   <Button
                     variant="outline"
                     size="sm"
@@ -213,7 +213,7 @@ export function RegionsTable({ customerId, onEdit, onDataChange, updateTrigger }
                     variant="outline"
                     size="sm"
                     onClick={() => handleDeleteClick(region)}
-                    className="h-9 px-3 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                    className="h-9 px-3 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:text-red-200 dark:hover:bg-red-950/40"
                     disabled={isLoading}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -224,7 +224,7 @@ export function RegionsTable({ customerId, onEdit, onDataChange, updateTrigger }
           </div>
 
           {/* Desktop Table Layout */}
-          <div className="hidden md:block border rounded-lg overflow-hidden">
+          <div className="hidden md:block border border-border bg-card text-card-foreground rounded-lg overflow-hidden">
             <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -246,8 +246,8 @@ export function RegionsTable({ customerId, onEdit, onDataChange, updateTrigger }
                     <TableCell>
                       <span className={`px-2 py-1 rounded-full text-xs ${
                         region.recordIsDeletedYN 
-                          ? 'bg-red-100 text-red-800' 
-                          : 'bg-green-100 text-green-800'
+                          ? 'bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-200' 
+                          : 'bg-green-100 text-green-800 dark:bg-green-950/60 dark:text-green-200'
                       }`}>
                         {region.recordIsDeletedYN ? 'Deleted' : 'Active'}
                       </span>
@@ -269,7 +269,7 @@ export function RegionsTable({ customerId, onEdit, onDataChange, updateTrigger }
                           variant="outline"
                           size="sm"
                           onClick={() => handleDeleteClick(region)}
-                          className="text-red-600 hover:text-red-700"
+                          className="text-red-600 hover:text-red-700 dark:text-red-300 dark:hover:text-red-200"
                           disabled={isLoading}
                         >
                           <Trash2 className="h-4 w-4" />

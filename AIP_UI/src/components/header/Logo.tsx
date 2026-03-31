@@ -11,7 +11,7 @@ export const Logo = ({ variant, className = "", containerClassName = "" }: LogoP
   <Link to="/" className="flex items-center">
     <div className={`relative flex justify-center ${containerClassName}`}>
       <img 
-        src="/Heart_of_England_Co-operative.webp" 
+        src="/HOEnbg.png" 
         alt="Heart of England Co-operative"
         className={`${LOGO_SIZES[variant]} w-auto ${className}`}
       />

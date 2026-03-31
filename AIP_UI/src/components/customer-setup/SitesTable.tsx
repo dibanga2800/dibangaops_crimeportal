@@ -149,7 +149,7 @@ export function SitesTable({ customerId, onEdit, onDataChange, updateTrigger }: 
         <div className="flex justify-between items-center">
           <h2 className="text-lg font-semibold">Sites</h2>
         </div>
-        <div className="text-center py-8 text-gray-500">
+        <div className="text-center py-8 text-muted-foreground">
           Please select a customer to view sites
         </div>
       </div>
@@ -172,11 +172,11 @@ export function SitesTable({ customerId, onEdit, onDataChange, updateTrigger }: 
       </div>
 
       {safeSites.length === 0 ? (
-        <div className="text-center py-8 text-sm text-gray-500">
+        <div className="text-center py-8 text-sm text-muted-foreground">
           No sites found for this company. Click "Add Site" to create one.
         </div>
       ) : filteredSites.length === 0 ? (
-        <div className="text-center py-8 text-sm text-gray-500">
+        <div className="text-center py-8 text-sm text-muted-foreground">
           No sites match your search criteria.
         </div>
       ) : (
@@ -184,12 +184,12 @@ export function SitesTable({ customerId, onEdit, onDataChange, updateTrigger }: 
           {/* Mobile Card Layout */}
           <div className="block md:hidden space-y-3">
             {currentSitesTable.map((site) => (
-              <div key={site.siteID} className="rounded-lg border bg-white shadow-sm p-4 space-y-3">
+              <div key={site.siteID} className="rounded-lg border border-border bg-card text-card-foreground shadow-sm p-4 space-y-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-sm truncate">{site.locationName}</div>
                     {site.buildingName && (
-                      <div className="text-xs text-gray-500 mt-0.5">{site.buildingName}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">{site.buildingName}</div>
                     )}
                   </div>
                   <div className="flex gap-1.5 flex-shrink-0">
@@ -199,38 +199,38 @@ export function SitesTable({ customerId, onEdit, onDataChange, updateTrigger }: 
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t">
+                <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-border">
                   <div>
-                    <span className="text-gray-500 block mb-0.5">SIN Number</span>
+                    <span className="text-muted-foreground block mb-0.5">SIN Number</span>
                     <div className="font-medium">{site.sinNumber || "N/A"}</div>
                   </div>
                   <div>
-                    <span className="text-gray-500 block mb-0.5">Status</span>
+                    <span className="text-muted-foreground block mb-0.5">Status</span>
                     <Badge variant={site.recordIsDeletedYN ? "destructive" : "default"} className={`text-xs ${site.recordIsDeletedYN ? "bg-red-600" : "bg-green-600"}`}>
                       {site.recordIsDeletedYN ? "Inactive" : "Active"}
                     </Badge>
                   </div>
                   <div className="col-span-2">
-                    <span className="text-gray-500 block mb-0.5">Address</span>
+                    <span className="text-muted-foreground block mb-0.5">Address</span>
                     <div className="font-medium">
                       <div>{site.numberandStreet || "No street"}</div>
-                      <div className="text-gray-500">
+                      <div className="text-muted-foreground">
                         {[site.villageOrSuburb, site.town, site.county].filter(Boolean).join(", ")}
                       </div>
-                      <div className="text-gray-500">{site.postcode || "No postcode"}</div>
+                      <div className="text-muted-foreground">{site.postcode || "No postcode"}</div>
                     </div>
                   </div>
                   <div>
-                    <span className="text-gray-500 block mb-0.5">Telephone</span>
+                    <span className="text-muted-foreground block mb-0.5">Telephone</span>
                     <div className="font-medium">{site.telephoneNumber || "N/A"}</div>
                   </div>
                   <div>
-                    <span className="text-gray-500 block mb-0.5">Created</span>
+                    <span className="text-muted-foreground block mb-0.5">Created</span>
                     <div className="font-medium">{new Date(site.dateCreated).toLocaleDateString()}</div>
                   </div>
                 </div>
 
-                <div className="flex gap-2 pt-2 border-t">
+                <div className="flex gap-2 pt-2 border-t border-border">
                   <Button
                     variant="outline"
                     size="sm"
@@ -245,7 +245,7 @@ export function SitesTable({ customerId, onEdit, onDataChange, updateTrigger }: 
                     variant="outline"
                     size="sm"
                     onClick={() => handleDeleteClick(site)}
-                    className="h-9 px-3 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                    className="h-9 px-3 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:text-red-200 dark:hover:bg-red-950/40"
                     disabled={isLoading}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -256,7 +256,7 @@ export function SitesTable({ customerId, onEdit, onDataChange, updateTrigger }: 
           </div>
 
           {/* Desktop Table Layout */}
-          <div className="hidden md:block border rounded-lg overflow-hidden">
+          <div className="hidden md:block border border-border bg-card text-card-foreground rounded-lg overflow-hidden">
             <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -278,7 +278,7 @@ export function SitesTable({ customerId, onEdit, onDataChange, updateTrigger }: 
                       <div>
                         <div className="font-medium">{site.locationName}</div>
                         {site.buildingName && (
-                          <div className="text-sm text-gray-500">{site.buildingName}</div>
+                          <div className="text-sm text-muted-foreground">{site.buildingName}</div>
                         )}
                       </div>
                     </TableCell>
@@ -288,10 +288,10 @@ export function SitesTable({ customerId, onEdit, onDataChange, updateTrigger }: 
                     <TableCell className={getResponsiveClasses('address')}>
                       <div className="text-sm">
                         <div>{site.numberandStreet || "No street address"}</div>
-                        <div className="text-gray-500">
+                        <div className="text-muted-foreground">
                           {[site.villageOrSuburb, site.town, site.county].filter(Boolean).join(", ")}
                         </div>
-                        <div className="text-gray-500">{site.postcode || "No postcode"}</div>
+                        <div className="text-muted-foreground">{site.postcode || "No postcode"}</div>
                       </div>
                     </TableCell>
                     <TableCell className={getResponsiveClasses('telephone')}>
@@ -324,7 +324,7 @@ export function SitesTable({ customerId, onEdit, onDataChange, updateTrigger }: 
                           variant="outline"
                           size="sm"
                           onClick={() => handleDeleteClick(site)}
-                          className="text-red-600 hover:text-red-700"
+                          className="text-red-600 hover:text-red-700 dark:text-red-300 dark:hover:text-red-200"
                           disabled={isLoading}
                         >
                           <Trash2 className="h-4 w-4" />

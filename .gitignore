@@ -144,10 +144,17 @@ vite.config.ts.timestamp-*
 # Editor / AI assistant artefacts
 .cursor/
 assets/
+.tmp-full-history-export/
 
-# Backend configuration (contains secrets per environment)
+# Backend configuration
+# Keep cloud secrets in hosted environment settings and local secrets in ignored files.
+AIP_Backend/appsettings.json
 AIP_Backend/appsettings.Development.json
 AIP_Backend/appsettings.Production.json
+AIP_Backend/appsettings.Local.json
+AIP_Backend/appsettings.*.local.json
+AIP_Backend/appsettings.*.secrets.json
+AIP_Backend/wwwroot/uploads/
 
 # InsightFace models (downloaded on first run; exceed GitHub 100 MB limit)
 AIP_Backend/InsightFaceService/models/

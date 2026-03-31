@@ -32,7 +32,15 @@ export interface IncidentGraphData {
 		cost: number
 		quantity: number
 		totalAmount: number
+		wasRecovered?: boolean
+		recoveredQuantity?: number
+		recoveredAmount?: number
+		lostAmount?: number
 	}>
+	totalStolenValue: number
+	totalRecoveredValue: number
+	totalLostValue: number
+	totalRecoveredQuantity: number
 	totalValueRecovered: number
 	value: number
 	valueRecovered: number

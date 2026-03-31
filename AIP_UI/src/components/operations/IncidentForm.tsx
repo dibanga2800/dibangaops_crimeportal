@@ -73,6 +73,10 @@ const formSchema = z.object({
     cost: z.number(),
     quantity: z.number(),
     totalAmount: z.number(),
+    wasRecovered: z.boolean().default(false),
+    recoveredQuantity: z.number().default(0),
+    recoveredAmount: z.number().default(0),
+    lostAmount: z.number().default(0),
     category: z.string(),
     productName: z.string(),
   })).optional(),
@@ -133,6 +137,51 @@ const formatDateSafe = (value: string | Date | undefined, pattern: string, fallb
   return format(dateValue, pattern)
 }
 
+const calculateStolenItemValues = (item: StolenItem): StolenItem => {
+  const cost = Number.isFinite(item.cost) ? Math.max(item.cost, 0) : 0
+  const quantity = Number.isFinite(item.quantity) ? Math.max(item.quantity, 0) : 0
+  const totalAmount = cost * quantity
+  const wasRecovered = Boolean(item.wasRecovered)
+  const requestedRecoveredQuantity = Number.isFinite(item.recoveredQuantity)
+    ? Math.max(item.recoveredQuantity ?? 0, 0)
+    : 0
+  const recoveredQuantity = wasRecovered ? Math.min(requestedRecoveredQuantity, quantity) : 0
+  const recoveredAmount = cost * recoveredQuantity
+  const lostAmount = totalAmount - recoveredAmount
+
+  return {
+    ...item,
+    cost,
+    quantity,
+    totalAmount,
+    wasRecovered,
+    recoveredQuantity,
+    recoveredAmount,
+    lostAmount,
+  }
+}
+
+const calculateIncidentValueTotals = (items: StolenItem[]) => {
+  return items.reduce(
+    (totals, currentItem) => {
+      const item = calculateStolenItemValues(currentItem)
+
+      totals.totalStolenValue += item.totalAmount
+      totals.totalRecoveredValue += item.recoveredAmount ?? 0
+      totals.totalLostValue += item.lostAmount ?? 0
+      totals.totalRecoveredQuantity += item.recoveredQuantity ?? 0
+
+      return totals
+    },
+    {
+      totalStolenValue: 0,
+      totalRecoveredValue: 0,
+      totalLostValue: 0,
+      totalRecoveredQuantity: 0,
+    }
+  )
+}
+
 const incidentInvolved: IncidentInvolved[] = [
   IncidentInvolved.SELF_SCAN_TILLS,
   IncidentInvolved.THREATS_AND_INTIMIDATION,
@@ -184,7 +233,9 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
     console.log('📝 Form initializing with incident:', initialData.id, '|', initialData.customerName, '|', initialData.siteName)
   }
   
-  const [stolenItems, setStolenItems] = useState<StolenItem[]>(initialData?.stolenItems || [])
+  const [stolenItems, setStolenItems] = useState<StolenItem[]>(
+    (initialData?.stolenItems || []).map(calculateStolenItemValues)
+  )
   const [incidentType, setIncidentType] = useState(initialData?.incidentType || '')
   const [arrestSaveComment, setArrestSaveComment] = useState(initialData?.arrestSaveComment || '')
   const [formErrors, setFormErrors] = useState<{ arrestSaveComment?: string }>({})
@@ -457,8 +508,8 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
       incidentInvolved: initialData?.incidentInvolved || [],
       policeInvolvement: initialData?.policeInvolvement || false,
       urnNumber: initialData?.urnNumber || "",
-      totalValueRecovered: initialData?.totalValueRecovered?.toString() || "",
-      stolenItems: initialData?.stolenItems || [],
+      totalValueRecovered: initialData?.totalRecoveredValue?.toString() || initialData?.totalValueRecovered?.toString() || "",
+      stolenItems: (initialData?.stolenItems || []).map(calculateStolenItemValues),
       dutyManagerName: initialData?.dutyManagerName || "",
       status: initialData?.status || 'pending',
       priority: initialData?.priority || 'medium',
@@ -758,7 +809,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
 
   useEffect(() => {
     if (initialData && initialData.id) {
-      setStolenItems(initialData.stolenItems || [])
+      setStolenItems((initialData.stolenItems || []).map(calculateStolenItemValues))
       setIncidentType(initialData.incidentType || '')
       setArrestSaveComment(initialData.arrestSaveComment || '')
       setVerificationEvidencePreview(initialData.verificationEvidenceImage || '')
@@ -780,8 +831,8 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
         incidentInvolved: initialData.incidentInvolved || [],
         policeInvolvement: initialData.policeInvolvement || false,
         urnNumber: initialData.urnNumber || "",
-        totalValueRecovered: initialData.totalValueRecovered?.toString() || "",
-        stolenItems: initialData.stolenItems || [],
+        totalValueRecovered: initialData.totalRecoveredValue?.toString() || initialData.totalValueRecovered?.toString() || "",
+        stolenItems: (initialData.stolenItems || []).map(calculateStolenItemValues),
         dutyManagerName: initialData.dutyManagerName || "",
         status: initialData.status || 'pending',
         priority: initialData.priority || 'medium',
@@ -842,21 +893,21 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
   // Update stolen items when initialData.stolenItems changes (e.g., from barcode scanning)
   useEffect(() => {
     if (initialData?.stolenItems && initialData.stolenItems.length !== stolenItems.length) {
-      setStolenItems(initialData.stolenItems)
+      setStolenItems(initialData.stolenItems.map(calculateStolenItemValues))
     } else if (initialData?.stolenItems) {
       // Deep comparison for array content changes
       const currentIds = stolenItems.map(item => item.id).join(',')
       const newIds = initialData.stolenItems.map(item => item.id).join(',')
       if (currentIds !== newIds) {
-        setStolenItems(initialData.stolenItems)
+        setStolenItems(initialData.stolenItems.map(calculateStolenItemValues))
       }
     }
   }, [initialData?.stolenItems, stolenItems])
 
-  // Add useEffect to update totalValueRecovered when stolen items change
+  // Keep incident recovered value synced to the current stolen-item recovery totals.
   React.useEffect(() => {
-    const totalValue = stolenItems.reduce((sum, item) => sum + item.totalAmount, 0);
-    form.setValue('totalValueRecovered', totalValue.toString(), { shouldValidate: false });
+    const totals = calculateIncidentValueTotals(stolenItems)
+    form.setValue('totalValueRecovered', totals.totalRecoveredValue.toString(), { shouldValidate: false })
   }, [stolenItems, form]);
 
   // Update incidentDetails value whenever description changes
@@ -939,6 +990,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
 
   const handleSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
+      const incidentTotals = calculateIncidentValueTotals(stolenItems)
       // Log form values for debugging
       console.log('Form values (on submit):', values)
       console.log('URN Number:', values.urnNumber)
@@ -1020,17 +1072,26 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
         evidenceAttached: values.evidenceAttached,
         offenderAddress: values.offenderAddress,
         gender: values.gender,
-        stolenItems: stolenItems.map(item => ({
-          ...item,
-          // Normalise barcode so we never send explicit null back
-          barcode: item.barcode || undefined,
-          totalAmount: item.cost * item.quantity
-        })),
+        stolenItems: stolenItems.map(item => {
+          const normalizedItem = calculateStolenItemValues(item)
+
+          return {
+            ...normalizedItem,
+            // Normalise barcode so we never send explicit null back
+            barcode: normalizedItem.barcode || undefined,
+          }
+        }),
         // Optional fields
         incidentDetails: values.incidentDetails,
         storeComments: values.storeComments,
         urnNumber: values.urnNumber || '',
+        totalStolenValue: incidentTotals.totalStolenValue,
+        totalRecoveredValue: incidentTotals.totalRecoveredValue,
+        totalLostValue: incidentTotals.totalLostValue,
+        totalRecoveredQuantity: incidentTotals.totalRecoveredQuantity,
         totalValueRecovered: parseFloat(values.totalValueRecovered || '0'),
+        valueRecovered: incidentTotals.totalRecoveredValue,
+        quantityRecovered: incidentTotals.totalRecoveredQuantity,
         actionTaken: values.actionTaken,
         witnessStatements: values.witnessStatements,
         involvedParties: values.involvedParties,
@@ -1092,6 +1153,10 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
         cost: 0,
         quantity: 1,
         totalAmount: 0,
+        wasRecovered: false,
+        recoveredQuantity: 0,
+        recoveredAmount: 0,
+        lostAmount: 0,
       },
     ])
   }
@@ -1104,13 +1169,12 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
       ...item,
       [field]: value
     }
-    
-    // Update totalAmount if cost or quantity changes
-    if (field === 'cost' || field === 'quantity') {
-      updatedItem.totalAmount = updatedItem.cost * updatedItem.quantity
+
+    if (field === 'wasRecovered' && !value) {
+      updatedItem.recoveredQuantity = 0
     }
-    
-    updatedItems[index] = updatedItem
+
+    updatedItems[index] = calculateStolenItemValues(updatedItem)
     setStolenItems(updatedItems)
   }
 
@@ -2649,6 +2713,58 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                             disabled
                           />
                         </div>
+                        <div className="w-full sm:col-span-12 rounded-lg border border-border bg-muted/30 px-4 py-3">
+                          <div className="flex flex-col gap-3">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="flex items-center gap-3">
+                                <Checkbox
+                                  id={`recovered-${item.id}`}
+                                  checked={Boolean(item.wasRecovered)}
+                                  onCheckedChange={(checked) => updateStolenItem(index, 'wasRecovered', checked === true)}
+                                />
+                                <Label htmlFor={`recovered-${item.id}`} className="text-sm font-medium">
+                                  Was item recovered?
+                                </Label>
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                Recovered items count as saved value for the store.
+                              </div>
+                            </div>
+
+                            <div className="grid gap-3 sm:grid-cols-3">
+                              <div>
+                                <Label className="mb-1 block text-sm font-medium">Recovered Quantity</Label>
+                                <Input
+                                  className="h-11"
+                                  type="number"
+                                  min={0}
+                                  max={item.quantity}
+                                  value={item.recoveredQuantity ?? 0}
+                                  onChange={(e) => updateStolenItem(index, 'recoveredQuantity', parseInt(e.target.value || '0', 10))}
+                                  disabled={!item.wasRecovered}
+                                />
+                              </div>
+                              <div>
+                                <Label className="mb-1 block text-sm font-medium">Value Saved</Label>
+                                <Input
+                                  className="h-11 text-right"
+                                  type="number"
+                                  value={item.recoveredAmount ?? 0}
+                                  disabled
+                                />
+                              </div>
+                              <div>
+                                <Label className="mb-1 block text-sm font-medium">Value Lost</Label>
+                                <Input
+                                  className="h-11 text-right"
+                                  type="number"
+                                  value={item.lostAmount ?? item.totalAmount}
+                                  disabled
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -2667,14 +2783,24 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                     <span className="text-base font-medium">Total Items:</span>
                     <span className="text-lg font-semibold">{stolenItems.length}</span>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 sm:gap-4">
-                    <span className="text-base font-medium">Total Value Recovered:</span>
-                    <div className="flex items-center gap-1">
-                      <span className="text-lg sm:text-xl font-semibold">£</span>
-                      <span className="text-lg sm:text-xl font-semibold">
-                        {stolenItems.reduce((sum, item) => sum + item.totalAmount, 0).toFixed(2)}
+                  <div className="grid gap-2 text-sm sm:grid-cols-3 sm:gap-4">
+                    <div className="rounded-md bg-muted/40 px-3 py-2">
+                      <span className="block text-muted-foreground">Total Stolen</span>
+                      <span className="text-lg font-semibold">
+                        £{calculateIncidentValueTotals(stolenItems).totalStolenValue.toFixed(2)}
                       </span>
-                      <span className="text-sm text-gray-500 ml-1">(Auto-saved)</span>
+                    </div>
+                    <div className="rounded-md bg-emerald-50 px-3 py-2 dark:bg-emerald-950/30">
+                      <span className="block text-emerald-700 dark:text-emerald-300">Value Saved</span>
+                      <span className="text-lg font-semibold text-emerald-700 dark:text-emerald-300">
+                        £{calculateIncidentValueTotals(stolenItems).totalRecoveredValue.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="rounded-md bg-rose-50 px-3 py-2 dark:bg-rose-950/30">
+                      <span className="block text-rose-700 dark:text-rose-300">Value Lost</span>
+                      <span className="text-lg font-semibold text-rose-700 dark:text-rose-300">
+                        £{calculateIncidentValueTotals(stolenItems).totalLostValue.toFixed(2)}
+                      </span>
                     </div>
                   </div>
                 </div>

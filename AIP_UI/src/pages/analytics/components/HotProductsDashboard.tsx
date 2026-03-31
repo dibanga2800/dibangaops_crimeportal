@@ -165,19 +165,19 @@ export const HotProductsDashboard = ({
 					Hot Products Dashboard
 				</CardTitle>
 				<CardDescription>
-					Barcode frequency, value lost per product, and store-level heatmap
+					Barcode frequency, saved vs lost value, and store-level recovery heatmap
 				</CardDescription>
 			</CardHeader>
 			<CardContent className="pt-6 space-y-8">
 				{/* Summary Cards */}
-				<div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+				<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
 					<Card>
 						<CardContent className="p-4">
 							<div className="flex items-center justify-between">
 								<div>
-									<p className="text-sm text-gray-500">Total Value Lost</p>
+									<p className="text-sm text-gray-500">Total Value Stolen</p>
 									<p className="text-2xl font-bold">
-										£{data.totalValueLost.toLocaleString('en-GB', {
+										£{data.totalValueStolen.toLocaleString('en-GB', {
 											minimumFractionDigits: 2,
 											maximumFractionDigits: 2,
 										})}
@@ -191,8 +191,13 @@ export const HotProductsDashboard = ({
 						<CardContent className="p-4">
 							<div className="flex items-center justify-between">
 								<div>
-									<p className="text-sm text-gray-500">Top Products Tracked</p>
-									<p className="text-2xl font-bold">{data.topProducts.length}</p>
+									<p className="text-sm text-gray-500">Value Saved</p>
+									<p className="text-2xl font-bold text-emerald-600 dark:text-emerald-300">
+										£{data.totalValueRecovered.toLocaleString('en-GB', {
+											minimumFractionDigits: 2,
+											maximumFractionDigits: 2,
+										})}
+									</p>
 								</div>
 								<TrendingUp className="h-8 w-8 text-gray-400" />
 							</div>
@@ -202,10 +207,26 @@ export const HotProductsDashboard = ({
 						<CardContent className="p-4">
 							<div className="flex items-center justify-between">
 								<div>
-									<p className="text-sm text-gray-500">Stores Affected</p>
-									<p className="text-2xl font-bold">{data.storeHeatmap.length}</p>
+									<p className="text-sm text-gray-500">Value Lost</p>
+									<p className="text-2xl font-bold text-rose-600 dark:text-rose-300">
+										£{data.totalValueLost.toLocaleString('en-GB', {
+											minimumFractionDigits: 2,
+											maximumFractionDigits: 2,
+										})}
+									</p>
 								</div>
 								<AlertTriangle className="h-8 w-8 text-gray-400" />
+							</div>
+						</CardContent>
+					</Card>
+					<Card>
+						<CardContent className="p-4">
+							<div className="flex items-center justify-between">
+								<div>
+									<p className="text-sm text-gray-500">Recovery Rate</p>
+									<p className="text-2xl font-bold">{data.recoveryRate.toFixed(1)}%</p>
+								</div>
+								<Package className="h-8 w-8 text-gray-400" />
 							</div>
 						</CardContent>
 					</Card>
@@ -244,9 +265,9 @@ export const HotProductsDashboard = ({
 					</div>
 				</div>
 
-				{/* Value Lost Table */}
+				{/* Product Recovery Table */}
 				<div className="pt-4">
-					<h3 className="font-semibold mb-6">Value Lost per Product</h3>
+					<h3 className="font-semibold mb-6">Saved vs Lost per Product</h3>
 					<div className="border rounded-lg">
 						<Table>
 							<TableHeader>
@@ -255,12 +276,14 @@ export const HotProductsDashboard = ({
 									<TableHead>Barcode</TableHead>
 									<TableHead>Frequency</TableHead>
 									<TableHead>Stores Affected</TableHead>
-									<TableHead className="text-right">Total Value Lost</TableHead>
+									<TableHead className="text-right">Saved</TableHead>
+									<TableHead className="text-right">Lost</TableHead>
+									<TableHead className="text-right">Recovery Rate</TableHead>
 								</TableRow>
 							</TableHeader>
 							<TableBody>
 								{data.topProducts
-									.sort((a, b) => b.totalValue - a.totalValue)
+									.sort((a, b) => b.lostValue - a.lostValue)
 									.map((product) => (
 										<TableRow key={product.barcode}>
 											<TableCell className="font-medium">
@@ -273,17 +296,71 @@ export const HotProductsDashboard = ({
 												<Badge variant="outline">{product.frequency}</Badge>
 											</TableCell>
 											<TableCell>{product.storesAffected}</TableCell>
-											<TableCell className="text-right font-semibold">
-												£{product.totalValue.toLocaleString('en-GB', {
+											<TableCell className="text-right font-semibold text-emerald-600 dark:text-emerald-300">
+												£{product.recoveredValue.toLocaleString('en-GB', {
 													minimumFractionDigits: 2,
 													maximumFractionDigits: 2,
 												})}
 											</TableCell>
+											<TableCell className="text-right font-semibold text-rose-600 dark:text-rose-300">
+												£{product.lostValue.toLocaleString('en-GB', {
+													minimumFractionDigits: 2,
+													maximumFractionDigits: 2,
+												})}
+											</TableCell>
+											<TableCell className="text-right">{product.recoveryRate.toFixed(1)}%</TableCell>
 										</TableRow>
 									))}
 							</TableBody>
 						</Table>
 					</div>
+				</div>
+
+				<div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+					<Card>
+						<CardHeader>
+							<CardTitle className="text-base">Top Recovered Products</CardTitle>
+							<CardDescription>Products generating the most saved value.</CardDescription>
+						</CardHeader>
+						<CardContent className="space-y-3">
+							{data.topRecoveredProducts.slice(0, 5).map((product) => (
+								<div key={`${product.barcode}-recovered`} className="flex items-center justify-between rounded-lg border p-3">
+									<div>
+										<div className="font-medium">{product.productName}</div>
+										<div className="text-xs text-muted-foreground">{product.frequency} incidents</div>
+									</div>
+									<div className="text-right">
+										<div className="font-semibold text-emerald-600 dark:text-emerald-300">
+											£{product.recoveredValue.toFixed(2)}
+										</div>
+										<div className="text-xs text-muted-foreground">{product.recoveryRate.toFixed(1)}%</div>
+									</div>
+								</div>
+							))}
+						</CardContent>
+					</Card>
+					<Card>
+						<CardHeader>
+							<CardTitle className="text-base">Worst Recovery Products</CardTitle>
+							<CardDescription>Products with the highest unrecovered value exposure.</CardDescription>
+						</CardHeader>
+						<CardContent className="space-y-3">
+							{data.worstRecoveryProducts.slice(0, 5).map((product) => (
+								<div key={`${product.barcode}-worst`} className="flex items-center justify-between rounded-lg border p-3">
+									<div>
+										<div className="font-medium">{product.productName}</div>
+										<div className="text-xs text-muted-foreground">{product.frequency} incidents</div>
+									</div>
+									<div className="text-right">
+										<div className="font-semibold text-rose-600 dark:text-rose-300">
+											£{product.lostValue.toFixed(2)}
+										</div>
+										<div className="text-xs text-muted-foreground">{product.recoveryRate.toFixed(1)}%</div>
+									</div>
+								</div>
+							))}
+						</CardContent>
+					</Card>
 				</div>
 
 				{/* Store Heatmap */}
@@ -332,7 +409,7 @@ export const HotProductsDashboard = ({
 								{paginatedStores.map((store) => {
 									const intensity = getHeatmapIntensity(store)
 									const heatmapColor = getHeatmapColor(intensity, store.riskLevel)
-									const totalValue = store.products.reduce((sum, p) => sum + p.value, 0)
+									const totalValue = store.totalValueLost
 									const isExpanded = expandedStores.has(store.storeId)
 
 									return (
@@ -370,12 +447,12 @@ export const HotProductsDashboard = ({
 															<div className="font-bold">£{totalValue.toFixed(0)}</div>
 														</div>
 														<div>
-															<div className="text-white/80 text-xs">Products</div>
-															<div className="font-bold">{store.products.length}</div>
+															<div className="text-white/80 text-xs">Saved</div>
+															<div className="font-bold">£{store.totalValueRecovered.toFixed(0)}</div>
 														</div>
 														<div>
-															<div className="text-white/80 text-xs">Intensity</div>
-															<div className="font-bold">{intensity.toFixed(0)}%</div>
+															<div className="text-white/80 text-xs">Recovery</div>
+															<div className="font-bold">{store.recoveryRate.toFixed(1)}%</div>
 														</div>
 													</div>
 												</div>
@@ -404,7 +481,7 @@ export const HotProductsDashboard = ({
 																	</div>
 																	<div className="text-right ml-2">
 																		<div className="font-semibold">{product.frequency}×</div>
-																		<div className="text-gray-600">£{product.value.toFixed(0)}</div>
+																		<div className="text-gray-600">£{product.lostValue.toFixed(0)} lost</div>
 																	</div>
 																</div>
 															))}
@@ -500,7 +577,7 @@ export const HotProductsDashboard = ({
 							<div className="space-y-4">
 								{paginatedStores.map((store) => {
 									const isExpanded = expandedStores.has(store.storeId)
-									const totalValue = store.products.reduce((sum, p) => sum + p.value, 0)
+									const totalValue = store.totalValueLost
 
 									return (
 										<Card key={store.storeId}>
@@ -510,7 +587,9 @@ export const HotProductsDashboard = ({
 													<div className="flex items-center gap-3">
 														<div className="text-right">
 															<div className="text-sm font-semibold">{store.totalIncidents} incidents</div>
-															<div className="text-xs text-gray-500">£{totalValue.toFixed(2)} lost</div>
+															<div className="text-xs text-gray-500">
+																£{totalValue.toFixed(2)} lost, {store.recoveryRate.toFixed(1)}% recovered
+															</div>
 														</div>
 														<Badge
 															variant="outline"
@@ -556,7 +635,7 @@ export const HotProductsDashboard = ({
 																			{product.frequency} ×
 																		</span>
 																		<span className="text-xs font-semibold">
-																			£{product.value.toFixed(2)}
+																			£{product.lostValue.toFixed(2)}
 																		</span>
 																	</div>
 																</div>
@@ -639,12 +718,13 @@ export const HotProductsDashboard = ({
 											<TableHead>Incidents</TableHead>
 											<TableHead>Products Affected</TableHead>
 											<TableHead className="text-right">Total Value Lost</TableHead>
+											<TableHead className="text-right">Recovery Rate</TableHead>
 											<TableHead className="text-right">Actions</TableHead>
 										</TableRow>
 									</TableHeader>
 									<TableBody>
 										{paginatedStores.map((store) => {
-											const totalValue = store.products.reduce((sum, p) => sum + p.value, 0)
+											const totalValue = store.totalValueLost
 											const isExpanded = expandedStores.has(store.storeId)
 
 											return (
@@ -670,6 +750,7 @@ export const HotProductsDashboard = ({
 																maximumFractionDigits: 2,
 															})}
 														</TableCell>
+														<TableCell className="text-right">{store.recoveryRate.toFixed(1)}%</TableCell>
 														<TableCell className="text-right">
 															<Button
 																variant="ghost"
@@ -692,7 +773,7 @@ export const HotProductsDashboard = ({
 													</TableRow>
 													{isExpanded && (
 														<TableRow>
-															<TableCell colSpan={6} className="bg-gray-50">
+															<TableCell colSpan={7} className="bg-gray-50">
 																<div className="p-4">
 																	<div className="text-sm font-semibold mb-3">Products:</div>
 																	<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -714,7 +795,7 @@ export const HotProductsDashboard = ({
 																							{product.frequency} ×
 																						</span>
 																						<span className="font-semibold">
-																							£{product.value.toFixed(2)}
+																							£{product.lostValue.toFixed(2)}
 																						</span>
 																					</div>
 																				</div>

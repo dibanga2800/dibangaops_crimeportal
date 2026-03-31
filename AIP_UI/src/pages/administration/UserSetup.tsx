@@ -364,9 +364,9 @@ const UserSetup = () => {
 
   const getStatusColor = (isDeleted?: boolean) => {
     if (isDeleted) {
-      return 'bg-gray-100 text-gray-700'
+      return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200'
     }
-    return 'bg-emerald-100 text-emerald-800'
+    return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200'
   }
 
   const getStatusIcon = (isDeleted?: boolean) => {
@@ -383,7 +383,7 @@ const UserSetup = () => {
   const storeUsers = filteredUsers.filter(u => u.role === 'store' && !(u as any).recordIsDeleted).length
 
   return (
-    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden" style={{ backgroundColor: '#F4F8FE' }}>
+      <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gradient-to-br from-background via-muted/30 to-background">
       <div className="container mx-auto px-2 sm:px-4 md:px-6 lg:px-8 py-2 sm:py-4 md:py-6 lg:py-8 space-y-3 sm:space-y-4 md:space-y-6">
         {/* Header Section */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2 sm:gap-3 md:gap-4">
@@ -391,7 +391,7 @@ const UserSetup = () => {
             <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600">
               User Management
             </h1>
-            <p className="text-xs sm:text-sm md:text-base text-gray-500">
+            <p className="text-xs sm:text-sm md:text-base text-muted-foreground">
               Manage your team members and their account permissions here
             </p>
           </div>
@@ -399,7 +399,7 @@ const UserSetup = () => {
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
               <div className="flex flex-none w-auto">
                 <div className="relative flex-none w-auto">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search users..."
                   value={searchQuery}
@@ -475,8 +475,8 @@ const UserSetup = () => {
         {/* Mobile Card Layout - visible only on small screens */}
         <div className="block md:hidden space-y-3">
           {totalFilteredUsers === 0 ? (
-            <div className="rounded-lg border bg-white shadow-sm p-8 text-center">
-              <div className="flex flex-col items-center gap-2 text-gray-500">
+            <div className="rounded-lg border border-border bg-card text-card-foreground shadow-sm p-8 text-center">
+              <div className="flex flex-col items-center gap-2 text-muted-foreground">
                 <UserX className="h-8 w-8" />
                 <div className="text-base">No users found</div>
                 <div className="text-sm">Try adjusting your search or filter</div>
@@ -484,7 +484,7 @@ const UserSetup = () => {
             </div>
           ) : (
             displayUsers.map((user) => (
-              <div key={user.id} className="rounded-lg border bg-white shadow-sm p-4 space-y-3">
+              <div key={user.id} className="rounded-lg border border-border bg-card text-card-foreground shadow-sm p-4 space-y-3">
                 {/* Header with avatar and name */}
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -493,35 +493,35 @@ const UserSetup = () => {
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="font-semibold text-sm truncate">{user.firstName || 'Unknown'} {user.lastName || ''}</div>
-                      <div className="text-xs text-gray-500 truncate">{user.username}</div>
+                      <div className="text-xs text-muted-foreground truncate">{user.username}</div>
                     </div>
                   </div>
-                  <Badge className={`${getStatusColor(user.role)} flex items-center gap-1 text-xs flex-shrink-0`}>
-                    {getStatusIcon(user.role)}
+                  <Badge className={`${getStatusColor((user as any).recordIsDeleted)} flex items-center gap-1 text-xs flex-shrink-0`}>
+                    {getStatusIcon((user as any).recordIsDeleted)}
                     <span className="hidden xs:inline">{formatRoleForDisplay(user.role).split(/(?=[A-Z])/).slice(0, 2).join('')}</span>
                   </Badge>
                 </div>
 
                 {/* Details Grid */}
-                <div className="space-y-2 text-xs pt-2 border-t">
+                <div className="space-y-2 text-xs pt-2 border-t border-border">
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <span className="text-gray-500 block mb-0.5">Email</span>
+                      <span className="text-muted-foreground block mb-0.5">Email</span>
                       <div className="font-medium truncate">{user.email}</div>
                     </div>
                     <div>
-                      <span className="text-gray-500 block mb-0.5">Job Title</span>
+                      <span className="text-muted-foreground block mb-0.5">Job Title</span>
                       <div className="font-medium truncate">{user.jobTitle || 'N/A'}</div>
                     </div>
                   </div>
                   
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <span className="text-gray-500 block mb-0.5">User Role</span>
+                      <span className="text-muted-foreground block mb-0.5">User Role</span>
                       <div className="font-medium">{formatRoleForDisplay(user.role)}</div>
                     </div>
                     <div>
-                      <span className="text-gray-500 block mb-0.5">Status</span>
+                      <span className="text-muted-foreground block mb-0.5">Status</span>
                       <Badge
                         className={`${getStatusColor((user as any).recordIsDeleted)} flex items-center gap-1 text-[10px] px-2 py-0.5`}
                       >
@@ -535,11 +535,11 @@ const UserSetup = () => {
 
                   {'assignedCustomerIds' in user && user.assignedCustomerIds && user.assignedCustomerIds.length > 0 && (
                     <div>
-                      <span className="text-gray-500 block mb-0.5">Assigned Customers</span>
+                      <span className="text-muted-foreground block mb-0.5">Assigned Customers</span>
                       <div className="font-medium">
                         {user.assignedCustomerIds.length} customer{user.assignedCustomerIds.length !== 1 ? 's' : ''}
                         {('assignedCustomerNames' in user && user.assignedCustomerNames && user.assignedCustomerNames.length > 0) && (
-                          <div className="text-xs text-gray-500 mt-0.5 truncate" title={user.assignedCustomerNames.join(', ')}>
+                          <div className="text-xs text-muted-foreground mt-0.5 truncate" title={user.assignedCustomerNames.join(', ')}>
                             {user.assignedCustomerNames.join(', ')}
                           </div>
                         )}
@@ -549,7 +549,7 @@ const UserSetup = () => {
                 </div>
 
                 {/* Actions */}
-                <div className="flex gap-2 pt-2 border-t">
+                <div className="flex gap-2 pt-2 border-t border-border">
                   <Button 
                     variant="outline" 
                     size="sm" 
@@ -572,7 +572,7 @@ const UserSetup = () => {
                     variant="outline" 
                     size="sm" 
                     onClick={() => openDeleteDialog(user)} 
-                    className="h-9 px-3 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                    className="h-9 px-3 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:text-red-200 dark:hover:bg-red-950/40"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
@@ -583,7 +583,7 @@ const UserSetup = () => {
         </div>
 
         {/* Desktop Table Layout - visible on medium screens and above */}
-        <div className="hidden md:block rounded-lg border bg-white shadow-sm overflow-x-auto">
+        <div className="hidden md:block rounded-lg border border-border bg-card text-card-foreground shadow-sm overflow-x-auto">
           <div className="min-w-full">
           <Table>
             <TableHeader>
@@ -607,18 +607,18 @@ const UserSetup = () => {
                       </div>
                         <div className="min-w-0 flex-1">
                           <div className="font-medium text-sm truncate">{user.firstName || 'Unknown'} {user.lastName || ''}</div>
-                          <div className="text-xs text-gray-500 truncate">{user.username}</div>
+                          <div className="text-xs text-muted-foreground truncate">{user.username}</div>
                         </div>
                     </div>
                   </TableCell>
                     <TableCell className="text-sm">{user.email}</TableCell>
                     <TableCell className="text-sm">
-                      <div className="text-sm text-gray-600">
+                      <div className="text-sm text-muted-foreground">
                         {user.jobTitle || 'N/A'}
                       </div>
                     </TableCell>
                     <TableCell className="text-sm hidden lg:table-cell">
-                      <div className="text-sm text-gray-600">
+                      <div className="text-sm text-muted-foreground">
                         {formatRoleForDisplay(user.role)}
                       </div>
                     </TableCell>
@@ -634,12 +634,12 @@ const UserSetup = () => {
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">
                     <div className="flex items-center gap-1">
-                        <Users className="h-5 w-5 text-gray-500" />
+                        <Users className="h-5 w-5 text-muted-foreground" />
                         <span className="font-medium text-sm">
                         {'assignedCustomerIds' in user ? user.assignedCustomerIds?.length || 0 : 0}
                       </span>
                       {('assignedCustomerNames' in user && user.assignedCustomerNames && user.assignedCustomerNames.length > 0) && (
-                        <div className="text-xs text-gray-500 truncate max-w-[200px]" title={user.assignedCustomerNames.join(', ')}>
+                        <div className="text-xs text-muted-foreground truncate max-w-[200px]" title={user.assignedCustomerNames.join(', ')}>
                           {user.assignedCustomerNames.join(', ')}
                         </div>
                       )}
@@ -647,13 +647,13 @@ const UserSetup = () => {
                   </TableCell>
                     <TableCell className="py-3">
                       <div className="flex justify-end gap-2">
-                        <Button variant="ghost" size="icon" onClick={() => openEditDialog(user)} className="h-8 w-8 p-0 hover:bg-blue-50">
+                        <Button variant="ghost" size="icon" onClick={() => openEditDialog(user)} className="h-8 w-8 p-0 hover:bg-blue-50 dark:hover:bg-blue-950/40">
                           <Pencil className="h-4 w-4 text-blue-600" />
                       </Button>
-                        <Button variant="ghost" size="icon" onClick={() => openDeleteDialog(user)} className="h-8 w-8 p-0 hover:bg-red-50">
+                        <Button variant="ghost" size="icon" onClick={() => openDeleteDialog(user)} className="h-8 w-8 p-0 hover:bg-red-50 dark:hover:bg-red-950/40">
                           <Trash2 className="h-4 w-4 text-red-600" />
                       </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleViewUser(user)} className="h-8 w-8 p-0 hover:bg-green-50">
+                        <Button variant="ghost" size="icon" onClick={() => handleViewUser(user)} className="h-8 w-8 p-0 hover:bg-green-50 dark:hover:bg-green-950/40">
                           <Eye className="h-4 w-4 text-green-600" />
                       </Button>
                     </div>
@@ -663,7 +663,7 @@ const UserSetup = () => {
               {totalFilteredUsers === 0 && (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8">
-                    <div className="flex flex-col items-center gap-2 text-gray-500">
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
                         <UserX className="h-8 w-8" />
                         <div className="text-base">No users found</div>
                         <div className="text-sm">Try adjusting your search or filter</div>
@@ -679,7 +679,7 @@ const UserSetup = () => {
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-4">
-            <div className="text-xs sm:text-sm text-gray-500 text-center sm:text-left">
+            <div className="text-xs sm:text-sm text-muted-foreground text-center sm:text-left">
               Showing {startIndex + 1} to {Math.min(endIndex, totalFilteredUsers)} of {totalFilteredUsers} results
             </div>
             <Pagination>
@@ -815,27 +815,27 @@ const UserSetup = () => {
                   </CardHeader>
                   <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <div>
-                      <div className="text-xs text-gray-500 mb-1">First Name</div>
+                      <div className="text-xs text-muted-foreground mb-1">First Name</div>
                       <div className="font-medium text-sm sm:text-base truncate">{viewUser.firstName || 'N/A'}</div>
                     </div>
                     <div>
-                      <div className="text-xs text-gray-500 mb-1">Last Name</div>
+                      <div className="text-xs text-muted-foreground mb-1">Last Name</div>
                       <div className="font-medium text-sm sm:text-base truncate">{viewUser.lastName || 'N/A'}</div>
                     </div>
                     <div>
-                      <div className="text-xs text-gray-500 mb-1">Username</div>
+                      <div className="text-xs text-muted-foreground mb-1">Username</div>
                       <div className="font-medium text-sm sm:text-base truncate">{viewUser.username}</div>
                     </div>
                     <div>
-                      <div className="text-xs text-gray-500 mb-1">Email</div>
+                      <div className="text-xs text-muted-foreground mb-1">Email</div>
                       <div className="font-medium text-sm sm:text-base truncate">{viewUser.email}</div>
                     </div>
                     <div>
-                      <div className="text-xs text-gray-500 mb-1">Job Title</div>
+                      <div className="text-xs text-muted-foreground mb-1">Job Title</div>
                       <div className="font-medium text-sm sm:text-base truncate">{viewUser.jobTitle || 'N/A'}</div>
                     </div>
                     <div>
-                      <div className="text-xs text-gray-500 mb-1">Customer</div>
+                      <div className="text-xs text-muted-foreground mb-1">Customer</div>
                       <div className="font-medium text-sm sm:text-base truncate">
                         {viewUser.customerId 
                           ? ((viewUser as any).customerName || customerNameMap.get(viewUser.customerId) || `Customer ID: ${viewUser.customerId}`)
@@ -855,19 +855,19 @@ const UserSetup = () => {
                   </CardHeader>
                   <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <div>
-                      <div className="text-xs text-gray-500 mb-1">Role</div>
+                      <div className="text-xs text-muted-foreground mb-1">Role</div>
                       <div className="font-medium text-sm sm:text-base">{formatRoleForDisplay(viewUser.role)}</div>
                     </div>
                     <div>
-                      <div className="text-xs text-gray-500 mb-1">Page Access Role</div>
+                      <div className="text-xs text-muted-foreground mb-1">Page Access Role</div>
                       <div className="font-medium text-sm sm:text-base">{formatRoleForDisplay(viewUser.pageAccessRole)}</div>
                     </div>
                     <div>
-                      <div className="text-xs text-gray-500 mb-1">Created At</div>
+                      <div className="text-xs text-muted-foreground mb-1">Created At</div>
                       <div className="font-medium text-sm sm:text-base">{new Date(viewUser.createdAt).toLocaleDateString()}</div>
                     </div>
                     <div>
-                      <div className="text-xs text-gray-500 mb-1">Last Updated</div>
+                      <div className="text-xs text-muted-foreground mb-1">Last Updated</div>
                       <div className="font-medium text-sm sm:text-base">{new Date(viewUser.updatedAt).toLocaleDateString()}</div>
                     </div>
                   </CardContent>
@@ -883,15 +883,15 @@ const UserSetup = () => {
                   </CardHeader>
                   <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <div>
-                      <div className="text-xs text-gray-500 mb-1">Signature</div>
+                      <div className="text-xs text-muted-foreground mb-1">Signature</div>
                       <div className="font-medium text-sm sm:text-base break-words">{viewUser.signature || 'N/A'}</div>
                     </div>
                     <div>
-                      <div className="text-xs text-gray-500 mb-1">Signature Code</div>
+                      <div className="text-xs text-muted-foreground mb-1">Signature Code</div>
                       <div className="font-medium text-sm sm:text-base">{viewUser.signatureCode || 'N/A'}</div>
                     </div>
                     <div className="sm:col-span-2">
-                      <div className="text-xs text-gray-500 mb-1">Record Status</div>
+                      <div className="text-xs text-muted-foreground mb-1">Record Status</div>
                       <div className={`font-medium text-sm sm:text-base flex items-center gap-2 ${viewUser.recordIsDeleted ? 'text-red-600' : 'text-green-600'}`}>
                         {viewUser.recordIsDeleted ? (
                           <>

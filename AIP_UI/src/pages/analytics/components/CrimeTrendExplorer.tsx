@@ -9,6 +9,8 @@ import { useState, useMemo } from 'react'
 import {
 	BarChart,
 	Bar,
+	LineChart,
+	Line,
 	XAxis,
 	YAxis,
 	CartesianGrid,
@@ -102,6 +104,15 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 			fill: CHART_COLORS[index % CHART_COLORS.length],
 		}))
 	}, [data.incidentTypes])
+
+	const recoveryTrendData = useMemo(() => {
+		return data.recoveryTrend.map((item) => ({
+			...item,
+			stolenValueLabel: Number(item.stolenValue.toFixed(2)),
+			recoveredValueLabel: Number(item.recoveredValue.toFixed(2)),
+			lostValueLabel: Number(item.lostValue.toFixed(2)),
+		}))
+	}, [data.recoveryTrend])
 
 	const handleDayClick = (day: string) => {
 		if (selectedDay === day) {
@@ -241,6 +252,35 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 				</div>
 			</CardHeader>
 			<CardContent className="pt-6">
+				<div className="mb-8 space-y-4">
+					<div>
+						<h3 className="font-semibold">Recovered vs Lost Trend</h3>
+						<p className="text-sm text-muted-foreground">
+							Track stolen value against saved and unrecovered loss over time.
+						</p>
+					</div>
+					<div className="h-[320px] w-full">
+						<ResponsiveContainer width="100%" height="100%">
+							<LineChart data={recoveryTrendData}>
+								<CartesianGrid strokeDasharray="3 3" className="stroke-gray-200" />
+								<XAxis dataKey="period" className="text-xs" tick={{ fill: '#6b7280' }} />
+								<YAxis className="text-xs" tick={{ fill: '#6b7280' }} />
+								<Tooltip
+									contentStyle={{
+										backgroundColor: '#fff',
+										border: '1px solid #e5e7eb',
+										borderRadius: '0.5rem',
+									}}
+								/>
+								<Legend />
+								<Line type="monotone" dataKey="stolenValue" name="Stolen" stroke="#6366f1" strokeWidth={2} dot={false} />
+								<Line type="monotone" dataKey="recoveredValue" name="Saved" stroke="#10b981" strokeWidth={2} dot={false} />
+								<Line type="monotone" dataKey="lostValue" name="Lost" stroke="#ef4444" strokeWidth={2} dot={false} />
+							</LineChart>
+						</ResponsiveContainer>
+					</div>
+				</div>
+
 				{!selectedStore ? (
 					<Tabs defaultValue="day-of-week" className="w-full">
 						<TabsList className="grid w-full grid-cols-3 mb-6">
@@ -574,6 +614,35 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 													<div className="text-sm text-gray-500">Peak Hour</div>
 													<div className="text-2xl font-bold">
 														{selectedStoreData.peakHour}:00
+													</div>
+												</CardContent>
+											</Card>
+										</div>
+										<div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+											<Card>
+												<CardContent className="p-4">
+													<div className="text-sm text-gray-500">Value Stolen</div>
+													<div className="text-2xl font-bold">
+														£{selectedStoreData.totalStolenValue.toFixed(0)}
+													</div>
+												</CardContent>
+											</Card>
+											<Card>
+												<CardContent className="p-4">
+													<div className="text-sm text-gray-500">Value Saved</div>
+													<div className="text-2xl font-bold text-emerald-600 dark:text-emerald-300">
+														£{selectedStoreData.totalRecoveredValue.toFixed(0)}
+													</div>
+												</CardContent>
+											</Card>
+											<Card>
+												<CardContent className="p-4">
+													<div className="text-sm text-gray-500">Value Lost</div>
+													<div className="text-2xl font-bold text-rose-600 dark:text-rose-300">
+														£{selectedStoreData.totalLostValue.toFixed(0)}
+													</div>
+													<div className="text-xs text-muted-foreground mt-1">
+														Recovery rate {selectedStoreData.recoveryRate.toFixed(1)}%
 													</div>
 												</CardContent>
 											</Card>

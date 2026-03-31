@@ -518,11 +518,11 @@ const Settings = () => {
     <div className="w-full px-2 sm:px-3 md:px-4 lg:px-6 2xl:px-8 py-2 sm:py-3 md:py-4 lg:py-6 space-y-2 sm:space-y-3 md:space-y-4">
       {/* Test Mode Banner */}
       {isTestMode && currentRole === 'administrator' && (
-        <Alert className="bg-blue-50 border-blue-200 text-blue-800 mb-2 sm:mb-3 md:mb-4">
+        <Alert className="bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-950/40 dark:border-blue-900 dark:text-blue-100 mb-2 sm:mb-3 md:mb-4">
           <Eye className="h-4 w-4" />
           <AlertTitle className="flex flex-wrap items-center gap-2">
             Admin Test Mode
-            <Badge variant="outline" className="ml-2 bg-blue-100 text-blue-700 border-blue-300">
+            <Badge variant="outline" className="ml-2 bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/50 dark:text-blue-100 dark:border-blue-800">
               {userRoles.find(r => r.id === testRole)?.name || testRole}
             </Badge>
           </AlertTitle>
@@ -533,9 +533,9 @@ const Settings = () => {
         </Alert>
       )}
 
-      <div className="bg-white rounded-lg shadow-sm border border-border/40">
+      <div className="bg-card text-card-foreground rounded-lg shadow-sm border border-border">
         {/* Header Section */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between p-2 sm:p-3 md:p-4 border-b">
+        <div className="flex flex-col md:flex-row md:items-center justify-between p-2 sm:p-3 md:p-4 border-b border-border">
           <div className="mb-2 md:mb-0">
             <h1 className="text-base sm:text-lg md:text-xl font-semibold flex items-center gap-1.5 sm:gap-2">
               <UserCog className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
@@ -592,7 +592,7 @@ const Settings = () => {
           )}
 
           {/* Officer Customer Reporting Setting */}
-          <Card className="mb-4">
+          <Card className="mb-4 border-border bg-card">
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <UserCog className="h-4 w-4 text-primary" />
@@ -603,9 +603,9 @@ const Settings = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3">
                 <div className="space-y-1">
-                  <p className="text-sm font-medium">Company Reporting Access</p>
+                  <p className="text-sm font-medium text-card-foreground">Company Reporting Access</p>
                   <p className="text-xs text-muted-foreground">
                     Allow store users to access the Company Reporting page
                   </p>
@@ -654,11 +654,11 @@ const Settings = () => {
           </div>
 
           {/* Table Container */}
-          <div className="border rounded-md shadow-sm">
+          <div className="border border-border rounded-md shadow-sm bg-card/50">
             {/* Table for Larger Screens */}
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full min-w-[900px] 2xl:min-w-[1200px] 3xl:min-w-[1600px]">
-                <thead className="bg-muted/50 sticky top-0 z-10">
+                <thead className="bg-muted/60 sticky top-0 z-10">
                   <tr>
                     <th className="text-left py-2.5 px-3 sm:py-3 sm:px-4 font-medium text-xs sm:text-sm w-1/4">Page</th>
                     {userRoles.map((role) => (
@@ -684,7 +684,7 @@ const Settings = () => {
                   if (pagesInSubcategory.length === 0) return null;
                   return (<React.Fragment key={subcategory + '-lg'}>
                     <tr className="bg-muted/30 border-t">
-                      <td colSpan={userRoles.length + 1} className="py-2 px-4 font-semibold text-sm">
+                      <td colSpan={userRoles.length + 1} className="py-2 px-4 font-semibold text-sm text-foreground">
                         {subcategory}
                       </td>
                     </tr>
@@ -726,7 +726,7 @@ const Settings = () => {
             {/* Table for Small Screens */}
             <div className="block md:hidden">
               <table className="w-full min-w-[280px]">
-                <thead className="bg-muted/50 sticky top-0 z-10">
+                <thead className="bg-muted/60 sticky top-0 z-10">
                   <tr>
                     <th className="text-left py-2.5 px-3 sm:py-3 sm:px-4 font-medium text-xs sm:text-sm w-3/5">Page</th>
                     <th className="text-center py-2.5 px-2 sm:py-3 sm:px-3 font-medium text-xs whitespace-nowrap w-2/5">
@@ -752,7 +752,7 @@ const Settings = () => {
                   if (pagesInSubcategory.length === 0) return null;
                   return (<React.Fragment key={subcategory + '-sm'}>
                     <tr className="bg-muted/30 border-t">
-                      <td colSpan={2} className="py-2 px-4 font-semibold text-sm">{subcategory}</td>
+                      <td colSpan={2} className="py-2 px-4 font-semibold text-sm text-foreground">{subcategory}</td>
                     </tr>
                     {pagesInSubcategory.map(page => (
                       <tr key={page.id + '-sm'} className="border-t hover:bg-muted/20 transition-colors">

@@ -36,6 +36,16 @@ namespace AIPBackend.Models
 		[Column(TypeName = "decimal(18,2)")]
 		public decimal TotalAmount { get; set; }
 
+		[Required]
+		public bool WasRecovered { get; set; } = false;
+
+		[Required]
+		public int RecoveredQuantity { get; set; } = 0;
+
+		[Required]
+		[Column(TypeName = "decimal(18,2)")]
+		public decimal RecoveredAmount { get; set; } = 0;
+
 		[MaxLength(100)]
 		public string? Barcode { get; set; }
 

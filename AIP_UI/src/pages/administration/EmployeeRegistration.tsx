@@ -110,14 +110,14 @@ export default function EmployeeRegistration() {
   }
 
   return (
-    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden" style={{ backgroundColor: '#F4F8FE' }}>
+    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gradient-to-br from-background via-muted/30 to-background">
       <div className="container mx-auto px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12 py-3 sm:py-4 md:py-6 lg:py-8 xl:py-10 2xl:py-12 space-y-3 sm:space-y-4 md:space-y-6 xl:space-y-8 max-w-screen-2xl">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-4">
           <div className="space-y-1">
-            <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl 2xl:text-5xl font-bold text-[#324053]">
+            <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl 2xl:text-5xl font-bold text-foreground">
               Employee Registration
             </h1>
-            <p className="text-xs sm:text-sm md:text-base text-gray-500">Register and manage employee information</p>
+            <p className="text-xs sm:text-sm md:text-base text-muted-foreground">Register and manage employee information</p>
           </div>
         </div>
 
@@ -128,13 +128,13 @@ export default function EmployeeRegistration() {
 
         {/* Main Content - Responsive Container */}
         <div className="w-full">
-            <Card className="bg-white/70 backdrop-blur-lg border border-gray-100 shadow-md">
+            <Card className="bg-card/95 backdrop-blur-lg border border-border shadow-md">
             <CardContent className="p-3 sm:p-4 md:p-6">
                 {isInitialLoading ? (
                   <div className="flex items-center justify-center py-8">
                     <div className="text-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
-                      <p className="mt-2 text-sm text-gray-600">Loading employees...</p>
+                      <p className="mt-2 text-sm text-muted-foreground">Loading employees...</p>
                     </div>
                   </div>
                 ) : (

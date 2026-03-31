@@ -29,10 +29,44 @@ namespace AIPBackend.Models.DTOs
 	{
 		public CrimeTrendDataDto CrimeTrends { get; set; } = new();
 		public HotProductsDataDto HotProducts { get; set; } = new();
+		public AnalyticsFinancialSummaryDto FinancialSummary { get; set; } = new();
+		public List<StoreRecoveryComparisonDto> StoreRecoveryComparisons { get; set; } = new();
 		public RepeatOffenderDataDto RepeatOffenders { get; set; } = new();
 		public DeploymentRecommendationDto DeploymentRecommendations { get; set; } = new();
 		public CrimeLinkingDataDto CrimeLinking { get; set; } = new();
 		public AnalyticsMetadataDto Metadata { get; set; } = new();
+	}
+
+	public class AnalyticsFinancialSummaryDto
+	{
+		public decimal TotalStolenValue { get; set; }
+		public decimal TotalRecoveredValue { get; set; }
+		public decimal TotalLostValue { get; set; }
+		public double RecoveryRate { get; set; }
+		public int TotalRecoveredQuantity { get; set; }
+		public int TotalLostQuantity { get; set; }
+	}
+
+	public class StoreRecoveryComparisonDto
+	{
+		public int StoreId { get; set; }
+		public string StoreName { get; set; } = string.Empty;
+		public int IncidentCount { get; set; }
+		public decimal TotalStolenValue { get; set; }
+		public decimal TotalRecoveredValue { get; set; }
+		public decimal TotalLostValue { get; set; }
+		public double RecoveryRate { get; set; }
+		public int TotalRecoveredQuantity { get; set; }
+		public int TotalLostQuantity { get; set; }
+	}
+
+	public class RecoveryTrendPointDto
+	{
+		public string Period { get; set; } = string.Empty;
+		public int IncidentCount { get; set; }
+		public decimal StolenValue { get; set; }
+		public decimal RecoveredValue { get; set; }
+		public decimal LostValue { get; set; }
 	}
 
 	// ============================================================================
@@ -45,6 +79,7 @@ namespace AIPBackend.Models.DTOs
 		public List<TimeOfDayDataDto> TimeOfDay { get; set; } = new();
 		public List<IncidentTypeDataDto> IncidentTypes { get; set; } = new();
 		public Dictionary<string, StoreDrilldownDataDto> StoreDrilldown { get; set; } = new();
+		public List<RecoveryTrendPointDto> RecoveryTrend { get; set; } = new();
 		public int TotalIncidents { get; set; }
 		public DateRangeDto DateRange { get; set; } = new();
 	}
@@ -79,6 +114,10 @@ namespace AIPBackend.Models.DTOs
 		public string StoreName { get; set; } = string.Empty;
 		public int Incidents { get; set; }
 		public List<IncidentTypeDataDto> IncidentTypes { get; set; } = new();
+		public decimal TotalStolenValue { get; set; }
+		public decimal TotalRecoveredValue { get; set; }
+		public decimal TotalLostValue { get; set; }
+		public double RecoveryRate { get; set; }
 		public string PeakDay { get; set; } = string.Empty;
 		public int PeakHour { get; set; }
 	}
@@ -90,8 +129,13 @@ namespace AIPBackend.Models.DTOs
 	public class HotProductsDataDto
 	{
 		public List<ProductFrequencyDataDto> TopProducts { get; set; } = new();
+		public List<ProductFrequencyDataDto> TopRecoveredProducts { get; set; } = new();
+		public List<ProductFrequencyDataDto> WorstRecoveryProducts { get; set; } = new();
 		public List<StoreProductHeatmapDataDto> StoreHeatmap { get; set; } = new();
+		public decimal TotalValueStolen { get; set; }
+		public decimal TotalValueRecovered { get; set; }
 		public decimal TotalValueLost { get; set; }
+		public double RecoveryRate { get; set; }
 		public DateRangeDto Period { get; set; } = new();
 	}
 
@@ -101,6 +145,10 @@ namespace AIPBackend.Models.DTOs
 		public string ProductName { get; set; } = string.Empty;
 		public int Frequency { get; set; }
 		public decimal TotalValue { get; set; }
+		public decimal StolenValue { get; set; }
+		public decimal RecoveredValue { get; set; }
+		public decimal LostValue { get; set; }
+		public double RecoveryRate { get; set; }
 		public int StoresAffected { get; set; }
 	}
 
@@ -110,6 +158,10 @@ namespace AIPBackend.Models.DTOs
 		public string StoreName { get; set; } = string.Empty;
 		public List<StoreProductItemDto> Products { get; set; } = new();
 		public int TotalIncidents { get; set; }
+		public decimal TotalValueStolen { get; set; }
+		public decimal TotalValueRecovered { get; set; }
+		public decimal TotalValueLost { get; set; }
+		public double RecoveryRate { get; set; }
 		public string RiskLevel { get; set; } = "low";
 	}
 
@@ -119,6 +171,10 @@ namespace AIPBackend.Models.DTOs
 		public string ProductName { get; set; } = string.Empty;
 		public int Frequency { get; set; }
 		public decimal Value { get; set; }
+		public decimal StolenValue { get; set; }
+		public decimal RecoveredValue { get; set; }
+		public decimal LostValue { get; set; }
+		public double RecoveryRate { get; set; }
 	}
 
 	// ============================================================================

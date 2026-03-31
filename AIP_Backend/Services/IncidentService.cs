@@ -585,6 +585,8 @@ namespace AIPBackend.Services
 
 		private IncidentDto MapToDto(Incident incident)
 		{
+			ApplyComputedIncidentTotals(incident);
+
 			// Parse JSON arrays
 			List<string>? incidentInvolved = null;
 			if (!string.IsNullOrWhiteSpace(incident.IncidentInvolved))
@@ -687,6 +689,10 @@ namespace AIPBackend.Services
 				Description = incident.Description,
 				IncidentDetails = incident.IncidentDetails,
 				StoreComments = incident.StoreComments,
+				TotalStolenValue = incident.TotalStolenValue,
+				TotalRecoveredValue = incident.TotalRecoveredValue,
+				TotalLostValue = incident.TotalLostValue,
+				TotalRecoveredQuantity = incident.TotalRecoveredQuantity,
 				TotalValueRecovered = incident.TotalValueRecovered,
 				Value = incident.TotalValueRecovered, // Legacy field
 				ValueRecovered = incident.ValueRecovered,
@@ -702,6 +708,9 @@ namespace AIPBackend.Services
 					Cost = item.Cost,
 					Quantity = item.Quantity,
 					TotalAmount = item.TotalAmount,
+					WasRecovered = item.WasRecovered,
+					RecoveredQuantity = item.RecoveredQuantity,
+					RecoveredAmount = item.RecoveredAmount,
 					Barcode = item.Barcode
 				}).ToList(),
 				PoliceInvolvement = incident.PoliceInvolvement,
@@ -753,6 +762,10 @@ namespace AIPBackend.Services
 				Description = dto.Description,
 				IncidentDetails = dto.IncidentDetails,
 				StoreComments = dto.StoreComments,
+				TotalStolenValue = dto.TotalStolenValue,
+				TotalRecoveredValue = dto.TotalRecoveredValue,
+				TotalLostValue = dto.TotalLostValue,
+				TotalRecoveredQuantity = dto.TotalRecoveredQuantity,
 				TotalValueRecovered = dto.TotalValueRecovered,
 				ValueRecovered = dto.ValueRecovered,
 				QuantityRecovered = dto.QuantityRecovered,
@@ -816,10 +829,15 @@ namespace AIPBackend.Services
 					Cost = item.Cost,
 					Quantity = item.Quantity,
 					TotalAmount = item.TotalAmount,
+					WasRecovered = item.WasRecovered,
+					RecoveredQuantity = item.RecoveredQuantity,
+					RecoveredAmount = item.RecoveredAmount,
 					Barcode = item.Barcode,
 					CreatedAt = DateTime.UtcNow
 				}).ToList();
 			}
+
+			ApplyComputedIncidentTotals(incident);
 
 			return incident;
 		}
@@ -876,6 +894,10 @@ namespace AIPBackend.Services
 			incident.Description = dto.Description;
 			incident.IncidentDetails = dto.IncidentDetails;
 			incident.StoreComments = dto.StoreComments;
+			incident.TotalStolenValue = dto.TotalStolenValue;
+			incident.TotalRecoveredValue = dto.TotalRecoveredValue;
+			incident.TotalLostValue = dto.TotalLostValue;
+			incident.TotalRecoveredQuantity = dto.TotalRecoveredQuantity;
 			incident.TotalValueRecovered = dto.TotalValueRecovered;
 			incident.ValueRecovered = dto.ValueRecovered;
 			incident.QuantityRecovered = dto.QuantityRecovered;
@@ -952,11 +974,56 @@ namespace AIPBackend.Services
 						Cost = itemDto.Cost,
 						Quantity = itemDto.Quantity,
 						TotalAmount = itemDto.TotalAmount,
+						WasRecovered = itemDto.WasRecovered,
+						RecoveredQuantity = itemDto.RecoveredQuantity,
+						RecoveredAmount = itemDto.RecoveredAmount,
 						Barcode = itemDto.Barcode,
 						CreatedAt = DateTime.UtcNow
 					});
 				}
 			}
+
+			ApplyComputedIncidentTotals(incident);
+		}
+
+		private static void ApplyComputedIncidentTotals(Incident incident)
+		{
+			if (incident.StolenItems == null || !incident.StolenItems.Any())
+			{
+				return;
+			}
+
+			foreach (var item in incident.StolenItems)
+			{
+				item.Quantity = Math.Max(item.Quantity, 0);
+				item.Cost = Math.Max(item.Cost, 0);
+				item.TotalAmount = item.Cost * item.Quantity;
+
+				if (!item.WasRecovered)
+				{
+					item.RecoveredQuantity = 0;
+					item.RecoveredAmount = 0;
+					continue;
+				}
+
+				item.RecoveredQuantity = Math.Clamp(item.RecoveredQuantity, 0, item.Quantity);
+				item.RecoveredAmount = item.Cost * item.RecoveredQuantity;
+			}
+
+			var totalStolenValue = incident.StolenItems.Sum(item => item.TotalAmount);
+			var totalRecoveredValue = incident.StolenItems.Sum(item => item.RecoveredAmount);
+			var totalRecoveredQuantity = incident.StolenItems.Sum(item => item.RecoveredQuantity);
+			var totalLostValue = totalStolenValue - totalRecoveredValue;
+
+			incident.TotalStolenValue = totalStolenValue;
+			incident.TotalRecoveredValue = totalRecoveredValue;
+			incident.TotalLostValue = totalLostValue;
+			incident.TotalRecoveredQuantity = totalRecoveredQuantity;
+
+			// Keep legacy fields aligned during rollout.
+			incident.TotalValueRecovered = totalRecoveredValue;
+			incident.ValueRecovered = totalRecoveredValue;
+			incident.QuantityRecovered = totalRecoveredQuantity;
 		}
 
 		private RepeatOffenderMatchDto MapRepeatOffenderResultToDto(RepeatOffenderRepositoryResult result)

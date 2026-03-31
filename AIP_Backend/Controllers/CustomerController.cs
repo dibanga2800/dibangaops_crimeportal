@@ -238,6 +238,24 @@ namespace AIPBackend.Controllers
                     Message = "Customer deleted successfully"
                 });
             }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning("Customer delete validation failed: {Message}", ex.Message);
+                return NotFound(new ApiResponseDto<object>
+                {
+                    Success = false,
+                    Message = ex.Message
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning("Customer delete blocked: {Message}", ex.Message);
+                return BadRequest(new ApiResponseDto<object>
+                {
+                    Success = false,
+                    Message = ex.Message
+                });
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error deleting customer {CustomerId}", id);

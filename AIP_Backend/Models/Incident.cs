@@ -117,6 +117,17 @@ namespace AIPBackend.Models
 
 		// Financial information
 		[Column(TypeName = "decimal(18,2)")]
+		public decimal? TotalStolenValue { get; set; }
+
+		[Column(TypeName = "decimal(18,2)")]
+		public decimal? TotalRecoveredValue { get; set; }
+
+		[Column(TypeName = "decimal(18,2)")]
+		public decimal? TotalLostValue { get; set; }
+
+		public int? TotalRecoveredQuantity { get; set; }
+
+		[Column(TypeName = "decimal(18,2)")]
 		public decimal? TotalValueRecovered { get; set; }
 
 		[Column(TypeName = "decimal(18,2)")]

@@ -40,7 +40,7 @@ export default {
 				'support-green': '#198754',
 				'support-blue': '#0D6EFD',
 				// Header colors
-				'header-bg': '#F9F9F9',
+				'header-bg': '#F7F7FB',
 				'header-text': '#1F2937',
 				'header-border': '#E5E7EB',
 				// Sidebar colors (dark theme)

@@ -56,7 +56,6 @@ import {
 } from "lucide-react"
 import { usePageAccess, PageAccessContext } from "@/contexts/PageAccessContext"
 import { Input } from "@/components/ui/input"
-import { useTheme } from "@/components/theme-provider"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from "@/components/ui/sheet"
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion"
@@ -179,8 +178,6 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
   
 	const { currentRole, hasAccess: hasPageAccess } = pageAccessContext;
   
-  const { theme } = useTheme();
-
   const { user: authenticatedUser } = useAuth();
   const isAuthenticated = !!authenticatedUser;
 
@@ -296,8 +293,8 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
             <SheetHeader className="p-6 border-b border-blue-900 shrink-0">
               <SheetTitle className="text-left flex items-center justify-center text-white">
                 <img 
-                  src="/central coop.png" 
-                  alt="Central Coop"
+                  src="/HOEnbg.png" 
+                  alt="Heart of England Co-operative"
                   className="h-17 w-auto" 
                 />
               </SheetTitle>
@@ -337,7 +334,7 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
         <div className="flex items-center gap-4">
           {!isSearchExpanded && (
             <img 
-              src="/Heart_of_England_Co-operative.webp" 
+              src="/HOEnbg.png" 
               alt="Heart of England Co-operative"
               className="h-12 w-auto" 
             />
@@ -353,8 +350,9 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
           </Button>
         </div>
 
-        {/* Right: Notifications and User Profile */}
+        {/* Right: Theme, notifications and user profile */}
         <div className="flex items-center gap-3 text-header-text dark:text-white">
+          <ThemeToggle />
           <NotificationBell />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -382,8 +380,9 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
           </div>
         </div>
         
-		{/* Right: Notifications and User Profile */}
+		{/* Right: Theme, notifications and user profile */}
 				<div className="flex items-center gap-4 text-header-text dark:text-white">
+          <ThemeToggle />
           <NotificationBell />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

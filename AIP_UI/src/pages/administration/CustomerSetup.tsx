@@ -57,10 +57,10 @@ export default function CustomerSetup() {
   }
 
   return (
-    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-[#F4F8FE] dark:bg-slate-950">
+    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gradient-to-br from-background via-muted/30 to-background">
       <div className="container mx-auto px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12 py-3 sm:py-4 md:py-6 lg:py-8 xl:py-10 2xl:py-12 space-y-3 sm:space-y-4 md:space-y-6 xl:space-y-8 max-w-screen-2xl">
         <div className="flex items-center justify-between">
-          <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl 2xl:text-5xl font-bold text-[#324053] dark:text-gray-100">Company Setup</h1>
+          <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl 2xl:text-5xl font-bold text-foreground">Company Setup</h1>
         </div>
 
         <CustomerStats 
@@ -92,7 +92,7 @@ export default function CustomerSetup() {
             selectedCustomerId ? (
               <div className="space-y-4">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                  <h2 className="text-base sm:text-lg font-semibold">Regions</h2>
+                  <h2 className="text-base sm:text-lg font-semibold text-foreground">Regions</h2>
                   <Button
                     onClick={() => {
                       setSelectedRegion(undefined)
@@ -111,7 +111,7 @@ export default function CustomerSetup() {
                 />
               </div>
             ) : (
-              <div className="text-center py-8 text-sm text-gray-500">
+              <div className="text-center py-8 text-sm text-muted-foreground">
                 Please select a company to view regions
               </div>
             )
@@ -123,7 +123,7 @@ export default function CustomerSetup() {
             selectedCustomerId ? (
               <div className="space-y-4">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                  <h2 className="text-base sm:text-lg font-semibold">Sites</h2>
+                  <h2 className="text-base sm:text-lg font-semibold text-foreground">Sites</h2>
                   <Button
                     onClick={() => {
                       setSelectedSite(undefined)
@@ -142,7 +142,7 @@ export default function CustomerSetup() {
                 />
               </div>
             ) : (
-              <div className="text-center py-8 text-sm text-gray-500">
+              <div className="text-center py-8 text-sm text-muted-foreground">
                 Please select a company to view sites
               </div>
             )
