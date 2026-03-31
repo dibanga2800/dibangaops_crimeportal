@@ -1,12 +1,18 @@
-# 🔐 PRODUCTION ENVIRONMENT VARIABLES
-# Copy this file to .env.production and fill in the actual values
-# ⚠️ NEVER commit .env.production to Git!
+# PRODUCTION CONFIGURATION REFERENCE
+# Use Azure App Service environment variables / connection strings for production.
+# Keep local-only secrets in an ignored appsettings.Local.json file instead.
 
-# Database Configuration
-SQL_SERVER=localhost
-SQL_DATABASE=COOP_PRODUCTION
-SQL_USER=sa
-SQL_PASSWORD=YOUR_STRONG_SQL_PASSWORD_HERE
+# Azure App Service database setting
+# Name: ConnectionStrings__DefaultConnection
+# Value:
+# Server=tcp:<azure-sql-server>.database.windows.net,1433;Initial Catalog=COOP;Persist Security Info=False;User ID=<sql-user>;Password=<sql-password>;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;
+
+# Local development override example (store in ignored appsettings.Local.json)
+# {
+#   "ConnectionStrings": {
+#     "DefaultConnection": "Server=localhost;Database=COOP;User Id=<local-user>;Password=<local-password>;TrustServerCertificate=True;Encrypt=True;"
+#   }
+# }
 
 # JWT Configuration (MUST be 64+ characters for production)
 JWT_SECRET_KEY=REPLACE_WITH_CRYPTOGRAPHICALLY_SECURE_RANDOM_STRING_AT_LEAST_64_CHARACTERS

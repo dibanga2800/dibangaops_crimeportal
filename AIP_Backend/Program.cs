@@ -16,6 +16,12 @@ using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
+if (builder.Environment.IsDevelopment())
+{
+	// Allow ignored local overrides without affecting cloud-hosted configuration.
+	builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
+}
+
 static bool IsMissingOrPlaceholderStorageConnectionString(string? value)
 {
 	return string.IsNullOrWhiteSpace(value) ||
