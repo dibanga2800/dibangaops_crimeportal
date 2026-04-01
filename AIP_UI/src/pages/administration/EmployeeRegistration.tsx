@@ -6,7 +6,7 @@ import { EmployeeStats } from "@/components/employee-registration/EmployeeStats"
 import { Employee } from "@/types/employee"
 import { useToast } from "@/hooks/use-toast"
 import { employeeService } from "@/services/employeeService"
-import { mapToBackendRequest } from "@/utils/employeeMapper"
+import { handleApiError } from "@/config/api"
 import {
   Dialog,
   DialogContent,
@@ -99,9 +99,10 @@ export default function EmployeeRegistration() {
       setSelectedEmployee(null)
       setIsDialogOpen(false)
     } catch (error) {
+      const errorMessage = handleApiError(error)
       toast({
         title: "Error",
-        description: "Failed to save employee",
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {
