@@ -259,6 +259,43 @@ jobs:
       - name: Wait for RBAC propagation
         run: sleep 30
 
+      - name: Import existing COOP database into Terraform state
+        env:
+          TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
+          TF_VAR_sql_admin_password: ${{ secrets.TF_VAR_SQL_ADMIN_PASSWORD }}
+          TF_VAR_smtp_password: ${{ secrets.TF_VAR_SMTP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if terraform state show azurerm_mssql_database.sql_db >/dev/null 2>&1; then
+            DB_ID="$(terraform state show azurerm_mssql_database.sql_db | awk -F' = ' '/^\s*id\s*=/{print $2}' | tr -d '"')"
+            if [ -n "${DB_ID}" ] && [ "${DB_ID}" != *"/databases/COOP" ]; then
+              echo "State still points at old database (${DB_ID}); removing stale SQL database state."
+              terraform state rm azurerm_mssql_database.sql_db
+            else
+              echo "Terraform SQL database state already points to COOP."
+            fi
+          fi
+
+          if ! terraform state show azurerm_mssql_database.sql_db >/dev/null 2>&1; then
+            SQL_SERVER_ID="$(az sql server show \
+              --name "crimeportalsql0gf8g" \
+              --resource-group "crimeportal-rg" \
+              --query id -o tsv)"
+            COOP_DB_ID="${SQL_SERVER_ID}/databases/COOP"
+            if az sql db show --ids "${COOP_DB_ID}" --query id -o tsv >/dev/null 2>&1; then
+              echo "Importing existing COOP database into Terraform state."
+              terraform import -lock-timeout=10m \
+                -var-file="terraform.prod.tfvars" \
+                -var="budget_start_date=${{ steps.budget-date.outputs.value }}" \
+                -var="backend_image=${{ needs.build-and-push-images.outputs.backend_image }}" \
+                -var="ai_image=${{ needs.build-and-push-images.outputs.ai_image }}" \
+                azurerm_mssql_database.sql_db \
+                "${COOP_DB_ID}"
+            else
+              echo "COOP database does not exist yet; Terraform will create it."
+            fi
+          fi
+
       - name: Terraform Apply (release images)
         env:
           TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
