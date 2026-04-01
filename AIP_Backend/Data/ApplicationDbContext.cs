@@ -546,7 +546,7 @@ namespace AIPBackend.Data
             modelBuilder.Entity<Employee>()
                 .HasIndex(e => e.Email)
                 .IsUnique()
-                .HasFilter("[Email] IS NOT NULL");
+                .HasFilter("[Email] IS NOT NULL AND [RecordIsDeletedYN] = 0");
 
             modelBuilder.Entity<Employee>()
                 .HasIndex(e => e.UserId)

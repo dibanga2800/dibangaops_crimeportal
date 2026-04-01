@@ -3,6 +3,7 @@ using AIPBackend.Models;
 using AIPBackend.Models.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using System.Text.RegularExpressions;
@@ -314,6 +315,7 @@ namespace AIPBackend.Controllers
                 var employeeNumber = string.IsNullOrWhiteSpace(request.EmployeeNumber)
                     ? await GenerateNextEmployeeNumberAsync()
                     : request.EmployeeNumber.Trim();
+                var normalizedEmail = NormalizeEmail(request.Email);
 
                 _logger.LogInformation("Registering new employee: {EmployeeNumber}", employeeNumber);
 
@@ -333,10 +335,13 @@ namespace AIPBackend.Controllers
                 }
 
                 // Validate unique email if provided
-                if (!string.IsNullOrWhiteSpace(request.Email))
+                if (normalizedEmail != null)
                 {
                     var existingEmail = await _context.Employees
-                        .Where(e => e.Email == request.Email && !e.RecordIsDeletedYN)
+                        .Where(e =>
+                            !e.RecordIsDeletedYN &&
+                            e.Email != null &&
+                            e.Email.Trim().ToUpper() == normalizedEmail.ToUpper())
                         .FirstOrDefaultAsync();
 
                     if (existingEmail != null)
@@ -345,7 +350,7 @@ namespace AIPBackend.Controllers
                         {
                             Success = false,
                             Message = "Email already exists",
-                            Errors = new List<string> { $"Email {request.Email} is already in use" }
+                            Errors = new List<string> { $"Email {normalizedEmail} is already in use" }
                         });
                     }
                 }
@@ -364,7 +369,7 @@ namespace AIPBackend.Controllers
                     EmploymentType = request.EmploymentType,
                     AipAccessLevel = request.AipAccessLevel,
                     Region = request.Region,
-                    Email = request.Email,
+                    Email = normalizedEmail,
                     ContactNumber = request.ContactNumber,
                     HouseName = request.HouseName,
                     NumberAndStreet = request.NumberAndStreet,
@@ -403,6 +408,16 @@ namespace AIPBackend.Controllers
                     Data = response
                 });
             }
+            catch (DbUpdateException ex) when (IsUniqueEmployeeEmailViolation(ex))
+            {
+                _logger.LogWarning(ex, "Duplicate employee email detected while registering employee");
+                return BadRequest(new ApiResponseDto<EmployeeRegistrationResponse>
+                {
+                    Success = false,
+                    Message = "Email already exists",
+                    Errors = new List<string> { "The employee email address is already in use by another active employee" }
+                });
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error registering employee");
@@ -425,6 +440,9 @@ namespace AIPBackend.Controllers
         {
             try
             {
+                var normalizedEmployeeNumber = NormalizeOptionalValue(request.EmployeeNumber);
+                var normalizedEmail = NormalizeEmail(request.Email);
+
                 var employee = await _context.Employees
                     .Where(e => e.EmployeeId == id && !e.RecordIsDeletedYN)
                     .FirstOrDefaultAsync();
@@ -439,10 +457,10 @@ namespace AIPBackend.Controllers
                 }
 
                 // Validate unique employee number if changed
-                if (!string.IsNullOrWhiteSpace(request.EmployeeNumber) && request.EmployeeNumber != employee.EmployeeNumber)
+                if (normalizedEmployeeNumber != null && normalizedEmployeeNumber != employee.EmployeeNumber)
                 {
                     var existingEmployee = await _context.Employees
-                        .Where(e => e.EmployeeNumber == request.EmployeeNumber && e.EmployeeId != id && !e.RecordIsDeletedYN)
+                        .Where(e => e.EmployeeNumber == normalizedEmployeeNumber && e.EmployeeId != id && !e.RecordIsDeletedYN)
                         .FirstOrDefaultAsync();
 
                     if (existingEmployee != null)
@@ -456,10 +474,14 @@ namespace AIPBackend.Controllers
                 }
 
                 // Validate unique email if changed
-                if (!string.IsNullOrWhiteSpace(request.Email) && request.Email != employee.Email)
+                if (normalizedEmail != null && normalizedEmail.ToUpper() != NormalizeEmail(employee.Email)?.ToUpper())
                 {
                     var existingEmail = await _context.Employees
-                        .Where(e => e.Email == request.Email && e.EmployeeId != id && !e.RecordIsDeletedYN)
+                        .Where(e =>
+                            e.EmployeeId != id &&
+                            !e.RecordIsDeletedYN &&
+                            e.Email != null &&
+                            e.Email.Trim().ToUpper() == normalizedEmail.ToUpper())
                         .FirstOrDefaultAsync();
 
                     if (existingEmail != null)
@@ -475,7 +497,7 @@ namespace AIPBackend.Controllers
                 var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
                 // Update only provided fields
-                if (!string.IsNullOrWhiteSpace(request.EmployeeNumber)) employee.EmployeeNumber = request.EmployeeNumber;
+                if (normalizedEmployeeNumber != null) employee.EmployeeNumber = normalizedEmployeeNumber;
                 if (!string.IsNullOrWhiteSpace(request.Title)) employee.Title = request.Title;
                 if (!string.IsNullOrWhiteSpace(request.FirstName)) employee.FirstName = request.FirstName;
                 if (!string.IsNullOrWhiteSpace(request.Surname)) employee.Surname = request.Surname;
@@ -485,7 +507,7 @@ namespace AIPBackend.Controllers
                 if (!string.IsNullOrWhiteSpace(request.EmploymentType)) employee.EmploymentType = request.EmploymentType;
                 if (request.AipAccessLevel != null) employee.AipAccessLevel = request.AipAccessLevel;
                 if (request.Region != null) employee.Region = request.Region;
-                if (request.Email != null) employee.Email = request.Email;
+                if (request.Email != null) employee.Email = normalizedEmail;
                 if (request.ContactNumber != null) employee.ContactNumber = request.ContactNumber;
                 if (request.HouseName != null) employee.HouseName = request.HouseName;
                 if (request.NumberAndStreet != null) employee.NumberAndStreet = request.NumberAndStreet;
@@ -504,6 +526,16 @@ namespace AIPBackend.Controllers
 
                 // Return updated employee details
                 return await GetEmployee(id);
+            }
+            catch (DbUpdateException ex) when (IsUniqueEmployeeEmailViolation(ex))
+            {
+                _logger.LogWarning(ex, "Duplicate employee email detected while updating employee {EmployeeId}", id);
+                return BadRequest(new ApiResponseDto<EmployeeDetailResponse>
+                {
+                    Success = false,
+                    Message = "Email already exists",
+                    Errors = new List<string> { "The employee email address is already in use by another active employee" }
+                });
             }
             catch (Exception ex)
             {
@@ -583,6 +615,39 @@ namespace AIPBackend.Controllers
                 .Max() + 1;
 
             return $"EMP{nextNumber:D6}";
+        }
+
+        private static string? NormalizeEmail(string? email)
+        {
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                return null;
+            }
+
+            return email.Trim();
+        }
+
+        private static string? NormalizeOptionalValue(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return null;
+            }
+
+            return value.Trim();
+        }
+
+        private static bool IsUniqueEmployeeEmailViolation(DbUpdateException exception)
+        {
+            if (exception.InnerException is not SqlException sqlException)
+            {
+                return false;
+            }
+
+            var isUniqueConstraintViolation = sqlException.Number == 2601 || sqlException.Number == 2627;
+
+            return isUniqueConstraintViolation &&
+                   sqlException.Message.Contains("Email", StringComparison.OrdinalIgnoreCase);
         }
     }
 }
