@@ -5,7 +5,7 @@ import { EmployeesTable } from "@/components/employee-registration/EmployeesTabl
 import { EmployeeStats } from "@/components/employee-registration/EmployeeStats"
 import { Employee } from "@/types/employee"
 import { useToast } from "@/hooks/use-toast"
-import { employeeService } from "@/services/employeeService"
+import { employeeService, EmployeeStatistics } from "@/services/employeeService"
 import { handleApiError } from "@/config/api"
 import {
   Dialog,
@@ -20,6 +20,7 @@ export default function EmployeeRegistration() {
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize] = useState(10)
   const [totalEmployees, setTotalEmployees] = useState(0)
+  const [employeeStatistics, setEmployeeStatistics] = useState<EmployeeStatistics | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isInitialLoading, setIsInitialLoading] = useState(true)
@@ -31,6 +32,10 @@ export default function EmployeeRegistration() {
   useEffect(() => {
     fetchEmployees()
   }, [currentPage, pageSize, searchQuery])
+
+  useEffect(() => {
+    fetchEmployeeStatistics()
+  }, [])
 
   const fetchEmployees = async (page = currentPage) => {
     try {
@@ -53,6 +58,19 @@ export default function EmployeeRegistration() {
     }
   }
 
+  const fetchEmployeeStatistics = async () => {
+    try {
+      const statistics = await employeeService.getEmployeeStatistics()
+      setEmployeeStatistics(statistics)
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to fetch employee statistics",
+        variant: "destructive",
+      })
+    }
+  }
+
   const handleNewEmployee = () => {
     setSelectedEmployee(null)
     setIsDialogOpen(true)
@@ -68,6 +86,7 @@ export default function EmployeeRegistration() {
       await employeeService.deleteEmployee(Number(employee.id))
       const nextPage = employees.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage
       await fetchEmployees(nextPage)
+      await fetchEmployeeStatistics()
       toast({
         title: "Success",
         description: `${employee.firstName} ${employee.surname} has been deleted`,
@@ -91,6 +110,7 @@ export default function EmployeeRegistration() {
           Number(selectedEmployee.id)
         )
         await fetchEmployees(currentPage)
+        await fetchEmployeeStatistics()
         toast({
           title: "Success",
           description: `${updatedEmployee.firstName} ${updatedEmployee.surname} has been updated`,
@@ -100,6 +120,7 @@ export default function EmployeeRegistration() {
         const created = await employeeService.registerEmployeeFromFrontend(data)
         const createdEmployee = await employeeService.getEmployeeByIdAsFrontendInterface(created.id)
         await fetchEmployees(1)
+        await fetchEmployeeStatistics()
         toast({
           title: "Success",
           description: `${createdEmployee.firstName} ${createdEmployee.surname} has been created as ${createdEmployee.employeeNumber}`,
@@ -134,7 +155,7 @@ export default function EmployeeRegistration() {
 
         {/* Employee Stats - Responsive Grid */}
         <div className="w-full overflow-hidden">
-          <EmployeeStats employees={employees} />
+          <EmployeeStats statistics={employeeStatistics} />
         </div>
 
         {/* Main Content - Responsive Container */}

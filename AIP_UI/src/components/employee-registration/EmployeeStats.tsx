@@ -1,17 +1,15 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Users, Briefcase, Building2, CalendarCheck } from "lucide-react"
-import { Employee } from "@/types/employee"
+import { Users, Briefcase, CalendarCheck } from "lucide-react"
+import { EmployeeStatistics } from "@/services/employeeService"
 
 interface EmployeeStatsProps {
-  employees?: Employee[]
+  statistics?: EmployeeStatistics | null
 }
 
-export const EmployeeStats = ({ employees }: EmployeeStatsProps) => {
-  // Add null checks to prevent errors when employees is undefined
-  const employeesArray = employees || []
-  const totalEmployees = employeesArray.length
-  const activeEmployees = employeesArray.filter(emp => emp.employeeStatus === "Active").length
-  const positions = new Set(employeesArray.map(emp => emp.position)).size
+export const EmployeeStats = ({ statistics }: EmployeeStatsProps) => {
+  const totalEmployees = statistics?.totalEmployees ?? 0
+  const activeEmployees = statistics?.activeEmployees ?? 0
+  const positions = Object.keys(statistics?.employeesByPosition ?? {}).length
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
