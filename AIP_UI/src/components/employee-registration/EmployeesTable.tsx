@@ -18,29 +18,35 @@ import {
 
 interface EmployeesTableProps {
   employees?: Employee[]
+  currentPage: number
+  totalPages: number
+  itemsPerPage: number
+  totalItems: number
+  searchQuery: string
+  onSearchChange: (query: string) => void
+  onPageChange: (page: number) => void
   onNewEmployee: () => void
   onEditEmployee: (employee: Employee) => void
   onDeleteEmployee: (employee: Employee) => void
 }
 
-export function EmployeesTable({ employees, onNewEmployee, onEditEmployee, onDeleteEmployee }: EmployeesTableProps) {
-  const [currentPage, setCurrentPage] = useState(1)
-  const [searchQuery, setSearchQuery] = useState("")
+export function EmployeesTable({
+  employees,
+  currentPage,
+  totalPages,
+  itemsPerPage,
+  totalItems,
+  searchQuery,
+  onSearchChange,
+  onPageChange,
+  onNewEmployee,
+  onEditEmployee,
+  onDeleteEmployee,
+}: EmployeesTableProps) {
   const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null)
-  const itemsPerPage = 10
 
   const employeesArray = employees || []
-  const filteredEmployees = employeesArray.filter(employee => {
-    const fullName = `${employee.firstName || ''} ${employee.surname || ''}`.toLowerCase()
-    const employeeNumber = (employee.employeeNumber || '').toLowerCase()
-    const searchLower = searchQuery.toLowerCase()
-    
-    return fullName.includes(searchLower) || employeeNumber.includes(searchLower)
-  })
-
-  const totalPages = Math.ceil(filteredEmployees.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
-  const paginatedEmployees = filteredEmployees.slice(startIndex, startIndex + itemsPerPage)
 
   // Function to determine which columns to hide on different screen sizes
   const getResponsiveClasses = (column: string) => {
@@ -58,17 +64,14 @@ export function EmployeesTable({ employees, onNewEmployee, onEditEmployee, onDel
     <div className="space-y-2 md:space-y-4">
       <TableActions 
         searchQuery={searchQuery}
-        onSearchChange={(query) => {
-          setSearchQuery(query)
-          setCurrentPage(1)
-        }}
+        onSearchChange={onSearchChange}
         onNewEmployee={onNewEmployee}
       />
 
       {/* Mobile Card Layout - visible only on small screens */}
       <div className="block md:hidden space-y-3">
-        {paginatedEmployees.length > 0 ? (
-          paginatedEmployees.map((employee, index) => (
+        {employeesArray.length > 0 ? (
+          employeesArray.map((employee, index) => (
             <div key={employee.id || `employee-${index}`} className="rounded-lg border border-border bg-card/80 text-card-foreground backdrop-blur-sm shadow-sm p-4 space-y-3">
               {/* Header with name and status */}
               <div className="flex items-start justify-between gap-2">
@@ -147,8 +150,8 @@ export function EmployeesTable({ employees, onNewEmployee, onEditEmployee, onDel
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedEmployees.length > 0 ? (
-                paginatedEmployees.map((employee, index) => (
+              {employeesArray.length > 0 ? (
+                employeesArray.map((employee, index) => (
                   <TableRow key={employee.id || `employee-${index}`} className="text-sm transition-colors hover:bg-accent/60">
                     <TableCell className="font-medium py-3">{`${employee.firstName || ''} ${employee.surname || ''}`}</TableCell>
                     <TableCell className="py-3">{employee.employeeNumber}</TableCell>
@@ -204,9 +207,9 @@ export function EmployeesTable({ employees, onNewEmployee, onEditEmployee, onDel
       <TablePagination 
         currentPage={currentPage}
         totalPages={totalPages}
-        onPageChange={setCurrentPage}
+        onPageChange={onPageChange}
         itemsPerPage={itemsPerPage}
-        totalItems={filteredEmployees.length}
+        totalItems={totalItems}
         startIndex={startIndex}
       />
 

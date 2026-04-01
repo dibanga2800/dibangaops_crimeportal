@@ -17,6 +17,10 @@ import {
 
 export default function EmployeeRegistration() {
   const [employees, setEmployees] = useState<Employee[]>([])
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize] = useState(10)
+  const [totalEmployees, setTotalEmployees] = useState(0)
+  const [searchQuery, setSearchQuery] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isInitialLoading, setIsInitialLoading] = useState(true)
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
@@ -26,12 +30,18 @@ export default function EmployeeRegistration() {
   // Fetch employees on component mount
   useEffect(() => {
     fetchEmployees()
-  }, [])
+  }, [currentPage, pageSize, searchQuery])
 
-  const fetchEmployees = async () => {
+  const fetchEmployees = async (page = currentPage) => {
     try {
-      const result = await employeeService.getEmployeesAsFrontendInterface()
+      const result = await employeeService.getEmployeesAsFrontendInterface({
+        page,
+        pageSize,
+        search: searchQuery || undefined,
+      })
       setEmployees(result.employees)
+      setTotalEmployees(result.total)
+      setCurrentPage(result.page)
     } catch (error) {
       toast({
         title: "Error",
@@ -56,7 +66,8 @@ export default function EmployeeRegistration() {
   const handleDeleteEmployee = async (employee: Employee) => {
     try {
       await employeeService.deleteEmployee(Number(employee.id))
-      setEmployees(employees.filter(e => e.id !== employee.id))
+      const nextPage = employees.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage
+      await fetchEmployees(nextPage)
       toast({
         title: "Success",
         description: `${employee.firstName} ${employee.surname} has been deleted`,
@@ -79,7 +90,7 @@ export default function EmployeeRegistration() {
         const updatedEmployee = await employeeService.getEmployeeByIdAsFrontendInterface(
           Number(selectedEmployee.id)
         )
-        await fetchEmployees()
+        await fetchEmployees(currentPage)
         toast({
           title: "Success",
           description: `${updatedEmployee.firstName} ${updatedEmployee.surname} has been updated`,
@@ -88,7 +99,7 @@ export default function EmployeeRegistration() {
         // Create
         const created = await employeeService.registerEmployeeFromFrontend(data)
         const createdEmployee = await employeeService.getEmployeeByIdAsFrontendInterface(created.id)
-        await fetchEmployees()
+        await fetchEmployees(1)
         toast({
           title: "Success",
           description: `${createdEmployee.firstName} ${createdEmployee.surname} has been created as ${createdEmployee.employeeNumber}`,
@@ -140,6 +151,16 @@ export default function EmployeeRegistration() {
                 ) : (
                   <EmployeesTable
                     employees={employees}
+                    currentPage={currentPage}
+                    totalPages={Math.max(1, Math.ceil(totalEmployees / pageSize))}
+                    itemsPerPage={pageSize}
+                    totalItems={totalEmployees}
+                    searchQuery={searchQuery}
+                    onSearchChange={(query) => {
+                      setSearchQuery(query)
+                      setCurrentPage(1)
+                    }}
+                    onPageChange={setCurrentPage}
                     onNewEmployee={handleNewEmployee}
                     onEditEmployee={handleEditEmployee}
                     onDeleteEmployee={handleDeleteEmployee}
