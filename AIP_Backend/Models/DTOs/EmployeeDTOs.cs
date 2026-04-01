@@ -230,4 +230,17 @@ namespace AIPBackend.Models.DTOs
         public int PageNumber { get; set; }
         public int PageSize { get; set; }
     }
+
+    /// <summary>
+    /// DTO for employee dashboard statistics.
+    /// </summary>
+    public class EmployeeStatisticsResponse
+    {
+        public int TotalEmployees { get; set; }
+        public int ActiveEmployees { get; set; }
+        public int InactiveEmployees { get; set; }
+        public int NewEmployeesThisMonth { get; set; }
+        public Dictionary<string, int> EmployeesByPosition { get; set; } = new();
+        public Dictionary<string, int> EmployeesByRegion { get; set; } = new();
+    }
 }

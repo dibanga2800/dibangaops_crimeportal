@@ -250,6 +250,59 @@ namespace AIPBackend.Controllers
         }
 
         /// <summary>
+        /// Get employee statistics for dashboard cards
+        /// </summary>
+        [HttpGet("statistics")]
+        public async Task<ActionResult<ApiResponseDto<EmployeeStatisticsResponse>>> GetEmployeeStatistics()
+        {
+            try
+            {
+                var employees = await _context.Employees
+                    .AsNoTracking()
+                    .Where(e => !e.RecordIsDeletedYN)
+                    .ToListAsync();
+
+                var now = DateTime.UtcNow;
+                var monthStart = new DateTime(now.Year, now.Month, 1);
+
+                var response = new EmployeeStatisticsResponse
+                {
+                    TotalEmployees = employees.Count,
+                    ActiveEmployees = employees.Count(e => string.Equals(e.EmployeeStatus, "Active", StringComparison.OrdinalIgnoreCase)),
+                    InactiveEmployees = employees.Count(e => !string.Equals(e.EmployeeStatus, "Active", StringComparison.OrdinalIgnoreCase)),
+                    NewEmployeesThisMonth = employees.Count(e => e.DateCreated >= monthStart),
+                    EmployeesByPosition = employees
+                        .Where(e => !string.IsNullOrWhiteSpace(e.Position))
+                        .GroupBy(e => e.Position)
+                        .OrderBy(g => g.Key)
+                        .ToDictionary(g => g.Key, g => g.Count()),
+                    EmployeesByRegion = employees
+                        .Where(e => !string.IsNullOrWhiteSpace(e.Region))
+                        .GroupBy(e => e.Region!)
+                        .OrderBy(g => g.Key)
+                        .ToDictionary(g => g.Key, g => g.Count())
+                };
+
+                return Ok(new ApiResponseDto<EmployeeStatisticsResponse>
+                {
+                    Success = true,
+                    Message = "Employee statistics retrieved successfully",
+                    Data = response
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving employee statistics");
+                return StatusCode(500, new ApiResponseDto<EmployeeStatisticsResponse>
+                {
+                    Success = false,
+                    Message = "An error occurred while retrieving employee statistics",
+                    Errors = new List<string> { ex.Message }
+                });
+            }
+        }
+
+        /// <summary>
         /// Register a new employee
         /// </summary>
         [HttpPost]
