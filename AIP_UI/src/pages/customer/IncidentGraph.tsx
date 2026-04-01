@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -40,6 +40,7 @@ import {
 	type IncidentGraphFilters,
 	type RegionOption,
 } from '@/services/incidentGraphService'
+import { getCustomerNameById } from '@/services/customerMappingService'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -49,7 +50,7 @@ interface FilteredData {
 	quantity: number
 }
 
-type GraphType = 'value' | 'quantity' | 'type'
+type GraphType = 'value' | 'lost' | 'quantity' | 'type'
 type ScreenSize = 'sm' | 'md' | 'lg'
 
 interface IncidentGraphProps {
@@ -151,6 +152,18 @@ const getIncidentValue = (inc: any): number => {
 	return typeof raw === 'number' ? raw : parseFloat(raw) || 0
 }
 
+const getIncidentLostValue = (inc: any): number => {
+	const raw =
+		inc.totalLostValue ??
+		inc.TotalLostValue ??
+		inc.lostValue ??
+		inc.LostValue ??
+		inc.valueLost ??
+		inc.ValueLost ??
+		0
+	return typeof raw === 'number' ? raw : parseFloat(raw) || 0
+}
+
 const formatCurrency = (value: number, compact = false): string => {
 	if (value === 0) return '£0'
 	if (compact && value >= 1000) {
@@ -168,7 +181,6 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 	const { isAdmin, isManager, selectedCustomerId: contextCustomerId, setSelectedCustomerId, assignedCustomers } = useCustomerSelection()
 	const { availableCustomers, isLoading: loadingCustomers } = useAvailableCustomers()
 	const [searchParams, setSearchParams] = useSearchParams()
-	const navigate = useNavigate()
 
 	const urlCustomerId = searchParams.get('customerId')
 	const userCustomerId = user && 'customerId' in user ? (user as any).customerId : undefined
@@ -178,9 +190,11 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 		if (urlCustomerId) return parseInt(urlCustomerId)
 		if (isAdmin && contextCustomerId) return contextCustomerId
 		if (isManager && contextCustomerId) return contextCustomerId
+		if (isAdmin && availableCustomers.length > 0) return availableCustomers[0].id
+		if (isManager && assignedCustomers.length > 0) return assignedCustomers[0].id
 		if (userCustomerId) return typeof userCustomerId === 'string' ? parseInt(userCustomerId, 10) : userCustomerId
-		return 1
-	}, [customerId, urlCustomerId, isAdmin, isManager, contextCustomerId, userCustomerId])
+		return null
+	}, [customerId, urlCustomerId, isAdmin, isManager, contextCustomerId, userCustomerId, availableCustomers, assignedCustomers])
 
 	// ── Responsive state ──────────────────────────────────────────────────────
 
@@ -205,7 +219,6 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 	const [incidentTypeData, setIncidentTypeData] = useState<IncidentTypeData[]>([])
 	const [availableRegions, setAvailableRegions] = useState<RegionOption[]>([])
 	const [customerName, setCustomerName] = useState<string>('')
-	const [totalSaved, setTotalSaved] = useState(0)
 	const [filteredTotal, setFilteredTotal] = useState(0)
 	const [selectedCustomerForAdmin, setSelectedCustomerForAdmin] = useState<number | null>(null)
 
@@ -266,6 +279,9 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 		if (!isAdmin && !isManager) return
 		if (!currentCustomerId) return
 		setSelectedCustomerForAdmin(currentCustomerId)
+		if (!contextCustomerId) {
+			setSelectedCustomerId(currentCustomerId)
+		}
 	}, [isAdmin, isManager, currentCustomerId])
 
 	// ── Data fetching ─────────────────────────────────────────────────────────
@@ -281,8 +297,26 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 	}, [currentCustomerId])
 
 	const fetchCustomerName = useCallback(async () => {
-		// Customer name is a nice-to-have; failures are swallowed silently
-	}, [])
+		if (!currentCustomerId) {
+			setCustomerName('')
+			return
+		}
+
+		const availableCustomer = availableCustomers.find(c => c.id === currentCustomerId)
+		if (availableCustomer?.name) {
+			setCustomerName(availableCustomer.name)
+			return
+		}
+
+		const assignedCustomer = assignedCustomers.find(c => c.id === currentCustomerId)
+		if (assignedCustomer?.name) {
+			setCustomerName(assignedCustomer.name)
+			return
+		}
+
+		const resolvedCustomerName = await getCustomerNameById(currentCustomerId)
+		setCustomerName(resolvedCustomerName ?? '')
+	}, [currentCustomerId, availableCustomers, assignedCustomers])
 
 	useEffect(() => {
 		fetchRegions()
@@ -311,7 +345,6 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 
 			if (graphResponse.success) {
 				setGraphData(graphResponse.data.incidents)
-				setTotalSaved(graphResponse.data.totals.totalValue)
 				setFilteredTotal(
 					graphType === 'quantity'
 						? graphResponse.data.totals.totalQuantity
@@ -340,9 +373,9 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 	}, [filters, graphType, currentCustomerId])
 
 	useEffect(() => {
+		if (!currentCustomerId) return
 		fetchData()
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [filtersVersion])
+	}, [fetchData, filtersVersion, currentCustomerId])
 
 	// ── Paginated / sorted data ───────────────────────────────────────────────
 
@@ -352,7 +385,12 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 				? incidentTypeData.map(item => ({ location: item.type, value: item.count, quantity: item.count }))
 				: graphData.map(item => ({
 					location: item.location || item.siteName || 'Unknown Location',
-					value: graphType === 'value' ? getIncidentValue(item) : item.value || 0,
+					value:
+						graphType === 'value'
+							? getIncidentValue(item)
+							: graphType === 'lost'
+								? getIncidentLostValue(item)
+								: item.value || 0,
 					quantity: item.quantity || item.quantityRecovered || 0,
 				}))
 
@@ -418,13 +456,14 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 			'Selected Period'
 		if (graphType === 'type') return `Total Incidents by ${ofText} (${selectedRegionLabel}) — ${periodText}`
 		if (graphType === 'quantity') return `Total Items Recovered by ${ofText} (${selectedRegionLabel}) — ${periodText}`
+		if (graphType === 'lost') return `Total Value Lost by ${ofText} (${selectedRegionLabel}) — ${periodText}`
 		return `Total Value Recovered by ${ofText} (${selectedRegionLabel}) — ${periodText}`
 	}, [officerType, timeFilter, graphType, selectedRegionLabel])
 
 	// ── Chart rendering ───────────────────────────────────────────────────────
 
 	const formatValue = (value: number) =>
-		graphType === 'value' ? formatCurrency(value, screenSize === 'sm') : value.toString()
+		graphType === 'value' || graphType === 'lost' ? formatCurrency(value, screenSize === 'sm') : value.toString()
 
 	const formatTooltipValue = (val: any, _name: string, props: any) => {
 		if (graphType === 'type') {
@@ -454,6 +493,7 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 	const barName =
 		graphType === 'type' ? 'Incident Count' :
 		graphType === 'quantity' ? 'Items Recovered' :
+		graphType === 'lost' ? 'Value Lost' :
 		officerType === 'uniform' ? 'Uniform Officer' :
 		officerType === 'detective' ? 'Store Detective' :
 		'Total Value'
@@ -526,11 +566,9 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 									</Select>
 								) : (
 									<>
-										{customerName && (
-											<span className="bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-sm font-medium px-3 py-1 rounded-full">
-												{customerName}
-											</span>
-										)}
+										<span className="bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-sm font-medium px-3 py-1 rounded-full">
+											{customerName || 'Loading customer...'}
+										</span>
 										{currentCustomerId && (
 											<span className="bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-sm font-medium px-3 py-1 rounded-full">
 												ID: {currentCustomerId}
@@ -599,7 +637,7 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 									}}
 									className="flex flex-wrap gap-x-4 gap-y-2"
 								>
-									{([['value', 'Value Recovered'], ['quantity', 'Items Recovered'], ['type', 'Action Types']] as const).map(
+									{([['value', 'Value Recovered'], ['lost', 'Value Lost'], ['quantity', 'Items Recovered'], ['type', 'Action Types']] as const).map(
 										([val, label]) => (
 											<div key={val} className="flex items-center gap-2">
 												<RadioGroupItem value={val} id={`gt-${val}`} className="border-slate-600 text-indigo-500" />
@@ -646,7 +684,7 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 										}}
 										className="flex flex-col gap-2"
 									>
-										{([['all', 'All Officers'], ['uniform', 'Uniform Officers'], ['detective', 'Store Detectives']] as const).map(
+										{([['all', 'All Officers'], ['uniform', 'Uniform Officers'], ['detective', 'Store Detectives'], ['store-user', 'Store Users']] as const).map(
 											([val, label]) => (
 												<div key={val} className="flex items-center gap-2">
 													<RadioGroupItem value={val} id={`ot-${val}`} className="border-slate-600 text-indigo-500" />
@@ -692,9 +730,23 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 							{graphType === 'type'
 								? `${selectedRegionLabel} — Incident Types Distribution`
 								: `${selectedRegionLabel} — ${
-										officerType === 'all' ? 'Total Incidents by Location' :
-										officerType === 'uniform' ? 'Uniform Officer Incidents' :
-										'Store Detective Incidents'
+										graphType === 'value'
+											? officerType === 'uniform'
+												? 'Recovered Value by Location (Uniform Officers)'
+												: officerType === 'detective'
+													? 'Recovered Value by Location (Store Detectives)'
+													: 'Recovered Value by Location'
+											: graphType === 'lost'
+												? officerType === 'uniform'
+													? 'Lost Value by Location (Uniform Officers)'
+													: officerType === 'detective'
+														? 'Lost Value by Location (Store Detectives)'
+														: 'Lost Value by Location'
+												: officerType === 'uniform'
+													? 'Recovered Items by Location (Uniform Officers)'
+													: officerType === 'detective'
+														? 'Recovered Items by Location (Store Detectives)'
+														: 'Recovered Items by Location'
 									}`}
 						</CardTitle>
 						{startDate && endDate && (
@@ -784,6 +836,7 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 													value:
 														graphType === 'type' ? 'Number of Incidents' :
 														graphType === 'value' ? 'Amount Recovered (£)' :
+														graphType === 'lost' ? 'Amount Lost (£)' :
 														'Number of Items',
 													angle: -90,
 													position: 'insideLeft',
@@ -825,7 +878,7 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 											/>
 
 											<Bar
-												dataKey={graphType === 'type' ? 'count' : graphType === 'value' ? 'value' : 'quantity'}
+												dataKey={graphType === 'type' ? 'count' : graphType === 'quantity' ? 'quantity' : 'value'}
 												name={barName}
 												radius={[0, 0, 0, 0]}
 												style={{ filter: 'url(#barShadow)' }}
@@ -857,7 +910,7 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 												}}
 											>
 												<LabelList
-													dataKey={graphType === 'type' ? 'count' : graphType === 'value' ? 'value' : 'quantity'}
+													dataKey={graphType === 'type' ? 'count' : graphType === 'quantity' ? 'quantity' : 'value'}
 													position="top"
 													offset={cfg.labelOffset}
 													formatter={formatValue}

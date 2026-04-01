@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
+using System.Text.RegularExpressions;
 
 namespace AIPBackend.Controllers
 {
@@ -13,6 +14,7 @@ namespace AIPBackend.Controllers
     [Authorize(Roles = "administrator,manager")]
     public class EmployeeController : ControllerBase
     {
+        private static readonly Regex GeneratedEmployeeNumberPattern = new(@"^EMP(\d+)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
         private readonly ApplicationDbContext _context;
         private readonly ILogger<EmployeeController> _logger;
 
@@ -256,11 +258,15 @@ namespace AIPBackend.Controllers
         {
             try
             {
-                _logger.LogInformation("Registering new employee: {EmployeeNumber}", request.EmployeeNumber);
+                var employeeNumber = string.IsNullOrWhiteSpace(request.EmployeeNumber)
+                    ? await GenerateNextEmployeeNumberAsync()
+                    : request.EmployeeNumber.Trim();
+
+                _logger.LogInformation("Registering new employee: {EmployeeNumber}", employeeNumber);
 
                 // Validate unique employee number
                 var existingEmployee = await _context.Employees
-                    .Where(e => e.EmployeeNumber == request.EmployeeNumber && !e.RecordIsDeletedYN)
+                    .Where(e => e.EmployeeNumber == employeeNumber && !e.RecordIsDeletedYN)
                     .FirstOrDefaultAsync();
 
                 if (existingEmployee != null)
@@ -269,7 +275,7 @@ namespace AIPBackend.Controllers
                     {
                         Success = false,
                         Message = "Employee number already exists",
-                        Errors = new List<string> { $"Employee number {request.EmployeeNumber} is already in use" }
+                        Errors = new List<string> { $"Employee number {employeeNumber} is already in use" }
                     });
                 }
 
@@ -295,7 +301,7 @@ namespace AIPBackend.Controllers
 
                 var employee = new Employee
                 {
-                    EmployeeNumber = request.EmployeeNumber,
+                    EmployeeNumber = employeeNumber,
                     Title = request.Title,
                     FirstName = request.FirstName,
                     Surname = request.Surname,
@@ -506,6 +512,24 @@ namespace AIPBackend.Controllers
                     Errors = new List<string> { ex.Message }
                 });
             }
+        }
+
+        private async Task<string> GenerateNextEmployeeNumberAsync()
+        {
+            var employeeNumbers = await _context.Employees
+                .AsNoTracking()
+                .Where(e => !e.RecordIsDeletedYN && e.EmployeeNumber.StartsWith("EMP"))
+                .Select(e => e.EmployeeNumber)
+                .ToListAsync();
+
+            var nextNumber = employeeNumbers
+                .Select(value => GeneratedEmployeeNumberPattern.Match(value))
+                .Where(match => match.Success && int.TryParse(match.Groups[1].Value, out _))
+                .Select(match => int.Parse(match.Groups[1].Value))
+                .DefaultIfEmpty(0)
+                .Max() + 1;
+
+            return $"EMP{nextNumber:D6}";
         }
     }
 }

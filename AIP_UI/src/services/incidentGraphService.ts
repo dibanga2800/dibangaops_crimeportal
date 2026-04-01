@@ -34,6 +34,18 @@ const getIncidentValue = (inc: any): number => {
 	return typeof raw === 'number' ? raw : parseFloat(raw) || 0
 }
 
+const getIncidentLostValue = (inc: any): number => {
+	const raw =
+		inc.totalLostValue ??
+		inc.TotalLostValue ??
+		inc.valueLost ??
+		inc.ValueLost ??
+		inc.lostValue ??
+		inc.LostValue ??
+		0
+	return typeof raw === 'number' ? raw : parseFloat(raw) || 0
+}
+
 const buildAuthHeaders = (): Record<string, string> => {
 	const customerId = getCurrentCustomerId()
 	return customerId ? { 'X-Customer-Id': customerId.toString() } : {}
@@ -56,6 +68,7 @@ const passesOfficerFilter = (incident: any, officerType: string | undefined): bo
 	if (!role) return false
 	if (officerType === 'uniform') return role === 'Uniform Officer'
 	if (officerType === 'detective') return role === 'Store Detective'
+	if (officerType === 'store-user') return role === 'Store User'
 	return true
 }
 
@@ -72,7 +85,7 @@ export const incidentGraphService = {
 			const response = await api.get(url, { headers: buildAuthHeaders() })
 			const incidents: any[] = response.data.data || []
 
-			const grouped = new Map<string, { value: number; count: number; quantity: number }>()
+			const grouped = new Map<string, { value: number; count: number; quantity: number; lostValue: number }>()
 
 			for (const incident of incidents) {
 				const location: string =
@@ -86,11 +99,15 @@ export const incidentGraphService = {
 
 				if (!passesOfficerFilter(incident, filters.officerType)) continue
 
-				const existing = grouped.get(location) ?? { value: 0, count: 0, quantity: 0 }
+				const existing = grouped.get(location) ?? { value: 0, count: 0, quantity: 0, lostValue: 0 }
 				existing.count += 1
 
 				if (filters.graphType === 'value') {
 					existing.value += getIncidentValue(incident)
+				} else if (filters.graphType === 'lost') {
+					const lostValue = getIncidentLostValue(incident)
+					existing.lostValue += lostValue
+					existing.value += lostValue
 				} else if (filters.graphType === 'quantity') {
 					const qty =
 						incident.quantityRecovered ??
@@ -139,8 +156,10 @@ export const incidentGraphService = {
 					description: '',
 					incidentInvolved: [],
 					stolenItems: [],
+					totalLostValue: data.lostValue,
 					totalValueRecovered: data.value,
 					value: data.value,
+					lostValue: data.lostValue,
 					valueRecovered: data.value,
 					quantityRecovered: data.quantity,
 					quantity: data.quantity,

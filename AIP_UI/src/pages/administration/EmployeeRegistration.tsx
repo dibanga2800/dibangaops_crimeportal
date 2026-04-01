@@ -89,10 +89,11 @@ export default function EmployeeRegistration() {
       } else {
         // Create
         const created = await employeeService.registerEmployeeFromFrontend(data)
-        setEmployees(prev => [...prev, created])
+        const createdEmployee = await employeeService.getEmployeeByIdAsFrontendInterface(created.id)
+        setEmployees(prev => [...prev, createdEmployee])
         toast({
           title: "Success",
-          description: `${created.firstName} ${created.surname} has been created`,
+          description: `${createdEmployee.firstName} ${createdEmployee.surname} has been created as ${createdEmployee.employeeNumber}`,
         })
       }
       // Clear selected employee and close dialog

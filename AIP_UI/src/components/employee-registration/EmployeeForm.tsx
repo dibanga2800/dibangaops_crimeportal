@@ -36,7 +36,7 @@ const formatRoleDisplay = (value: string): string =>
 
 const formSchema = z.object({
   // Basic Information - Backend Required Fields
-  employeeNumber: z.string().min(1, "Employee number is required"),
+  employeeNumber: z.string().optional(),
   title: z.string().min(1, "Title is required"),
   firstName: z.string().min(2, "First name must be at least 2 characters"),
   surname: z.string().min(2, "Last name must be at least 2 characters"),
@@ -113,7 +113,7 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
       postCode: initialData?.postCode || "",
       region: initialData?.region || "",
       position: initialData?.position || "",
-      employeeNumber: initialData?.employeeNumber || "",
+      employeeNumber: initialData?.employeeNumber || "Auto-generated when employee is created",
       employeeStatus: initialData?.employeeStatus || "Active",
       employmentType: initialData?.employmentType || "Full-time",
       nationality: initialData?.nationality || "",
@@ -236,7 +236,7 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
     console.log('🆔 [EmployeeForm] Current employee ID:', initialData?.id)
     
     // Validate required fields before submission
-    const requiredFields = ['employeeNumber', 'title', 'firstName', 'surname', 'startDate', 'position', 'employeeStatus', 'employmentType']
+    const requiredFields = ['title', 'firstName', 'surname', 'startDate', 'position', 'employeeStatus', 'employmentType']
     const missingFields = requiredFields.filter(field => !data[field as keyof FormData])
     
     console.log('🔍 [EmployeeForm] Form validation - Required fields:', requiredFields)
@@ -434,8 +434,19 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
                 <FormItem>
                   <FormLabel>Employee Number</FormLabel>
                   <FormControl>
-                    <Input placeholder="EMP001" {...field} />
+                    <Input
+                      placeholder="Auto-generated when employee is created"
+                      readOnly={!initialData}
+                      disabled={!initialData}
+                      {...field}
+                      value={field.value ?? ''}
+                    />
                   </FormControl>
+                  {!initialData && (
+                    <p className="text-xs text-muted-foreground">
+                      Generated automatically after the employee is created.
+                    </p>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}

@@ -6,9 +6,8 @@ import { EmployeeRegistrationRequest, EmployeeDetailResponse } from '@/services/
  * Converts camelCase to PascalCase and handles data transformations
  */
 export const mapToBackendRequest = (employee: Partial<Employee>): EmployeeRegistrationRequest => {
-  return {
+  const request: EmployeeRegistrationRequest = {
     // Required fields
-    EmployeeNumber: employee.employeeNumber || '',
     Title: employee.title || '',
     FirstName: employee.firstName || '',
     Surname: employee.surname || '',
@@ -35,6 +34,12 @@ export const mapToBackendRequest = (employee: Partial<Employee>): EmployeeRegist
     RightToWorkCondition: employee.rightToWorkCondition,
     
   }
+
+  if (employee.employeeNumber?.trim()) {
+    request.EmployeeNumber = employee.employeeNumber.trim()
+  }
+
+  return request
 }
 
 /**
@@ -178,7 +183,6 @@ export const validateEmployeeRegistration = (employee: Partial<Employee>): strin
   const errors: string[] = []
   
   // Required fields validation
-  if (!employee.employeeNumber) errors.push('Employee number is required')
   if (!employee.title) errors.push('Title is required')
   if (!employee.firstName) errors.push('First name is required')
   if (!employee.surname) errors.push('Surname is required')
