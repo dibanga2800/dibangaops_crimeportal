@@ -37,6 +37,8 @@ locals {
   jwt_signing_key_value  = var.jwt_signing_key != null && var.jwt_signing_key != "" ? var.jwt_signing_key : random_password.jwt_signing_key.result
   backend_container_fqdn = "https://${azurerm_container_app.backend.latest_revision_fqdn}"
   ai_container_fqdn      = "https://${var.ai_name}.internal.${azurerm_container_app_environment.env.default_domain}"
+  effective_frontend_url = var.frontend_url != null && var.frontend_url != "" ? var.frontend_url : "https://${azurerm_static_web_app.frontend.default_host_name}"
+  effective_insightface_base_url = var.insightface_base_url != null && var.insightface_base_url != "" ? var.insightface_base_url : local.ai_container_fqdn
 }
 
 resource "azurerm_resource_group" "rg" {
@@ -154,6 +156,22 @@ resource "azurerm_key_vault_secret" "jwt_signing_key" {
   depends_on   = [azurerm_role_assignment.terraform_kv_admin]
 }
 
+resource "azurerm_key_vault_secret" "smtp_password" {
+  count        = var.smtp_password != null && var.smtp_password != "" ? 1 : 0
+  name         = "smtp-password"
+  value        = var.smtp_password
+  key_vault_id = azurerm_key_vault.kv.id
+  depends_on   = [azurerm_role_assignment.terraform_kv_admin]
+}
+
+resource "azurerm_key_vault_secret" "azure_openai_api_key" {
+  count        = var.azure_openai_api_key != null && var.azure_openai_api_key != "" ? 1 : 0
+  name         = "azure-openai-api-key"
+  value        = var.azure_openai_api_key
+  key_vault_id = azurerm_key_vault.kv.id
+  depends_on   = [azurerm_role_assignment.terraform_kv_admin]
+}
+
 # ---------------- STORAGE ----------------
 
 resource "azurerm_storage_account" "storage" {
@@ -229,6 +247,24 @@ resource "azurerm_container_app" "backend" {
     identity            = "System"
   }
 
+  dynamic "secret" {
+    for_each = var.smtp_password != null && var.smtp_password != "" ? [1] : []
+    content {
+      name                = "smtp-password"
+      key_vault_secret_id = azurerm_key_vault_secret.smtp_password[0].versionless_id
+      identity            = "System"
+    }
+  }
+
+  dynamic "secret" {
+    for_each = var.azure_openai_api_key != null && var.azure_openai_api_key != "" ? [1] : []
+    content {
+      name                = "azure-openai-api-key"
+      key_vault_secret_id = azurerm_key_vault_secret.azure_openai_api_key[0].versionless_id
+      identity            = "System"
+    }
+  }
+
   template {
     container {
       name   = "backend"
@@ -250,12 +286,12 @@ resource "azurerm_container_app" "backend" {
 
       env {
         name  = "InsightFace__BaseUrl"
-        value = local.ai_container_fqdn
+        value = local.effective_insightface_base_url
       }
 
       env {
         name  = "FrontendUrl"
-        value = "https://${azurerm_static_web_app.frontend.default_host_name}"
+        value = local.effective_frontend_url
       }
 
       env {
@@ -286,6 +322,115 @@ resource "azurerm_container_app" "backend" {
       env {
         name  = "Jwt__Audience"
         value = var.jwt_audience
+      }
+
+      env {
+        name  = "Jwt__AccessTokenExpirationMinutes"
+        value = tostring(var.jwt_access_token_expiration_minutes)
+      }
+
+      env {
+        name  = "Jwt__RefreshTokenExpirationDays"
+        value = tostring(var.jwt_refresh_token_expiration_days)
+      }
+
+      dynamic "env" {
+        for_each = var.smtp_host != null && var.smtp_host != "" ? [1] : []
+        content {
+          name  = "Smtp__Host"
+          value = var.smtp_host
+        }
+      }
+
+      dynamic "env" {
+        for_each = var.smtp_port > 0 ? [1] : []
+        content {
+          name  = "Smtp__Port"
+          value = tostring(var.smtp_port)
+        }
+      }
+
+      env {
+        name  = "Smtp__EnableSsl"
+        value = tostring(var.smtp_enable_ssl)
+      }
+
+      dynamic "env" {
+        for_each = var.smtp_username != null && var.smtp_username != "" ? [1] : []
+        content {
+          name  = "Smtp__Username"
+          value = var.smtp_username
+        }
+      }
+
+      dynamic "env" {
+        for_each = var.smtp_password != null && var.smtp_password != "" ? [1] : []
+        content {
+          name        = "Smtp__Password"
+          secret_name = "smtp-password"
+        }
+      }
+
+      dynamic "env" {
+        for_each = var.smtp_from_email != null && var.smtp_from_email != "" ? [1] : []
+        content {
+          name  = "Smtp__FromEmail"
+          value = var.smtp_from_email
+        }
+      }
+
+      env {
+        name  = "Smtp__FromName"
+        value = var.smtp_from_name
+      }
+
+      env {
+        name  = "AzureOpenAI__Enabled"
+        value = tostring(var.azure_openai_enabled)
+      }
+
+      dynamic "env" {
+        for_each = var.azure_openai_endpoint != null && var.azure_openai_endpoint != "" ? [1] : []
+        content {
+          name  = "AzureOpenAI__Endpoint"
+          value = var.azure_openai_endpoint
+        }
+      }
+
+      dynamic "env" {
+        for_each = var.azure_openai_api_key != null && var.azure_openai_api_key != "" ? [1] : []
+        content {
+          name        = "AzureOpenAI__ApiKey"
+          secret_name = "azure-openai-api-key"
+        }
+      }
+
+      dynamic "env" {
+        for_each = var.azure_openai_deployment != null && var.azure_openai_deployment != "" ? [1] : []
+        content {
+          name  = "AzureOpenAI__Deployment"
+          value = var.azure_openai_deployment
+        }
+      }
+
+      env {
+        name  = "InsightFace__Enabled"
+        value = tostring(var.insightface_enabled)
+      }
+
+      env {
+        name  = "InsightFace__TimeoutSeconds"
+        value = tostring(var.insightface_timeout_seconds)
+      }
+
+      env {
+        name  = "InsightFace__MinSimilarity"
+        value = tostring(var.insightface_min_similarity)
+      }
+
+      env {
+        name  = "InsightFace__MaxSearchResults"
+        value = tostring(var.insightface_max_search_results)
       }
     }
 

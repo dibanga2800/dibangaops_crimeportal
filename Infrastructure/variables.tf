@@ -43,7 +43,7 @@ variable "sql_server_name_prefix" {
 variable "sql_db_name" {
   description = "Azure SQL database name"
   type        = string
-  default     = "crimeportal-db"
+  default     = "COOP"
 }
 
 variable "blob_storage_name_prefix" {
@@ -127,10 +127,135 @@ variable "jwt_audience" {
   default     = "AIPFrontend"
 }
 
+variable "jwt_access_token_expiration_minutes" {
+  description = "JWT access token lifetime in minutes"
+  type        = number
+  default     = 60
+}
+
+variable "jwt_refresh_token_expiration_days" {
+  description = "JWT refresh token lifetime in days"
+  type        = number
+  default     = 7
+}
+
 variable "container_app_environment_name" {
   description = "Container Apps environment name"
   type        = string
   default     = "crimeportal-env"
+}
+
+variable "frontend_url" {
+  description = "Allowed frontend origin for backend CORS"
+  type        = string
+  default     = null
+  nullable    = true
+}
+
+variable "smtp_host" {
+  description = "SMTP server host"
+  type        = string
+  default     = null
+  nullable    = true
+}
+
+variable "smtp_port" {
+  description = "SMTP server port"
+  type        = number
+  default     = 587
+}
+
+variable "smtp_enable_ssl" {
+  description = "Whether SMTP should use SSL/TLS"
+  type        = bool
+  default     = true
+}
+
+variable "smtp_username" {
+  description = "SMTP username"
+  type        = string
+  default     = null
+  nullable    = true
+}
+
+variable "smtp_password" {
+  description = "SMTP password or app password"
+  type        = string
+  default     = null
+  nullable    = true
+  sensitive   = true
+}
+
+variable "smtp_from_email" {
+  description = "Default From email for backend notifications"
+  type        = string
+  default     = null
+  nullable    = true
+}
+
+variable "smtp_from_name" {
+  description = "Default From display name for backend notifications"
+  type        = string
+  default     = "Crime Portal Notifications"
+}
+
+variable "azure_openai_endpoint" {
+  description = "Azure OpenAI endpoint URL"
+  type        = string
+  default     = null
+  nullable    = true
+}
+
+variable "azure_openai_api_key" {
+  description = "Azure OpenAI API key"
+  type        = string
+  default     = null
+  nullable    = true
+  sensitive   = true
+}
+
+variable "azure_openai_deployment" {
+  description = "Azure OpenAI deployment name"
+  type        = string
+  default     = null
+  nullable    = true
+}
+
+variable "azure_openai_enabled" {
+  description = "Whether Azure OpenAI-backed classification is enabled"
+  type        = bool
+  default     = false
+}
+
+variable "insightface_enabled" {
+  description = "Whether the backend should use InsightFace for offender recognition"
+  type        = bool
+  default     = true
+}
+
+variable "insightface_base_url" {
+  description = "InsightFace service base URL; leave null to use the internal Container App URL"
+  type        = string
+  default     = null
+  nullable    = true
+}
+
+variable "insightface_timeout_seconds" {
+  description = "InsightFace request timeout in seconds"
+  type        = number
+  default     = 30
+}
+
+variable "insightface_min_similarity" {
+  description = "Minimum InsightFace similarity threshold"
+  type        = number
+  default     = 0.85
+}
+
+variable "insightface_max_search_results" {
+  description = "Maximum InsightFace search matches to return"
+  type        = number
+  default     = 3
 }
 
 variable "enable_application_insights" {
