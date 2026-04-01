@@ -110,6 +110,7 @@ jobs:
           rm -rf swa-publish
           mkdir -p swa-publish
           cp -a AIP_UI/dist/. swa-publish/
+          cp AIP_UI/staticwebapp.config.json swa-publish/staticwebapp.config.json
           du -sh swa-publish
 
       - name: Deploy to Azure Static Web Apps
