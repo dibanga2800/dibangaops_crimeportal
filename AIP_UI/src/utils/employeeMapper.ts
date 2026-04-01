@@ -35,8 +35,11 @@ export const mapToBackendRequest = (employee: Partial<Employee>): EmployeeRegist
     
   }
 
-  if (employee.employeeNumber?.trim()) {
-    request.EmployeeNumber = employee.employeeNumber.trim()
+  const trimmedEmployeeNumber = employee.employeeNumber?.trim()
+  const isGeneratedPlaceholder = trimmedEmployeeNumber === 'Auto-generated when employee is created'
+
+  if (trimmedEmployeeNumber && !isGeneratedPlaceholder) {
+    request.EmployeeNumber = trimmedEmployeeNumber
   }
 
   return request

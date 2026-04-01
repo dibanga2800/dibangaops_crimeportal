@@ -113,7 +113,7 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
       postCode: initialData?.postCode || "",
       region: initialData?.region || "",
       position: initialData?.position || "",
-      employeeNumber: initialData?.employeeNumber || "Auto-generated when employee is created",
+      employeeNumber: initialData?.employeeNumber || "",
       employeeStatus: initialData?.employeeStatus || "Active",
       employmentType: initialData?.employmentType || "Full-time",
       nationality: initialData?.nationality || "",
@@ -205,7 +205,28 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
   // Reset form when initialData changes to null (when switching from edit to create mode)
   useEffect(() => {
     if (!initialData) {
-      form.reset()
+      form.reset({
+        aipAccessLevel: "",
+        title: "",
+        firstName: "",
+        surname: "",
+        email: "",
+        contactNumber: "",
+        startDate: "",
+        houseName: "",
+        numberAndStreet: "",
+        town: "",
+        county: "",
+        postCode: "",
+        region: "",
+        position: "",
+        employeeNumber: "",
+        employeeStatus: "Active",
+        employmentType: "Full-time",
+        nationality: "",
+        rightToWorkCondition: "",
+        status: "active",
+      })
       form.clearErrors()
     }
   }, [initialData, form])
