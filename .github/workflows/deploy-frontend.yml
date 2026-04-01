@@ -100,7 +100,7 @@ jobs:
         working-directory: AIP_UI
         env:
           VITE_APP_ENV: production
-          VITE_API_BASE_URL: ${{ needs.terraform-output.outputs.backend_url }}/api
+          VITE_API_BASE_URL: https://crimeportal-backend.bravemushroom-fae169c7.uksouth.azurecontainerapps.io/api
           VITE_ENABLE_MSW: 'false'
         run: npm run build:production
 
