@@ -158,6 +158,13 @@ variable "frontend_url" {
   nullable    = true
 }
 
+variable "frontend_custom_domain" {
+  description = "Custom domain to bind to Azure Static Web App (e.g. dibangops.com)"
+  type        = string
+  default     = null
+  nullable    = true
+}
+
 variable "smtp_host" {
   description = "SMTP server host"
   type        = string

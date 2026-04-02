@@ -564,3 +564,10 @@ resource "azurerm_static_web_app" "frontend" {
   sku_tier            = "Free"
   sku_size            = "Free"
 }
+
+resource "azurerm_static_web_app_custom_domain" "frontend_custom_domain" {
+  count             = var.frontend_custom_domain != null && var.frontend_custom_domain != "" ? 1 : 0
+  static_web_app_id = azurerm_static_web_app.frontend.id
+  domain_name       = var.frontend_custom_domain
+  validation_type   = "dns-txt-token"
+}
