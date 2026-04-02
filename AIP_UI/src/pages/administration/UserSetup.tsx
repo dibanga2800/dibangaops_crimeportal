@@ -84,6 +84,12 @@ const UserSetup = () => {
   const [viewUser, setViewUser] = useState<User | undefined>()
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize] = useState(10)
+  const [summaryStats, setSummaryStats] = useState({
+    totalUsers: 0,
+    activeUsers: 0,
+    adminUsers: 0,
+    storeUsers: 0,
+  })
   const { availableCustomers } = useAvailableCustomers()
   
   // Create a mapping of customerId to customer name for quick lookup
@@ -117,6 +123,33 @@ const UserSetup = () => {
       searchTerm: debouncedSearch || undefined
     }))
   }, [dispatch, currentPage, pageSize, debouncedSearch])
+
+  // Load summary stats from full dataset (not current page)
+  useEffect(() => {
+    const loadSummaryStats = async () => {
+      try {
+        const [usersResponse, adminUsersByRole, storeUsersByRole] = await Promise.all([
+          userService.getUsers({ page: 1, pageSize: 1 }),
+          userService.getUsersByRole('administrator'),
+          userService.getUsersByRole('store'),
+        ])
+
+        const totalUsers = usersResponse.pagination?.totalCount ?? 0
+
+        setSummaryStats({
+          totalUsers,
+          // Backend list excludes soft-deleted users, so total == active
+          activeUsers: totalUsers,
+          adminUsers: adminUsersByRole.length,
+          storeUsers: storeUsersByRole.length,
+        })
+      } catch (statsError) {
+        console.error('Failed to load user summary stats', statsError)
+      }
+    }
+
+    loadSummaryStats()
+  }, [])
 
   // Apply lightweight client-side filtering for UX (while backend still handles paging)
   const filteredUsers = useMemo(() => {
@@ -377,10 +410,9 @@ const UserSetup = () => {
   }
 
   const totalFilteredUsers = displayUsers.length
-  const activeUsers = filteredUsers.filter(u => !(u as any).recordIsDeleted).length
-  const adminUsers = filteredUsers.filter(u => u.role === 'administrator' && !(u as any).recordIsDeleted).length
-  const adminPercent = totalFilteredUsers > 0 ? ((adminUsers / totalFilteredUsers) * 100).toFixed(1) : '0.0'
-  const storeUsers = filteredUsers.filter(u => u.role === 'store' && !(u as any).recordIsDeleted).length
+  const adminPercent = summaryStats.totalUsers > 0
+    ? ((summaryStats.adminUsers / summaryStats.totalUsers) * 100).toFixed(1)
+    : '0.0'
 
   return (
       <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gradient-to-br from-background via-muted/30 to-background">
@@ -434,8 +466,8 @@ const UserSetup = () => {
             <div className="rounded-xl width-[350px] overflow-hidden shadow bg-gradient-to-br from-blue-500 to-blue-700 flex items-stretch min-h-[80px] sm:min-h-[100px]">
               <div className="flex-1 flex flex-col justify-center px-3  sm:px-4 md:px-6 py-3 sm:py-4 md:py-6">
                 <span className="text-white text-xs sm:text-sm md:text-base font-medium mb-1 leading-tight">Total Users</span>
-                <span className="text-xl sm:text-2xl md:text-3xl font-bold text-white leading-none">{totalFilteredUsers}</span>
-                <span className="text-white/80 text-xs mt-1 leading-tight">{activeUsers} active</span>
+                <span className="text-xl sm:text-2xl md:text-3xl font-bold text-white leading-none">{summaryStats.totalUsers}</span>
+                <span className="text-white/80 text-xs mt-1 leading-tight">{summaryStats.activeUsers} active</span>
               </div>
               <div className="flex items-center  pr-2 sm:pr-3 md:pr-6">
                 <span className="bg-white/20 rounded-full p-1.5 sm:p-2 md:p-3 flex items-center justify-center">
@@ -447,7 +479,7 @@ const UserSetup = () => {
             <div className="rounded-xl overflow-hidden shadow bg-gradient-to-br from-purple-500 to-purple-700 flex items-stretch min-h-[80px] sm:min-h-[100px]">
               <div className="flex-1 flex flex-col justify-center px-3 sm:px-4 md:px-6 py-3 sm:py-4 md:py-6">
                 <span className="text-white text-xs sm:text-sm md:text-base font-medium mb-1 leading-tight">Admin Users</span>
-                <span className="text-xl sm:text-2xl md:text-3xl font-bold text-white leading-none">{adminUsers}</span>
+                <span className="text-xl sm:text-2xl md:text-3xl font-bold text-white leading-none">{summaryStats.adminUsers}</span>
                 <span className="text-white/80 text-xs mt-1 leading-tight">{adminPercent}% of total</span>
               </div>
               <div className="flex items-center pr-2 sm:pr-3 md:pr-6">
@@ -460,7 +492,7 @@ const UserSetup = () => {
             <div className="rounded-xl overflow-hidden shadow bg-gradient-to-br from-green-500 to-green-700 flex items-stretch min-h-[80px] sm:min-h-[100px] sm:col-span-2 lg:col-span-1">
               <div className="flex-1 flex flex-col justify-center px-3 sm:px-4 md:px-6 py-3 sm:py-4 md:py-6">
                 <span className="text-white text-xs sm:text-sm md:text-base font-medium mb-1 leading-tight">Store Users</span>
-                <span className="text-xl sm:text-2xl md:text-3xl font-bold text-white leading-none">{storeUsers}</span>
+                <span className="text-xl sm:text-2xl md:text-3xl font-bold text-white leading-none">{summaryStats.storeUsers}</span>
                 <span className="text-white/80 text-xs mt-1 leading-tight">Active store users</span>
               </div>
               <div className="flex items-center pr-2 sm:pr-3 md:pr-6">
