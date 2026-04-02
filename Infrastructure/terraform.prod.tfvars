@@ -16,7 +16,7 @@ sql_max_size_gb = 5
 
 monthly_budget_amount = 75
 enable_budget_alert   = true
-budget_start_date     = "2026-01-01T00:00:00Z"
+budget_start_date     = "2026-04-01T00:00:00Z"
 budget_alert_emails   = ["crimeportalai@gmail.com"]
 
 # Set via TF_VAR_budget_alert_emails in CI/CLI.
@@ -43,7 +43,7 @@ insightface_timeout_seconds    = 30
 insightface_min_similarity     = 0.85
 insightface_max_search_results = 3
 
-frontend_url = "https://delightful-river-0c1f8b903.6.azurestaticapps.net"
+frontend_url = "https://dibangops.com"
 
 jwt_access_token_expiration_minutes = 60
 jwt_refresh_token_expiration_days   = 7
