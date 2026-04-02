@@ -34,20 +34,49 @@ const ROLE_DISPLAY_NAMES: Record<string, string> = {
 const formatRoleDisplay = (value: string): string =>
   ROLE_DISPLAY_NAMES[value.toLowerCase()] || value
 
+const formatDateInputLocal = (date: Date): string => {
+	const year = date.getFullYear()
+	const month = String(date.getMonth() + 1).padStart(2, '0')
+	const day = String(date.getDate()).padStart(2, '0')
+	return `${year}-${month}-${day}`
+}
+
+const parseDateInputLocal = (value: string): Date | null => {
+	if (!value) return null
+
+	const parts = value.split('-')
+	if (parts.length !== 3) return null
+
+	const [year, month, day] = parts.map((p) => Number(p))
+	if (!year || !month || !day) return null
+
+	const parsed = new Date(year, month - 1, day)
+	// Guard against invalid dates like NaN
+	if (Number.isNaN(parsed.getTime())) return null
+
+	return parsed
+}
+
 const formSchema = z.object({
   // Basic Information - Backend Required Fields
   employeeNumber: z.string().optional(),
   title: z.string().min(1, "Title is required"),
   firstName: z.string().min(2, "First name must be at least 2 characters"),
   surname: z.string().min(2, "Last name must be at least 2 characters"),
-  startDate: z.string().min(1, "Start date is required").refine((date) => {
+  startDate: z.string().min(1, 'Start date is required').refine((date) => {
     if (!date) return false
-    const selectedDate = new Date(date)
+
+    // Parse `YYYY-MM-DD` as a local date to avoid UTC timezone shifts
+    const selectedDate = parseDateInputLocal(date)
+    if (!selectedDate) return false
+
     const today = new Date()
-    today.setHours(0, 0, 0, 0) // Reset time to start of day
+    today.setHours(0, 0, 0, 0)
+
+    selectedDate.setHours(0, 0, 0, 0)
     return selectedDate <= today
   }, {
-    message: "Start date cannot be in the future"
+    message: 'Start date cannot be in the future'
   }),
   position: z.string().min(1, "Position is required"),
   employeeStatus: z.string().min(1, "Employee status is required"),
@@ -105,7 +134,7 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
       surname: initialData?.surname || "",
       email: initialData?.email || "",
       contactNumber: initialData?.contactNumber || "",
-      startDate: initialData?.startDate ? new Date(initialData.startDate).toISOString().split('T')[0] : "",
+      startDate: initialData?.startDate ? formatDateInputLocal(new Date(initialData.startDate)) : '',
       houseName: initialData?.houseName || "",
       numberAndStreet: initialData?.numberAndStreet || "",
       town: initialData?.town || "",
@@ -170,7 +199,7 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
               title: employeeData.title || "",
               firstName: employeeData.firstName || "",
               surname: employeeData.surname || "",
-              startDate: employeeData.startDate ? new Date(employeeData.startDate).toISOString().split('T')[0] : "",
+              startDate: employeeData.startDate ? formatDateInputLocal(new Date(employeeData.startDate)) : '',
               email: employeeData.email || "",
               contactNumber: employeeData.contactNumber || "",
               houseName: employeeData.houseName || "",
@@ -289,7 +318,7 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
           // Update existing employee - convert form data to Employee format
           const employeeData: Partial<Employee> = {
             ...data,
-            startDate: data.startDate ? new Date(data.startDate) : undefined,
+              startDate: data.startDate ? (parseDateInputLocal(data.startDate) ?? undefined) : undefined,
           }
           const result = await employeeService.updateEmployee(Number(initialData.id), employeeData)
           console.log('✅ [EmployeeForm] Employee update successful:', result)
@@ -298,7 +327,7 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
           // Create new employee - convert form data to Employee format
           const employeeData: Partial<Employee> = {
             ...data,
-            startDate: data.startDate ? new Date(data.startDate) : new Date(),
+            startDate: data.startDate ? (parseDateInputLocal(data.startDate) ?? new Date()) : new Date(),
           }
           console.log('📤 [EmployeeForm] About to send employee data:', JSON.stringify(employeeData, null, 2))
           const result = await employeeService.registerEmployeeFromFrontend(employeeData)
@@ -439,7 +468,7 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
                   <FormControl>
                     <Input 
                       type="date" 
-                      max={new Date().toISOString().split('T')[0]}
+                      max={formatDateInputLocal(new Date())}
                       {...field} 
                     />
                   </FormControl>

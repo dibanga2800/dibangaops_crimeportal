@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
-import { User, CreateUserInput, UpdateUserInput, UserRole } from '@/types/user'
+import { User, CreateUserInput, UpdateUserInput, UserRole, UsersResponse } from '@/types/user'
 import { userService } from '@/services/userService'
 import { sessionStore } from '@/state/sessionStore'
 
@@ -7,6 +7,7 @@ interface UsersState {
   users: User[]
   loading: boolean
   error: string | null
+	pagination: UsersResponse['pagination'] | null
   userAssignments: Record<string, number[]>
   assignmentLoading: boolean
   assignmentError: string | null
@@ -16,6 +17,7 @@ const initialState: UsersState = {
   users: [],
   loading: false,
   error: null,
+	pagination: null,
   userAssignments: {},
   assignmentLoading: false,
   assignmentError: null
@@ -68,8 +70,8 @@ const mapUserDetailToUser = (detail: any): User => {
 export const fetchUsers = createAsyncThunk(
   'users/fetchUsers',
   async (params?: { page?: number; pageSize?: number; searchTerm?: string }) => {
-    const response = await userService.getUsers(params)
-    return response.data // Return the users array from the backend response
+		const response = await userService.getUsers(params)
+		return response
   }
 )
 
@@ -149,8 +151,9 @@ const usersSlice = createSlice({
       })
       .addCase(fetchUsers.fulfilled, (state, action) => {
         state.loading = false
-        // Convert UserDetailResponse[] to User[] format
-        state.users = action.payload.map((userDetail: any) => mapUserDetailToUser(userDetail))
+		const payload = action.payload as UsersResponse
+		state.users = payload.data.map((userDetail: any) => mapUserDetailToUser(userDetail))
+		state.pagination = payload.pagination
       })
       .addCase(fetchUsers.rejected, (state, action) => {
         state.loading = false

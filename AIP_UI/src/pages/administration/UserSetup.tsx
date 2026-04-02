@@ -98,7 +98,7 @@ const UserSetup = () => {
   // Auth is enforced by ProtectedRoute — no need to duplicate the check here.
 
   // Get users and loading state from Redux store
-  const { users, loading, error } = useAppSelector((state: RootState) => state.users)
+  const { users, loading, error, pagination } = useAppSelector((state: RootState) => state.users)
 
   // Debounce the search term so we don't spam the API on every keypress
   useEffect(() => {
@@ -163,12 +163,12 @@ const UserSetup = () => {
     })
   }, [users, debouncedSearch, filterType, customerNameMap])
 
-  // Pagination calculations based on filtered users
-  const totalUsers = filteredUsers.length
-  const totalPages = Math.ceil(totalUsers / pageSize) || 1
-  const startIndex = (currentPage - 1) * pageSize
-  const endIndex = startIndex + pageSize
-  const displayUsers = filteredUsers.slice(startIndex, endIndex)
+  const totalCount = pagination?.totalCount ?? 0
+  const totalPages = pagination?.totalPages ?? 1
+  const startIndex = totalCount === 0 ? 0 : (currentPage - 1) * pageSize
+  const endIndex = Math.min(currentPage * pageSize, totalCount)
+  // Backend is already paginated; avoid applying client-side slice again.
+  const displayUsers = filteredUsers
 
   // Reset to first page when search changes
   useEffect(() => {
@@ -376,7 +376,7 @@ const UserSetup = () => {
     return <UserCheck className="h-4 w-4 text-emerald-600" />
   }
 
-  const totalFilteredUsers = totalUsers
+  const totalFilteredUsers = displayUsers.length
   const activeUsers = filteredUsers.filter(u => !(u as any).recordIsDeleted).length
   const adminUsers = filteredUsers.filter(u => u.role === 'administrator' && !(u as any).recordIsDeleted).length
   const adminPercent = totalFilteredUsers > 0 ? ((adminUsers / totalFilteredUsers) * 100).toFixed(1) : '0.0'
@@ -679,8 +679,8 @@ const UserSetup = () => {
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-4">
-            <div className="text-xs sm:text-sm text-muted-foreground text-center sm:text-left">
-              Showing {startIndex + 1} to {Math.min(endIndex, totalFilteredUsers)} of {totalFilteredUsers} results
+              <div className="text-xs sm:text-sm text-muted-foreground text-center sm:text-left">
+              Showing {totalCount === 0 ? 0 : startIndex + 1} to {endIndex} of {totalCount} results
             </div>
             <Pagination>
               <PaginationContent className="flex-wrap">
