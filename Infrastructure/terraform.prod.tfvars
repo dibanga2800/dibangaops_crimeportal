@@ -43,8 +43,10 @@ insightface_timeout_seconds    = 30
 insightface_min_similarity     = 0.85
 insightface_max_search_results = 3
 
-frontend_url           = "https://dibangops.com"
-frontend_custom_domain = "dibangops.com"
+# Canonical app URL (apex redirects to www via Cloudflare)
+frontend_url               = "https://www.dibangops.com"
+frontend_custom_domain     = "dibangops.com"
+frontend_www_custom_domain = "www.dibangops.com"
 
 jwt_access_token_expiration_minutes = 60
 jwt_refresh_token_expiration_days   = 7

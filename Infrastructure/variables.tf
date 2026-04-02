@@ -159,7 +159,14 @@ variable "frontend_url" {
 }
 
 variable "frontend_custom_domain" {
-  description = "Custom domain to bind to Azure Static Web App (e.g. dibangops.com)"
+  description = "Apex custom hostname for Azure Static Web App (e.g. dibangops.com)"
+  type        = string
+  default     = null
+  nullable    = true
+}
+
+variable "frontend_www_custom_domain" {
+  description = "WWW custom hostname for Azure Static Web App (e.g. www.dibangops.com)"
   type        = string
   default     = null
   nullable    = true
