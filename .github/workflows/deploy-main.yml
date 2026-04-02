@@ -310,6 +310,32 @@ jobs:
             fi
           fi
 
+      - name: Import existing www Static Web App custom domain into Terraform state
+        env:
+          TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
+          TF_VAR_sql_admin_password: ${{ secrets.TF_VAR_SQL_ADMIN_PASSWORD }}
+          TF_VAR_smtp_password: ${{ secrets.TF_VAR_SMTP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if terraform state show 'azurerm_static_web_app_custom_domain.frontend_www_custom_domain[0]' >/dev/null 2>&1; then
+            echo "frontend_www_custom_domain already in Terraform state."
+            exit 0
+          fi
+          SUB="$(az account show --query id -o tsv)"
+          WWW_RESOURCE_ID="/subscriptions/${SUB}/resourceGroups/crimeportal-rg/providers/Microsoft.Web/staticSites/crimeportal-frontend/customDomains/www.dibangops.com"
+          if ! az resource show --ids "${WWW_RESOURCE_ID}" -o none 2>/dev/null; then
+            echo "www.dibangops.com custom domain not found in Azure; Terraform will create it on apply."
+            exit 0
+          fi
+          echo "Importing existing www.dibangops.com custom domain into Terraform state."
+          terraform import -lock-timeout=10m \
+            -var-file="terraform.prod.tfvars" \
+            -var="budget_start_date=${{ steps.budget-date.outputs.value }}" \
+            -var="backend_image=${{ needs.build-and-push-images.outputs.backend_image }}" \
+            -var="ai_image=${{ needs.build-and-push-images.outputs.ai_image }}" \
+            'azurerm_static_web_app_custom_domain.frontend_www_custom_domain[0]' \
+            "${WWW_RESOURCE_ID}"
+
       - name: Terraform Apply (release images)
         env:
           TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
