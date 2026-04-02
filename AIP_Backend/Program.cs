@@ -260,11 +260,15 @@ builder.Services.AddCors(options =>
 					"https://coop-aip-ui-*.vercel.app"  // Preview deployments
 				};
 				
-				// Add custom domain if you have one
-				var customDomain = builder.Configuration["FrontendUrl"];
-				if (!string.IsNullOrEmpty(customDomain))
+				// Add custom domain(s): comma-separated for apex + www (e.g. https://www.example.com,https://example.com)
+				var customDomains = builder.Configuration["FrontendUrl"];
+				if (!string.IsNullOrEmpty(customDomains))
 				{
-					allowedOrigins.Add(customDomain);
+					foreach (var part in customDomains.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+					{
+						if (!string.IsNullOrEmpty(part))
+							allowedOrigins.Add(part);
+					}
 				}
 				
 				policy.SetIsOriginAllowed(origin =>

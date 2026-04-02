@@ -37,7 +37,7 @@ locals {
   jwt_signing_key_value          = var.jwt_signing_key != null && var.jwt_signing_key != "" ? var.jwt_signing_key : random_password.jwt_signing_key.result
   backend_container_fqdn         = "https://${azurerm_container_app.backend.latest_revision_fqdn}"
   ai_container_fqdn              = "https://${var.ai_name}.internal.${azurerm_container_app_environment.env.default_domain}"
-  effective_frontend_url         = var.frontend_url != null && var.frontend_url != "" ? var.frontend_url : "https://${azurerm_static_web_app.frontend.default_host_name}"
+  effective_frontend_url = var.frontend_url != null && var.frontend_url != "" ? trimspace(var.frontend_url) : "https://${azurerm_static_web_app.frontend.default_host_name}"
   effective_insightface_base_url = var.insightface_base_url != null && var.insightface_base_url != "" ? var.insightface_base_url : local.ai_container_fqdn
 }
 

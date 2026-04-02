@@ -152,7 +152,7 @@ variable "container_app_environment_name" {
 }
 
 variable "frontend_url" {
-  description = "Allowed frontend origin for backend CORS"
+  description = "Allowed frontend origin(s) for backend CORS (comma-separated for apex + www, e.g. https://www.example.com,https://example.com)"
   type        = string
   default     = null
   nullable    = true

@@ -43,8 +43,8 @@ insightface_timeout_seconds    = 30
 insightface_min_similarity     = 0.85
 insightface_max_search_results = 3
 
-# Canonical app URL (apex redirects to www via Cloudflare)
-frontend_url               = "https://www.dibangops.com"
+# Comma-separated origins for backend CORS (apex + www; Cloudflare redirects apex → www)
+frontend_url               = "https://www.dibangops.com,https://dibangops.com"
 frontend_custom_domain     = "dibangops.com"
 frontend_www_custom_domain = "www.dibangops.com"
 
