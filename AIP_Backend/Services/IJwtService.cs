@@ -10,6 +10,9 @@ namespace AIPBackend.Services
         bool ValidateRefreshToken(string refreshToken);
         ClaimsPrincipal GetPrincipalFromExpiredToken(string token);
         Task<bool> IsRefreshTokenValidAsync(string refreshToken, string userId);
+        Task<ApplicationUser?> GetUserByRefreshTokenAsync(string refreshToken);
+        Task<bool> StoreRefreshTokenAsync(ApplicationUser user, string refreshToken);
+        Task<bool> RevokeRefreshTokenAsync(ApplicationUser user);
         Task<string?> GetUserIdFromTokenAsync(string token);
         Task<IList<string>> GetUserRolesFromTokenAsync(string token);
     }

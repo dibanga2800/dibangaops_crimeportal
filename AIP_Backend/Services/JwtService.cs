@@ -7,6 +7,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.EntityFrameworkCore;
 
 namespace AIPBackend.Services
 {
@@ -195,16 +196,100 @@ namespace AIPBackend.Services
                 if (string.IsNullOrWhiteSpace(refreshToken) || string.IsNullOrWhiteSpace(userId))
                     return Task.FromResult(false);
 
-                // In a real application, you would store refresh tokens in a database
-                // and validate them against the stored tokens for the user
-                // For now, we'll do basic validation
-                return Task.FromResult(ValidateRefreshToken(refreshToken));
+                if (!ValidateRefreshToken(refreshToken))
+                    return Task.FromResult(false);
+
+                var refreshTokenHash = HashRefreshToken(refreshToken);
+                return _userManager.Users
+                    .AnyAsync(u =>
+                        u.Id == userId &&
+                        u.IsActive &&
+                        u.RefreshTokenHash == refreshTokenHash &&
+                        u.RefreshTokenExpiresAtUtc.HasValue &&
+                        u.RefreshTokenExpiresAtUtc > DateTime.UtcNow &&
+                        !u.RefreshTokenRevokedAtUtc.HasValue);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error validating refresh token for user {UserId}", userId);
                 return Task.FromResult(false);
             }
+        }
+
+        public async Task<ApplicationUser?> GetUserByRefreshTokenAsync(string refreshToken)
+        {
+            try
+            {
+                if (!ValidateRefreshToken(refreshToken))
+                {
+                    return null;
+                }
+
+                var refreshTokenHash = HashRefreshToken(refreshToken);
+                return await _userManager.Users
+                    .Where(u =>
+                        u.IsActive &&
+                        u.RefreshTokenHash == refreshTokenHash &&
+                        u.RefreshTokenExpiresAtUtc.HasValue &&
+                        u.RefreshTokenExpiresAtUtc > DateTime.UtcNow &&
+                        !u.RefreshTokenRevokedAtUtc.HasValue)
+                    .FirstOrDefaultAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error resolving user from refresh token");
+                return null;
+            }
+        }
+
+        public async Task<bool> StoreRefreshTokenAsync(ApplicationUser user, string refreshToken)
+        {
+            try
+            {
+                if (user == null || string.IsNullOrWhiteSpace(refreshToken))
+                {
+                    return false;
+                }
+
+                var refreshTokenExpiryDays = Convert.ToInt32(_configuration["Jwt:RefreshTokenExpirationDays"] ?? "7");
+                user.RefreshTokenHash = HashRefreshToken(refreshToken);
+                user.RefreshTokenCreatedAtUtc = DateTime.UtcNow;
+                user.RefreshTokenExpiresAtUtc = DateTime.UtcNow.AddDays(refreshTokenExpiryDays);
+                user.RefreshTokenRevokedAtUtc = null;
+
+                var result = await _userManager.UpdateAsync(user);
+                return result.Succeeded;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error storing refresh token for user {UserId}", user.Id);
+                return false;
+            }
+        }
+
+        public async Task<bool> RevokeRefreshTokenAsync(ApplicationUser user)
+        {
+            try
+            {
+                user.RefreshTokenRevokedAtUtc = DateTime.UtcNow;
+                user.RefreshTokenHash = null;
+                user.RefreshTokenCreatedAtUtc = null;
+                user.RefreshTokenExpiresAtUtc = null;
+
+                var result = await _userManager.UpdateAsync(user);
+                return result.Succeeded;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error revoking refresh token for user {UserId}", user.Id);
+                return false;
+            }
+        }
+
+        private static string HashRefreshToken(string refreshToken)
+        {
+            var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(refreshToken));
+            return Convert.ToHexString(bytes);
         }
 
         public Task<string?> GetUserIdFromTokenAsync(string token)

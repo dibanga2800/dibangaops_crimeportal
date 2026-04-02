@@ -98,6 +98,13 @@ namespace AIPBackend.Models
 
         public DateTime? LockoutUntil { get; set; }
 
+        // Refresh token lifecycle (stored hashed for security)
+        [MaxLength(128)]
+        public string? RefreshTokenHash { get; set; }
+        public DateTime? RefreshTokenCreatedAtUtc { get; set; }
+        public DateTime? RefreshTokenExpiresAtUtc { get; set; }
+        public DateTime? RefreshTokenRevokedAtUtc { get; set; }
+
         // Security preferences (persisted in DB, not localStorage)
         public bool EmailNotificationsEnabled { get; set; } = true;
 

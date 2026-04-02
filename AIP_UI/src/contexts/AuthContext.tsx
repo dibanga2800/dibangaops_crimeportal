@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User } from '@/types/user';
-import { api } from '@/config/api';
+import { api, tryRefreshAccessToken } from '@/config/api';
 import { sessionStore } from '@/state/sessionStore';
 import { ApiResponse } from '@/types/api';
 
@@ -115,6 +115,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     fetchCurrentUser();
   }, [fetchCurrentUser]);
+
+  useEffect(() => {
+    let isMounted = true
+
+    const refreshIfNearExpiry = async () => {
+      const expiresAt = sessionStore.getTokenExpiresAt()
+      const refreshToken = sessionStore.getRefreshToken()
+      const hasSession = !!sessionStore.getToken() && !!sessionStore.getUser()
+
+      if (!expiresAt || !refreshToken || !hasSession) {
+        return
+      }
+
+      const expiresAtMs = new Date(expiresAt).getTime()
+      if (Number.isNaN(expiresAtMs)) {
+        return
+      }
+
+      const remainingMs = expiresAtMs - Date.now()
+      const proactiveWindowMs = 5 * 60 * 1000 // refresh 5 minutes before expiry
+
+      if (remainingMs > proactiveWindowMs) {
+        return
+      }
+
+      const newToken = await tryRefreshAccessToken()
+      if (isMounted && newToken) {
+        setUser(sessionStore.getUser())
+      }
+    }
+
+    const intervalId = window.setInterval(() => {
+      void refreshIfNearExpiry()
+    }, 60 * 1000)
+
+    void refreshIfNearExpiry()
+
+    return () => {
+      isMounted = false
+      window.clearInterval(intervalId)
+    }
+  }, [])
 
   const login = async (username: string, password: string): Promise<User> => {
     try {

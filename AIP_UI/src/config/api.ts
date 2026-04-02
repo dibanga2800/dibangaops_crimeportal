@@ -60,6 +60,7 @@ type AxiosRequestConfigWithRetry = InternalAxiosRequestConfig & {
 
 const refreshAccessToken = async (): Promise<string | null> => {
   const refreshToken = sessionStore.getRefreshToken()
+  const currentAccessToken = sessionStore.getToken()
   if (!refreshToken) {
     return null
   }
@@ -73,6 +74,9 @@ const refreshAccessToken = async (): Promise<string | null> => {
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
+          // Backend refresh endpoint uses the (possibly expired) access token
+          // from Authorization to resolve the user identity.
+          ...(currentAccessToken ? { 'Authorization': `Bearer ${currentAccessToken}` } : {}),
         },
         timeout: 10000,
       }
@@ -124,6 +128,10 @@ const refreshAccessToken = async (): Promise<string | null> => {
     }
     return null
   }
+}
+
+export const tryRefreshAccessToken = async (): Promise<string | null> => {
+  return refreshAccessToken()
 }
 
 // Add response interceptor for error handling + token refresh

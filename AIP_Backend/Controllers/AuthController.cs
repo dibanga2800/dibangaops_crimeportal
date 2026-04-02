@@ -123,7 +123,7 @@ namespace AIPBackend.Controllers
 
                 var accessToken = _jwtService.GenerateAccessToken(user, roles);
                 var refreshToken = _jwtService.GenerateRefreshToken();
-                await _userManager.UpdateAsync(user);
+                await _jwtService.StoreRefreshTokenAsync(user, refreshToken);
 
                 var userResponse = await BuildUserResponseAsync(user, roles);
 
@@ -345,7 +345,7 @@ namespace AIPBackend.Controllers
                 // 2FA not enabled → generate tokens as before
                 var accessToken = _jwtService.GenerateAccessToken(user, roles);
                 var refreshToken = _jwtService.GenerateRefreshToken();
-                await _userManager.UpdateAsync(user);
+                await _jwtService.StoreRefreshTokenAsync(user, refreshToken);
 
                 var isCustomerUser = user.CustomerId.HasValue && user.CustomerId.Value > 0;
                 
@@ -519,28 +519,11 @@ namespace AIPBackend.Controllers
                     });
                 }
 
-                // Get user from expired access token (if available in Authorization header)
-                string? userId = null;
-                var authHeader = Request.Headers["Authorization"].FirstOrDefault();
-                if (!string.IsNullOrEmpty(authHeader) && authHeader.StartsWith("Bearer "))
+                // Resolve user by persisted refresh token mapping.
+                var user = await _jwtService.GetUserByRefreshTokenAsync(request.RefreshToken);
+                if (user == null)
                 {
-                    var expiredToken = authHeader.Substring("Bearer ".Length);
-                    try
-                    {
-                        var principal = _jwtService.GetPrincipalFromExpiredToken(expiredToken);
-                        userId = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                    }
-                    catch
-                    {
-                        // Token is invalid or expired, which is expected
-                    }
-                }
-
-                // If we couldn't get userId from expired token, we need to implement
-                // a way to store and retrieve refresh tokens with their associated users
-                if (string.IsNullOrEmpty(userId))
-                {
-                    _logger.LogWarning("Could not determine user for refresh token");
+                    _logger.LogWarning("Could not determine active user for refresh token");
 
                     await _loginProtectionService.RegisterLoginFailureAsync(
                         null,
@@ -554,10 +537,10 @@ namespace AIPBackend.Controllers
                     });
                 }
 
-                // Validate refresh token for user
-                if (!await _jwtService.IsRefreshTokenValidAsync(request.RefreshToken, userId))
+                // Validate refresh token for resolved user
+                if (!await _jwtService.IsRefreshTokenValidAsync(request.RefreshToken, user.Id))
                 {
-                    _logger.LogWarning("Invalid refresh token for user {UserId}", userId);
+                    _logger.LogWarning("Invalid refresh token for user {UserId}", user.Id);
 
                     await _loginProtectionService.RegisterLoginFailureAsync(
                         null,
@@ -568,24 +551,6 @@ namespace AIPBackend.Controllers
                     {
                         Success = false,
                         Message = "Invalid refresh token"
-                    });
-                }
-
-                // Get user
-                var user = await _userManager.FindByIdAsync(userId);
-                if (user == null || !user.IsActive)
-                {
-                    _logger.LogWarning("User {UserId} not found or inactive", userId);
-
-                    await _loginProtectionService.RegisterLoginFailureAsync(
-                        null,
-                        "refresh-token",
-                        clientIp);
-
-                    return Unauthorized(new ApiResponseDto<RefreshTokenResponseDto>
-                    {
-                        Success = false,
-                        Message = "User not found or inactive"
                     });
                 }
 
@@ -635,6 +600,7 @@ namespace AIPBackend.Controllers
                 // Generate new tokens
                 var newAccessToken = _jwtService.GenerateAccessToken(user, roles);
                 var newRefreshToken = _jwtService.GenerateRefreshToken();
+                await _jwtService.StoreRefreshTokenAsync(user, newRefreshToken);
 
                 await _loginProtectionService.RegisterLoginSuccessAsync(
                     user,
@@ -650,7 +616,7 @@ namespace AIPBackend.Controllers
                     ExpiresAt = DateTime.UtcNow.AddMinutes(Convert.ToInt32(_configuration["Jwt:AccessTokenExpirationMinutes"]))
                 };
 
-                _logger.LogInformation("Token refreshed successfully for user {UserId}", userId);
+                _logger.LogInformation("Token refreshed successfully for user {UserId}", user.Id);
 
                 return Ok(new ApiResponseDto<RefreshTokenResponseDto>
                 {
@@ -675,7 +641,7 @@ namespace AIPBackend.Controllers
         /// </summary>
         [HttpPost("logout")]
         [Authorize]
-        public Task<ActionResult<ApiResponseDto<LogoutResponseDto>>> Logout([FromBody] LogoutRequestDto request)
+        public async Task<ActionResult<ApiResponseDto<LogoutResponseDto>>> Logout([FromBody] LogoutRequestDto request)
         {
             try
             {
@@ -689,17 +655,22 @@ namespace AIPBackend.Controllers
                         .Select(e => e.ErrorMessage)
                         .ToList();
 
-                    return Task.FromResult<ActionResult<ApiResponseDto<LogoutResponseDto>>>(BadRequest(new ApiResponseDto<LogoutResponseDto>
+                    return BadRequest(new ApiResponseDto<LogoutResponseDto>
                     {
                         Success = false,
                         Message = "Invalid request data",
                         Errors = errors
-                    }));
+                    });
                 }
 
-                // In a real application, you would invalidate the refresh token in the database
-                // For now, we'll just return success
-                // TODO: Implement refresh token invalidation
+                if (!string.IsNullOrWhiteSpace(userId))
+                {
+                    var user = await _userManager.FindByIdAsync(userId);
+                    if (user != null)
+                    {
+                        await _jwtService.RevokeRefreshTokenAsync(user);
+                    }
+                }
 
                 var response = new LogoutResponseDto
                 {
@@ -709,21 +680,21 @@ namespace AIPBackend.Controllers
 
                 _logger.LogInformation("Logout successful for user {UserId}", userId ?? "Unknown");
 
-                return Task.FromResult<ActionResult<ApiResponseDto<LogoutResponseDto>>>(Ok(new ApiResponseDto<LogoutResponseDto>
+                return Ok(new ApiResponseDto<LogoutResponseDto>
                 {
                     Success = true,
                     Message = "Logout successful",
                     Data = response
-                }));
+                });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error during logout");
-                return Task.FromResult<ActionResult<ApiResponseDto<LogoutResponseDto>>>(StatusCode(500, new ApiResponseDto<LogoutResponseDto>
+                return StatusCode(500, new ApiResponseDto<LogoutResponseDto>
                 {
                     Success = false,
                     Message = "An error occurred during logout. Please try again."
-                }));
+                });
             }
         }
 
