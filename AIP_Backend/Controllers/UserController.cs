@@ -362,17 +362,44 @@ namespace AIPBackend.Controllers
         [HttpGet("list")]
         public async Task<ActionResult<UserListResponseDto>> GetUsers(
             [FromQuery] int page = 1,
-            [FromQuery] int pageSize = 10)
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string? searchTerm = null)
         {
             try
             {
+                if (page < 1) page = 1;
+                if (pageSize < 1) pageSize = 10;
+
                 // Filter out soft-deleted users
                 var query = _userManager.Users
                     .Where(u => !u.RecordIsDeleted && !u.RecordIsDeletedYN)
                     .AsQueryable();
+
+                if (!string.IsNullOrWhiteSpace(searchTerm))
+                {
+                    var terms = searchTerm
+                        .Trim()
+                        .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+                    foreach (var term in terms)
+                    {
+                        var keyword = term;
+                        query = query.Where(u =>
+                            (u.UserName != null && u.UserName.Contains(keyword)) ||
+                            (u.FirstName != null && u.FirstName.Contains(keyword)) ||
+                            (u.LastName != null && u.LastName.Contains(keyword)) ||
+                            (u.Email != null && u.Email.Contains(keyword)) ||
+                            (u.JobTitle != null && u.JobTitle.Contains(keyword)) ||
+                            ((u.FirstName + " " + u.LastName).Contains(keyword)));
+                    }
+                }
+
                 var totalCount = await query.CountAsync();
 
                 var users = await query
+                    .OrderBy(u => u.FirstName)
+                    .ThenBy(u => u.LastName)
+                    .ThenBy(u => u.UserName)
                     .Skip((page - 1) * pageSize)
                     .Take(pageSize)
                     .ToListAsync();
