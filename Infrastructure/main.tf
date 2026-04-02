@@ -24,20 +24,20 @@ resource "random_password" "jwt_signing_key" {
 }
 
 locals {
-  suffix                 = random_string.suffix.result
-  sql_server_name        = substr("${var.sql_server_name_prefix}${local.suffix}", 0, 63)
-  storage_account_name   = substr("${var.blob_storage_name_prefix}${local.suffix}", 0, 24)
-  acr_name               = substr("${var.acr_name_prefix}${local.suffix}", 0, 50)
-  key_vault_name         = substr("${var.keyvault_name_prefix}-${local.suffix}", 0, 24)
-  sql_admin_password     = var.sql_admin_password != null && var.sql_admin_password != "" ? var.sql_admin_password : random_password.sql_admin[0].result
-  backend_target_port    = var.backend_target_port == null ? (strcontains(var.backend_image, "azuredocs/containerapps-helloworld") ? 80 : 8080) : var.backend_target_port
-  ai_target_port         = var.ai_target_port == null ? (strcontains(var.ai_image, "azuredocs/containerapps-helloworld") ? 80 : 8000) : var.ai_target_port
-  backend_uses_acr       = strcontains(var.backend_image, ".azurecr.io/")
-  ai_uses_acr            = strcontains(var.ai_image, ".azurecr.io/")
-  jwt_signing_key_value  = var.jwt_signing_key != null && var.jwt_signing_key != "" ? var.jwt_signing_key : random_password.jwt_signing_key.result
-  backend_container_fqdn = "https://${azurerm_container_app.backend.latest_revision_fqdn}"
-  ai_container_fqdn      = "https://${var.ai_name}.internal.${azurerm_container_app_environment.env.default_domain}"
-  effective_frontend_url = var.frontend_url != null && var.frontend_url != "" ? var.frontend_url : "https://${azurerm_static_web_app.frontend.default_host_name}"
+  suffix                         = random_string.suffix.result
+  sql_server_name                = substr("${var.sql_server_name_prefix}${local.suffix}", 0, 63)
+  storage_account_name           = substr("${var.blob_storage_name_prefix}${local.suffix}", 0, 24)
+  acr_name                       = substr("${var.acr_name_prefix}${local.suffix}", 0, 50)
+  key_vault_name                 = substr("${var.keyvault_name_prefix}-${local.suffix}", 0, 24)
+  sql_admin_password             = var.sql_admin_password != null && var.sql_admin_password != "" ? var.sql_admin_password : random_password.sql_admin[0].result
+  backend_target_port            = var.backend_target_port == null ? (strcontains(var.backend_image, "azuredocs/containerapps-helloworld") ? 80 : 8080) : var.backend_target_port
+  ai_target_port                 = var.ai_target_port == null ? (strcontains(var.ai_image, "azuredocs/containerapps-helloworld") ? 80 : 8000) : var.ai_target_port
+  backend_uses_acr               = strcontains(var.backend_image, ".azurecr.io/")
+  ai_uses_acr                    = strcontains(var.ai_image, ".azurecr.io/")
+  jwt_signing_key_value          = var.jwt_signing_key != null && var.jwt_signing_key != "" ? var.jwt_signing_key : random_password.jwt_signing_key.result
+  backend_container_fqdn         = "https://${azurerm_container_app.backend.latest_revision_fqdn}"
+  ai_container_fqdn              = "https://${var.ai_name}.internal.${azurerm_container_app_environment.env.default_domain}"
+  effective_frontend_url         = var.frontend_url != null && var.frontend_url != "" ? var.frontend_url : "https://${azurerm_static_web_app.frontend.default_host_name}"
   effective_insightface_base_url = var.insightface_base_url != null && var.insightface_base_url != "" ? var.insightface_base_url : local.ai_container_fqdn
 }
 
@@ -90,7 +90,7 @@ resource "azurerm_key_vault" "kv" {
 resource "azurerm_role_assignment" "terraform_kv_admin" {
   scope                = azurerm_key_vault.kv.id
   role_definition_name = "Key Vault Administrator"
-  principal_id         = data.azurerm_client_config.current.object_id
+  principal_id         = var.terraform_kv_admin_principal_object_id
 }
 
 # ---------------- SQL ----------------

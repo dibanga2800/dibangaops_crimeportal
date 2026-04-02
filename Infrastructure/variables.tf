@@ -62,6 +62,12 @@ variable "keyvault_name_prefix" {
   default     = "crimeportal-kv"
 }
 
+variable "terraform_kv_admin_principal_object_id" {
+  description = "Object ID to assign Key Vault Administrator for Terraform runs (use CI service principal object ID)"
+  type        = string
+  default     = "474a9563-e96f-46d8-af37-21478bad7f5b"
+}
+
 variable "backend_image" {
   description = "Container image for .NET API"
   type        = string
@@ -102,7 +108,7 @@ variable "sql_admin_password" {
   nullable    = true
 
   validation {
-    condition = var.sql_admin_password == null || var.sql_admin_password == "" || length(var.sql_admin_password) >= 8
+    condition     = var.sql_admin_password == null || var.sql_admin_password == "" || length(var.sql_admin_password) >= 8
     error_message = "sql_admin_password must be at least 8 characters (Azure SQL minimum) when set."
   }
 }
