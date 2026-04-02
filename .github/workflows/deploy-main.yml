@@ -216,10 +216,6 @@ jobs:
           TF_VAR_smtp_password: ${{ secrets.TF_VAR_SMTP_PASSWORD }}
         run: |
           set -euo pipefail
-          if terraform state show azurerm_role_assignment.terraform_kv_admin >/dev/null 2>&1; then
-            echo "terraform_kv_admin already in state"
-            exit 0
-          fi
           KV_SCOPE="$(az keyvault show \
             --name "${{ needs.terraform-bootstrap.outputs.key_vault_name }}" \
             --resource-group "crimeportal-rg" \
@@ -229,24 +225,48 @@ jobs:
             --assignee "${SP_OID}" \
             --scope "${KV_SCOPE}" \
             --query "[?roleDefinitionName=='Key Vault Administrator'] | [0].id" -o tsv)"
-          if [ -n "${RA_ID}" ] && [ "${RA_ID}" != "null" ]; then
-            echo "Importing existing Key Vault Administrator assignment into Terraform state"
-            terraform import -lock-timeout=10m \
-              -var-file="terraform.prod.tfvars" \
-              -var="budget_start_date=${{ steps.budget-date.outputs.value }}" \
-              -var="backend_image=${{ needs.build-and-push-images.outputs.backend_image }}" \
-              -var="ai_image=${{ needs.build-and-push-images.outputs.ai_image }}" \
-              azurerm_role_assignment.terraform_kv_admin \
-              "${RA_ID}"
-          else
-            echo "Creating Key Vault Administrator assignment via targeted apply (no refresh)"
-            terraform apply -auto-approve -refresh=false -lock-timeout=10m \
-              -target="azurerm_role_assignment.terraform_kv_admin" \
-              -var-file="terraform.prod.tfvars" \
-              -var="budget_start_date=${{ steps.budget-date.outputs.value }}" \
-              -var="backend_image=${{ needs.build-and-push-images.outputs.backend_image }}" \
-              -var="ai_image=${{ needs.build-and-push-images.outputs.ai_image }}"
+
+          if [ -z "${RA_ID}" ] || [ "${RA_ID}" = "null" ]; then
+            echo "Key Vault Administrator assignment not found for CI SP; creating it now."
+            az role assignment create \
+              --assignee-object-id "${SP_OID}" \
+              --assignee-principal-type ServicePrincipal \
+              --role "Key Vault Administrator" \
+              --scope "${KV_SCOPE}" >/dev/null
+            RA_ID="$(az role assignment list \
+              --assignee "${SP_OID}" \
+              --scope "${KV_SCOPE}" \
+              --query "[?roleDefinitionName=='Key Vault Administrator'] | [0].id" -o tsv)"
           fi
+
+          if [ -z "${RA_ID}" ] || [ "${RA_ID}" = "null" ]; then
+            echo "Unable to resolve Key Vault Administrator role assignment ID for CI SP."
+            exit 1
+          fi
+
+          STATE_RA_ID=""
+          if terraform state show azurerm_role_assignment.terraform_kv_admin >/dev/null 2>&1; then
+            STATE_RA_ID="$(terraform state show azurerm_role_assignment.terraform_kv_admin | awk -F' = ' '/^\s*id\s*=/{print $2}' | tr -d '"')"
+          fi
+
+          if [ "${STATE_RA_ID}" = "${RA_ID}" ]; then
+            echo "terraform_kv_admin state already points to CI service principal assignment."
+            exit 0
+          fi
+
+          if [ -n "${STATE_RA_ID}" ]; then
+            echo "Removing stale terraform_kv_admin state (${STATE_RA_ID})."
+            terraform state rm azurerm_role_assignment.terraform_kv_admin
+          fi
+
+          echo "Importing Key Vault Administrator assignment into Terraform state."
+          terraform import -lock-timeout=10m \
+            -var-file="terraform.prod.tfvars" \
+            -var="budget_start_date=${{ steps.budget-date.outputs.value }}" \
+            -var="backend_image=${{ needs.build-and-push-images.outputs.backend_image }}" \
+            -var="ai_image=${{ needs.build-and-push-images.outputs.ai_image }}" \
+            azurerm_role_assignment.terraform_kv_admin \
+            "${RA_ID}"
 
       # See deploy-backend.yml: avoid -target ACR apply before release; it still refreshes backend.
 
