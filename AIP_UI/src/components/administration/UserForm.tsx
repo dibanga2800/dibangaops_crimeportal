@@ -174,28 +174,35 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
   const [loadingSites, setLoadingSites] = useState(false);
 
   useEffect(() => {
-    const shouldLoad = !formData.customerId;
-    if (!shouldLoad) {
-      setEmployees([]);
-      return;
-    }
-
     const load = async () => {
       setLoadingEmployees(true);
       try {
-        // For editing, we need all employees (including the currently linked one)
-        // For creating, we only need unlinked employees
+        // For editing, include the currently linked employee even if inactive/unlinked.
         if (initialData) {
-          // When editing, get all active employees
-          const allEmployees = await employeeService.getActiveEmployees();
-          console.log('🔍 [UserForm] Loaded all employees for editing:', allEmployees);
-          setEmployees(allEmployees);
-        } else {
-          // When creating, get only unlinked employees
-          const unlinked = await userService.getUnlinkedEmployees();
-          console.log('🔍 [UserForm] Loaded unlinked employees for creating:', unlinked);
-          setEmployees(unlinked);
+          const [activeEmployees, currentLinkedEmployee] = await Promise.all([
+            employeeService.getActiveEmployees(),
+            formData.employeeId
+              ? employeeService.getEmployeeByIdAsFrontendInterface(Number(formData.employeeId))
+              : Promise.resolve(null),
+          ]);
+
+          const merged = [...activeEmployees];
+          if (
+            currentLinkedEmployee &&
+            !merged.some((employee) => Number(employee.id) === Number(currentLinkedEmployee.id))
+          ) {
+            merged.push(currentLinkedEmployee);
+          }
+
+          console.log('🔍 [UserForm] Loaded employees for editing:', merged);
+          setEmployees(merged);
+          return;
         }
+
+        // When creating, get only unlinked employees.
+        const unlinked = await userService.getUnlinkedEmployees();
+        console.log('🔍 [UserForm] Loaded unlinked employees for creating:', unlinked);
+        setEmployees(unlinked);
       } catch (err) {
         console.error('❌ [UserForm] Error loading employees:', err);
         setEmployees([]);
@@ -206,8 +213,9 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
         setLoadingEmployees(false);
       }
     };
+
     load();
-  }, [formData.role, initialData]);
+  }, [initialData, formData.employeeId]);
 
   // Load sites for the selected customer (store users) or all assigned customers (officers/managers)
   useEffect(() => {
