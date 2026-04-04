@@ -7,20 +7,20 @@ The system is currently used to support operations across organisations includin
 
 This platform was fully designed and developed by me as the sole technical lead and engineer.
 
-##Problem Statement
+**Problem Statement**
 
 Prior to this system, incident management within retail security environments faced several challenges:
 
-Manual and fragmented incident reporting processes
-Lack of centralised visibility across multiple store locations
-Inconsistent classification of incidents
-Limited ability to track repeat offenders
-No real-time alerting or intelligence sharing
-Minimal analytics for operational decision-making
+-Manual and fragmented incident reporting processes
+-Lack of centralised visibility across multiple store locations
+-Inconsistent classification of incidents
+-Limited ability to track repeat offenders
+-No real-time alerting or intelligence sharing
+-Minimal analytics for operational decision-making
 
 These limitations significantly reduced response efficiency and prevented organisations from leveraging data for proactive security management.
 
-Solution
+**Solution**
 
 To address these challenges, I designed and built a centralised, scalable platform that provides:
 
@@ -30,7 +30,8 @@ Barcode-based tracking for offender and incident linkage
 Cross-organisation intelligence sharing
 Role-based dashboards and operational workflows
 Advanced analytics and reporting capabilities
-Core Capabilities
+
+**Core Capabilities**
 🔹 Incident Management
 Structured incident reporting with configurable workflows
 Centralised data storage and retrieval
