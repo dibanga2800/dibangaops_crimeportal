@@ -234,14 +234,64 @@ namespace AIPBackend.Services
 			var fromStr = fromDate.ToString("yyyy-MM-dd");
 			var toStr = toDateInclusive.ToString("yyyy-MM-dd");
 
-			var crimeTrends = BuildCrimeTrends(filtered, total, fromStr, toStr);
-			var hotProducts = BuildHotProducts(filtered, fromStr, toStr);
-			var financialSummary = BuildFinancialSummary(filtered);
-			var storeRecoveryComparisons = BuildStoreRecoveryComparisons(filtered);
-			var repeatOffenders = BuildRepeatOffenders(filtered);
-			var hotLocations = BuildHotLocationsForDeployment(filtered);
-			var deployment = BuildDeploymentRecommendations(filtered, hotLocations);
-			var crimeLinking = BuildCrimeLinking(filtered, fromStr, toStr);
+			T BuildSection<T>(string sectionName, Func<T> builder, Func<T> fallback)
+			{
+				try
+				{
+					return builder();
+				}
+				catch (Exception ex)
+				{
+					_logger.LogError(ex, "Failed to generate analytics hub section {SectionName}", sectionName);
+					return fallback();
+				}
+			}
+
+			var crimeTrends = BuildSection(
+				"crimeTrends",
+				() => BuildCrimeTrends(filtered, total, fromStr, toStr),
+				() => new CrimeTrendDataDto
+				{
+					TotalIncidents = total,
+					DateRange = new DateRangeDto { Start = fromStr, End = toStr }
+				});
+			var hotProducts = BuildSection(
+				"hotProducts",
+				() => BuildHotProducts(filtered, fromStr, toStr),
+				() => new HotProductsDataDto
+				{
+					Period = new DateRangeDto { Start = fromStr, End = toStr }
+				});
+			var financialSummary = BuildSection(
+				"financialSummary",
+				() => BuildFinancialSummary(filtered),
+				() => new AnalyticsFinancialSummaryDto());
+			var storeRecoveryComparisons = BuildSection(
+				"storeRecoveryComparisons",
+				() => BuildStoreRecoveryComparisons(filtered),
+				() => new List<StoreRecoveryComparisonDto>());
+			var repeatOffenders = BuildSection(
+				"repeatOffenders",
+				() => BuildRepeatOffenders(filtered),
+				() => new RepeatOffenderDataDto());
+			var hotLocations = BuildSection(
+				"hotLocations",
+				() => BuildHotLocationsForDeployment(filtered),
+				() => new List<HotLocationDto>());
+			var deployment = BuildSection(
+				"deploymentRecommendations",
+				() => BuildDeploymentRecommendations(filtered, hotLocations),
+				() => new DeploymentRecommendationDto
+				{
+					OverallStrategy = "Analytics data could not be fully generated for the selected period."
+				});
+			var crimeLinking = BuildSection(
+				"crimeLinking",
+				() => BuildCrimeLinking(filtered, fromStr, toStr),
+				() => new CrimeLinkingDataDto
+				{
+					Period = new DateRangeDto { Start = fromStr, End = toStr }
+				});
 
 			_logger.LogInformation(
 				"Analytics hub generated: {Count} incidents, {Offenders} repeat offenders, {Clusters} clusters",
@@ -386,7 +436,8 @@ namespace AIPBackend.Services
 		private static HotProductsDataDto BuildHotProducts(List<Incident> incidents, string fromStr, string toStr)
 		{
 			var allItems = incidents
-				.SelectMany(i => i.StolenItems.Select(si => new { Incident = i, Item = si }))
+				.SelectMany(i => (i.StolenItems ?? Array.Empty<StolenItem>())
+					.Select(si => new { Incident = i, Item = si }))
 				.ToList();
 
 			var totalValueStolen = allItems.Sum(x => GetItemStolenValue(x.Item));
@@ -404,7 +455,9 @@ namespace AIPBackend.Services
 				.Select(g => new ProductFrequencyDataDto
 				{
 					Barcode = g.Key,
-					ProductName = g.Select(x => x.Item.ProductName ?? x.Item.Description ?? g.Key).First(s => !string.IsNullOrWhiteSpace(s)) ?? g.Key,
+					ProductName = g
+						.Select(x => x.Item.ProductName ?? x.Item.Description ?? g.Key)
+						.FirstOrDefault(s => !string.IsNullOrWhiteSpace(s)) ?? g.Key,
 					Frequency = g.Count(),
 					TotalValue = g.Sum(x => GetItemLostValue(x.Item)),
 					StolenValue = g.Sum(x => GetItemStolenValue(x.Item)),
@@ -456,7 +509,9 @@ namespace AIPBackend.Services
 						.Select(pg => new StoreProductItemDto
 						{
 							Barcode = pg.Key,
-							ProductName = pg.Select(x => x.Item.ProductName ?? x.Item.Description ?? pg.Key).First(s => !string.IsNullOrWhiteSpace(s)) ?? pg.Key,
+							ProductName = pg
+								.Select(x => x.Item.ProductName ?? x.Item.Description ?? pg.Key)
+								.FirstOrDefault(s => !string.IsNullOrWhiteSpace(s)) ?? pg.Key,
 							Frequency = pg.Count(),
 							Value = pg.Sum(x => GetItemLostValue(x.Item)),
 							StolenValue = pg.Sum(x => GetItemStolenValue(x.Item)),
