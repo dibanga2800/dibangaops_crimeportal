@@ -20,6 +20,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  # Run JS-based actions on Node 24 before GitHub’s June 2026 default (Node 20 runner removal Sept 2026).
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   TERRAFORM_VERSION: '1.13.4'
   NODE_VERSION: '20'
 
@@ -35,15 +37,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
 
       - name: Azure Login (OIDC)
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -68,10 +70,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
