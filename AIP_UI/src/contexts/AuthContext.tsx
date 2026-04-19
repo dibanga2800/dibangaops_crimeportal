@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User } from '@/types/user';
-import { api, tryRefreshAccessToken } from '@/config/api';
+import { api, tryRefreshAccessToken, AUTH_REQUEST_TIMEOUT_MS } from '@/config/api';
 import { sessionStore } from '@/state/sessionStore';
 import { ApiResponse } from '@/types/api';
 
@@ -59,7 +59,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     try {
       setIsLoading(true);
-      const response = await api.get<BackendApiResponse<User>>('/Auth/me');
+      const response = await api.get<BackendApiResponse<User>>('/Auth/me', {
+        timeout: AUTH_REQUEST_TIMEOUT_MS,
+      });
       // Backend returns ApiResponseDto with capital Data property
       const apiResponse = response.data;
       if (apiResponse.Success && apiResponse.Data) {
@@ -165,10 +167,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       let response;
       try {
-        response = await api.post<any>('/Auth/login', {
-          email: username,
-          password
-        });
+        response = await api.post<any>(
+          '/Auth/login',
+          {
+            email: username,
+            password,
+          },
+          { timeout: AUTH_REQUEST_TIMEOUT_MS },
+        );
       } catch (axiosError: any) {
         // Check if it's a timeout error
         const isTimeout = axiosError?.code === 'ECONNABORTED' || axiosError?.message?.includes('timeout');

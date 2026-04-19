@@ -437,13 +437,13 @@ export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({ onNavigate
               asChild
               className={cn(
 								'w-[180px] rounded-[20px] bg-white px-3 text-black hover:bg-white/90 flex h-9 items-center justify-start gap-2',
-								location.pathname === '/' && 'bg-white/90',
+								(location.pathname === '/' || location.pathname === '/dashboard') && 'bg-white/90',
               )}
             >
               <a 
-                href="/" 
-								onClick={handleNavigation('/')}
-								onKeyDown={handleKeyDown('/')}
+                href="/dashboard" 
+								onClick={handleNavigation('/dashboard')}
+								onKeyDown={handleKeyDown('/dashboard')}
                 className="flex items-center gap-2"
               >
 								<div className="rounded-lg bg-red-500/10 p-1.5">

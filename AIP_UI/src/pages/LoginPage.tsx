@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { usePageAccess } from '@/contexts/PageAccessContext'
 import { useAuth } from '@/contexts/AuthContext'
-import { api } from '@/config/api'
+import { api, AUTH_REQUEST_TIMEOUT_MS } from '@/config/api'
 import { sessionStore } from '@/state/sessionStore'
 
 interface LoginError {
@@ -115,10 +115,14 @@ export default function LoginPage() {
 
 		setIsVerifying2FA(true)
 		try {
-			const response = await api.post('/Auth/2fa/complete', {
-				email: twoFactorEmail,
-				code: twoFactorCode.trim(),
-			})
+			const response = await api.post(
+				'/Auth/2fa/complete',
+				{
+					email: twoFactorEmail,
+					code: twoFactorCode.trim(),
+				},
+				{ timeout: AUTH_REQUEST_TIMEOUT_MS },
+			)
 
 			const apiResponse = response.data
 			const isSuccess = apiResponse?.Success ?? apiResponse?.success ?? false

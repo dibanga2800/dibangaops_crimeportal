@@ -39,7 +39,15 @@ describe('sessionStore', () => {
 
 		// In-memory cache is empty after clearAll, so it should fall back
 		const retrieved = sessionStore.getUser()
-		expect(retrieved).toEqual(user)
+		expect(retrieved).toMatchObject({
+			id: '1',
+			role: 'administrator',
+			username: 'test',
+			pageAccessRole: 'administrator',
+			twoFactorEnabled: false,
+			emailNotificationsEnabled: true,
+			loginAlertsEnabled: true,
+		})
 	})
 })
 

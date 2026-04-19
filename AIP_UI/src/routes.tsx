@@ -11,6 +11,7 @@ import { PageAccessProvider } from '@/contexts/PageAccessContext';
 import { CustomerSelectionUrlSync } from '@/components/customer/CustomerSelectionUrlSync';
 import { LoadingFallback } from '@/components/LoadingFallback';
 import { SessionTimeoutManager } from '@/components/session/SessionTimeoutManager';
+import { RootRedirect } from '@/components/RootRedirect';
 
 // Component to normalize paths and fix double slashes
 const PathNormalizer = () => {
@@ -160,6 +161,10 @@ const router = createBrowserRouter([
     ),
     children: [
       {
+        index: true,
+        element: <RootRedirect />,
+      },
+      {
         path: 'login',
         element: <LoginPage />,
       },
@@ -192,17 +197,8 @@ const router = createBrowserRouter([
         element: <BarcodeTestPage />,
       },
       {
-        path: '/',
         element: <Layout />,
         children: [
-          {
-            path: '/',
-            element: (
-              <ProtectedRoute>
-                <Index />
-              </ProtectedRoute>
-            ),
-          },
           {
             path: 'dashboard',
             element: (

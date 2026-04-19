@@ -6,13 +6,22 @@ import { API_BASE_URL, isDevelopment } from './env'
 // Validated and loaded from environment configuration
 export const BASE_API_URL = API_BASE_URL
 
+/** Default HTTP timeout for most API calls (slow networks / busy APIs). */
+export const DEFAULT_API_TIMEOUT_MS = 30_000
+
+/**
+ * Longer timeout for auth endpoints (login, session, refresh).
+ * Cloud backends (e.g. Azure Container Apps) can exceed 10s on cold start; short timeouts surface as false "connection timeout".
+ */
+export const AUTH_REQUEST_TIMEOUT_MS = 90_000
+
 export const api = axios.create({
   baseURL: BASE_API_URL,
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json'
   },
-  timeout: 10000 // 10 second timeout to prevent hanging requests
+  timeout: DEFAULT_API_TIMEOUT_MS
 })
 
 // Add request interceptor to include auth token
@@ -78,7 +87,7 @@ const refreshAccessToken = async (): Promise<string | null> => {
           // from Authorization to resolve the user identity.
           ...(currentAccessToken ? { 'Authorization': `Bearer ${currentAccessToken}` } : {}),
         },
-        timeout: 10000,
+        timeout: AUTH_REQUEST_TIMEOUT_MS,
       }
     )
 
@@ -200,6 +209,8 @@ api.interceptors.response.use(
       })
 
       // Never try to refresh for login or refresh endpoints themselves
+      let refreshAttemptedAndFailed = false
+
       if (!isLoginEndpoint && !isRefreshEndpoint) {
         const refreshToken = sessionStore.getRefreshToken()
 
@@ -223,17 +234,23 @@ api.interceptors.response.use(
               config.headers.Authorization = `Bearer ${newAccessToken}`
               return api(config)
             }
+            refreshAttemptedAndFailed = true
           } catch (refreshError) {
             if (isDevelopment) {
               console.error('❌ [API] Error during token refresh:', refreshError)
             }
+            refreshAttemptedAndFailed = true
           }
         }
       }
 
-      // Only force logout + redirect when the token itself is proven invalid
-      // (i.e. /Auth/me or /Auth/refresh returned 401), or when refresh failed.
-      if ((isAuthValidation && !isLoginPage && hasToken) || !sessionStore.getRefreshToken()) {
+      // Log out when auth endpoints prove the session invalid, or when refresh was attempted and failed.
+      // Do not clear the session on arbitrary 401s when no refresh token exists (e.g. legacy access-only session).
+      const shouldForceLogout =
+        (isAuthValidation && !isLoginPage && hasToken) ||
+        refreshAttemptedAndFailed
+
+      if (shouldForceLogout) {
         console.warn('⚠️ [API 401] Token invalid/expired and refresh unavailable/failed — clearing session and redirecting to /login')
         sessionStore.clearAll()
         if (!isLoginPage) {
