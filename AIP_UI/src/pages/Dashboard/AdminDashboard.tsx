@@ -649,7 +649,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
         }
 
         const [alertData, analyticsData] = await Promise.allSettled([
-          alertInstancesApi.getSummary(),
+          alertInstancesApi.getSummary(effectiveCustomerId ?? undefined),
           classificationApi.getAnalyticsSummary(analyticsParams)
         ])
 
@@ -875,10 +875,39 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
     return []
   }, [filteredIncidents, analyticsData, selectedRegion, isDateRangeActive])
 
+  const scopedRecentAlerts = React.useMemo(() => {
+    if (!alertSummary) {
+      return []
+    }
+    if (!isScopedRole || !effectiveSiteId) {
+      return alertSummary.recentAlerts
+    }
+
+    const scopedIncidentIds = new Set(
+      loadedIncidents
+        .map(incident => Number(incident.id))
+        .filter(incidentId => Number.isFinite(incidentId))
+    )
+
+    return alertSummary.recentAlerts.filter(alert => {
+      if (alert.incidentId == null) {
+        return false
+      }
+      return scopedIncidentIds.has(Number(alert.incidentId))
+    })
+  }, [alertSummary, isScopedRole, effectiveSiteId, loadedIncidents])
+
+  const scopedNewAlertCount = React.useMemo(() => {
+    if (scopedRecentAlerts.length === 0) {
+      return 0
+    }
+    return scopedRecentAlerts.filter(alert => alert.status === 'new').length
+  }, [scopedRecentAlerts])
+
   // Generate alerts data from live API when available
   const alerts = React.useMemo(() => {
-    if (alertSummary && alertSummary.recentAlerts.length > 0) {
-      return alertSummary.recentAlerts.map(alert => {
+    if (scopedRecentAlerts.length > 0) {
+      return scopedRecentAlerts.map(alert => {
         const createdDate = new Date(alert.createdAt)
         const minutesAgo = Math.round((Date.now() - createdDate.getTime()) / 60000)
         const timeLabel = minutesAgo < 60
@@ -899,13 +928,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
       })
     }
 
+    if (isScopedRole) {
+      return []
+    }
+
     return [
       { id: '1', type: 'warning' as const, title: 'High Priority Incident Reported', message: 'New high-priority incident requires immediate attention', time: '15 minutes ago', priority: 'high' as const, status: 'new' },
       { id: '2', type: 'info' as const, title: 'Alert Rule Triggered', message: 'Bulk theft alert rule matched', time: '1 hour ago', priority: 'medium' as const, status: 'new' },
       { id: '3', type: 'error' as const, title: 'Police Involvement Required', message: 'Incident requires police assistance — URN assigned', time: '2 hours ago', priority: 'high' as const, status: 'acknowledged' },
       { id: '4', type: 'warning' as const, title: 'Repeat Offender Detected', message: 'Known repeat offender identified', time: '3 hours ago', priority: 'medium' as const, status: 'new' }
     ]
-  }, [alertSummary])
+  }, [scopedRecentAlerts, isScopedRole])
 
   // Use real backend data for quick statistics
   const quickStats = React.useMemo(() => {
@@ -1582,7 +1615,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
                   Alerts
                 </CardTitle>
                 <Badge variant="destructive" className="text-xs">
-                  {alertSummary ? alertSummary.newCount : alerts.filter(a => a.priority === 'high').length} New
+                  {scopedNewAlertCount || alerts.filter(a => a.priority === 'high').length} New
                 </Badge>
               </CardHeader>
               <CardContent className="p-0">
