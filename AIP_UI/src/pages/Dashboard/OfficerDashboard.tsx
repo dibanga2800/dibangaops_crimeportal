@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { cn } from '@/lib/utils'
+import { Input } from '@/components/ui/input'
 import {
   Table,
   TableBody,
@@ -48,6 +49,24 @@ interface ProgressCardProps {
   target: number
   unit: string
   color: string
+}
+
+const formatCurrency = (value: number) => `£${value.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+const formatDateInput = (date: Date) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const getMonthComparisonLabel = (current: number, previous: number) => {
+  if (previous <= 0) {
+    return current > 0 ? 'vs last month' : 'No data for last month'
+  }
+  const diff = current - previous
+  const pct = (diff / Math.max(previous, 1)) * 100
+  const sign = diff >= 0 ? '+' : ''
+  return `${sign}${diff.toFixed(2)} (${pct.toFixed(0)}%) vs last month`
 }
 
 // Components
@@ -149,7 +168,13 @@ const ActivityItem: React.FC<{ activity: Activity }> = ({ activity }) => {
 }
 
 const ProgressCard: React.FC<ProgressCardProps> = ({ title, current, target, unit, color }) => {
-  const percentage = Math.min((current / target) * 100, 100)
+  const percentage = target > 0 ? Math.min((current / target) * 100, 100) : 0
+  const formatMetricValue = (value: number) => {
+    if (unit === '£') {
+      return formatCurrency(value)
+    }
+    return `${Math.round(value).toLocaleString()} ${unit}`
+  }
   
   return (
     <Card>
@@ -164,17 +189,17 @@ const ProgressCard: React.FC<ProgressCardProps> = ({ title, current, target, uni
           
           <div className="space-y-1.5 sm:space-y-2">
             <div className="flex justify-between text-[10px] sm:text-xs">
-              <span className="text-gray-600">Current: {current.toLocaleString()} {unit}</span>
-              <span className="text-gray-600">Target: {target.toLocaleString()} {unit}</span>
+              <span className="text-gray-600">Current: {formatMetricValue(current)}</span>
+              <span className="text-gray-600">Target: {formatMetricValue(target)}</span>
             </div>
             <Progress value={percentage} className="h-1.5 sm:h-2" />
           </div>
           
           <div className="text-[10px] sm:text-xs text-gray-600">
             {target - current > 0 ? (
-              <>Need {(target - current).toLocaleString()} more {unit} to reach target</>
+              <>Need {formatMetricValue(target - current)} more to reach target</>
             ) : (
-              <>🎉 Target achieved! {(current - target).toLocaleString()} {unit} ahead</>
+              <>🎉 Target achieved! {formatMetricValue(current - target)} ahead</>
             )}
           </div>
         </div>
@@ -266,6 +291,14 @@ const IncidentTable: React.FC<{ incidents: RecentIncident[] }> = ({ incidents })
 export default function OfficerDashboard() {
   const { user: loggedInUser } = useAuth()
   const { selectedCustomerId, selectedSiteId } = useCustomerSelection()
+  const today = React.useMemo(() => new Date(), [])
+  const initialFromDate = React.useMemo(
+    () => formatDateInput(new Date(today.getFullYear(), today.getMonth(), 1)),
+    [today]
+  )
+  const initialToDate = React.useMemo(() => formatDateInput(today), [today])
+  const [fromDate, setFromDate] = React.useState(initialFromDate)
+  const [toDate, setToDate] = React.useState(initialToDate)
 
   // Fetch dashboard data
   const { 
@@ -283,21 +316,25 @@ export default function OfficerDashboard() {
     isLoading: isIncidentsLoading,
     error: incidentsError
   } = useQuery({
-    queryKey: ['recentIncidents', selectedCustomerId ?? 'all', selectedSiteId ?? 'all'],
+    queryKey: ['recentIncidents', selectedCustomerId ?? 'all', selectedSiteId ?? 'all', fromDate, toDate],
     queryFn: () =>
       dashboardService.getRecentIncidents({
         customerId: selectedCustomerId ?? undefined,
-        siteId: selectedSiteId ?? undefined
+        siteId: selectedSiteId ?? undefined,
+        fromDate: fromDate || undefined,
+        toDate: toDate || undefined
       })
   })
 
   // Fetch AI risk indicators for assigned stores
   const { data: aiAnalytics } = useQuery({
-    queryKey: ['officerAnalytics', selectedCustomerId ?? 'all', selectedSiteId ?? 'all'],
+    queryKey: ['officerAnalytics', selectedCustomerId ?? 'all', selectedSiteId ?? 'all', fromDate, toDate],
     queryFn: () =>
       classificationApi.getAnalyticsSummary({
         customerId: selectedCustomerId ?? undefined,
-        siteId: selectedSiteId ?? undefined
+        siteId: selectedSiteId ?? undefined,
+        from: fromDate || undefined,
+        to: toDate || undefined
       }),
     enabled: selectedCustomerId != null || selectedSiteId != null
   })
@@ -309,76 +346,93 @@ export default function OfficerDashboard() {
   // whose primary workflow is reporting incidents. Route protection handles unauthorized access.
   const showNewIncidentButton = true
 
+  const handleFromDateChange = (value: string) => {
+    if (toDate && value && new Date(value) > new Date(toDate)) {
+      setToDate(value)
+    }
+    setFromDate(value)
+  }
+
+  const handleToDateChange = (value: string) => {
+    if (fromDate && value && new Date(fromDate) > new Date(value)) {
+      setFromDate(value)
+    }
+    setToDate(value)
+  }
+
+  const handleResetDateFilter = () => {
+    setFromDate(initialFromDate)
+    setToDate(initialToDate)
+  }
+
+  const selectedRangeLabel = React.useMemo(() => {
+    if (fromDate && toDate) {
+      return `${new Date(`${fromDate}T00:00:00`).toLocaleDateString()} - ${new Date(`${toDate}T00:00:00`).toLocaleDateString()}`
+    }
+    if (fromDate) {
+      return `From ${new Date(`${fromDate}T00:00:00`).toLocaleDateString()}`
+    }
+    if (toDate) {
+      return `Up to ${new Date(`${toDate}T00:00:00`).toLocaleDateString()}`
+    }
+    return 'All dates'
+  }, [fromDate, toDate])
+
   const computedStats = React.useMemo(() => {
     if (!incidentsData || incidentsData.length === 0) {
       return {
-        incidentsThisMonth: dashboardData?.stats.incidentsThisMonth ?? 0,
-        incidentsLastMonth: dashboardData?.stats.incidentsLastMonth ?? 0,
-        totalValueThisMonth: dashboardData?.stats.totalValueSaved ?? 0,
+        incidentsThisMonth: 0,
+        incidentsLastMonth: 0,
+        totalValueThisMonth: 0,
         totalValueLastMonth: 0,
-        theftThisMonth: 0,
-        theftLastMonth: 0,
+        recoveredValueThisMonth: 0,
+        recoveredValueLastMonth: 0,
+        lostValueThisMonth: 0,
+        lostValueLastMonth: 0,
       }
-    }
-
-    const now = new Date()
-    const currentMonth = now.getMonth()
-    const currentYear = now.getFullYear()
-
-    const prevMonthDate = new Date(currentYear, currentMonth - 1, 1)
-    const prevMonth = prevMonthDate.getMonth()
-    const prevYear = prevMonthDate.getFullYear()
-
-    const parseDate = (value: string): Date | null => {
-      if (!value) return null
-      const d = new Date(value)
-      return isNaN(d.getTime()) ? null : d
     }
 
     let incidentsThisMonth = 0
     let incidentsLastMonth = 0
     let totalValueThisMonth = 0
     let totalValueLastMonth = 0
-    let theftThisMonth = 0
-    let theftLastMonth = 0
+    let recoveredValueThisMonth = 0
+    let recoveredValueLastMonth = 0
+    let lostValueThisMonth = 0
+    let lostValueLastMonth = 0
+    const startBoundary = fromDate ? new Date(`${fromDate}T00:00:00`) : null
+    const endBoundary = toDate ? new Date(`${toDate}T23:59:59`) : null
 
     for (const inc of incidentsData) {
-      const d = parseDate(inc.date)
-      if (!d) continue
-      const y = d.getFullYear()
-      const m = d.getMonth()
-
-      const value = typeof inc.value === 'number' && !isNaN(inc.value)
-        ? inc.value
-        : (typeof inc.amount === 'number' && !isNaN(inc.amount) ? inc.amount : 0)
-
-      const incidentType = (inc.type || inc.incidentType || '').toLowerCase()
-      const isTheftIncident =
-        incidentType.includes('theft') ||
-        incidentType.includes('stolen') ||
-        incidentType.includes('shoplifting')
-
-      if (y === currentYear && m === currentMonth) {
-        incidentsThisMonth += 1
-        totalValueThisMonth += value
-        if (isTheftIncident) {
-          theftThisMonth += 1
-        }
-      } else if (y === prevYear && m === prevMonth) {
-        incidentsLastMonth += 1
-        totalValueLastMonth += value
-        if (isTheftIncident) {
-          theftLastMonth += 1
-        }
+      const d = new Date(inc.date)
+      if (Number.isNaN(d.getTime())) {
+        continue
       }
-    }
+      if (startBoundary && d < startBoundary) {
+        continue
+      }
+      if (endBoundary && d > endBoundary) {
+        continue
+      }
 
-    // Fallback to backend values if present and non-zero
-    incidentsThisMonth = dashboardData?.stats.incidentsThisMonth || incidentsThisMonth
-    incidentsLastMonth = dashboardData?.stats.incidentsLastMonth || incidentsLastMonth
+      const recoveredValue =
+        typeof inc.recoveredValue === 'number' && !Number.isNaN(inc.recoveredValue)
+          ? inc.recoveredValue
+          : typeof inc.value === 'number' && !Number.isNaN(inc.value)
+            ? inc.value
+            : typeof inc.amount === 'number' && !Number.isNaN(inc.amount)
+              ? inc.amount
+              : 0
 
-    if (dashboardData?.stats.totalValueSaved && dashboardData.stats.totalValueSaved > 0) {
-      totalValueThisMonth = dashboardData.stats.totalValueSaved
+      const lostValue =
+        typeof inc.lostValue === 'number' && !Number.isNaN(inc.lostValue)
+          ? inc.lostValue
+          : 0
+
+      incidentsThisMonth += 1
+      totalValueThisMonth += recoveredValue
+      recoveredValueThisMonth += recoveredValue
+      lostValueThisMonth += lostValue
     }
 
     return {
@@ -386,31 +440,29 @@ export default function OfficerDashboard() {
       incidentsLastMonth,
       totalValueThisMonth,
       totalValueLastMonth,
-      theftThisMonth,
-      theftLastMonth,
+      recoveredValueThisMonth,
+      recoveredValueLastMonth,
+      lostValueThisMonth,
+      lostValueLastMonth,
     }
-  }, [incidentsData, dashboardData])
+  }, [incidentsData, fromDate, toDate])
 
-  const incidentsChangeLabel = React.useMemo(() => {
-    const { incidentsThisMonth, incidentsLastMonth } = computedStats
-    if (incidentsLastMonth <= 0) {
-      return incidentsThisMonth > 0 ? 'vs last month' : 'No data for last month'
-    }
-    const diff = incidentsThisMonth - incidentsLastMonth
-    const pct = (diff / Math.max(incidentsLastMonth, 1)) * 100
-    const sign = diff >= 0 ? '+' : ''
-    return `${sign}${diff} (${pct.toFixed(0)}%) vs last month`
-  }, [computedStats])
+  const monthlyFinancialSnapshot = React.useMemo(() => {
+    const totalImpact = computedStats.recoveredValueThisMonth + computedStats.lostValueThisMonth
+    const recoveryRate = totalImpact > 0
+      ? (computedStats.recoveredValueThisMonth / totalImpact) * 100
+      : 0
 
-  const theftChangeLabel = React.useMemo(() => {
-    const { theftThisMonth, theftLastMonth } = computedStats
-    if (theftLastMonth <= 0) {
-      return theftThisMonth > 0 ? 'vs last month' : 'No data for last month'
+    return {
+      recoveryRate,
+      incidentsInRangeCount: computedStats.incidentsThisMonth,
+      averageRecoveredPerIncident: computedStats.incidentsThisMonth > 0
+        ? computedStats.recoveredValueThisMonth / computedStats.incidentsThisMonth
+        : 0,
+      averageLostPerIncident: computedStats.incidentsThisMonth > 0
+        ? computedStats.lostValueThisMonth / computedStats.incidentsThisMonth
+        : 0
     }
-    const diff = theftThisMonth - theftLastMonth
-    const pct = (diff / Math.max(theftLastMonth, 1)) * 100
-    const sign = diff >= 0 ? '+' : ''
-    return `${sign}${diff} (${pct.toFixed(0)}%) vs last month`
   }, [computedStats])
 
   // Recent Activity: prefer incidents for assigned stores; fallback to dashboard activities
@@ -486,57 +538,80 @@ export default function OfficerDashboard() {
             )}
           </header>
 
+          <section
+            aria-label="Date filter"
+            className="rounded-lg border bg-white/80 backdrop-blur-sm p-3 sm:p-4"
+          >
+            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                <CalendarRange className="h-4 w-4 text-blue-600" />
+                Date Range
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 w-full lg:w-auto">
+                <div className="space-y-1">
+                  <label htmlFor="officer-from-date" className="text-xs text-gray-600">From</label>
+                  <Input
+                    id="officer-from-date"
+                    type="date"
+                    value={fromDate}
+                    onChange={(event) => handleFromDateChange(event.target.value)}
+                    className="h-9"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label htmlFor="officer-to-date" className="text-xs text-gray-600">To</label>
+                  <Input
+                    id="officer-to-date"
+                    type="date"
+                    value={toDate}
+                    onChange={(event) => handleToDateChange(event.target.value)}
+                    className="h-9"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-9 self-end"
+                  onClick={handleResetDateFilter}
+                >
+                  Reset to this month
+                </Button>
+              </div>
+            </div>
+          </section>
+
           {/* Stats Grid */}
           <section aria-label="Dashboard Statistics" className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <StatCard
-              title="Incidents This Month"
+              title="Incidents in Range"
               value={computedStats.incidentsThisMonth}
-              change={incidentsChangeLabel}
-              trend={computedStats.incidentsThisMonth >= computedStats.incidentsLastMonth ? 'up' : 'down'}
               icon={Shield}
               gradient="bg-gradient-to-br from-blue-500 to-blue-700"
-              subtitle={`Target: ${dashboardData.monthlyTarget.incidents}`}
+              subtitle={selectedRangeLabel}
               link="/operations/incident-report"
             />
             <StatCard
-              title="No. of Theft Reported"
-              value={computedStats.theftThisMonth}
-              change={theftChangeLabel}
-              trend={computedStats.theftThisMonth >= computedStats.theftLastMonth ? 'up' : 'down'}
-              icon={TrendingUp}
-              gradient="bg-gradient-to-br from-emerald-500 to-emerald-700"
-              subtitle="This month"
+              title="Value Lost"
+              value={formatCurrency(computedStats.lostValueThisMonth)}
+              icon={AlertTriangle}
+              gradient="bg-gradient-to-br from-rose-500 to-rose-700"
+              subtitle={selectedRangeLabel}
               link="/operations/incident-report"
             />
             <StatCard
-              title="Sites in Scope"
-              value={
-                incidentsData && incidentsData.length > 0
-                  ? new Set(incidentsData.map((i) => i.siteId || i.siteName)).size
-                  : dashboardData.stats.sitesVisited || 0
-              }
-              icon={MapPin}
-              gradient="bg-gradient-to-br from-purple-500 to-purple-700"
-              subtitle="Based on your recent incidents"
+              title="Value Recovered"
+              value={formatCurrency(computedStats.recoveredValueThisMonth)}
+              icon={Wallet}
+              gradient="bg-gradient-to-br from-emerald-500 to-green-700"
+              subtitle={selectedRangeLabel}
+              link="/operations/incident-report"
             />
             <StatCard
-              title="Incidents Today"
-              value={
-                incidentsData
-                  ? incidentsData.filter((i) => {
-                      const d = new Date(i.date)
-                      const now = new Date()
-                      return (
-                        d.getFullYear() === now.getFullYear() &&
-                        d.getMonth() === now.getMonth() &&
-                        d.getDate() === now.getDate()
-                      )
-                    }).length
-                  : 0
-              }
+              title="Incidents in Scope"
+              value={computedStats.incidentsThisMonth}
               icon={Calendar}
               gradient="bg-gradient-to-br from-amber-500 to-orange-600"
-              subtitle="For your current store scope"
+              subtitle={selectedRangeLabel}
             />
           </section>
 
@@ -548,24 +623,54 @@ export default function OfficerDashboard() {
               <section aria-label="Monthly Progress">
                 <h2 className="text-sm sm:text-base font-semibold mb-3 flex items-center gap-2">
                   <Target className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
-                  Monthly Progress
+                  Monthly Progress (Selected Range)
                 </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <ProgressCard
-                    title="Incidents Handled"
+                    title="Operational Target: Incidents Handled"
                     current={computedStats.incidentsThisMonth}
                     target={dashboardData.monthlyTarget.incidents}
                     unit="incidents"
                     color="blue"
                   />
                   <ProgressCard
-                    title="Value Saved"
-                    current={Math.round(computedStats.totalValueThisMonth)}
+                    title="Financial Target: Value Recovered"
+                    current={computedStats.recoveredValueThisMonth}
                     target={dashboardData.monthlyTarget.valueSaved}
                     unit="£"
                     color="green"
                   />
                 </div>
+
+                <Card className="mt-3">
+                  <CardContent className="p-3 sm:p-4">
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                      <h3 className="text-xs sm:text-sm font-semibold text-gray-900">Store Financial Snapshot (Selected Range)</h3>
+                      <Badge variant="secondary" className="text-[10px] sm:text-xs">
+                        Live from incidents
+                      </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                      <div className="rounded-md border bg-rose-50/70 p-2 sm:p-3">
+                        <p className="text-[10px] sm:text-xs text-gray-600">Value Lost</p>
+                        <p className="text-sm sm:text-base font-semibold text-rose-700">{formatCurrency(computedStats.lostValueThisMonth)}</p>
+                      </div>
+                      <div className="rounded-md border bg-emerald-50/70 p-2 sm:p-3">
+                        <p className="text-[10px] sm:text-xs text-gray-600">Value Recovered</p>
+                        <p className="text-sm sm:text-base font-semibold text-emerald-700">{formatCurrency(computedStats.recoveredValueThisMonth)}</p>
+                      </div>
+                      <div className="rounded-md border bg-blue-50/70 p-2 sm:p-3">
+                        <p className="text-[10px] sm:text-xs text-gray-600">Recovery Rate</p>
+                        <p className="text-sm sm:text-base font-semibold text-blue-700">{monthlyFinancialSnapshot.recoveryRate.toFixed(1)}%</p>
+                      </div>
+                      <div className="rounded-md border bg-amber-50/70 p-2 sm:p-3">
+                        <p className="text-[10px] sm:text-xs text-gray-600">Incidents in Range</p>
+                        <p className="text-sm sm:text-base font-semibold text-amber-700">{monthlyFinancialSnapshot.incidentsInRangeCount}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               </section>
 
               {/* Recent Incidents */}

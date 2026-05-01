@@ -49,7 +49,6 @@ import { usePageAccess } from "@/contexts/PageAccessContext"
 import { DashboardGreeting } from '@/components/dashboard/DashboardGreeting'
 
 // Lazy load the dashboard components
-const OfficerDashboard = React.lazy(() => import('@/pages/Dashboard/OfficerDashboard'))
 const AdminDashboard = React.lazy(() => import('@/pages/Dashboard/AdminDashboard'))
 
 const officerStats = [
@@ -217,9 +216,23 @@ const Index = () => {
   }
 
   // Show appropriate dashboard based on role
-  // Admin/Manager: management dashboard. Officer/Store: operational dashboard.
-  if (effectiveRole === 'administrator' || effectiveRole === 'manager') {
+  // Admin/Manager/Officer/Store all use AdminDashboard with role-aware scoping.
+  if (
+    effectiveRole === 'administrator' ||
+    effectiveRole === 'manager' ||
+    effectiveRole === 'security-officer' ||
+    effectiveRole === 'store'
+  ) {
     console.log('🏠 [Index] Rendering AdminDashboard for role:', effectiveRole);
+    const viewRole =
+      effectiveRole === 'manager'
+        ? 'manager'
+        : effectiveRole === 'security-officer'
+          ? 'security-officer'
+          : effectiveRole === 'store'
+            ? 'store'
+            : 'administrator'
+
     return (
       <Suspense fallback={
         <div className="flex items-center justify-center min-h-screen">
@@ -229,22 +242,7 @@ const Index = () => {
           </div>
         </div>
       }>
-        <AdminDashboard viewRole={effectiveRole === 'manager' ? 'manager' : 'administrator'} />
-      </Suspense>
-    )
-  } else if (effectiveRole === 'security-officer' || effectiveRole === 'store') {
-    // Officer and store user get OfficerDashboard with user-specific data filtering
-    console.log('🏠 [Index] Rendering OfficerDashboard for role:', effectiveRole);
-    return (
-      <Suspense fallback={
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="space-y-4 text-center">
-            <div className="text-lg font-medium">Loading Dashboard...</div>
-            <div className="text-sm text-gray-500">Please wait</div>
-          </div>
-        </div>
-      }>
-        <OfficerDashboard />
+        <AdminDashboard viewRole={viewRole} />
       </Suspense>
     )
   }

@@ -1,5 +1,5 @@
-import React, { Suspense } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import React from 'react'
+import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -62,10 +62,6 @@ import type { Incident } from '@/types/incidents'
 import type { IncidentsResponse } from '@/types/api'
 import { BASE_API_URL } from '@/config/api'
 import { sessionStore } from '@/state/sessionStore'
-
-// Lazy load the dashboard components
-const OfficerDashboard = React.lazy(() => import('@/pages/Dashboard/OfficerDashboard'))
-
 
 const officerStats = [
   // Top Performers
@@ -269,25 +265,40 @@ const getIncidentFinancials = (incident: any) => {
 }
 
 interface AdminDashboardProps {
-  viewRole?: 'administrator' | 'manager'
+  viewRole?: 'administrator' | 'manager' | 'security-officer' | 'store'
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrator' }) => {
-  const location = useLocation();
   const { currentRole, isTestMode, testRole, isLoading } = usePageAccess();
   const effectiveRole = isTestMode && testRole ? testRole : currentRole;
-  const { selectedCustomerId: contextCustomerId, assignedCustomers } = useCustomerSelection();
+  const {
+    selectedCustomerId: contextCustomerId,
+    selectedSiteId: contextSiteId,
+    assignedCustomers
+  } = useCustomerSelection();
+  const isScopedRole = effectiveRole === 'store' || effectiveRole === 'security-officer'
 
-  // For managers: use selected (or first assigned) customer so regions load for their assigned customer
+  // For scoped roles/managers: use selected (or first assigned) customer so data stays constrained
   const effectiveCustomerId = React.useMemo(() => {
+    if (isScopedRole) {
+      return contextCustomerId ?? assignedCustomers[0]?.id ?? null;
+    }
     if (viewRole !== 'manager') return null;
     return contextCustomerId ?? assignedCustomers[0]?.id ?? null;
-  }, [viewRole, contextCustomerId, assignedCustomers]);
+  }, [isScopedRole, viewRole, contextCustomerId, assignedCustomers]);
+
+  const effectiveSiteId = React.useMemo(() => {
+    if (!isScopedRole) {
+      return null
+    }
+    return contextSiteId ? String(contextSiteId) : null
+  }, [isScopedRole, contextSiteId])
 
   // All state declarations must be at the top before any conditional returns
   const [analyticsData, setAnalyticsData] = React.useState<AnalyticsHubData | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = React.useState<boolean>(true);
   const [analyticsError, setAnalyticsError] = React.useState<string | null>(null);
+  const [siteOptions, setSiteOptions] = React.useState<Array<{ id: string; name: string }>>([]);
   const [regionOptions, setRegionOptions] = React.useState<Array<{ id: string; name: string }>>([]);
   const [selectedRegion, setSelectedRegion] = React.useState<string>('all');
   const [activePeriod, setActivePeriod] = React.useState<'Daily' | 'Weekly' | 'Monthly' | 'Yearly'>('Monthly');
@@ -301,6 +312,38 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
   const [alertSummary, setAlertSummary] = React.useState<AlertSummary | null>(null);
   const [aiAnalytics, setAiAnalytics] = React.useState<IncidentAnalyticsSummary | null>(null);
   const isDateRangeActive = Boolean(fromDate || toDate);
+  const viewBadgeLabel =
+    viewRole === 'administrator'
+      ? 'Admin View'
+      : viewRole === 'manager'
+        ? 'Manager View'
+        : viewRole === 'store'
+          ? 'Store View'
+          : 'Officer View'
+  const showIncidentReportCta = isScopedRole
+  const scopedStoreLabel = React.useMemo(() => {
+    if (!isScopedRole || !effectiveSiteId) {
+      return null
+    }
+
+    const matchedSite = siteOptions.find(site => String(site.id) === String(effectiveSiteId))
+    if (matchedSite?.name) {
+      return matchedSite.name
+    }
+
+    const incidentSiteName = loadedIncidents.find(incident => String(incident.siteId || '') === String(effectiveSiteId))?.siteName
+    if (incidentSiteName) {
+      return incidentSiteName
+    }
+
+    return `Store ${effectiveSiteId}`
+  }, [isScopedRole, effectiveSiteId, siteOptions, loadedIncidents])
+
+  React.useEffect(() => {
+    if (isScopedRole && selectedRegion !== 'all') {
+      setSelectedRegion('all')
+    }
+  }, [isScopedRole, selectedRegion])
 
   const handleApplyDateRange = () => {
     if (!fromDateInput && !toDateInput) {
@@ -347,10 +390,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
         console.log('🔄 Loading incidents using incidentsApi service');
         
         // Use the proper incidents API service which handles authentication
-        const response = await incidentsApi.getIncidents({
+        const incidentQueryParams: {
+          page: number
+          pageSize: number
+          customerId?: string
+          siteId?: string
+        } = {
           page: 1,
           pageSize: 500
-        });
+        }
+        if (effectiveCustomerId != null) {
+          incidentQueryParams.customerId = String(effectiveCustomerId)
+        }
+        if (effectiveSiteId) {
+          incidentQueryParams.siteId = effectiveSiteId
+        }
+
+        const response = await incidentsApi.getIncidents(incidentQueryParams);
         
         // Extract incidents from response (handle data, Data, items formats)
         type ResWithAlternates = IncidentsResponse & { Data?: unknown[]; items?: unknown[] }
@@ -520,9 +576,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
       isActive = false;
       abortController.abort();
     };
-  }, []); // Load once on mount
+  }, [effectiveCustomerId, effectiveSiteId]);
 
-  // Load analytics data for admin/manager overview; for managers use assigned customer so regions populate
+  // Load analytics data for dashboard overview; for manager/scoped roles use assigned customer so regions/sites stay constrained
   React.useEffect(() => {
     const abortController = new AbortController();
     const loadAnalytics = async () => {
@@ -530,7 +586,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
         setAnalyticsLoading(true);
         setAnalyticsError(null);
 
-        // Manager: pass assigned customer so API returns that customer's regions/sites; Admin: no override
+        // Manager/scoped roles: pass assigned customer so API returns constrained regions/sites; Admin: no override
         const [regions, sites] = await Promise.all([
           customerDashboardService.getRegions(abortController.signal, effectiveCustomerId ?? undefined),
           customerDashboardService.getSites(abortController.signal, effectiveCustomerId ?? undefined),
@@ -556,6 +612,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
           console.log('🏢 Dashboard regions loaded:', regionOpts.length, viewRole === 'manager' ? `(customer ${effectiveCustomerId})` : '');
         }
 
+        setSiteOptions(storeOptions);
         setRegionOptions(regionOpts);
 
         const data = await analyticsService.getAnalyticsHub({
@@ -583,9 +640,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
   React.useEffect(() => {
     const loadEnhancedData = async () => {
       try {
+        const analyticsParams = {
+          customerId: effectiveCustomerId ?? undefined,
+          siteId: effectiveSiteId ?? undefined,
+          regionId: selectedRegion !== 'all' ? selectedRegion : undefined,
+          from: fromDate || undefined,
+          to: toDate || undefined
+        }
+
         const [alertData, analyticsData] = await Promise.allSettled([
           alertInstancesApi.getSummary(),
-          classificationApi.getAnalyticsSummary()
+          classificationApi.getAnalyticsSummary(analyticsParams)
         ])
 
         if (alertData.status === 'fulfilled') {
@@ -600,7 +665,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
     }
 
     loadEnhancedData()
-  }, [])
+  }, [effectiveCustomerId, effectiveSiteId, selectedRegion, fromDate, toDate])
 
   // Get regions for dropdown – use ONLY real regions from API for the current customer
   const regions = React.useMemo(() => {
@@ -609,9 +674,27 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
 
   // Filter incidents by selected region and date range
   const filteredIncidents = React.useMemo(() => {
-    const regionFiltered = selectedRegion === 'all'
+    const scopedIncidents = !isScopedRole
       ? loadedIncidents
       : loadedIncidents.filter(incident => {
+          if (effectiveCustomerId != null) {
+            const incidentCustomerId = Number(incident.customerId)
+            if (Number.isFinite(incidentCustomerId) && incidentCustomerId !== Number(effectiveCustomerId)) {
+              return false
+            }
+          }
+          if (effectiveSiteId) {
+            const incidentSiteId = incident.siteId ? String(incident.siteId) : ''
+            if (incidentSiteId !== String(effectiveSiteId)) {
+              return false
+            }
+          }
+          return true
+        })
+
+    const regionFiltered = selectedRegion === 'all'
+      ? scopedIncidents
+      : scopedIncidents.filter(incident => {
           const incidentRegionId = incident.regionId ? String(incident.regionId) : null
           const incidentRegionName = (incident.regionName || '').toLowerCase().trim()
           const selectedRegionName = regions.find(r => r.id === selectedRegion)?.name?.toLowerCase().trim()
@@ -655,7 +738,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
 
       return true
     })
-  }, [selectedRegion, loadedIncidents, regions, isDateRangeActive, fromDate, toDate])
+  }, [
+    isScopedRole,
+    effectiveCustomerId,
+    effectiveSiteId,
+    selectedRegion,
+    loadedIncidents,
+    regions,
+    isDateRangeActive,
+    fromDate,
+    toDate
+  ])
 
   // Use filtered incidents for all calculations
   const customerMetrics = React.useMemo(() => {
@@ -1074,28 +1167,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
     );
   }
 
-  // Show appropriate dashboard based on role (after all hooks have been called)
-  // Store and security-officer use the officer dashboard; admin/manager use the management dashboard UI below.
-  if (effectiveRole === 'store' || effectiveRole === 'security-officer') {
-    return (
-      <Suspense fallback={
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="space-y-4 text-center">
-            <div className="text-lg font-medium">Loading Officer Dashboard...</div>
-            <div className="text-sm text-gray-500">Please wait</div>
-          </div>
-        </div>
-      }>
-        <OfficerDashboard />
-      </Suspense>
-    )
-  }
-
-  // Management dashboard UI (admin/manager)
+  // Unified dashboard UI (admin/manager/store/security-officer)
   return (
     <div className="min-h-screen bg-slate-50 p-6">
       <div className="space-y-6">
-        <DashboardGreeting />
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+          <DashboardGreeting />
+          {showIncidentReportCta && (
+            <Button asChild className="h-9 text-xs sm:text-sm bg-blue-600 hover:bg-blue-700 self-start sm:self-auto">
+              <Link to="/operations/incident-report?open=new">
+                <Plus className="h-4 w-4 mr-1" />
+                Incident Report
+              </Link>
+            </Button>
+          )}
+        </div>
         
         
         {/* Loading State */}
@@ -1111,8 +1197,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
           <div className="flex items-center gap-2 flex-wrap">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Dashboard Overview</h2>
             <Badge variant="secondary" className="text-xs">
-              {viewRole === 'administrator' ? 'Admin View' : 'Manager View'}
+              {viewBadgeLabel}
             </Badge>
+            {isScopedRole && (
+              <Badge variant="outline" className="text-xs">
+                {scopedStoreLabel || 'Assigned store'}
+              </Badge>
+            )}
             {selectedRegion !== 'all' && (
               <Badge variant="default" className="text-xs bg-blue-600">
                 <MapPin className="h-3 w-3 mr-1" />
@@ -1122,7 +1213,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
           </div>
           
           <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-            <Select value={selectedRegion} onValueChange={setSelectedRegion}>
+            <Select value={selectedRegion} onValueChange={setSelectedRegion} disabled={isScopedRole}>
               <SelectTrigger className="w-full text-sm md:w-[200px]">
                 <SelectValue placeholder="Select region" />
               </SelectTrigger>

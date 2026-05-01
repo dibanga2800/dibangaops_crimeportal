@@ -192,11 +192,13 @@ class DashboardService {
     }
   }
 
-  async getRecentIncidents(params?: { customerId?: number; siteId?: string }): Promise<RecentIncident[]> {
+  async getRecentIncidents(params?: { customerId?: number; siteId?: string; fromDate?: string; toDate?: string }): Promise<RecentIncident[]> {
     try {
-      const queryParams: Record<string, string | number> = { page: 1, pageSize: 10 }
+      const queryParams: Record<string, string | number> = { page: 1, pageSize: 100 }
       if (params?.customerId != null) queryParams.customerId = params.customerId
       if (params?.siteId) queryParams.siteId = params.siteId
+      if (params?.fromDate) queryParams.fromDate = params.fromDate
+      if (params?.toDate) queryParams.toDate = params.toDate
       const response = await api.get<ApiResponse<any>>('/incidents', { params: queryParams })
       const incidents = response.data?.data || []
       return incidents.map((inc: any) => {
