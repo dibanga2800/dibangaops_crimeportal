@@ -1,5 +1,6 @@
 import type { Customer } from "@/types/customer"
 import { api, CUSTOMER_ENDPOINTS, ApiResponse } from "@/config/api"
+import { CUSTOMER_PAGES, getPagesByCustomerType } from "@/config/customerPages"
 
 // Helper function to map backend customer data to frontend Customer type
 const mapBackendCustomerToFrontend = (backendCustomer: any): Customer => {
@@ -233,7 +234,6 @@ export const customerService = {
       console.log('🔄 [CustomerService] Creating new customer with page assignments')
       
       // Get pages for customer type
-      const { getPagesByCustomerType } = require('@/config/customerPages')
       const availablePages = getPagesByCustomerType(customerData.customerType)
       
       // Create page assignments
@@ -241,8 +241,8 @@ export const customerService = {
       const now = new Date().toISOString()
       
       availablePages.forEach(page => {
-        const pageKey = Object.keys(require('@/config/customerPages').CUSTOMER_PAGES).find(
-          key => require('@/config/customerPages').CUSTOMER_PAGES[key].id === page.id
+        const pageKey = Object.keys(CUSTOMER_PAGES).find(
+          key => CUSTOMER_PAGES[key].id === page.id
         )
         if (pageKey) {
           pageAssignments[pageKey] = {

@@ -155,15 +155,9 @@ const NavigationMenu = ({
 export function Header({ onMobileMenuClick }: HeaderProps) {
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
-
-  // Try to get context, but handle gracefully if not available
-  let pageAccessContext;
-  try {
-    pageAccessContext = React.useContext(PageAccessContext);
-  } catch (error) {
-    // Context not available
-    pageAccessContext = undefined;
-  }
+  const pageAccessContext = React.useContext(PageAccessContext);
+  const { user: authenticatedUser } = useAuth();
+  const isAuthenticated = !!authenticatedUser;
   
   // If context is not available, return minimal header
   if (!pageAccessContext) {
@@ -177,9 +171,6 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
   }
   
 	const { currentRole, hasAccess: hasPageAccess } = pageAccessContext;
-  
-  const { user: authenticatedUser } = useAuth();
-  const isAuthenticated = !!authenticatedUser;
 
   // Define navigation sections to match SidebarNavigation
   const navigationItems = [

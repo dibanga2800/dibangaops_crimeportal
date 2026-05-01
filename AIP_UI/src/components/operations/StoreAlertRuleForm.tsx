@@ -61,7 +61,10 @@ export const StoreAlertRuleForm = ({ initialData, onSubmit, onCancel }: StoreAle
 							? `${REGION_ENDPOINTS.LIST}?pageSize=100&customerId=${customerId}`
 							: `${REGION_ENDPOINTS.LIST}?pageSize=100`
 					),
-					lookupTableService.getByCategory('IncidentType').catch(() => []),
+					lookupTableService.getByCategory('IncidentTypes').catch(async () => {
+						// Backward-compatible fallback for environments still using the singular key.
+						return lookupTableService.getByCategory('IncidentType').catch(() => [])
+					}),
 				])
 				const regionData = regionsResponse.data?.data ?? regionsResponse.data ?? []
 				setRegions(Array.isArray(regionData) ? regionData : [])

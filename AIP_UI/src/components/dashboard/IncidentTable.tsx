@@ -11,6 +11,8 @@ interface IncidentReport {
   officerName: string
   date: string
   amount: number
+  recoveredValue?: number
+  lostValue?: number
   incidentType: string
   incidentCategory?: string
   incidentCategoryConfidence?: number
@@ -64,6 +66,8 @@ export function IncidentTable({ data }: DataTableProps) {
           item.officerName.toLowerCase().includes(query) ||
           new Date(item.date).toLocaleDateString().toLowerCase().includes(query) ||
           item.amount.toString().includes(query) ||
+          (item.recoveredValue ?? item.amount).toString().includes(query) ||
+          (item.lostValue ?? 0).toString().includes(query) ||
           item.incidentType.toLowerCase().includes(query)
       )
       console.log('🔍 IncidentTable - After filtering:', processed.length)
@@ -162,7 +166,13 @@ export function IncidentTable({ data }: DataTableProps) {
                 </div>
                 <div className="text-right">
                   <div className="font-semibold text-sm text-green-600 dark:text-green-400 whitespace-nowrap">
-                    £{report.amount.toLocaleString(undefined, {
+                    Rec: £{(report.recoveredValue ?? report.amount).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2
+                    })}
+                  </div>
+                  <div className="font-semibold text-xs text-red-600 dark:text-red-400 whitespace-nowrap">
+                    Lost: £{(report.lostValue ?? 0).toLocaleString(undefined, {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2
                     })}
@@ -233,10 +243,18 @@ export function IncidentTable({ data }: DataTableProps) {
               </th>
               <th 
                   className="h-12 px-4 text-right align-middle font-semibold tracking-tight text-muted-foreground cursor-pointer hover:bg-muted/70"
-                onClick={() => sortData('amount')}
+                onClick={() => sortData('recoveredValue')}
               >
                 <div className="flex items-center justify-end gap-1">
-                  Total Amount {getSortIcon('amount')}
+                  Recovered Value {getSortIcon('recoveredValue')}
+                </div>
+              </th>
+              <th 
+                  className="h-12 px-4 text-right align-middle font-semibold tracking-tight text-muted-foreground cursor-pointer hover:bg-muted/70"
+                onClick={() => sortData('lostValue')}
+              >
+                <div className="flex items-center justify-end gap-1">
+                  Lost Value {getSortIcon('lostValue')}
                 </div>
               </th>
               <th 
@@ -255,7 +273,7 @@ export function IncidentTable({ data }: DataTableProps) {
           <tbody className="tracking-normal">
             {filteredAndSortedData.length === 0 && data.length > 0 && (
               <tr>
-                <td colSpan={7} className="h-12 text-center text-sm text-amber-600">
+                <td colSpan={8} className="h-12 text-center text-sm text-amber-600">
                   Data available but filtered out: {data.length} records found
                 </td>
               </tr>
@@ -271,7 +289,13 @@ export function IncidentTable({ data }: DataTableProps) {
                     {new Date(report.date).toLocaleDateString()}
                   </td>
                     <td className="p-4 align-middle text-right font-medium tabular-nums leading-relaxed text-green-600 dark:text-green-400">
-                    £{report.amount.toLocaleString(undefined, {
+                    £{(report.recoveredValue ?? report.amount).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2
+                    })}
+                  </td>
+                    <td className="p-4 align-middle text-right font-medium tabular-nums leading-relaxed text-red-600 dark:text-red-400">
+                    £{(report.lostValue ?? 0).toLocaleString(undefined, {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2
                     })}
@@ -311,7 +335,7 @@ export function IncidentTable({ data }: DataTableProps) {
               ))
             ) : (
               <tr>
-                <td colSpan={7} className="h-24 text-center text-sm text-muted-foreground">
+                <td colSpan={8} className="h-24 text-center text-sm text-muted-foreground">
                   No results found. Data length: {data.length}
                 </td>
               </tr>

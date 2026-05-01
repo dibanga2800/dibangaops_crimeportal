@@ -67,6 +67,12 @@ const getRiskColor = (riskLevel: string) => {
 	return RISK_COLORS[riskLevel as keyof typeof RISK_COLORS] || RISK_COLORS.low
 }
 
+const formatCurrencyExact = (value: number) =>
+	value.toLocaleString('en-GB', {
+		minimumFractionDigits: 2,
+		maximumFractionDigits: 2,
+	})
+
 export const HotProductsDashboard = ({
 	data,
 	loading = false,
@@ -444,11 +450,11 @@ export const HotProductsDashboard = ({
 														</div>
 														<div>
 															<div className="text-white/80 text-xs">Value Lost</div>
-															<div className="font-bold">£{totalValue.toFixed(0)}</div>
+															<div className="font-bold">£{formatCurrencyExact(totalValue)}</div>
 														</div>
 														<div>
 															<div className="text-white/80 text-xs">Saved</div>
-															<div className="font-bold">£{store.totalValueRecovered.toFixed(0)}</div>
+															<div className="font-bold">£{formatCurrencyExact(store.totalValueRecovered)}</div>
 														</div>
 														<div>
 															<div className="text-white/80 text-xs">Recovery</div>
@@ -481,7 +487,7 @@ export const HotProductsDashboard = ({
 																	</div>
 																	<div className="text-right ml-2">
 																		<div className="font-semibold">{product.frequency}×</div>
-																		<div className="text-gray-600">£{product.lostValue.toFixed(0)} lost</div>
+																		<div className="text-gray-600">£{formatCurrencyExact(product.lostValue)} lost</div>
 																	</div>
 																</div>
 															))}

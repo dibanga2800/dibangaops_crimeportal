@@ -214,6 +214,60 @@ const formatCurrency = (value: number): string => {
   }
 }
 
+const getIncidentFinancials = (incident: any) => {
+  const stolenItems = Array.isArray(incident?.StolenItems)
+    ? incident.StolenItems
+    : Array.isArray(incident?.stolenItems)
+      ? incident.stolenItems
+      : []
+
+  const totalStolenValue =
+    incident?.TotalStolenValue ??
+    incident?.totalStolenValue ??
+    stolenItems.reduce((sum: number, item: any) => {
+      const explicitAmount = item?.TotalAmount ?? item?.totalAmount
+      if (explicitAmount !== undefined && explicitAmount !== null) {
+        const parsed = Number(explicitAmount)
+        return sum + (Number.isFinite(parsed) ? parsed : 0)
+      }
+      const computed = Number(item?.Cost ?? item?.cost ?? 0) * Number(item?.Quantity ?? item?.quantity ?? 0)
+      return sum + (Number.isFinite(computed) ? computed : 0)
+    }, 0)
+
+  const totalRecoveredValue =
+    incident?.TotalRecoveredValue ??
+    incident?.totalRecoveredValue ??
+    incident?.TotalValueRecovered ??
+    incident?.totalValueRecovered ??
+    incident?.ValueRecovered ??
+    incident?.valueRecovered ??
+    incident?.Value ??
+    incident?.value ??
+    stolenItems.reduce((sum: number, item: any) => {
+      const parsed = Number(item?.RecoveredAmount ?? item?.recoveredAmount ?? 0)
+      return sum + (Number.isFinite(parsed) ? parsed : 0)
+    }, 0)
+
+  const explicitLostValue =
+    incident?.TotalLostValue ??
+    incident?.totalLostValue ??
+    incident?.ValueLost ??
+    incident?.valueLost ??
+    incident?.LostValue ??
+    incident?.lostValue
+
+  const totalLostValue =
+    explicitLostValue !== undefined && explicitLostValue !== null
+      ? Number(explicitLostValue) || 0
+      : Math.max((Number(totalStolenValue) || 0) - (Number(totalRecoveredValue) || 0), 0)
+
+  return {
+    totalStolenValue: Number(totalStolenValue) || 0,
+    totalRecoveredValue: Number(totalRecoveredValue) || 0,
+    totalLostValue: Number(totalLostValue) || 0,
+  }
+}
+
 interface AdminDashboardProps {
   viewRole?: 'administrator' | 'manager'
 }
@@ -336,6 +390,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
         // Priority order for site name: SiteName > LocationName > siteName > locationName
         const transformedIncidents = incidents.map((inc: any) => {
           const siteName = inc.SiteName || inc.LocationName || inc.siteName || inc.locationName || inc.Location || '';
+          const financials = getIncidentFinancials(inc)
 
           return {
             id: inc.Id || inc.id || '',
@@ -358,11 +413,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
             description: inc.Description || inc.description || '',
             incidentDetails: inc.IncidentDetails || inc.incidentDetails || '',
             storeComments: inc.StoreComments || inc.storeComments || inc.SiteComments || inc.siteComments || '',
-            totalValueRecovered: inc.TotalValueRecovered || inc.totalValueRecovered || inc.value || 0,
-            value: inc.TotalValueRecovered || inc.totalValueRecovered || inc.value || 0,
-            valueRecovered: inc.ValueRecovered || inc.valueRecovered || inc.TotalValueRecovered || 0,
-            amount: inc.Amount || inc.amount || inc.TotalValueRecovered || 0,
-            total: inc.Total || inc.total || inc.TotalValueRecovered || 0,
+            totalStolenValue: financials.totalStolenValue,
+            totalRecoveredValue: financials.totalRecoveredValue,
+            totalLostValue: financials.totalLostValue,
+            totalValueRecovered: financials.totalRecoveredValue,
+            value: financials.totalRecoveredValue,
+            valueRecovered: financials.totalRecoveredValue,
+            lostValue: financials.totalLostValue,
+            amount: financials.totalRecoveredValue,
+            total: financials.totalRecoveredValue,
             stolenItems: inc.StolenItems || inc.stolenItems || [],
             policeInvolvement: inc.PoliceInvolvement || inc.policeInvolvement || false,
             urnNumber: inc.UrnNumber || inc.urnNumber || '',
@@ -607,6 +666,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
     }).length
     const highPriority = filteredIncidents.filter(inc => inc.priority === 'high').length
     const totalValue = filteredIncidents.reduce((sum, inc) => sum + (inc.totalValueRecovered || inc.value || 0), 0)
+    const totalLostValue = filteredIncidents.reduce((sum, inc) => {
+      if (typeof (inc as any).totalLostValue === 'number' && !Number.isNaN((inc as any).totalLostValue)) {
+        return sum + (inc as any).totalLostValue
+      }
+      if (typeof (inc as any).lostValue === 'number' && !Number.isNaN((inc as any).lostValue)) {
+        return sum + (inc as any).lostValue
+      }
+      return sum + getIncidentFinancials(inc).totalLostValue
+    }, 0)
     const pending = filteredIncidents.filter(inc => inc.status === 'pending').length
     const resolved = filteredIncidents.filter(inc => inc.status === 'resolved').length
     
@@ -626,6 +694,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
       todayIncidents,
       highPriority,
       totalValue,
+      totalLostValue,
       pending,
       resolved,
       theftIncidents,
@@ -649,6 +718,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
           officerName: incident.officerName,
           date: incident.dateOfIncident,
           amount: incident.totalValueRecovered || incident.value || 0,
+          recoveredValue: incident.totalValueRecovered || incident.value || 0,
+          lostValue: incident.totalLostValue || incident.lostValue || 0,
           incidentType: incident.incidentType,
           incidentCategory: incident.incidentCategory,
           incidentCategoryConfidence: incident.incidentCategoryConfidence,
@@ -675,6 +746,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
         officerName: string
         date: string
         amount: number
+        recoveredValue: number
+        lostValue: number
         incidentType: string
       }[] = []
 
@@ -696,6 +769,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
               officerName: productIndex % 2 === 0 ? 'Uniform Officer' : 'Store Detective',
               date: date.toISOString(),
               amount: Math.round(product.value * product.frequency),
+              recoveredValue: product.recoveredValue ?? 0,
+              lostValue: product.lostValue ?? 0,
               incidentType: `Theft – ${product.productName}`
             })
           })
@@ -706,80 +781,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
 
     return []
   }, [filteredIncidents, analyticsData, selectedRegion, isDateRangeActive])
-
-  // Get priority cases – use real backend data
-  const priorityCases = React.useMemo(() => {
-    // Primary: use real loaded incidents from backend
-    if (filteredIncidents.length > 0) {
-      return filteredIncidents
-        .filter(incident => incident.priority === 'high')
-        .sort((a, b) => new Date(b.dateOfIncident).getTime() - new Date(a.dateOfIncident).getTime())
-        .slice(0, 5)
-        .map(incident => ({
-          id: incident.id,
-          customerName: incident.customerName,
-          siteName: incident.siteName || incident.store || 'N/A',
-          incidentType: incident.incidentType,
-          date: incident.dateOfIncident,
-          priority: incident.priority || 'high',
-          status: incident.status || 'pending',
-          description: incident.description || 'No description available'
-        }))
-    }
-
-    // Fallback: synthesize from analytics data if no real incidents loaded yet
-    if (!isDateRangeActive && analyticsData) {
-      const stores = analyticsData.hotProducts.storeHeatmap
-        .slice()
-        .sort((a, b) => b.totalIncidents - a.totalIncidents)
-      const cases: {
-        id: string
-        customerName: string
-        siteName: string
-        incidentType: string
-        date: string
-        priority: 'high' | 'medium'
-        status: 'resolved' | 'pending'
-        description: string
-      }[] = []
-
-      const endDate = new Date(analyticsData.metadata.dateRange.end)
-
-      stores.forEach((store, idx) => {
-        if (cases.length >= 5) {
-          return
-        }
-        const date = new Date(endDate)
-        date.setDate(endDate.getDate() - idx)
-
-        const topProduct = store.products
-          .slice()
-          .sort((a, b) => b.frequency - a.frequency)[0]
-
-        const priority =
-          store.riskLevel === 'critical' || store.riskLevel === 'high'
-            ? 'high'
-            : 'medium'
-
-        cases.push({
-          id: `CASE-${store.storeId}`,
-          customerName: filteredIncidents[0]?.customerName ?? 'Customer',
-          siteName: store.storeName,
-          incidentType: topProduct
-            ? `High loss risk – ${topProduct.productName}`
-            : 'High incident volume',
-          date: date.toISOString(),
-          priority,
-          status: priority === 'high' ? 'pending' : 'resolved',
-          description: `Store classified as ${store.riskLevel.toUpperCase()} risk with ${store.totalIncidents} incidents in the selected period.`
-        })
-      })
-
-      return cases.slice(0, 5)
-    }
-
-    return []
-  }, [filteredIncidents, analyticsData, isDateRangeActive])
 
   // Generate alerts data from live API when available
   const alerts = React.useMemo(() => {
@@ -885,15 +886,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
       });
     }
     
-    // Use filtered incidents to respect region selection
-    const incidentsByPeriod = new Map<string, { uniformOfficers: number; storeDetectives: number }>()
-    
-    // Helper to generate proper time period keys and data
+    // Generate period buckets with financial totals (recovered vs lost)
     const generateTimeData = () => {
       switch (activePeriod) {
         case 'Daily': {
           // Last 7 days
-          const data: Array<{ date: string; uniformOfficers: number; storeDetectives: number }> = []
+          const data: Array<{ date: string; recoveredValue: number; lostValue: number }> = []
           const today = new Date()
           
           for (let i = 6; i >= 0; i--) {
@@ -910,31 +908,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
               const incDate = new Date(incident.dateOfIncident)
               return incDate >= targetDate && incDate <= dayEnd
             })
-            
-            const uniformCount = dayIncidents.filter(inc => {
-              const role = (inc.officerRole || '').toLowerCase();
-              const type = (inc.officerType || '').toLowerCase();
-              return type === 'uniform' || 
-                     role.includes('advantageone') || 
-                     role.includes('uniform') ||
-                     type.includes('uniform');
-            }).length
-            const detectiveCount = dayIncidents.filter(inc => {
-              const role = (inc.officerRole || '').toLowerCase();
-              const type = (inc.officerType || '').toLowerCase();
-              return type.includes('detective') || 
-                     role.includes('detective') ||
-                     type === 'store detective';
-            }).length
-            
-            // Handle uncategorized incidents - split evenly
-            const uncategorized = dayIncidents.length - uniformCount - detectiveCount;
-            const halfUncategorized = Math.floor(uncategorized / 2);
-            
+
+            const recoveredValue = dayIncidents.reduce(
+              (sum, inc) => sum + getIncidentFinancials(inc).totalRecoveredValue,
+              0
+            )
+            const lostValue = dayIncidents.reduce(
+              (sum, inc) => sum + getIncidentFinancials(inc).totalLostValue,
+              0
+            )
+
             data.push({
               date: dayKey,
-              uniformOfficers: uniformCount + halfUncategorized,
-              storeDetectives: detectiveCount + (uncategorized - halfUncategorized)
+              recoveredValue,
+              lostValue,
             })
           }
           return data
@@ -942,7 +929,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
         
         case 'Weekly': {
           // Last 4 weeks
-          const data: Array<{ week: string; uniformOfficers: number; storeDetectives: number }> = []
+          const data: Array<{ week: string; recoveredValue: number; lostValue: number }> = []
           const today = new Date()
           
           for (let i = 3; i >= 0; i--) {
@@ -958,31 +945,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
               const incDate = new Date(incident.dateOfIncident)
               return incDate >= weekStart && incDate <= weekEnd
             })
-            
-            const uniformCount = weekIncidents.filter(inc => {
-              const role = (inc.officerRole || '').toLowerCase();
-              const type = (inc.officerType || '').toLowerCase();
-              return type === 'uniform' || 
-                     role.includes('advantageone') || 
-                     role.includes('uniform') ||
-                     type.includes('uniform');
-            }).length
-            const detectiveCount = weekIncidents.filter(inc => {
-              const role = (inc.officerRole || '').toLowerCase();
-              const type = (inc.officerType || '').toLowerCase();
-              return type.includes('detective') || 
-                     role.includes('detective') ||
-                     type === 'store detective';
-            }).length
-            
-            // Handle uncategorized incidents - split evenly
-            const uncategorized = weekIncidents.length - uniformCount - detectiveCount;
-            const halfUncategorized = Math.floor(uncategorized / 2);
-            
+
+            const recoveredValue = weekIncidents.reduce(
+              (sum, inc) => sum + getIncidentFinancials(inc).totalRecoveredValue,
+              0
+            )
+            const lostValue = weekIncidents.reduce(
+              (sum, inc) => sum + getIncidentFinancials(inc).totalLostValue,
+              0
+            )
+
             data.push({
               week: `Week ${4 - i}`,
-              uniformOfficers: uniformCount + halfUncategorized,
-              storeDetectives: detectiveCount + (uncategorized - halfUncategorized)
+              recoveredValue,
+              lostValue,
             })
           }
           return data
@@ -990,9 +966,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
         
         case 'Monthly': {
           // Last 12 months
-          const data: Array<{ month: string; uniformOfficers: number; storeDetectives: number }> = []
+          const data: Array<{ month: string; recoveredValue: number; lostValue: number }> = []
           const today = new Date()
-          const monthOrder = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
           
           for (let i = 11; i >= 0; i--) {
             const monthDate = new Date(today.getFullYear(), today.getMonth() - i, 1)
@@ -1003,31 +978,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
               return incDate.getMonth() === monthDate.getMonth() &&
                      incDate.getFullYear() === monthDate.getFullYear()
             })
-            
-            const uniformCount = monthIncidents.filter(inc => {
-              const role = (inc.officerRole || '').toLowerCase();
-              const type = (inc.officerType || '').toLowerCase();
-              return type === 'uniform' || 
-                     role.includes('advantageone') || 
-                     role.includes('uniform') ||
-                     type.includes('uniform');
-            }).length
-            const detectiveCount = monthIncidents.filter(inc => {
-              const role = (inc.officerRole || '').toLowerCase();
-              const type = (inc.officerType || '').toLowerCase();
-              return type.includes('detective') || 
-                     role.includes('detective') ||
-                     type === 'store detective';
-            }).length
-            
-            // Handle uncategorized incidents - split evenly
-            const uncategorized = monthIncidents.length - uniformCount - detectiveCount;
-            const halfUncategorized = Math.floor(uncategorized / 2);
-            
+
+            const recoveredValue = monthIncidents.reduce(
+              (sum, inc) => sum + getIncidentFinancials(inc).totalRecoveredValue,
+              0
+            )
+            const lostValue = monthIncidents.reduce(
+              (sum, inc) => sum + getIncidentFinancials(inc).totalLostValue,
+              0
+            )
+
             data.push({
               month: monthKey,
-              uniformOfficers: uniformCount + halfUncategorized,
-              storeDetectives: detectiveCount + (uncategorized - halfUncategorized)
+              recoveredValue,
+              lostValue,
             })
           }
           return data
@@ -1035,7 +999,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
         
         case 'Yearly': {
           // Last 5 years
-          const data: Array<{ year: string; uniformOfficers: number; storeDetectives: number }> = []
+          const data: Array<{ year: string; recoveredValue: number; lostValue: number }> = []
           const currentYear = new Date().getFullYear()
           
           console.log('📅 [Yearly Chart] Current year:', currentYear);
@@ -1051,41 +1015,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
             })
             
             console.log(`📅 [Yearly Chart] Year ${year}: ${yearIncidents.length} incidents`);
-            
-            // If no officer type/role, split evenly as fallback
-            const uniformCount = yearIncidents.filter(inc => {
-              const role = (inc.officerRole || '').toLowerCase();
-              const type = (inc.officerType || '').toLowerCase();
-              return type === 'uniform' || 
-                     role.includes('advantageone') || 
-                     role.includes('uniform') ||
-                     type.includes('uniform');
-            }).length
-            const detectiveCount = yearIncidents.filter(inc => {
-              const role = (inc.officerRole || '').toLowerCase();
-              const type = (inc.officerType || '').toLowerCase();
-              return type.includes('detective') || 
-                     role.includes('detective') ||
-                     type === 'store detective';
-            }).length
-            
-            // Handle incidents without clear officer type - split evenly
-            const uncategorized = yearIncidents.length - uniformCount - detectiveCount;
-            const halfUncategorized = Math.floor(uncategorized / 2);
-            
-            if (uncategorized > 0) {
-              console.log(`⚠️ [Yearly Chart] Year ${year}: ${uncategorized} uncategorized incidents - splitting evenly`);
-            }
-            
-            const finalUniformCount = uniformCount + halfUncategorized;
-            const finalDetectiveCount = detectiveCount + (uncategorized - halfUncategorized);
-            
-            console.log(`📅 [Yearly Chart] Year ${year}: ${finalUniformCount} uniform, ${finalDetectiveCount} detective`);
+
+            const recoveredValue = yearIncidents.reduce(
+              (sum, inc) => sum + getIncidentFinancials(inc).totalRecoveredValue,
+              0
+            )
+            const lostValue = yearIncidents.reduce(
+              (sum, inc) => sum + getIncidentFinancials(inc).totalLostValue,
+              0
+            )
+
+            console.log(`📅 [Yearly Chart] Year ${year}: recovered=${recoveredValue}, lost=${lostValue}`);
             
             data.push({
               year: year.toString(),
-              uniformOfficers: finalUniformCount,
-              storeDetectives: finalDetectiveCount
+              recoveredValue,
+              lostValue,
             })
           }
           return data
@@ -1195,14 +1140,34 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
                 <Input
                   type="date"
                   value={fromDateInput}
-                  onChange={(event) => setFromDateInput(event.target.value)}
+                  onChange={(event) => {
+                    const nextFrom = event.target.value
+                    setFromDateInput(nextFrom)
+                    if (nextFrom && toDateInput && new Date(nextFrom) > new Date(toDateInput)) {
+                      setDateRangeError('Start date must be before end date.')
+                      return
+                    }
+                    setDateRangeError(null)
+                    setFromDate(nextFrom)
+                    setToDate(toDateInput)
+                  }}
                   className="w-full text-sm"
                   aria-label="Filter incidents from date"
                 />
                 <Input
                   type="date"
                   value={toDateInput}
-                  onChange={(event) => setToDateInput(event.target.value)}
+                  onChange={(event) => {
+                    const nextTo = event.target.value
+                    setToDateInput(nextTo)
+                    if (fromDateInput && nextTo && new Date(fromDateInput) > new Date(nextTo)) {
+                      setDateRangeError('Start date must be before end date.')
+                      return
+                    }
+                    setDateRangeError(null)
+                    setFromDate(fromDateInput)
+                    setToDate(nextTo)
+                  }}
                   className="w-full text-sm"
                   aria-label="Filter incidents to date"
                 />
@@ -1253,27 +1218,29 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
             </Card>
           </Link>
 
-          {/* Today's Incidents */}
-          <Link to="/operations/incident-report?preset=today" className="block" aria-label="View today's incidents">
-            <Card className="min-w-[140px] bg-emerald-600 text-white border-0 shadow-md overflow-hidden relative cursor-pointer transition-shadow hover:shadow-lg">
+          {/* Lost Value */}
+          <Link to="/operations/incident-report" className="block" aria-label="View incidents by lost value">
+            <Card className="min-w-[140px] bg-rose-700 text-white border-0 shadow-md overflow-hidden relative cursor-pointer transition-shadow hover:shadow-lg">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 md:p-4 pb-2 md:pb-3">
                 <CardTitle className="text-xs font-medium md:text-sm text-white">
-                  Today
+                  Lost Value
                 </CardTitle>
                 <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
-                  <Calendar className="h-4 w-4 text-white" />
+                  <AlertCircle className="h-4 w-4 text-white" />
                 </div>
               </CardHeader>
               <CardContent className="p-3 md:p-4 pt-1 md:pt-2 z-10 relative">
-                <div className="text-xl font-bold md:text-2xl lg:text-3xl text-white">{quickStats.todayIncidents}</div>
-                <div className="text-xs text-white/60 mt-1">Incidents today</div>
+                <div className="text-xl font-bold md:text-2xl lg:text-3xl text-white">
+                  {formatCurrency(quickStats.totalLostValue || 0)}
+                </div>
+                <div className="text-xs text-white/60 mt-1">Within selected filters</div>
               </CardContent>
             </Card>
           </Link>
 
           {/* Total Value Recovered */}
           <Link to="/operations/incident-report" className="block" aria-label="View incidents by value recovered">
-            <Card className="min-w-[140px] bg-amber-600 text-white border-0 shadow-md overflow-hidden relative cursor-pointer transition-shadow hover:shadow-lg">
+            <Card className="min-w-[140px] bg-emerald-600 text-white border-0 shadow-md overflow-hidden relative cursor-pointer transition-shadow hover:shadow-lg">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 md:p-4 pb-2 md:pb-3">
                 <CardTitle className="text-xs font-medium md:text-sm text-white">
                   Value Recovered
@@ -1348,7 +1315,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
                 </div>
               </CardHeader>
               <CardContent className="h-[200px] md:h-[280px] lg:h-[320px] p-2 md:p-4">
-                {(chartData.length === 0 || chartData.every(d => (d.uniformOfficers || 0) + (d.storeDetectives || 0) === 0)) && !incidentsLoading ? (
+                {(chartData.length === 0 || chartData.every(d => (d.recoveredValue || 0) + (d.lostValue || 0) === 0)) && !incidentsLoading ? (
                   <div className="flex items-center justify-center h-full">
                     <div className="text-center space-y-2">
                       <AlertCircle className="h-12 w-12 text-gray-400 mx-auto" />
@@ -1375,11 +1342,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
                     <div className="flex items-center justify-end mb-2 space-x-4">
                       <div className="flex items-center">
                         <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block mr-1"></span>
-                        <span className="text-xs text-gray-500">Uniform Officers</span>
+                        <span className="text-xs text-gray-500">Recovered Value</span>
                       </div>
                       <div className="flex items-center">
-                        <span className="w-3 h-3 rounded-full bg-amber-400 inline-block mr-1"></span>
-                        <span className="text-xs text-gray-500">Store Detectives</span>
+                        <span className="w-3 h-3 rounded-full bg-rose-500 inline-block mr-1"></span>
+                        <span className="text-xs text-gray-500">Lost Value</span>
                       </div>
                     </div>
                     <ResponsiveContainer width="100%" height="100%">
@@ -1388,13 +1355,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
                     margin={{ top: 5, right: 5, left: -15, bottom: 5 }}
                   >
                     <defs>
-                      <linearGradient id="colorUniformOfficers" x1="0" y1="0" x2="0" y2="1">
+                      <linearGradient id="colorRecoveredValue" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
                         <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
                       </linearGradient>
-                      <linearGradient id="colorStoreDetectives" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.8}/>
-                        <stop offset="95%" stopColor="#F59E0B" stopOpacity={0}/>
+                      <linearGradient id="colorLostValue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
+                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -1408,7 +1375,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
                       tick={{ fontSize: 10, fill: '#6B7280' }}
                       axisLine={false}
                       tickLine={false}
-                      tickFormatter={(value) => `${value}`}
+                      tickFormatter={(value) => formatCurrency(Number(value))}
                     />
                     <Tooltip 
                       contentStyle={{ 
@@ -1419,27 +1386,27 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
                         fontSize: '0.75rem' 
                       }}
                       itemStyle={{ padding: '2px 0' }}
-                      formatter={(value) => [`${value}`, '']}
+                      formatter={(value) => [formatCurrency(Number(value)), '']}
                       labelFormatter={(label) => `${label}`}
                     />
                     <Area
                       type="monotone"
-                      name="Uniform Officers"
-                      dataKey="uniformOfficers"
+                      name="Recovered Value"
+                      dataKey="recoveredValue"
                       stroke="#10b981"
                       fillOpacity={1}
-                      fill="url(#colorUniformOfficers)"
+                      fill="url(#colorRecoveredValue)"
                       activeDot={{ r: 6, stroke: '#10b981', strokeWidth: 2, fill: 'white' }}
                       strokeWidth={2}
                     />
                     <Area
                       type="monotone"
-                      name="Store Detectives"
-                      dataKey="storeDetectives"
-                      stroke="#F59E0B"
+                      name="Lost Value"
+                      dataKey="lostValue"
+                      stroke="#ef4444"
                       fillOpacity={1}
-                      fill="url(#colorStoreDetectives)"
-                      activeDot={{ r: 6, stroke: '#F59E0B', strokeWidth: 2, fill: 'white' }}
+                      fill="url(#colorLostValue)"
+                      activeDot={{ r: 6, stroke: '#ef4444', strokeWidth: 2, fill: 'white' }}
                       strokeWidth={2}
                     />
                   </AreaChart>
@@ -1557,53 +1524,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
                       </div>
                     </div>
                   ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Priority Cases */}
-            <Card>
-              <CardHeader className="p-2 md:p-4 flex flex-row items-center justify-between">
-                <CardTitle className="text-base font-medium md:text-lg lg:text-xl flex items-center gap-2">
-                  <Shield className="h-4 w-4" />
-                  Priority Cases
-                </CardTitle>
-                <Badge variant="destructive" className="text-xs">
-                  {priorityCases.length}
-                </Badge>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="divide-y">
-                  {priorityCases.length > 0 ? (
-                    priorityCases.map((case_) => (
-                      <div key={case_.id} className="p-3 hover:bg-muted/50 transition-colors">
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-foreground truncate">{case_.siteName}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">{case_.customerName}</p>
-                          </div>
-                          <Badge variant="destructive" className="text-xs whitespace-nowrap">High</Badge>
-                        </div>
-                        <p className="text-xs font-medium text-foreground mb-1">{case_.incidentType}</p>
-                        <p className="text-xs text-muted-foreground line-clamp-2">{case_.description}</p>
-                        <div className="flex items-center justify-between mt-2">
-                          <span className="text-xs text-muted-foreground">
-                            {format(new Date(case_.date), 'MMM dd, yyyy')}
-                          </span>
-                          <Badge 
-                            variant={case_.status === 'resolved' ? 'default' : 'secondary'} 
-                            className="text-xs"
-                          >
-                            {case_.status}
-                          </Badge>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="p-6 text-center text-sm text-muted-foreground">
-                      No priority cases at this time
-                    </div>
-                  )}
                 </div>
               </CardContent>
             </Card>

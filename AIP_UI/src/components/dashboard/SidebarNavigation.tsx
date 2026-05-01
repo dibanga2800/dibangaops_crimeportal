@@ -173,29 +173,17 @@ const canDisplayLink = (link: SidebarNavLink, context: SidebarGuardContext, avai
 }
 
 export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({ onNavigate, onMobileClose }) => {
-	// Try to get context, but handle gracefully if not available
-	let pageAccessContext;
-	try {
-		pageAccessContext = React.useContext(PageAccessContext);
-	} catch (error) {
-		// Context not available
-		pageAccessContext = undefined;
-	}
-	
-	// Safety check - if context is not available, return loading state
-	if (!pageAccessContext) {
-		return (
-			<div className="px-3 py-2">
-				<div className="text-sm text-gray-500 dark:text-gray-400">Loading navigation...</div>
-			</div>
-		);
-	}
-	
-	const { hasAccess, currentRole, isLoading, availablePages, pageAccessByRole } = pageAccessContext;
-	const { user } = useAuth(); // Check user from AuthContext
+	const pageAccessContext = React.useContext(PageAccessContext);
+	const { user } = useAuth()
 	const { selectedCustomerId, isAdmin } = useCustomerSelection()
 	const navigate = useNavigate()
 	const location = useLocation()
+
+	const hasAccess = pageAccessContext?.hasAccess ?? (() => false)
+	const currentRole = pageAccessContext?.currentRole ?? null
+	const isLoading = pageAccessContext?.isLoading ?? true
+	const availablePages = pageAccessContext?.availablePages ?? []
+	const pageAccessByRole = pageAccessContext?.pageAccessByRole ?? {}
 
 	// Derive an effective role for navigation visibility:
 	// - Prefer the authenticated user's primary role
@@ -361,7 +349,7 @@ export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({ onNavigate
 		}, [])
 	}, [guardContext, pages, effectiveRole, settingsKey, pageAccessByRole])
   
-  if (isLoading) {
+  if (!pageAccessContext || isLoading) {
     return (
       <div className="px-3 py-2">
         <div className="space-y-4">

@@ -37,6 +37,8 @@ export interface RecentIncident {
   store: string;
   officerName: string;
   amount: number;
+  recoveredValue: number;
+  lostValue: number;
   incidentType: string;
 }
 

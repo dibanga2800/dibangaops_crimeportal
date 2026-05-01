@@ -62,13 +62,51 @@ const buildIncidentsUrl = (filters: Omit<IncidentGraphFilters, 'graphType'>): st
 	return `/incidents?${p.toString()}`
 }
 
+const normalizeRole = (value: unknown): string =>
+	String(value ?? '')
+		.trim()
+		.toLowerCase()
+		.replace(/[_-]+/g, ' ')
+		.replace(/\s+/g, ' ')
+
+const getIncidentRole = (incident: any): string => {
+	const rawRole =
+		incident.officerRole ??
+		incident.OfficerRole ??
+		incident.officerType ??
+		incident.OfficerType ??
+		incident.userRole ??
+		incident.UserRole ??
+		''
+
+	return normalizeRole(rawRole)
+}
+
+const isUniformRole = (role: string): boolean =>
+	role.includes('uniform') ||
+	role === 'security officer' ||
+	role === 'security-officer' ||
+	role === 'officer'
+
+const isDetectiveRole = (role: string): boolean =>
+	role.includes('detective')
+
+const isStoreUserRole = (role: string): boolean =>
+	role === 'store user' ||
+	role === 'store' ||
+	role === 'store colleague' ||
+	role === 'colleague'
+
 const passesOfficerFilter = (incident: any, officerType: string | undefined): boolean => {
 	if (!officerType || officerType === 'all') return true
-	const role: string = incident.officerRole || incident.OfficerRole || ''
+
+	const role = getIncidentRole(incident)
 	if (!role) return false
-	if (officerType === 'uniform') return role === 'Uniform Officer'
-	if (officerType === 'detective') return role === 'Store Detective'
-	if (officerType === 'store-user') return role === 'Store User'
+
+	if (officerType === 'uniform') return isUniformRole(role)
+	if (officerType === 'detective') return isDetectiveRole(role)
+	if (officerType === 'store-user') return isStoreUserRole(role)
+
 	return true
 }
 

@@ -126,6 +126,10 @@ Supporting security operations across multiple retail locations.
 /.github/workflows – CI/CD pipelines
 /docs – Architecture diagrams and supporting documentation
 
+### Operations Runbooks
+
+- [Azure Subscription Reactivation Runbook](./docs/AZURE_SUBSCRIPTION_REACTIVATION_RUNBOOK.md)
+
 ## Screenshots
 Dashboard view
 Incident reporting interface

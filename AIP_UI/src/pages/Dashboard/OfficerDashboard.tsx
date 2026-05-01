@@ -205,7 +205,8 @@ const IncidentTable: React.FC<{ incidents: RecentIncident[] }> = ({ incidents })
                   <TableHead className="w-[80px] sm:w-[100px]">Date</TableHead>
                   <TableHead className="w-[160px] sm:w-[200px]">Site Name</TableHead>
                   <TableHead className="w-[120px] sm:w-[150px]">Type</TableHead>
-                  <TableHead className="text-right w-[80px] sm:w-[100px]">Value</TableHead>
+                  <TableHead className="text-right w-[90px] sm:w-[120px]">Recovered</TableHead>
+                  <TableHead className="text-right w-[90px] sm:w-[120px]">Lost</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -215,8 +216,13 @@ const IncidentTable: React.FC<{ incidents: RecentIncident[] }> = ({ incidents })
                     <TableCell className="text-xs sm:text-sm">{new Date(incident.date).toLocaleDateString()}</TableCell>
                     <TableCell className="max-w-[160px] sm:max-w-[200px] truncate text-xs sm:text-sm">{incident.siteName}</TableCell>
                     <TableCell className="text-xs sm:text-sm">{incident.type}</TableCell>
-                    <TableCell className="text-right text-xs sm:text-sm">
-                      {incident.value > 0 ? `£${incident.value.toFixed(2)}` : '-'}
+                    <TableCell className="text-right text-xs sm:text-sm text-green-700 dark:text-green-300">
+                      {((incident.recoveredValue ?? incident.value ?? incident.amount ?? 0) > 0)
+                        ? `£${(incident.recoveredValue ?? incident.value ?? incident.amount ?? 0).toFixed(2)}`
+                        : '-'}
+                    </TableCell>
+                    <TableCell className="text-right text-xs sm:text-sm text-red-700 dark:text-red-300">
+                      {((incident.lostValue ?? 0) > 0) ? `£${(incident.lostValue ?? 0).toFixed(2)}` : '-'}
                     </TableCell>
                   </TableRow>
                 ))}

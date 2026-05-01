@@ -15,6 +15,62 @@ const getActiveUser = () => {
   return activeUser
 }
 
+const getIncidentFinancials = (incident: any) => {
+  const stolenItems = Array.isArray(incident?.StolenItems)
+    ? incident.StolenItems
+    : Array.isArray(incident?.stolenItems)
+      ? incident.stolenItems
+      : []
+
+  const totalStolenValue =
+    incident?.TotalStolenValue ??
+    incident?.totalStolenValue ??
+    stolenItems.reduce((sum: number, item: any) => {
+      const explicitAmount = item?.TotalAmount ?? item?.totalAmount
+      if (explicitAmount !== undefined && explicitAmount !== null) {
+        const parsed = Number(explicitAmount)
+        return sum + (Number.isFinite(parsed) ? parsed : 0)
+      }
+
+      const computed = Number(item?.Cost ?? item?.cost ?? 0) * Number(item?.Quantity ?? item?.quantity ?? 0)
+      return sum + (Number.isFinite(computed) ? computed : 0)
+    }, 0)
+
+  const totalRecoveredValue =
+    incident?.TotalRecoveredValue ??
+    incident?.totalRecoveredValue ??
+    incident?.TotalValueRecovered ??
+    incident?.totalValueRecovered ??
+    incident?.ValueRecovered ??
+    incident?.valueRecovered ??
+    incident?.Value ??
+    incident?.value ??
+    stolenItems.reduce((sum: number, item: any) => {
+      const amount = item?.RecoveredAmount ?? item?.recoveredAmount ?? 0
+      const parsed = Number(amount)
+      return sum + (Number.isFinite(parsed) ? parsed : 0)
+    }, 0)
+
+  const explicitLostValue =
+    incident?.TotalLostValue ??
+    incident?.totalLostValue ??
+    incident?.ValueLost ??
+    incident?.valueLost ??
+    incident?.LostValue ??
+    incident?.lostValue
+
+  const totalLostValue =
+    explicitLostValue !== undefined && explicitLostValue !== null
+      ? Number(explicitLostValue) || 0
+      : Math.max((Number(totalStolenValue) || 0) - (Number(totalRecoveredValue) || 0), 0)
+
+  return {
+    totalStolenValue: Number(totalStolenValue) || 0,
+    totalRecoveredValue: Number(totalRecoveredValue) || 0,
+    totalLostValue: Number(totalLostValue) || 0,
+  }
+}
+
 class APIError extends Error {
   constructor(
     message: string,
@@ -143,7 +199,9 @@ class DashboardService {
       if (params?.siteId) queryParams.siteId = params.siteId
       const response = await api.get<ApiResponse<any>>('/incidents', { params: queryParams })
       const incidents = response.data?.data || []
-      return incidents.map((inc: any) => ({
+      return incidents.map((inc: any) => {
+        const financials = getIncidentFinancials(inc)
+        return ({
         id: inc.Id || inc.id?.toString() || '',
         customerId: inc.CustomerId || inc.customerId || 0,
         date: inc.DateOfIncident || inc.Date || inc.date || inc.incidentDate || '',
@@ -157,9 +215,11 @@ class DashboardService {
         customerName: inc.CustomerName || inc.customerName || '',
         store: inc.SiteName || inc.siteName || '',
         officerName: inc.OfficerName || inc.officerName || '',
-        amount: inc.TotalValueRecovered || inc.Amount || inc.amount || inc.value || 0,
+        amount: financials.totalRecoveredValue,
+        recoveredValue: financials.totalRecoveredValue,
+        lostValue: financials.totalLostValue,
         incidentType: inc.IncidentType || inc.incidentType || inc.type || ''
-      }))
+      })})
     } catch {
       return []
     }
@@ -698,7 +758,9 @@ class CustomerDashboardService {
       const incidents = Array.isArray(incidentsData) ? incidentsData : (incidentsData?.items || []);
       
       // Map incidents for recent incidents list
-      recentIncidents = incidents.slice(0, 10).map((inc: any) => ({
+      recentIncidents = incidents.slice(0, 10).map((inc: any) => {
+        const financials = getIncidentFinancials(inc)
+        return ({
         id: inc.Id || inc.id?.toString() || '',
         customerId: inc.CustomerId || inc.customerId || userCustomerId || 0,
         date: inc.DateOfIncident || inc.Date || inc.date || inc.incidentDate || '',
@@ -712,9 +774,11 @@ class CustomerDashboardService {
         customerName: inc.CustomerName || inc.customerName || '',
         store: inc.SiteName || inc.siteName || siteName,
         officerName: inc.OfficerName || inc.officerName || '',
-        amount: inc.TotalValueRecovered || inc.Amount || inc.amount || inc.value || 0,
+        amount: financials.totalRecoveredValue,
+        recoveredValue: financials.totalRecoveredValue,
+        lostValue: financials.totalLostValue,
         incidentType: inc.IncidentType || inc.incidentType || inc.type || ''
-      }));
+      })});
 
       // Map all incidents for chart calculation
       allIncidentsForChart = incidents.map((inc: any) => ({
@@ -1123,7 +1187,9 @@ class CustomerDashboardService {
       const flatIncidents = incidentsArrays.flat();
       
       // Map for recent incidents list
-      allIncidents = flatIncidents.map((inc: any) => ({
+      allIncidents = flatIncidents.map((inc: any) => {
+        const financials = getIncidentFinancials(inc)
+        return ({
         id: inc.Id || inc.id?.toString() || '',
         customerId: inc.CustomerId || inc.customerId || customerId || 0,
         date: inc.DateOfIncident || inc.Date || inc.date || inc.incidentDate || '',
@@ -1137,9 +1203,11 @@ class CustomerDashboardService {
         customerName: inc.CustomerName || inc.customerName || '',
         store: inc.SiteName || inc.siteName || '',
         officerName: inc.OfficerName || inc.officerName || '',
-        amount: inc.TotalValueRecovered || inc.Amount || inc.amount || inc.value || 0,
+        amount: financials.totalRecoveredValue,
+        recoveredValue: financials.totalRecoveredValue,
+        lostValue: financials.totalLostValue,
         incidentType: inc.IncidentType || inc.incidentType || inc.type || ''
-      }));
+      })});
 
       // Map all incidents for chart calculation
       allIncidentsForChart = flatIncidents.map((inc: any) => ({

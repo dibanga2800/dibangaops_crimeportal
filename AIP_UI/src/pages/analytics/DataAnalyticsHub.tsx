@@ -61,6 +61,12 @@ import { useCustomerSelection } from '@/contexts/CustomerSelectionContext'
 import { useAvailableCustomers } from '@/hooks/useAvailableCustomers'
 import { MapPin, Building2 } from 'lucide-react'
 
+const formatCurrencyExact = (value: number) =>
+	value.toLocaleString('en-GB', {
+		minimumFractionDigits: 2,
+		maximumFractionDigits: 2,
+	})
+
 const DataAnalyticsHub = () => {
 	const [searchParams, setSearchParams] = useSearchParams()
 	const { toast } = useToast()
@@ -280,19 +286,13 @@ const DataAnalyticsHub = () => {
 
 		if (highestLossStore) {
 			insights.push(
-				`${highestLossStore.storeName} has the highest unrecovered loss at £${highestLossStore.totalLostValue.toLocaleString('en-GB', {
-					minimumFractionDigits: 0,
-					maximumFractionDigits: 0,
-				})}`
+				`${highestLossStore.storeName} has the highest unrecovered loss at £${formatCurrencyExact(highestLossStore.totalLostValue)}`
 			)
 		}
 
 		if (bestRecoveredProduct) {
 			insights.push(
-				`${bestRecoveredProduct.productName} leads recovered value at £${bestRecoveredProduct.recoveredValue.toLocaleString('en-GB', {
-					minimumFractionDigits: 0,
-					maximumFractionDigits: 0,
-				})}`
+				`${bestRecoveredProduct.productName} leads recovered value at £${formatCurrencyExact(bestRecoveredProduct.recoveredValue)}`
 			)
 		}
 
@@ -504,8 +504,8 @@ const DataAnalyticsHub = () => {
 							</div>
 
 							{data && (
-								<>
-									<div className="mt-4 grid grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4 w-full">
+								<div className="mt-4 rounded-xl border border-indigo-300/60 bg-gradient-to-r from-indigo-100/90 via-indigo-50/85 to-sky-100/85 dark:border-indigo-800/60 dark:from-indigo-950/55 dark:via-indigo-900/45 dark:to-sky-950/45 p-3 sm:p-4 shadow-sm">
+									<div className="grid grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4 w-full">
 										<div className="text-center sm:text-left min-w-0">
 											<div className="text-[11px] sm:text-xs font-semibold uppercase tracking-wide text-muted-foreground truncate">
 												Date Range
@@ -528,10 +528,7 @@ const DataAnalyticsHub = () => {
 												Total Stolen
 											</div>
 											<div className="text-xs sm:text-sm font-semibold text-card-foreground truncate">
-												£{data.financialSummary.totalStolenValue.toLocaleString('en-GB', {
-													minimumFractionDigits: 0,
-													maximumFractionDigits: 0,
-												})}
+												£{formatCurrencyExact(data.financialSummary.totalStolenValue)}
 											</div>
 										</div>
 										<div className="text-center sm:text-left min-w-0">
@@ -539,10 +536,7 @@ const DataAnalyticsHub = () => {
 												Value Saved
 											</div>
 											<div className="text-xs sm:text-sm font-semibold text-emerald-700 dark:text-emerald-300 truncate">
-												£{data.financialSummary.totalRecoveredValue.toLocaleString('en-GB', {
-													minimumFractionDigits: 0,
-													maximumFractionDigits: 0,
-												})}
+												£{formatCurrencyExact(data.financialSummary.totalRecoveredValue)}
 											</div>
 										</div>
 										<div className="text-center sm:text-left min-w-0">
@@ -550,10 +544,7 @@ const DataAnalyticsHub = () => {
 												Value Lost
 											</div>
 											<div className="text-xs sm:text-sm font-semibold text-rose-700 dark:text-rose-300 truncate">
-												£{data.financialSummary.totalLostValue.toLocaleString('en-GB', {
-													minimumFractionDigits: 0,
-													maximumFractionDigits: 0,
-												})}
+												£{formatCurrencyExact(data.financialSummary.totalLostValue)}
 											</div>
 										</div>
 										<div className="text-center sm:text-left min-w-0">
@@ -610,14 +601,14 @@ const DataAnalyticsHub = () => {
 											{recoveryInsights.map((insight) => (
 												<div
 													key={insight}
-													className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs sm:text-sm text-foreground"
+													className="rounded-lg border border-border bg-background/90 px-3 py-2 text-xs sm:text-sm text-foreground"
 												>
 													{insight}
 												</div>
 											))}
 										</div>
 									)}
-								</>
+								</div>
 							)}
 						</div>
 					</CardHeader>
@@ -742,13 +733,13 @@ const DataAnalyticsHub = () => {
 																<TableCell className="font-medium">{store.storeName}</TableCell>
 																<TableCell>{store.incidentCount}</TableCell>
 																<TableCell className="text-right">
-																	£{store.totalStolenValue.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+																	£{formatCurrencyExact(store.totalStolenValue)}
 																</TableCell>
 																<TableCell className="text-right text-emerald-700 dark:text-emerald-300">
-																	£{store.totalRecoveredValue.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+																	£{formatCurrencyExact(store.totalRecoveredValue)}
 																</TableCell>
 																<TableCell className="text-right text-rose-700 dark:text-rose-300">
-																	£{store.totalLostValue.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+																	£{formatCurrencyExact(store.totalLostValue)}
 																</TableCell>
 																<TableCell className="text-right">
 																	<Badge variant="outline">{store.recoveryRate.toFixed(1)}%</Badge>
