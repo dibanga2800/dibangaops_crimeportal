@@ -26,7 +26,7 @@ export const LOGO_SIZES = {
   mobile: "h-28",
   sheet: "h-32",
   ipad: "h-34",
-  desktop: "h-20"
+  desktop: "h-14"
 } as const;
 
 export const NAVIGATION_ITEMS = [
