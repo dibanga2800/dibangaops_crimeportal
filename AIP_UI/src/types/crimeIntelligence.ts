@@ -2,6 +2,11 @@ export interface CrimeInsightMetric {
 	title: string
 	value: string
 	subtext?: string
+	valueImpact?: {
+		recovered: string
+		estimatedLoss: string
+		lossLabel?: string
+	}
 	trend?: string
 	trendIsPositive: boolean
 }

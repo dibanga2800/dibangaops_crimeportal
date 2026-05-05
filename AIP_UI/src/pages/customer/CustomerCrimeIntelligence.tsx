@@ -52,6 +52,7 @@ import { DatePicker } from '@/components/ui/date-picker'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
+import { filterByAssignedSiteIds } from '@/utils/siteAccess'
 
 // ============================================================================
 // Constants
@@ -80,10 +81,14 @@ const toIsoDate = (date?: Date | null): string | undefined =>
 	date ? date.toISOString().split('T')[0] : undefined
 
 const formatCurrency = (value: number): string => {
-	if (value === 0) return '£0'
-	if (value < 1000) return `£${value.toLocaleString()}`
-	if (value < 1_000_000) return `£${(value / 1000).toFixed(1)}K`
-	return `£${(value / 1_000_000).toFixed(2)}M`
+	if (!Number.isFinite(value) || value === 0) return '£0'
+
+	return new Intl.NumberFormat('en-GB', {
+		style: 'currency',
+		currency: 'GBP',
+		notation: 'compact',
+		maximumFractionDigits: 1,
+	}).format(value)
 }
 
 const getIncidentValue = (inc: Incident): number => {
@@ -98,13 +103,62 @@ const getIncidentValue = (inc: Incident): number => {
 	return typeof raw === 'number' ? raw : parseFloat(raw) || 0
 }
 
+const getIncidentLostValue = (inc: Incident): number => {
+	const explicitLoss =
+		(inc as any).totalLostValue ??
+		(inc as any).TotalLostValue ??
+		(inc as any).valueLost ??
+		(inc as any).ValueLost ??
+		(inc as any).lostValue ??
+		(inc as any).LostValue
+
+	if (explicitLoss !== undefined && explicitLoss !== null) {
+		return typeof explicitLoss === 'number' ? explicitLoss : parseFloat(explicitLoss) || 0
+	}
+
+	const stolenValueRaw =
+		(inc as any).totalStolenValue ??
+		(inc as any).TotalStolenValue ??
+		(inc as any).stolenValue ??
+		(inc as any).StolenValue
+	const stolenValue =
+		stolenValueRaw !== undefined && stolenValueRaw !== null
+			? typeof stolenValueRaw === 'number'
+				? stolenValueRaw
+				: parseFloat(stolenValueRaw) || 0
+			: (inc.stolenItems ?? []).reduce((sum, item) => {
+					const amount = (item as any).totalAmount ?? (item as any).TotalAmount
+					if (amount !== undefined && amount !== null) {
+						const parsed = typeof amount === 'number' ? amount : parseFloat(amount) || 0
+						return sum + parsed
+					}
+					return sum + ((item.cost ?? 0) * (item.quantity ?? 0))
+			  }, 0)
+
+	return Math.max(stolenValue - getIncidentValue(inc), 0)
+}
+
+const isIncidentLossEstimated = (inc: Incident): boolean => {
+	const explicitLoss =
+		(inc as any).totalLostValue ??
+		(inc as any).TotalLostValue ??
+		(inc as any).valueLost ??
+		(inc as any).ValueLost ??
+		(inc as any).lostValue ??
+		(inc as any).LostValue
+
+	return explicitLoss === undefined || explicitLoss === null
+}
+
 // ============================================================================
 // Data processing
 // ============================================================================
 
 const processIncidents = (incidents: Incident[]): CrimeIntelligenceResponse => {
 	const total = incidents.length
-	const totalValue = incidents.reduce((sum, inc) => sum + getIncidentValue(inc), 0)
+	const totalRecoveredValue = incidents.reduce((sum, inc) => sum + getIncidentValue(inc), 0)
+	const totalEstimatedLoss = incidents.reduce((sum, inc) => sum + getIncidentLostValue(inc), 0)
+	const hasEstimatedLossValues = incidents.some(isIncidentLossEstimated)
 	const distinctStores = new Set(incidents.map(i => i.siteName).filter(Boolean)).size
 
 	const countBy = <T extends string | undefined>(
@@ -195,9 +249,14 @@ const processIncidents = (incidents: Incident[]): CrimeIntelligenceResponse => {
 		},
 		{
 			title: 'Value Impact',
-			value: formatCurrency(totalValue),
-			subtext: 'Recovered / estimated loss',
-			trendIsPositive: totalValue <= 0,
+			value: formatCurrency(totalRecoveredValue),
+			subtext: 'Recovered / Estimated loss',
+			valueImpact: {
+				recovered: formatCurrency(totalRecoveredValue),
+				estimatedLoss: formatCurrency(totalEstimatedLoss),
+				lossLabel: hasEstimatedLossValues ? 'Est. loss' : 'Loss',
+			},
+			trendIsPositive: totalEstimatedLoss <= totalRecoveredValue,
 		},
 	]
 	if (topIncidentTypes[0]) {
@@ -295,8 +354,20 @@ const HeroMetricCard = ({ metric, index }: HeroMetricCardProps) => {
 					<Icon className="h-4 w-4" />
 				</div>
 				<p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">{metric.title}</p>
-				<p className={`text-2xl font-bold ${accent.text} leading-tight truncate mb-1`}>{metric.value}</p>
-				{metric.subtext && <p className="text-xs text-slate-400">{metric.subtext}</p>}
+				{!metric.valueImpact && (
+					<p className={`text-2xl font-bold ${accent.text} leading-tight truncate mb-1`}>{metric.value}</p>
+				)}
+				{metric.valueImpact ? (
+					<p className="text-[clamp(0.72rem,1.2vw,1rem)] whitespace-nowrap overflow-hidden text-ellipsis tracking-tight font-semibold mt-1">
+						<span className="text-emerald-600 font-medium">Recovered {metric.valueImpact.recovered}</span>
+						<span className="text-slate-400"> / </span>
+						<span className="text-rose-600 font-medium">
+							{metric.valueImpact.lossLabel ?? 'Est. loss'} {metric.valueImpact.estimatedLoss}
+						</span>
+					</p>
+				) : (
+					metric.subtext && <p className="text-xs text-slate-400">{metric.subtext}</p>
+				)}
 				{metric.trend && (
 					<div className="flex items-center gap-1 mt-2">
 						<TrendingUp
@@ -804,15 +875,6 @@ export default function CustomerCrimeIntelligence() {
 	const loadSites = useCallback(async () => {
 		const id = resolvedCustomerId
 		if (id == null) return
-		const role = (user?.role ?? (user as any)?.pageAccessRole ?? '').toString().toLowerCase()
-		const isOfficerOrStore = role === 'security-officer' || role === 'store'
-		const assignedSiteIds = (user as any)?.assignedSiteIds ?? (user as any)?.AssignedSiteIds
-		const primarySiteId = (user as any)?.primarySiteId ?? (user as any)?.PrimarySiteId
-		const assignedIds = Array.isArray(assignedSiteIds)
-			? assignedSiteIds.map((s: string | number) => String(s))
-			: primarySiteId
-				? [String(primarySiteId)]
-				: null
 
 		try {
 			const sitesRes =
@@ -820,13 +882,9 @@ export default function CustomerCrimeIntelligence() {
 					? await siteService.getSitesByRegion(parseInt(selectedRegionId, 10))
 					: await siteService.getSitesByCustomer(id)
 			let sitesList: Site[] = sitesRes.success && sitesRes.data?.length ? sitesRes.data : []
-
-			if (isOfficerOrStore && assignedIds && assignedIds.length > 0) {
-				sitesList = sitesList.filter((s) => {
-					const sid = String(s.siteID ?? (s as any).SiteID ?? (s as any).id ?? '')
-					return assignedIds.includes(sid)
-				})
-			}
+			sitesList = filterByAssignedSiteIds(sitesList, user, (site) =>
+				site.siteID ?? (site as any).SiteID ?? (site as any).id ?? null
+			)
 
 			setSites(sitesList)
 		} catch {
@@ -879,6 +937,10 @@ export default function CustomerCrimeIntelligence() {
 				})
 			}
 
+			incidents = filterByAssignedSiteIds(incidents, user, (incident) =>
+				(incident as any).siteId ?? (incident as any).SiteId ?? (incident as any).siteID ?? (incident as any).SiteID ?? null
+			)
+
 			setInsights(processIncidents(incidents))
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : 'Unable to load insights'
@@ -888,7 +950,7 @@ export default function CustomerCrimeIntelligence() {
 		} finally {
 			setLoadingInsights(false)
 		}
-	}, [resolvedCustomerId, selectedSiteId, selectedRegionId, startDate, endDate, toast])
+	}, [resolvedCustomerId, selectedSiteId, selectedRegionId, startDate, endDate, toast, user])
 
 	useEffect(() => {
 		if (!customer && resolvedCustomerId) {

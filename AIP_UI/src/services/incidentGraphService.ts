@@ -8,6 +8,8 @@ import {
 import { api } from '@/config/api'
 import { regionService } from '@/services/regionService'
 import { getCurrentCustomerId } from '@/lib/utils'
+import { filterByAssignedSiteIds } from '@/utils/siteAccess'
+import { sessionStore } from '@/state/sessionStore'
 
 export interface RegionOption {
 	id: string
@@ -121,7 +123,11 @@ export const incidentGraphService = {
 
 		try {
 			const response = await api.get(url, { headers: buildAuthHeaders() })
-			const incidents: any[] = response.data.data || []
+			const incidents: any[] = filterByAssignedSiteIds(
+				response.data.data || [],
+				sessionStore.getUser(),
+				(incident) => incident.siteId ?? incident.SiteId ?? incident.siteID ?? incident.SiteID ?? null
+			)
 
 			const grouped = new Map<string, { value: number; count: number; quantity: number; lostValue: number }>()
 
@@ -276,7 +282,11 @@ export const incidentGraphService = {
 	): Promise<IncidentTypesResponse> {
 		try {
 			const response = await api.get(buildIncidentsUrl(filters), { headers: buildAuthHeaders() })
-			const incidents: any[] = response.data.data || []
+			const incidents: any[] = filterByAssignedSiteIds(
+				response.data.data || [],
+				sessionStore.getUser(),
+				(incident) => incident.siteId ?? incident.SiteId ?? incident.siteID ?? incident.SiteID ?? null
+			)
 			const typeMap = new Map<string, number>()
 
 			for (const incident of incidents) {

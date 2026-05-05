@@ -62,6 +62,7 @@ import type { Incident } from '@/types/incidents'
 import type { IncidentsResponse } from '@/types/api'
 import { BASE_API_URL } from '@/config/api'
 import { sessionStore } from '@/state/sessionStore'
+import { getAssignedSiteIds } from '@/utils/siteAccess'
 
 const officerStats = [
   // Top Performers
@@ -271,12 +272,17 @@ interface AdminDashboardProps {
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrator' }) => {
   const { currentRole, isTestMode, testRole, isLoading } = usePageAccess();
   const effectiveRole = isTestMode && testRole ? testRole : currentRole;
+  const sessionUser = React.useMemo(() => sessionStore.getUser(), [])
+  const assignedSiteIds = React.useMemo(() => getAssignedSiteIds(sessionUser), [sessionUser])
+  const assignedSiteIdsSet = React.useMemo(() => new Set(assignedSiteIds), [assignedSiteIds])
+  const assignedSiteIdsKey = React.useMemo(() => assignedSiteIds.join(','), [assignedSiteIds])
+  const hasAssignedSites = assignedSiteIds.length > 0
   const {
     selectedCustomerId: contextCustomerId,
     selectedSiteId: contextSiteId,
     assignedCustomers
   } = useCustomerSelection();
-  const isScopedRole = effectiveRole === 'store' || effectiveRole === 'security-officer'
+  const isScopedRole = effectiveRole === 'store' || effectiveRole === 'security-officer' || effectiveRole === 'manager'
 
   // For scoped roles/managers: use selected (or first assigned) customer so data stays constrained
   const effectiveCustomerId = React.useMemo(() => {
@@ -514,26 +520,35 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
           };
         });
 
+        const scopedTransformedIncidents = !isScopedRole
+          ? transformedIncidents
+          : !hasAssignedSites
+            ? []
+            : transformedIncidents.filter((incident) => {
+                const incidentSiteId = String(incident.siteId || '')
+                return incidentSiteId.length > 0 && assignedSiteIdsSet.has(incidentSiteId)
+              })
+
         if (isActive) {
-          setLoadedIncidents(transformedIncidents);
-          console.log('✅ Loaded incidents:', transformedIncidents.length);
+          setLoadedIncidents(scopedTransformedIncidents);
+          console.log('✅ Loaded incidents:', scopedTransformedIncidents.length);
           
-          if (transformedIncidents.length > 0) {
+          if (scopedTransformedIncidents.length > 0) {
             // Log sample incident with value and status
             console.log('📋 Sample incident:', {
-              id: transformedIncidents[0].id,
-              siteName: transformedIncidents[0].siteName,
-              date: transformedIncidents[0].dateOfIncident,
-              value: transformedIncidents[0].totalValueRecovered || transformedIncidents[0].value || 0,
-              status: transformedIncidents[0].status,
-              priority: transformedIncidents[0].priority
+              id: scopedTransformedIncidents[0].id,
+              siteName: scopedTransformedIncidents[0].siteName,
+              date: scopedTransformedIncidents[0].dateOfIncident,
+              value: scopedTransformedIncidents[0].totalValueRecovered || scopedTransformedIncidents[0].value || 0,
+              status: scopedTransformedIncidents[0].status,
+              priority: scopedTransformedIncidents[0].priority
             });
             
             // Calculate and log key metrics
-            const totalValue = transformedIncidents.reduce((sum, inc) => sum + (inc.totalValueRecovered || inc.value || 0), 0);
-            const resolved = transformedIncidents.filter(inc => inc.status === 'resolved').length;
+            const totalValue = scopedTransformedIncidents.reduce((sum, inc) => sum + (inc.totalValueRecovered || inc.value || 0), 0);
+            const resolved = scopedTransformedIncidents.filter(inc => inc.status === 'resolved').length;
             console.log('💰 Total value recovered:', totalValue);
-            console.log('✅ Resolved incidents:', resolved, '/', transformedIncidents.length);
+            console.log('✅ Resolved incidents:', resolved, '/', scopedTransformedIncidents.length);
           }
         }
       } catch (error) {
@@ -576,7 +591,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
       isActive = false;
       abortController.abort();
     };
-  }, [effectiveCustomerId, effectiveSiteId]);
+  }, [effectiveCustomerId, effectiveSiteId, isScopedRole, hasAssignedSites, assignedSiteIdsSet, assignedSiteIdsKey]);
 
   // Load analytics data for dashboard overview; for manager/scoped roles use assigned customer so regions/sites stay constrained
   React.useEffect(() => {
@@ -592,7 +607,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
           customerDashboardService.getSites(abortController.signal, effectiveCustomerId ?? undefined),
         ]);
 
-        const storeOptions = (sites as any[]).map((site: any) => ({
+        const allStoreOptions = (sites as any[]).map((site: any) => ({
           id: site.siteID || site.SiteID || site.id,
           name:
             site.locationName ||
@@ -600,6 +615,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
             site.name ||
             `Store ${site.siteID || site.SiteID || site.id}`,
         }));
+        const storeOptions = !isScopedRole
+          ? allStoreOptions
+          : !hasAssignedSites
+            ? []
+            : allStoreOptions.filter((site) => assignedSiteIdsSet.has(String(site.id)))
 
         // Use all regions/sites from API – no static blocklist or customer filter; production data only
         const regionOpts = (regions as any[]).map((region: any) => ({
@@ -634,7 +654,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
 
     loadAnalytics();
     return () => abortController.abort();
-  }, [viewRole, effectiveCustomerId]);
+  }, [viewRole, effectiveCustomerId, isScopedRole, hasAssignedSites, assignedSiteIdsSet, assignedSiteIdsKey]);
 
   // Load alert summary and AI analytics from backend (uses default: last 90 days, user's customer scope)
   React.useEffect(() => {
@@ -879,7 +899,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
     if (!alertSummary) {
       return []
     }
-    if (!isScopedRole || !effectiveSiteId) {
+    if (!isScopedRole) {
       return alertSummary.recentAlerts
     }
 
@@ -895,7 +915,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
       }
       return scopedIncidentIds.has(Number(alert.incidentId))
     })
-  }, [alertSummary, isScopedRole, effectiveSiteId, loadedIncidents])
+  }, [alertSummary, isScopedRole, loadedIncidents])
 
   const scopedNewAlertCount = React.useMemo(() => {
     if (scopedRecentAlerts.length === 0) {
@@ -1224,6 +1244,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
             <p className="text-sm text-blue-800">Loading incident data...</p>
           </div>
         )}
+        {isScopedRole && !hasAssignedSites && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <p className="text-sm text-amber-800">
+              No stores are assigned to this account yet. Dashboard metrics and recent incidents are hidden until store assignments are added.
+            </p>
+          </div>
+        )}
         
         {/* Region Selection */}
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-2 md:gap-4">
@@ -1357,7 +1384,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
                 <div className="text-xl font-bold md:text-2xl lg:text-3xl text-white">
                   {formatCurrency(quickStats.totalLostValue || 0)}
                 </div>
-                <div className="text-xs text-white/60 mt-1">Within selected filters</div>
+                <div className="text-xs text-white/60 mt-1">
+                  {isDateRangeActive || selectedRegion !== 'all' ? 'Within selected filters' : 'All time'}
+                </div>
               </CardContent>
             </Card>
           </Link>

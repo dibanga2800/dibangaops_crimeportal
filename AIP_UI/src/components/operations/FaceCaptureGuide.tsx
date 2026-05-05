@@ -80,15 +80,15 @@ export const FaceCaptureGuide: React.FC<FaceCaptureGuideProps> = ({
 			ctx.clearRect(0, 0, w, h)
 
 			const cx = w / 2
-			// Put the oval near the top so it frames a face in the camera
-			// preview (object-cover tends to push the face upward).
-			const cy = h * 0.33
+			// Place the oval lower so the top of the face is not clipped.
+			const cy = h * 0.48
 
 			// Radii scale with preview size and are clamped so the oval
 			// doesn't overflow the canvas on small screens.
 			const base = Math.min(w, h)
 			const rx = Math.min(w * 0.44, base * 0.52, 190)
-			const ry = Math.min(h * 0.32, base * 0.42, 150)
+			// Make the guide taller so users can align more of the face vertically.
+			const ry = Math.min(h * 0.40, base * 0.50, 185)
 
 			// Ensure it never overflows the canvas.
 			const safeRx = Math.min(rx, w * 0.49)

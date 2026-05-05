@@ -1,5 +1,5 @@
-import { useState, useCallback, memo, useEffect, useRef } from "react"
-import { Incident, IncidentInvolved, StolenItem, RepeatOffenderMatch } from "@/types/incidents"
+import { useState, useCallback, memo, useEffect, useRef, useMemo } from "react"
+import { Incident, StolenItem, RepeatOffenderMatch } from "@/types/incidents"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -22,7 +22,7 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { format } from "date-fns"
-import { CalendarIcon, PlusCircle, Trash2, Package, QrCode, Hash, Loader2 } from "lucide-react"
+import { CalendarIcon, PlusCircle, Trash2, Package, QrCode, Hash, Loader2, User, Search } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Calendar } from "@/components/ui/calendar"
 import {
@@ -46,6 +46,7 @@ import { regionService } from "@/services/regionService"
 import { lookupTableService } from "@/services/lookupTableService"
 import type { Customer, Region, Site } from "@/types/customer"
 import type { LookupTableItem } from "@/services/lookupTableService"
+import { filterByAssignedSiteIds, getAssignedSiteIds, isSiteScopeEnforcedForUser } from '@/utils/siteAccess'
 
 const formSchema = z.object({
   customerId: z.string().min(1, "Customer is required"),
@@ -182,32 +183,24 @@ const calculateIncidentValueTotals = (items: StolenItem[]) => {
   )
 }
 
-const incidentInvolved: IncidentInvolved[] = [
-  IncidentInvolved.SELF_SCAN_TILLS,
-  IncidentInvolved.THREATS_AND_INTIMIDATION,
-  IncidentInvolved.BAN_FROM_STORE,
-  IncidentInvolved.SCAN_AND_GO,
-  IncidentInvolved.ABUSIVE_BEHAVIOUR,
-  IncidentInvolved.SPITTING,
-  IncidentInvolved.VIOLENT_BEHAVIOR,
-  IncidentInvolved.POLICE_FAILED_TO_ATTEND
-]
-
-const modusOperandiOptions = [
-  'Late evening entry',
-  'Distraction technique',
-  'Group operation',
-  'Solo quick grab',
-  'Return policy abuse',
-  'High-value electronics focus',
-  'Self-scan till bypass',
-  'Concealment in bags/coats',
-  'Other'
+const FALLBACK_INCIDENT_CATEGORIES = [
+  'Shoplifting / Theft',
+  'Fraud (Refund / Price Switching / Barcode Abuse)',
+  'Abusive Behaviour',
+  'Threats and Intimidation',
+  'Violent Behaviour',
+  'Ban from Store / Trespassing',
+  'Self-Scan / Scan & Go Misuse',
+  'Police Related (Attended / Failed to Attend)',
+  'Internal Theft',
+  'Injury / Medical Emergency',
+  'Others',
 ] as const
-
 
 export interface IncidentFormProps {
   initialData?: Incident | null
+  isEditMode?: boolean
+  prefilledStolenItems?: StolenItem[]
   onSubmit: (incident: Incident) => void
   onCancel: () => void
   onScanBarcode: () => void
@@ -217,25 +210,36 @@ export interface IncidentFormProps {
   siteId?: string | null
 }
 
-const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit, onCancel, onScanBarcode, onBarcodeScanned, isLoading = false, customerId: propCustomerId, siteId: propSiteId }) => {
+const IncidentForm: React.FC<IncidentFormProps> = memo(({
+  initialData,
+  isEditMode = false,
+  prefilledStolenItems = [],
+  onSubmit,
+  onCancel,
+  onScanBarcode,
+  onBarcodeScanned,
+  isLoading = false,
+  customerId: propCustomerId,
+  siteId: propSiteId
+}) => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'administrator';
-  const isSecurityOfficer = user?.role === 'security-officer';
-  const assignedSiteIds: string[] =
-    (user as any)?.assignedSiteIds ??
-    (user as any)?.AssignedSiteIds ??
-    [];
+  const enforceSiteScope = isSiteScopeEnforcedForUser(user)
+  const assignedSiteIds = getAssignedSiteIds(user)
   const hasMultipleAssignedSites =
-    isSecurityOfficer && Array.isArray(assignedSiteIds) && assignedSiteIds.length > 1;
+    enforceSiteScope && assignedSiteIds.length > 1;
   
   // Debug logging (remove in production)
   if (initialData) {
     console.log('📝 Form initializing with incident:', initialData.id, '|', initialData.customerName, '|', initialData.siteName)
   }
   
-  const [stolenItems, setStolenItems] = useState<StolenItem[]>(
-    (initialData?.stolenItems || []).map(calculateStolenItemValues)
+  const initialStolenItems = useMemo(
+    () => (initialData?.stolenItems ?? prefilledStolenItems).map(calculateStolenItemValues),
+    [initialData?.stolenItems, prefilledStolenItems]
   )
+
+  const [stolenItems, setStolenItems] = useState<StolenItem[]>(initialStolenItems)
   const [incidentType, setIncidentType] = useState(initialData?.incidentType || '')
   const [arrestSaveComment, setArrestSaveComment] = useState(initialData?.arrestSaveComment || '')
   const [formErrors, setFormErrors] = useState<{ arrestSaveComment?: string }>({})
@@ -251,7 +255,6 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
   const [verificationEvidencePreview, setVerificationEvidencePreview] = useState<string>(initialData?.verificationEvidenceImage || '')
   const [zoomedEvidenceImage, setZoomedEvidenceImage] = useState<string | null>(null)
   const [verificationFileName, setVerificationFileName] = useState<string>('')
-  const [imageSearchUrl, setImageSearchUrl] = useState<string>('')
   const [isImageSearching, setIsImageSearching] = useState(false)
   const [isSearchCaptureMode, setIsSearchCaptureMode] = useState(false)
   const [isProcessingVerificationImage, setIsProcessingVerificationImage] = useState(false)
@@ -277,6 +280,8 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
   // State for incident types from lookup table
   const [incidentTypesFromDb, setIncidentTypesFromDb] = useState<LookupTableItem[]>([])
   const [isLoadingIncidentTypes, setIsLoadingIncidentTypes] = useState(false)
+  const [incidentCategoriesFromDb, setIncidentCategoriesFromDb] = useState<LookupTableItem[]>([])
+  const [isLoadingIncidentCategories, setIsLoadingIncidentCategories] = useState(false)
 
   // State for product departments from lookup table
   const [productDepartments, setProductDepartments] = useState<LookupTableItem[]>([])
@@ -372,7 +377,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
   };
 
   const searchOffenderByImage = async (imageDataUrl?: string) => {
-    const dataUrl = imageDataUrl || imageSearchUrl.trim() || verificationEvidencePreview.trim()
+    const dataUrl = imageDataUrl || verificationEvidencePreview.trim()
     if (!dataUrl) {
       setOffenderSearchError('Capture an image or use verification evidence to search.')
       return
@@ -509,7 +514,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
       policeInvolvement: initialData?.policeInvolvement || false,
       urnNumber: initialData?.urnNumber || "",
       totalValueRecovered: initialData?.totalRecoveredValue?.toString() || initialData?.totalValueRecovered?.toString() || "",
-      stolenItems: (initialData?.stolenItems || []).map(calculateStolenItemValues),
+      stolenItems: initialStolenItems,
       dutyManagerName: initialData?.dutyManagerName || "",
       status: initialData?.status || 'pending',
       priority: initialData?.priority || 'medium',
@@ -547,6 +552,19 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
   const selectedCustomer = customers.find(c => c.id.toString() === customerId)
   const offenderMarksValue = form.watch('offenderMarks')
   const offenderDetailsVerified = form.watch('offenderDetailsVerified')
+  const selectedIncidentCategories = form.watch('incidentInvolved')
+
+  const incidentCategoryOptions = useMemo(() => {
+    const dynamicOptions = incidentCategoriesFromDb
+      .map((item) => item.value?.trim())
+      .filter((value): value is string => Boolean(value))
+    const selectedOptions = (selectedIncidentCategories || [])
+      .map((value) => value?.trim())
+      .filter((value): value is string => Boolean(value))
+
+    const baseOptions = dynamicOptions.length > 0 ? dynamicOptions : FALLBACK_INCIDENT_CATEGORIES
+    return Array.from(new Set([...baseOptions, ...selectedOptions]))
+  }, [incidentCategoriesFromDb, selectedIncidentCategories])
   
   // Fetch customers on mount
   useEffect(() => {
@@ -566,28 +584,38 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
     fetchCustomers()
   }, [])
   
-  // Fetch counties, positions and incident types from lookup table on mount
+  // Fetch counties, positions and incident lookups on mount
   useEffect(() => {
     const fetchLookups = async () => {
       setIsLoadingCounties(true)
       setIsLoadingPositions(true)
       setIsLoadingIncidentTypes(true)
+      setIsLoadingIncidentCategories(true)
       setIsLoadingDepartments(true)
       try {
-        const [fetchedCounties, fetchedPositions, fetchedIncidentTypes, fetchedDepartments] = await Promise.all([
+        const [fetchedCounties, fetchedPositions, fetchedIncidentTypes, fetchedIncidentCategories, fetchedDepartments] = await Promise.all([
           lookupTableService.getByCategory('UK_Counties'),
           lookupTableService.getByCategory('Positions'),
-          lookupTableService.getByCategory('IncidentTypes'),
+          lookupTableService.getByCategory('IncidentTypes').catch(async () => {
+            return lookupTableService.getByCategory('IncidentType').catch(() => [])
+          }),
+          lookupTableService.getByCategory('IncidentCategories').catch(async () => {
+            return lookupTableService.getByCategory('IncidentCategory').catch(async () => {
+              return lookupTableService.getByCategory('IncidentInvolved').catch(() => [])
+            })
+          }),
           lookupTableService.getByCategory('ProductDepartments'),
         ])
         setCounties(fetchedCounties)
         setPositions(fetchedPositions)
         setIncidentTypesFromDb(fetchedIncidentTypes)
+        setIncidentCategoriesFromDb(fetchedIncidentCategories)
         setProductDepartments(fetchedDepartments)
         console.log(
           '✅ [IncidentForm] Loaded counties:', fetchedCounties.length,
           '| positions:', fetchedPositions.length,
           '| incident types:', fetchedIncidentTypes.length,
+          '| incident categories:', fetchedIncidentCategories.length,
           '| departments:', fetchedDepartments.length
         )
       } catch (error) {
@@ -595,11 +623,13 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
         setCounties([])
         setPositions([])
         setIncidentTypesFromDb([])
+        setIncidentCategoriesFromDb([])
         setProductDepartments([])
       } finally {
         setIsLoadingCounties(false)
         setIsLoadingPositions(false)
         setIsLoadingIncidentTypes(false)
+        setIsLoadingIncidentCategories(false)
         setIsLoadingDepartments(false)
       }
     }
@@ -634,22 +664,9 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
         }
         if (sitesResponse.success) {
           let nextSites = sitesResponse.data;
-
-          // For security officers, restrict sites to those explicitly assigned to them (if any).
-          if (isSecurityOfficer && Array.isArray(assignedSiteIds) && assignedSiteIds.length > 0) {
-            const assignedSet = new Set(assignedSiteIds.map((id) => String(id)));
-            nextSites = nextSites.filter((site) => {
-              const id =
-                site.siteID != null
-                  ? String(site.siteID)
-                  : site.siteId != null
-                  ? String(site.siteId)
-                  : site.id != null
-                  ? String(site.id)
-                  : '';
-              return id && assignedSet.has(id);
-            });
-          }
+          nextSites = filterByAssignedSiteIds(nextSites, user, (site) =>
+            site.siteID ?? site.siteId ?? site.id ?? null
+          )
 
           setSites(nextSites)
           console.log('✅ [IncidentForm] Loaded sites for customer:', nextSites.length)
@@ -680,7 +697,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
     }
     
     fetchSitesAndRegions()
-  }, [customerId, form])
+  }, [customerId, form, user, initialData])
 
   // Resolve names from loaded API data (no static mapping)
   const getCustomerNameFromId = (customerId: string): string =>
@@ -890,7 +907,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
     }
   }, [initialData?.id, form])
 
-  // Update stolen items when initialData.stolenItems changes (e.g., from barcode scanning)
+  // Update stolen items when initialData.stolenItems changes (e.g., while editing)
   useEffect(() => {
     if (initialData?.stolenItems && initialData.stolenItems.length !== stolenItems.length) {
       setStolenItems(initialData.stolenItems.map(calculateStolenItemValues))
@@ -903,6 +920,19 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
       }
     }
   }, [initialData?.stolenItems, stolenItems])
+
+  // In create mode, append barcode-prefilled items without overwriting manual entries.
+  useEffect(() => {
+    if (isEditMode || prefilledStolenItems.length === 0) return
+
+    const incomingItems = prefilledStolenItems.map(calculateStolenItemValues)
+    setStolenItems((currentItems) => {
+      const existingIds = new Set(currentItems.map(item => item.id))
+      const itemsToAppend = incomingItems.filter(item => !existingIds.has(item.id))
+      if (itemsToAppend.length === 0) return currentItems
+      return [...currentItems, ...itemsToAppend]
+    })
+  }, [prefilledStolenItems, isEditMode])
 
   // Keep incident recovered value synced to the current stolen-item recovery totals.
   React.useEffect(() => {
@@ -1808,13 +1838,20 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                               {offenderVerified ? 'Details Verified' : 'Details Not Verified'}
                             </Badge>
                           </div>
-                          <div className="mt-3 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-3 space-y-2">
-                            <p className="text-xs font-semibold text-gray-700">
-                              Visual offender search (optional)
-                            </p>
-                            <p className="text-[11px] text-gray-600">
-                              Capture a new image to search against indexed verification evidence in the database.
-                            </p>
+                          <div className="mt-3 rounded-xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-4 space-y-3">
+                            <div className="flex items-center gap-3">
+                              <div className="h-11 w-11 rounded-lg border border-blue-200 bg-white flex items-center justify-center shadow-sm">
+                                <User className="h-5 w-5 text-blue-600" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold text-blue-900">
+                                  Face Search Intelligence
+                                </p>
+                                <p className="text-xs text-blue-700">
+                                  Capture a face image and instantly search verified offender records.
+                                </p>
+                              </div>
+                            </div>
                             {isSearchCaptureMode && isCameraActive ? (
                               <div className="rounded-lg border border-gray-200 bg-white p-3">
                                 <FaceCaptureGuide
@@ -1832,30 +1869,58 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                                 <canvas ref={canvasRef} className="hidden" aria-hidden="true" />
                               </div>
                             ) : (
-                              <div className="flex flex-wrap gap-2">
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={startSearchCapture}
-                                  disabled={isImageSearching}
-                                  className="h-9 text-xs sm:text-sm"
-                                >
-                                  Capture to search
-                                </Button>
-                                {verificationEvidencePreview && (
+                              <>
+                                <div className="flex flex-wrap gap-2">
                                   <Button
                                     type="button"
-                                    variant="ghost"
+                                    variant="default"
                                     size="sm"
-                                    onClick={() => searchOffenderByImage(verificationEvidencePreview)}
+                                    onClick={startSearchCapture}
                                     disabled={isImageSearching}
-                                    className="h-9 text-xs sm:text-sm"
+                                    className="h-9 text-xs sm:text-sm bg-blue-600 hover:bg-blue-700"
                                   >
-                                    {isImageSearching ? 'Searching…' : 'Use verification image'}
+                                    Capture to search
                                   </Button>
-                                )}
-                              </div>
+                                  {verificationEvidencePreview && (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => searchOffenderByImage(verificationEvidencePreview)}
+                                      disabled={isImageSearching}
+                                      className="h-9 text-xs sm:text-sm"
+                                    >
+                                      {isImageSearching ? 'Searching…' : 'Use verification image'}
+                                    </Button>
+                                  )}
+                                </div>
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                  <div className="relative flex-1">
+                                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-blue-500" />
+                                    <Input
+                                      value={form.watch('offenderName') || ''}
+                                      onChange={(event) => form.setValue('offenderName', event.target.value)}
+                                      placeholder="Search offender by name"
+                                      className="h-10 pl-9 bg-white border-blue-200 focus:border-blue-500"
+                                      aria-label="Search offender by name"
+                                    />
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    onClick={() => {
+                                      const name = form.getValues('offenderName')
+                                      const dob = form.getValues('offenderDOB')
+                                      const marks = form.getValues('offenderMarks')
+                                      if (!name?.trim()) return
+                                      searchOffender(name, dob, marks || offenderMarksPreview)
+                                    }}
+                                    disabled={isSearchingOffender || !(form.watch('offenderName') || '').trim()}
+                                    className="h-10 sm:px-4"
+                                  >
+                                    {isSearchingOffender ? 'Searching…' : 'Search records'}
+                                  </Button>
+                                </div>
+                              </>
                             )}
                           </div>
                         <FormField
@@ -1876,49 +1941,6 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                               <FormDescription className="text-xs">
                                 For repeat offender tracking and crime linking analytics
                               </FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="modusOperandi"
-                          render={({ field }) => (
-                            <FormItem className="mt-4">
-                              <FormLabel className="text-sm font-semibold text-gray-700 mb-2">
-                                Modus operandi (optional)
-                              </FormLabel>
-                              <FormDescription className="text-xs mb-2">
-                                Select how the incident was carried out for crime linking analytics
-                              </FormDescription>
-                              <FormControl>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                  {modusOperandiOptions.map((option) => (
-                                    <div
-                                      key={option}
-                                      className="flex items-center space-x-2"
-                                    >
-                                      <Checkbox
-                                        id={`mo-${option}`}
-                                        checked={(field.value || []).includes(option)}
-                                        onCheckedChange={(checked) => {
-                                          const current = field.value || []
-                                          const next = checked
-                                            ? [...current, option]
-                                            : current.filter((v) => v !== option)
-                                          field.onChange(next)
-                                        }}
-                                      />
-                                      <label
-                                        htmlFor={`mo-${option}`}
-                                        className="text-sm text-gray-700 cursor-pointer select-none"
-                                      >
-                                        {option}
-                                      </label>
-                                    </div>
-                                  ))}
-                                </div>
-                              </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
@@ -2473,7 +2495,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
               </div>
 
               <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                {incidentInvolved.map((type) => (
+                {incidentCategoryOptions.map((type) => (
                   <FormField
                     key={type}
                     control={form.control}
@@ -2500,6 +2522,9 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                     )}
                   />
                 ))}
+                {incidentCategoryOptions.length === 0 && !isLoadingIncidentCategories && (
+                  <p className="text-sm text-gray-500">No incident categories available.</p>
+                )}
               </div>
             </div>
 
@@ -2604,13 +2629,13 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                   <div className="col-span-2">
                     <Label className="text-base font-medium">Description</Label>
                   </div>
-                  <div className="col-span-2">
+                  <div className="col-span-1">
                     <Label className="text-base font-medium">Cost</Label>
                   </div>
                   <div className="col-span-1">
                     <Label className="text-base font-medium">Qty</Label>
                   </div>
-                  <div className="col-span-1">
+                  <div className="col-span-2">
                     <Label className="text-base font-medium">Total</Label>
                   </div>
                   <div className="col-span-1">
@@ -2664,7 +2689,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                             placeholder="Item description"
                           />
                         </div>
-                        <div className="w-full sm:col-span-2">
+                        <div className="w-full sm:col-span-1">
                           <Label className="sm:hidden mb-1 block text-sm font-medium">Cost</Label>
                           <Input
                             className="h-11"
@@ -2685,11 +2710,11 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                             placeholder="1"
                           />
                         </div>
-                        <div className="w-full sm:col-span-1 flex items-center gap-2">
+                        <div className="w-full sm:col-span-2 flex items-center gap-2">
                           <div className="flex-1">
                             <Label className="sm:hidden mb-1 block text-sm font-medium">Total</Label>
                             <Input
-                              className="h-11 text-right"
+                              className="h-11 text-right tabular-nums"
                               type="number"
                               value={item.totalAmount}
                               disabled
@@ -2858,7 +2883,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({ initialData, onSubmit,
                   className="h-9 px-4 text-sm bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
                   disabled={isLoading}
                 >
-                  {isLoading ? "Saving..." : initialData ? "Update" : "Create"}
+                  {isLoading ? "Saving..." : isEditMode ? "Update" : "Create"}
                 </Button>
               </div>
             </div>

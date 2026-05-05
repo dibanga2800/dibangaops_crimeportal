@@ -83,6 +83,8 @@ import type { Region } from "@/types/customer"
 import { Toaster } from '@/components/ui/toaster'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useCustomerSelection } from '@/contexts/CustomerSelectionContext'
+import { useAuth } from '@/hooks/useAuth'
+import { filterByAssignedSiteIds, getAssignedSiteIds, isSiteScopeEnforcedForUser } from '@/utils/siteAccess'
 
 const getIncidentFinancials = (incident: Incident) => {
   const stolenItems = Array.isArray(incident?.stolenItems) ? incident.stolenItems : []
@@ -116,6 +118,7 @@ interface IncidentReportPageProps {
 
 export default function IncidentReportPage({ isCustomerView = false, customerId: propCustomerId, siteId: propSiteId }: IncidentReportPageProps) {
   const queryClient = useQueryClient()
+  const { user } = useAuth()
   const { selectedCustomerId, selectedSiteId } = useCustomerSelection()
   const customerId = propCustomerId ?? (selectedCustomerId != null ? String(selectedCustomerId) : undefined)
   const siteId = propSiteId ?? selectedSiteId
@@ -146,6 +149,7 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
   const [currentPage, setCurrentPage] = useState(1)
   const [scanningBarcode, setScanningBarcode] = useState(false)
   const [isLoadingProduct, setIsLoadingProduct] = useState(false)
+  const [createPrefilledStolenItems, setCreatePrefilledStolenItems] = useState<StolenItem[]>([])
   const [datePreset, setDatePreset] = useState<'today' | 'week' | 'month' | 'custom' | null>(null)
   const [fromDate, setFromDate] = useState("")
   const [toDate, setToDate] = useState("")
@@ -156,12 +160,18 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
   const [regions, setRegions] = useState<Region[]>([])
   const [isLoadingRegions, setIsLoadingRegions] = useState(false)
   const itemsPerPage = 10
+  const enforceSiteScope = isSiteScopeEnforcedForUser(user)
+  const hasAssignedSites = getAssignedSiteIds(user).length > 0
+  const canCreateIncident = !enforceSiteScope || hasAssignedSites
 
   const didNavigateBackRef = useRef(false)
+  const editingIncidentId = editingIncident?.id?.trim() || ''
+  const isEditingExistingIncident = editingIncidentId.length > 0
 
   const handleCloseDialog = useCallback(() => {
     setOpen(false)
     setEditingIncident(null)
+    setCreatePrefilledStolenItems([])
 
     if (!isAutoOpenRef.current) return
     if (didNavigateBackRef.current) return
@@ -334,7 +344,7 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
     queryKey: ['incidents', currentPage, debouncedSearch, customerId, siteId, fromDate, toDate, incidentTypeFilter, regionFilter],
     queryFn: () => incidentsApi.getIncidents({
       page: currentPage,
-      pageSize: itemsPerPage,
+      pageSize: enforceSiteScope ? 1000 : itemsPerPage,
       search: debouncedSearch || undefined,
       ...(fromDate && { fromDate }),
       ...(toDate && { toDate }),
@@ -343,23 +353,27 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
       ...(isCustomerView && customerId && { customerId }),
       ...(siteId && { siteId })
     }),
-    enabled: !isAutoOpenRef.current
+    enabled: !isAutoOpenRef.current && (!enforceSiteScope || hasAssignedSites)
   })
 
   // Create/Update incident mutation using the API service
   const mutation = useMutation({
+    onMutate: () => {
+      return { isUpdate: Boolean(editingIncident?.id?.trim()) }
+    },
     mutationFn: async (incident: Incident) => {
-      if (editingIncident) {
-        return await incidentsApi.updateIncident(editingIncident.id, incident)
+      const incidentIdToUpdate = editingIncident?.id?.trim()
+      if (incidentIdToUpdate) {
+        return await incidentsApi.updateIncident(incidentIdToUpdate, incident)
       } else {
         return await incidentsApi.createIncident(incident)
       }
     },
-    onSuccess: () => {
+    onSuccess: (_data, _variables, context) => {
       queryClient.invalidateQueries({ queryKey: ['incidents'] })
       toast({
         title: 'Success',
-        description: editingIncident ? 'Incident updated successfully' : 'Incident created successfully',
+        description: context?.isUpdate ? 'Incident updated successfully' : 'Incident created successfully',
       })
       handleCloseDialog()
     },
@@ -397,7 +411,11 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
   })
 
   const filteredIncidents = useMemo(() => {
-    const baseData = incidentsResponse.data
+    const baseData = filterByAssignedSiteIds(
+      incidentsResponse.data,
+      user,
+      (incident) => incident.siteId ?? (incident as any).SiteId ?? (incident as any).siteID ?? (incident as any).SiteID ?? null
+    )
 
     if (!isClientFilterActive) {
     	return baseData
@@ -435,13 +453,13 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
       if (toBoundary && incidentDate > toBoundary) return false
       return true
     })
-  }, [incidentsResponse.data, isClientFilterActive, fromDate, toDate, incidentTypeFilter, regionFilter, regions])
+  }, [incidentsResponse.data, isClientFilterActive, fromDate, toDate, incidentTypeFilter, regionFilter, regions, user])
 
   // Calculate statistics using useMemo with null checks
   const stats = useMemo(() => {
     // Use filtered data when a date or region/type filter is active,
     // otherwise use the current page data and the server-reported totalCount.
-    const statsData = isClientFilterActive ? filteredIncidents : incidentsResponse.data
+    const statsData = isClientFilterActive || enforceSiteScope ? filteredIncidents : incidentsResponse.data
     
     return {
       totalAmountSaved: Array.prototype.reduce.call(
@@ -455,17 +473,18 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
         0
       ),
       uniqueSites: new Set(statsData.map(incident => incident?.siteName).filter(Boolean)).size,
-      totalIncidents: isClientFilterActive
+      totalIncidents: isClientFilterActive || enforceSiteScope
         ? filteredIncidents.length
         : incidentsResponse.pagination?.totalCount || statsData.length
     }
-  }, [incidentsResponse.data, incidentsResponse.pagination?.totalCount, isClientFilterActive, filteredIncidents])
+  }, [incidentsResponse.data, incidentsResponse.pagination?.totalCount, isClientFilterActive, filteredIncidents, enforceSiteScope])
 
   const handleSubmit = useCallback((incident: Incident) => {
     mutation.mutate(incident)
   }, [mutation])
 
   const handleEdit = useCallback((incident: Incident) => {
+    setCreatePrefilledStolenItems([])
     setEditingIncident(incident)
     setOpen(true)
   }, [])
@@ -485,16 +504,22 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
     }
   }, [deletingIncident, deleteMutation])
 
+  const shouldUseClientPagination = isClientFilterActive || enforceSiteScope
   const clientTotalPages = Math.max(1, Math.ceil(filteredIncidents.length / itemsPerPage))
-  const totalPages = isClientFilterActive ? clientTotalPages : incidentsResponse.pagination?.totalPages || 1
+  const totalPages = shouldUseClientPagination ? clientTotalPages : incidentsResponse.pagination?.totalPages || 1
 
   // Update the filtered and paginated incidents
-  const paginatedIncidents = isClientFilterActive
+  const paginatedIncidents = shouldUseClientPagination
     ? filteredIncidents.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
     : incidentsResponse.data
 
   const hasIncidents = paginatedIncidents.length > 0
   const isSearchActive = Boolean(searchTerm)
+  const viewingIncidentNumericId = useMemo(() => {
+    if (!viewingIncident?.id) return null
+    const parsed = Number(viewingIncident.id)
+    return Number.isFinite(parsed) ? parsed : null
+  }, [viewingIncident?.id])
 
   const handlePageChange = useCallback((page: number) => {
     if (page < 1 || page > totalPages) return
@@ -610,39 +635,15 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
       }
 
       // Update editingIncident if it exists, or initialize a new one
-      if (editingIncident) {
+      if (editingIncident?.id?.trim()) {
         setEditingIncident({
           ...editingIncident,
           stolenItems: [...(editingIncident.stolenItems || []), newItem]
         })
       } else {
-        // Initialize a new incident object with the scanned item
-        // Open the form dialog if not already open
-        const newIncident: Incident = {
-          id: '',
-          customerId: 0,
-          customerName: '',
-          siteId: '',
-          siteName: '',
-          officerName: '',
-          officerRole: '',
-          dateOfIncident: new Date().toISOString(),
-          timeOfIncident: '',
-          incidentType: '',
-          description: '',
-          incidentInvolved: [],
-          policeInvolvement: false,
-          dutyManagerName: '',
-          status: 'pending',
-          priority: 'medium',
-          stolenItems: [newItem],
-          totalValueRecovered: 0,
-          totalRecoveredValue: 0,
-          totalStolenValue: 0,
-          totalLostValue: 0,
-          totalRecoveredQuantity: 0,
-        }
-        setEditingIncident(newIncident)
+        // Keep create flow separate from edit mode.
+        setEditingIncident(null)
+        setCreatePrefilledStolenItems((prev) => [...prev, newItem])
         setOpen(true) // Open the form dialog
       }
       
@@ -733,15 +734,22 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
             <Button
               onClick={() => {
                 setEditingIncident(null)
+                setCreatePrefilledStolenItems([])
                 setOpen(true)
               }}
               size="default"
               className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm flex items-center gap-2 w-full sm:w-auto text-sm flex-shrink-0"
+              disabled={!canCreateIncident}
             >
               <PlusCircle className="w-4 h-4 sm:w-5 sm:h-5" />
               Incident Report
             </Button>
           </div>
+          {enforceSiteScope && !hasAssignedSites && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              No stores are assigned to this account yet. Incident data is hidden until store assignments are added.
+            </div>
+          )}
 
           {/* Stats Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 min-w-0">
@@ -930,9 +938,11 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
                 <Button
                   onClick={() => {
                     setEditingIncident(null)
+                    setCreatePrefilledStolenItems([])
                     setOpen(true)
                   }}
                   className="text-sm"
+                  disabled={!canCreateIncident}
                 >
                   Incident Report
                 </Button>
@@ -1171,16 +1181,18 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
         <DialogContent className="w-[calc(100%-16px)] sm:w-[calc(100%-32px)] max-w-[95vw] sm:max-w-[92vw] md:max-w-[90vw] lg:max-w-[90vw] xl:max-w-[85vw] 2xl:max-w-[80vw] h-[90vh] p-0 bg-background">
           <DialogHeader className="px-4 py-3 border-b bg-background">
             <DialogTitle className="text-xl font-bold">
-              {editingIncident ? 'Edit Incident Report' : 'Incident Report'}
+              {isEditingExistingIncident ? 'Edit Incident Report' : 'Incident Report'}
             </DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground">
-              {editingIncident ? 'Update the incident details below' : 'Fill in the incident details below'}
+              {isEditingExistingIncident ? 'Update the incident details below' : 'Fill in the incident details below'}
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto bg-muted/30">
             <Suspense fallback={<LazyLoadingFallback />}>
               <IncidentForm
                 initialData={editingIncident}
+                isEditMode={isEditingExistingIncident}
+                prefilledStolenItems={createPrefilledStolenItems}
                 onSubmit={handleSubmit}
                 onCancel={() => {
                   handleCloseDialog()
@@ -1456,19 +1468,19 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
                     </div>
                   )}
                   {/* AI Classification */}
-                  {viewingIncident.id && (
+                  {viewingIncidentNumericId !== null && (
                     <div className="mb-4">
                       <Suspense fallback={<LazyLoadingFallback />}>
-                        <IncidentClassificationBadge incidentId={viewingIncident.id} />
+                        <IncidentClassificationBadge incidentId={viewingIncidentNumericId} />
                       </Suspense>
                     </div>
                   )}
 
                   {/* Evidence Chain */}
-                  {viewingIncident.id && (
+                  {viewingIncidentNumericId !== null && (
                     <div className="mb-4">
                       <Suspense fallback={<LazyLoadingFallback />}>
-                        <EvidenceTimeline incidentId={viewingIncident.id} />
+                        <EvidenceTimeline incidentId={viewingIncidentNumericId} />
                       </Suspense>
                     </div>
                   )}
