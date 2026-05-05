@@ -256,6 +256,9 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
   const isIncidentTypeFilterActive = Boolean(incidentTypeFilter)
   const isRegionFilterActive = regionFilter !== 'all'
   const isClientFilterActive = isDateRangeActive || isIncidentTypeFilterActive || isRegionFilterActive
+  const shouldUseClientPagination = isClientFilterActive || enforceSiteScope
+  const pageForApi = shouldUseClientPagination ? 1 : currentPage
+  const pageSizeForApi = shouldUseClientPagination ? 1000 : itemsPerPage
 
   useEffect(() => {
     const presetParam = searchParams.get('preset')
@@ -341,10 +344,10 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
 
   // Fetch incidents using the API service
   const { data: incidentsResponse = { data: [], pagination: { currentPage: 1, totalPages: 1, pageSize: 10, totalCount: 0, hasPrevious: false, hasNext: false } }, isLoading, error } = useQuery({
-    queryKey: ['incidents', currentPage, debouncedSearch, customerId, siteId, fromDate, toDate, incidentTypeFilter, regionFilter],
+    queryKey: ['incidents', pageForApi, pageSizeForApi, debouncedSearch, customerId, siteId, fromDate, toDate, incidentTypeFilter, regionFilter],
     queryFn: () => incidentsApi.getIncidents({
-      page: currentPage,
-      pageSize: enforceSiteScope ? 1000 : itemsPerPage,
+      page: pageForApi,
+      pageSize: pageSizeForApi,
       search: debouncedSearch || undefined,
       ...(fromDate && { fromDate }),
       ...(toDate && { toDate }),
@@ -504,7 +507,6 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
     }
   }, [deletingIncident, deleteMutation])
 
-  const shouldUseClientPagination = isClientFilterActive || enforceSiteScope
   const clientTotalPages = Math.max(1, Math.ceil(filteredIncidents.length / itemsPerPage))
   const totalPages = shouldUseClientPagination ? clientTotalPages : incidentsResponse.pagination?.totalPages || 1
 
@@ -512,6 +514,12 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
   const paginatedIncidents = shouldUseClientPagination
     ? filteredIncidents.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
     : incidentsResponse.data
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+  }, [currentPage, totalPages])
 
   const hasIncidents = paginatedIncidents.length > 0
   const isSearchActive = Boolean(searchTerm)

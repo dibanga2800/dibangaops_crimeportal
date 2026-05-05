@@ -1,7 +1,6 @@
 import { useContext } from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { AuthContext } from '@/contexts/AuthContext'
-import { DEFAULT_AVATAR } from '@/constants/header'
 
 interface UserAvatarProps {
   size?: 'sm' | 'md' | 'lg'
@@ -25,7 +24,7 @@ export function UserAvatar({
 
   const borderClass = showBorder ? 'border border-blue-700' : ''
 
-  const profileSrc = user?.profilePicture || DEFAULT_AVATAR
+  const profileSrc = user?.profilePicture || undefined
   const initials = user
     ? `${user.firstName?.charAt(0) ?? ''}${user.lastName?.charAt(0) ?? ''}`.toUpperCase()
     : ''
