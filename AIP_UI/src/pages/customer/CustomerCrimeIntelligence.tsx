@@ -960,9 +960,9 @@ export default function CustomerCrimeIntelligence() {
 	}, [customer, resolvedCustomerId])
 
 	useEffect(() => {
-		if (resolvedCustomerId) fetchInsights()
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [resolvedCustomerId, filtersVersion])
+		if (!resolvedCustomerId || authLoading) return
+		void fetchInsights()
+	}, [resolvedCustomerId, filtersVersion, authLoading, fetchInsights])
 
 	const analystNotes = useMemo(() => (insights ? buildAnalystNotes(insights) : []), [insights])
 

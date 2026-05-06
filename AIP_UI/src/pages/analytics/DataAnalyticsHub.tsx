@@ -59,6 +59,8 @@ import { customerDashboardService } from '@/services/dashboardService'
 import type { Region, Site } from '@/types/dashboard'
 import { useCustomerSelection } from '@/contexts/CustomerSelectionContext'
 import { useAvailableCustomers } from '@/hooks/useAvailableCustomers'
+import { useAuth } from '@/hooks/useAuth'
+import { getAssignedSiteIds, isSiteScopeEnforcedForUser } from '@/utils/siteAccess'
 import { MapPin, Building2 } from 'lucide-react'
 
 const formatCurrencyExact = (value: number) =>
@@ -67,9 +69,180 @@ const formatCurrencyExact = (value: number) =>
 		maximumFractionDigits: 2,
 	})
 
+const toSiteIdString = (value: unknown): string => String(value ?? '').trim()
+
+const getSiteIdFromSiteOption = (site: Site): string =>
+	toSiteIdString((site as any).siteID ?? (site as any).id ?? (site as any).siteId)
+
+const mergeAnalyticsHubData = (datasets: AnalyticsHubData[]): AnalyticsHubData => {
+	if (datasets.length === 0) {
+		throw new Error('No analytics datasets to merge.')
+	}
+	if (datasets.length === 1) {
+		return datasets[0]
+	}
+
+	const mergedStoreDrilldown = datasets.reduce<Record<string, any>>((acc, dataset) => {
+		Object.entries(dataset.crimeTrends.storeDrilldown || {}).forEach(([key, store]) => {
+			const storeKey = toSiteIdString((store as any).storeId ?? key)
+			if (!storeKey) return
+
+			const prev = acc[storeKey]
+			const nextIncidentTypes = Object.values((store as any).incidentTypes || [])
+			if (!prev) {
+				acc[storeKey] = {
+					...(store as any),
+					incidentTypes: nextIncidentTypes,
+				}
+				return
+			}
+
+			const incidentTypeMap = new Map<string, any>()
+			;[...(prev.incidentTypes || []), ...nextIncidentTypes].forEach((it: any) => {
+				const typeKey = String(it?.type ?? 'Unknown')
+				const existing = incidentTypeMap.get(typeKey) ?? { type: typeKey, count: 0, percentage: 0, totalValue: 0 }
+				incidentTypeMap.set(typeKey, {
+					...existing,
+					count: existing.count + Number(it?.count ?? 0),
+					totalValue: existing.totalValue + Number(it?.totalValue ?? 0),
+				})
+			})
+
+			const incidents = Number(prev.incidents ?? 0) + Number((store as any).incidents ?? 0)
+			const totalRecoveredValue =
+				Number(prev.totalRecoveredValue ?? 0) + Number((store as any).totalRecoveredValue ?? 0)
+			const totalStolenValue =
+				Number(prev.totalStolenValue ?? 0) + Number((store as any).totalStolenValue ?? 0)
+			const totalLostValue =
+				Number(prev.totalLostValue ?? 0) + Number((store as any).totalLostValue ?? 0)
+
+			acc[storeKey] = {
+				...prev,
+				...(store as any),
+				storeId: Number((store as any).storeId ?? prev.storeId),
+				storeName: String((store as any).storeName ?? prev.storeName),
+				incidents,
+				totalRecoveredValue,
+				totalStolenValue,
+				totalLostValue,
+				recoveryRate: totalStolenValue > 0 ? (totalRecoveredValue / totalStolenValue) * 100 : 0,
+				incidentTypes: Array.from(incidentTypeMap.values()).sort((a, b) => b.count - a.count),
+			}
+		})
+		return acc
+	}, {})
+
+	const mergedStoreRecoveryComparisons = Object.values(mergedStoreDrilldown).map((store: any) => ({
+		storeId: Number(store.storeId),
+		storeName: String(store.storeName ?? `Store ${store.storeId}`),
+		incidentCount: Number(store.incidents ?? 0),
+		totalStolenValue: Number(store.totalStolenValue ?? 0),
+		totalRecoveredValue: Number(store.totalRecoveredValue ?? 0),
+		totalLostValue: Number(store.totalLostValue ?? 0),
+		recoveryRate:
+			Number(store.totalStolenValue ?? 0) > 0
+				? (Number(store.totalRecoveredValue ?? 0) / Number(store.totalStolenValue ?? 0)) * 100
+				: 0,
+		totalRecoveredQuantity: 0,
+		totalLostQuantity: 0,
+	}))
+
+	const financialSummary = mergedStoreRecoveryComparisons.reduce(
+		(acc, row) => {
+			acc.totalStolenValue += row.totalStolenValue
+			acc.totalRecoveredValue += row.totalRecoveredValue
+			acc.totalLostValue += row.totalLostValue
+			acc.totalRecoveredQuantity += row.totalRecoveredQuantity
+			acc.totalLostQuantity += row.totalLostQuantity
+			return acc
+		},
+		{
+			totalStolenValue: 0,
+			totalRecoveredValue: 0,
+			totalLostValue: 0,
+			recoveryRate: 0,
+			totalRecoveredQuantity: 0,
+			totalLostQuantity: 0,
+		}
+	)
+	financialSummary.recoveryRate =
+		financialSummary.totalStolenValue > 0
+			? (financialSummary.totalRecoveredValue / financialSummary.totalStolenValue) * 100
+			: 0
+
+	const mergedIncidentTypesMap = new Map<string, { type: string; count: number; totalValue: number }>()
+	Object.values(mergedStoreDrilldown).forEach((store: any) => {
+		;(store.incidentTypes || []).forEach((it: any) => {
+			const key = String(it?.type ?? 'Unknown')
+			const prev = mergedIncidentTypesMap.get(key) ?? { type: key, count: 0, totalValue: 0 }
+			mergedIncidentTypesMap.set(key, {
+				type: key,
+				count: prev.count + Number(it?.count ?? 0),
+				totalValue: prev.totalValue + Number(it?.totalValue ?? 0),
+			})
+		})
+	})
+
+	const totalIncidents = Object.values(mergedStoreDrilldown).reduce(
+		(sum, store: any) => sum + Number(store.incidents ?? 0),
+		0
+	)
+	const mergedIncidentTypes = Array.from(mergedIncidentTypesMap.values())
+		.map((it) => ({
+			...it,
+			percentage: totalIncidents > 0 ? (it.count / totalIncidents) * 100 : 0,
+		}))
+		.sort((a, b) => b.count - a.count)
+
+	const mergedStoreHeatmapMap = new Map<string, any>()
+	datasets.forEach((dataset) => {
+		(dataset.hotProducts.storeHeatmap || []).forEach((store) => {
+			const key = toSiteIdString((store as any).storeId)
+			if (!key) return
+			const prev = mergedStoreHeatmapMap.get(key)
+			if (!prev) {
+				mergedStoreHeatmapMap.set(key, { ...store })
+				return
+			}
+
+			mergedStoreHeatmapMap.set(key, {
+				...prev,
+				totalIncidents: Number(prev.totalIncidents ?? 0) + Number((store as any).totalIncidents ?? 0),
+				totalValueStolen:
+					Number(prev.totalValueStolen ?? 0) + Number((store as any).totalValueStolen ?? 0),
+				totalValueRecovered:
+					Number(prev.totalValueRecovered ?? 0) + Number((store as any).totalValueRecovered ?? 0),
+				totalValueLost: Number(prev.totalValueLost ?? 0) + Number((store as any).totalValueLost ?? 0),
+			})
+		})
+	})
+
+	const merged = datasets[0]
+	return {
+		...merged,
+		crimeTrends: {
+			...merged.crimeTrends,
+			storeDrilldown: mergedStoreDrilldown,
+			incidentTypes: mergedIncidentTypes,
+			totalIncidents,
+		},
+		financialSummary,
+		storeRecoveryComparisons: mergedStoreRecoveryComparisons,
+		hotProducts: {
+			...merged.hotProducts,
+			storeHeatmap: Array.from(mergedStoreHeatmapMap.values()),
+			totalValueStolen: financialSummary.totalStolenValue,
+			totalValueRecovered: financialSummary.totalRecoveredValue,
+			totalValueLost: financialSummary.totalLostValue,
+			recoveryRate: financialSummary.recoveryRate,
+		},
+	}
+}
+
 const DataAnalyticsHub = () => {
 	const [searchParams, setSearchParams] = useSearchParams()
 	const { toast } = useToast()
+	const { user } = useAuth()
 
 	const [loading, setLoading] = useState(true)
 	const [error, setError] = useState<string | null>(null)
@@ -86,6 +259,9 @@ const DataAnalyticsHub = () => {
 	const { isAdmin, selectedCustomerId, setSelectedCustomerId } = useCustomerSelection()
 	const { availableCustomers, isLoading: loadingCustomers } = useAvailableCustomers()
 	const [selectedCustomerForAdmin, setSelectedCustomerForAdmin] = useState<number | null>(null)
+	const enforceSiteScope = useMemo(() => isSiteScopeEnforcedForUser(user), [user])
+	const assignedSiteIds = useMemo(() => getAssignedSiteIds(user), [user])
+	const assignedSiteIdSet = useMemo(() => new Set(assignedSiteIds), [assignedSiteIds])
 
 	// Sync effective customer for admins based on URL or context
 	const urlCustomerId = searchParams.get('customerId')
@@ -122,8 +298,22 @@ const DataAnalyticsHub = () => {
 				])
 				console.log('✅ Loaded regions:', regionsData.length)
 				console.log('✅ Loaded sites:', sitesData.length)
-				setRegions(regionsData)
-				setSites(sitesData)
+				const scopedSites = !enforceSiteScope
+					? sitesData
+					: sitesData.filter((site) => assignedSiteIdSet.has(getSiteIdFromSiteOption(site)))
+				const scopedRegionIdSet = new Set(
+					scopedSites
+						.map((site) =>
+							toSiteIdString((site as any).regionId ?? (site as any).fkRegionID ?? (site as any).regionID)
+						)
+						.filter((id) => id.length > 0)
+				)
+				const scopedRegions = !enforceSiteScope
+					? regionsData
+					: regionsData.filter((region) => scopedRegionIdSet.has(toSiteIdString(region.id)))
+
+				setRegions(scopedRegions)
+				setSites(scopedSites)
 			} catch (err) {
 				console.error('Failed to load filter options:', err)
 				toast({
@@ -137,7 +327,7 @@ const DataAnalyticsHub = () => {
 		}
 
 		loadFilters()
-	}, [effectiveCustomerId, isAdmin, toast])
+	}, [effectiveCustomerId, isAdmin, toast, enforceSiteScope, assignedSiteIdSet])
 
 	// Customer switch should reset dependent region/store filters to avoid stale selections.
 	useEffect(() => {
@@ -163,19 +353,42 @@ const DataAnalyticsHub = () => {
 		setError(null)
 
 		try {
-			const params = {
+			const baseParams = {
 				startDate: dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : undefined,
 				endDate: dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined,
 				customerId: effectiveCustomerId,
 				regionIds: selectedRegionId !== 'all' ? [Number(selectedRegionId)] : undefined,
-				storeIds: selectedStoreId !== 'all' ? [Number(selectedStoreId)] : undefined,
 			}
 
-			const analyticsData = await analyticsService.getAnalyticsHub(params)
-			console.log(
-				'✅ Analytics data loaded, storeDrilldown count:',
-				Object.keys(analyticsData.crimeTrends.storeDrilldown).length
-			)
+			if (enforceSiteScope) {
+				const scopedStoreIds = (
+					selectedStoreId !== 'all'
+						? [selectedStoreId]
+						: filteredSites.map((site) => getSiteIdFromSiteOption(site))
+				).filter((id) => assignedSiteIdSet.has(id))
+
+				if (scopedStoreIds.length === 0) {
+					setData(null)
+					setError('No assigned stores available for the selected filters.')
+					return
+				}
+
+				const scopedDatasets = await Promise.all(
+					scopedStoreIds.map((siteId) =>
+						analyticsService.getAnalyticsHub({
+							...baseParams,
+							storeIds: [Number(siteId)],
+						})
+					)
+				)
+				setData(mergeAnalyticsHubData(scopedDatasets))
+				return
+			}
+
+			const analyticsData = await analyticsService.getAnalyticsHub({
+				...baseParams,
+				storeIds: selectedStoreId !== 'all' ? [Number(selectedStoreId)] : undefined,
+			})
 			setData(analyticsData)
 		} catch (err) {
 			console.error('Failed to load analytics data:', err)
@@ -188,7 +401,16 @@ const DataAnalyticsHub = () => {
 		} finally {
 			setLoading(false)
 		}
-	}, [dateRange, selectedRegionId, selectedStoreId, effectiveCustomerId, toast])
+	}, [
+		dateRange,
+		selectedRegionId,
+		selectedStoreId,
+		effectiveCustomerId,
+		toast,
+		enforceSiteScope,
+		filteredSites,
+		assignedSiteIdSet,
+	])
 
 	useEffect(() => {
 		// Load analytics data immediately; filters (regions/sites) load in parallel

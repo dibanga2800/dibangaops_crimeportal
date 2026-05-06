@@ -331,7 +331,7 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 
 		try {
 			const [graphResponse, typesResponse] = await Promise.all([
-				incidentGraphService.fetchGraphData(filters),
+				incidentGraphService.fetchGraphData(filters, user),
 				graphType === 'type'
 					? incidentGraphService.fetchTypesData({
 						customerId: filters.customerId,
@@ -339,7 +339,7 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 						endDate: filters.endDate,
 						regionId: filters.regionId,
 						officerType: filters.officerType,
-					})
+					}, user)
 					: Promise.resolve(null),
 			])
 
@@ -370,7 +370,7 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 		} finally {
 			setLoading(false)
 		}
-	}, [filters, graphType, currentCustomerId])
+	}, [filters, graphType, currentCustomerId, user])
 
 	useEffect(() => {
 		if (!currentCustomerId) return

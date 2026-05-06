@@ -118,14 +118,15 @@ export const incidentGraphService = {
 	/**
 	 * Fetch incident graph data with client-side aggregation by location.
 	 */
-	async fetchGraphData(filters: IncidentGraphFilters): Promise<IncidentGraphResponse> {
+	async fetchGraphData(filters: IncidentGraphFilters, scopeUser?: unknown): Promise<IncidentGraphResponse> {
 		const url = buildIncidentsUrl(filters)
 
 		try {
 			const response = await api.get(url, { headers: buildAuthHeaders() })
+			const scopeSource = scopeUser ?? sessionStore.getUser()
 			const incidents: any[] = filterByAssignedSiteIds(
 				response.data.data || [],
-				sessionStore.getUser(),
+				scopeSource,
 				(incident) => incident.siteId ?? incident.SiteId ?? incident.siteID ?? incident.SiteID ?? null
 			)
 
@@ -278,13 +279,15 @@ export const incidentGraphService = {
 	 * Fetch incident types summary with client-side aggregation.
 	 */
 	async fetchTypesData(
-		filters: Omit<IncidentGraphFilters, 'graphType'>
+		filters: Omit<IncidentGraphFilters, 'graphType'>,
+		scopeUser?: unknown
 	): Promise<IncidentTypesResponse> {
 		try {
 			const response = await api.get(buildIncidentsUrl(filters), { headers: buildAuthHeaders() })
+			const scopeSource = scopeUser ?? sessionStore.getUser()
 			const incidents: any[] = filterByAssignedSiteIds(
 				response.data.data || [],
-				sessionStore.getUser(),
+				scopeSource,
 				(incident) => incident.siteId ?? incident.SiteId ?? incident.siteID ?? incident.SiteID ?? null
 			)
 			const typeMap = new Map<string, number>()
