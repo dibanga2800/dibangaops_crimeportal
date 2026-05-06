@@ -82,57 +82,227 @@ const mergeAnalyticsHubData = (datasets: AnalyticsHubData[]): AnalyticsHubData =
 		return datasets[0]
 	}
 
-	const mergedStoreDrilldown = datasets.reduce<Record<string, any>>((acc, dataset) => {
-		Object.entries(dataset.crimeTrends.storeDrilldown || {}).forEach(([key, store]) => {
-			const storeKey = toSiteIdString((store as any).storeId ?? key)
-			if (!storeKey) return
+	const priorityWeight: Record<string, number> = {
+		low: 1,
+		medium: 2,
+		high: 3,
+		critical: 4,
+	}
+	const trendWeight: Record<string, number> = {
+		decreasing: -1,
+		stable: 0,
+		increasing: 1,
+	}
 
-			const prev = acc[storeKey]
-			const nextIncidentTypes = Object.values((store as any).incidentTypes || [])
+	const mergeIncidentTypes = (
+		items: Array<{ type: string; count: number; totalValue: number }>
+	): Array<{ type: string; count: number; totalValue: number; percentage: number }> => {
+		const map = new Map<string, { type: string; count: number; totalValue: number }>()
+		items.forEach((it) => {
+			const key = String(it?.type ?? 'Unknown')
+			const prev = map.get(key) ?? { type: key, count: 0, totalValue: 0 }
+			map.set(key, {
+				type: key,
+				count: prev.count + Number(it?.count ?? 0),
+				totalValue: prev.totalValue + Number(it?.totalValue ?? 0),
+			})
+		})
+		const totalCount = Array.from(map.values()).reduce((sum, it) => sum + it.count, 0)
+		return Array.from(map.values())
+			.map((it) => ({
+				...it,
+				percentage: totalCount > 0 ? (it.count / totalCount) * 100 : 0,
+			}))
+			.sort((a, b) => b.count - a.count)
+	}
+
+	const aggregateByKey = <T extends Record<string, any>>(
+		rows: T[],
+		keyFn: (row: T) => string,
+		initial: () => Record<string, any>,
+		mergeFn: (acc: Record<string, any>, row: T) => void
+	) => {
+		const map = new Map<string, Record<string, any>>()
+		rows.forEach((row) => {
+			const key = keyFn(row)
+			if (!key) return
+			const acc = map.get(key) ?? initial()
+			mergeFn(acc, row)
+			map.set(key, acc)
+		})
+		return Array.from(map.values())
+	}
+
+	const mergedStoreDrilldown: Record<string, any> = {}
+	datasets.forEach((dataset) => {
+		Object.values(dataset.crimeTrends.storeDrilldown || {}).forEach((store: any) => {
+			const storeName = String(store?.storeName ?? `Store ${store?.storeId ?? 'Unknown'}`)
+			const prev = mergedStoreDrilldown[storeName]
 			if (!prev) {
-				acc[storeKey] = {
-					...(store as any),
-					incidentTypes: nextIncidentTypes,
+				mergedStoreDrilldown[storeName] = {
+					...store,
+					storeName,
+					incidentTypes: mergeIncidentTypes(store.incidentTypes || []),
 				}
 				return
 			}
 
-			const incidentTypeMap = new Map<string, any>()
-			;[...(prev.incidentTypes || []), ...nextIncidentTypes].forEach((it: any) => {
-				const typeKey = String(it?.type ?? 'Unknown')
-				const existing = incidentTypeMap.get(typeKey) ?? { type: typeKey, count: 0, percentage: 0, totalValue: 0 }
-				incidentTypeMap.set(typeKey, {
-					...existing,
-					count: existing.count + Number(it?.count ?? 0),
-					totalValue: existing.totalValue + Number(it?.totalValue ?? 0),
-				})
-			})
-
-			const incidents = Number(prev.incidents ?? 0) + Number((store as any).incidents ?? 0)
+			const totalStolenValue = Number(prev.totalStolenValue ?? 0) + Number(store.totalStolenValue ?? 0)
 			const totalRecoveredValue =
-				Number(prev.totalRecoveredValue ?? 0) + Number((store as any).totalRecoveredValue ?? 0)
-			const totalStolenValue =
-				Number(prev.totalStolenValue ?? 0) + Number((store as any).totalStolenValue ?? 0)
-			const totalLostValue =
-				Number(prev.totalLostValue ?? 0) + Number((store as any).totalLostValue ?? 0)
+				Number(prev.totalRecoveredValue ?? 0) + Number(store.totalRecoveredValue ?? 0)
+			const totalLostValue = Number(prev.totalLostValue ?? 0) + Number(store.totalLostValue ?? 0)
+			const incidents = Number(prev.incidents ?? 0) + Number(store.incidents ?? 0)
 
-			acc[storeKey] = {
+			mergedStoreDrilldown[storeName] = {
 				...prev,
-				...(store as any),
-				storeId: Number((store as any).storeId ?? prev.storeId),
-				storeName: String((store as any).storeName ?? prev.storeName),
+				...store,
+				storeName,
 				incidents,
-				totalRecoveredValue,
 				totalStolenValue,
+				totalRecoveredValue,
 				totalLostValue,
 				recoveryRate: totalStolenValue > 0 ? (totalRecoveredValue / totalStolenValue) * 100 : 0,
-				incidentTypes: Array.from(incidentTypeMap.values()).sort((a, b) => b.count - a.count),
+				peakDay: incidents >= Number(prev.incidents ?? 0) ? store.peakDay ?? prev.peakDay : prev.peakDay,
+				peakHour: incidents >= Number(prev.incidents ?? 0) ? store.peakHour ?? prev.peakHour : prev.peakHour,
+				incidentTypes: mergeIncidentTypes([
+					...(prev.incidentTypes || []),
+					...(store.incidentTypes || []),
+				]),
 			}
 		})
-		return acc
-	}, {})
+	})
 
-	const mergedStoreRecoveryComparisons = Object.values(mergedStoreDrilldown).map((store: any) => ({
+	const storeDrilldownValues = Object.values(mergedStoreDrilldown)
+	const totalIncidents = storeDrilldownValues.reduce((sum: number, store: any) => sum + Number(store.incidents ?? 0), 0)
+	const mergedIncidentTypes = mergeIncidentTypes(
+		storeDrilldownValues.flatMap((store: any) => store.incidentTypes || [])
+	)
+
+	const mergedDayOfWeek = aggregateByKey(
+		datasets.flatMap((d) => d.crimeTrends.dayOfWeek || []),
+		(row) => String(row.day ?? ''),
+		() => ({ day: '', incidents: 0, stores: 0, percentage: 0 }),
+		(acc, row) => {
+			acc.day = row.day
+			acc.incidents += Number(row.incidents ?? 0)
+			acc.stores += Number(row.stores ?? 0)
+		}
+	).map((row) => ({
+		...row,
+		percentage: totalIncidents > 0 ? (Number(row.incidents ?? 0) / totalIncidents) * 100 : 0,
+	}))
+
+	const mergedTimeOfDay = aggregateByKey(
+		datasets.flatMap((d) => d.crimeTrends.timeOfDay || []),
+		(row) => String(row.hour ?? ''),
+		() => ({ hour: 0, label: '', incidents: 0, percentage: 0 }),
+		(acc, row) => {
+			acc.hour = Number(row.hour ?? 0)
+			acc.label = String(row.label ?? `${row.hour}:00`)
+			acc.incidents += Number(row.incidents ?? 0)
+		}
+	)
+		.map((row) => ({
+			...row,
+			percentage: totalIncidents > 0 ? (Number(row.incidents ?? 0) / totalIncidents) * 100 : 0,
+		}))
+		.sort((a, b) => Number(a.hour) - Number(b.hour))
+
+	const mergedRecoveryTrend = aggregateByKey(
+		datasets.flatMap((d) => d.crimeTrends.recoveryTrend || []),
+		(row) => String(row.period ?? ''),
+		() => ({ period: '', incidentCount: 0, stolenValue: 0, recoveredValue: 0, lostValue: 0 }),
+		(acc, row) => {
+			acc.period = String(row.period ?? '')
+			acc.incidentCount += Number(row.incidentCount ?? 0)
+			acc.stolenValue += Number(row.stolenValue ?? 0)
+			acc.recoveredValue += Number(row.recoveredValue ?? 0)
+			acc.lostValue += Number(row.lostValue ?? 0)
+		}
+	)
+
+	const mergeProducts = (products: any[]) => {
+		const map = new Map<string, any>()
+		products.forEach((product) => {
+			const key = `${String(product?.barcode ?? '')}|${String(product?.productName ?? '')}`
+			const prev = map.get(key)
+			if (!prev) {
+				map.set(key, {
+					...product,
+					frequency: Number(product?.frequency ?? 0),
+					totalValue: Number(product?.totalValue ?? 0),
+					stolenValue: Number(product?.stolenValue ?? 0),
+					recoveredValue: Number(product?.recoveredValue ?? 0),
+					lostValue: Number(product?.lostValue ?? 0),
+					storesAffected: Number(product?.storesAffected ?? 0),
+				})
+				return
+			}
+
+			const stolenValue = Number(prev.stolenValue ?? 0) + Number(product?.stolenValue ?? 0)
+			const recoveredValue = Number(prev.recoveredValue ?? 0) + Number(product?.recoveredValue ?? 0)
+			map.set(key, {
+				...prev,
+				frequency: Number(prev.frequency ?? 0) + Number(product?.frequency ?? 0),
+				totalValue: Number(prev.totalValue ?? 0) + Number(product?.totalValue ?? 0),
+				stolenValue,
+				recoveredValue,
+				lostValue: Number(prev.lostValue ?? 0) + Number(product?.lostValue ?? 0),
+				storesAffected: Number(prev.storesAffected ?? 0) + Number(product?.storesAffected ?? 0),
+				recoveryRate: stolenValue > 0 ? (recoveredValue / stolenValue) * 100 : 0,
+			})
+		})
+		return Array.from(map.values())
+	}
+
+	const mergedTopProducts = mergeProducts(datasets.flatMap((d) => d.hotProducts.topProducts || []))
+	const mergedTopRecoveredProducts = [...mergedTopProducts]
+		.sort((a, b) => Number(b.recoveredValue ?? 0) - Number(a.recoveredValue ?? 0))
+		.slice(0, 10)
+	const mergedWorstRecoveryProducts = [...mergedTopProducts]
+		.sort((a, b) => Number(b.lostValue ?? 0) - Number(a.lostValue ?? 0))
+		.slice(0, 10)
+
+	const mergedStoreHeatmapMap = new Map<string, any>()
+	datasets.forEach((dataset) => {
+		(dataset.hotProducts.storeHeatmap || []).forEach((store) => {
+			const key = toSiteIdString((store as any).storeId)
+			if (!key) return
+			const prev = mergedStoreHeatmapMap.get(key)
+			if (!prev) {
+				mergedStoreHeatmapMap.set(key, {
+					...store,
+					products: mergeProducts((store as any).products || []),
+				})
+				return
+			}
+
+			const totalValueStolen = Number(prev.totalValueStolen ?? 0) + Number((store as any).totalValueStolen ?? 0)
+			const totalValueRecovered =
+				Number(prev.totalValueRecovered ?? 0) + Number((store as any).totalValueRecovered ?? 0)
+			const totalValueLost = Number(prev.totalValueLost ?? 0) + Number((store as any).totalValueLost ?? 0)
+			const riskLevel =
+				priorityWeight[String((store as any).riskLevel ?? 'low')] >=
+				priorityWeight[String(prev.riskLevel ?? 'low')]
+					? (store as any).riskLevel
+					: prev.riskLevel
+
+			mergedStoreHeatmapMap.set(key, {
+				...prev,
+				...(store as any),
+				totalIncidents: Number(prev.totalIncidents ?? 0) + Number((store as any).totalIncidents ?? 0),
+				totalValueStolen,
+				totalValueRecovered,
+				totalValueLost,
+				riskLevel,
+				recoveryRate: totalValueStolen > 0 ? (totalValueRecovered / totalValueStolen) * 100 : 0,
+				products: mergeProducts([...(prev.products || []), ...((store as any).products || [])]),
+			})
+		})
+	})
+	const mergedStoreHeatmap = Array.from(mergedStoreHeatmapMap.values())
+
+	const mergedStoreRecoveryComparisons = storeDrilldownValues.map((store: any) => ({
 		storeId: Number(store.storeId),
 		storeName: String(store.storeName ?? `Store ${store.storeId}`),
 		incidentCount: Number(store.incidents ?? 0),
@@ -143,8 +313,8 @@ const mergeAnalyticsHubData = (datasets: AnalyticsHubData[]): AnalyticsHubData =
 			Number(store.totalStolenValue ?? 0) > 0
 				? (Number(store.totalRecoveredValue ?? 0) / Number(store.totalStolenValue ?? 0)) * 100
 				: 0,
-		totalRecoveredQuantity: 0,
-		totalLostQuantity: 0,
+		totalRecoveredQuantity: Number(store.totalRecoveredQuantity ?? 0),
+		totalLostQuantity: Number(store.totalLostQuantity ?? 0),
 	}))
 
 	const financialSummary = mergedStoreRecoveryComparisons.reduce(
@@ -170,71 +340,164 @@ const mergeAnalyticsHubData = (datasets: AnalyticsHubData[]): AnalyticsHubData =
 			? (financialSummary.totalRecoveredValue / financialSummary.totalStolenValue) * 100
 			: 0
 
-	const mergedIncidentTypesMap = new Map<string, { type: string; count: number; totalValue: number }>()
-	Object.values(mergedStoreDrilldown).forEach((store: any) => {
-		;(store.incidentTypes || []).forEach((it: any) => {
-			const key = String(it?.type ?? 'Unknown')
-			const prev = mergedIncidentTypesMap.get(key) ?? { type: key, count: 0, totalValue: 0 }
-			mergedIncidentTypesMap.set(key, {
-				type: key,
-				count: prev.count + Number(it?.count ?? 0),
-				totalValue: prev.totalValue + Number(it?.totalValue ?? 0),
-			})
-		})
-	})
-
-	const totalIncidents = Object.values(mergedStoreDrilldown).reduce(
-		(sum, store: any) => sum + Number(store.incidents ?? 0),
-		0
-	)
-	const mergedIncidentTypes = Array.from(mergedIncidentTypesMap.values())
-		.map((it) => ({
-			...it,
-			percentage: totalIncidents > 0 ? (it.count / totalIncidents) * 100 : 0,
-		}))
-		.sort((a, b) => b.count - a.count)
-
-	const mergedStoreHeatmapMap = new Map<string, any>()
+	const mergedBestTimesMap = new Map<string, any>()
 	datasets.forEach((dataset) => {
-		(dataset.hotProducts.storeHeatmap || []).forEach((store) => {
-			const key = toSiteIdString((store as any).storeId)
-			if (!key) return
-			const prev = mergedStoreHeatmapMap.get(key)
+		(dataset.deploymentRecommendations.bestTimes || []).forEach((rec) => {
+			const key = `${rec.day}|${rec.hour}|${rec.officerType}|${rec.recommendedLPM ? '1' : '0'}`
+			const prev = mergedBestTimesMap.get(key)
 			if (!prev) {
-				mergedStoreHeatmapMap.set(key, { ...store })
+				mergedBestTimesMap.set(key, { ...rec })
 				return
 			}
 
-			mergedStoreHeatmapMap.set(key, {
+			const prevPriority = String(prev.priority ?? 'low')
+			const nextPriority = String(rec.priority ?? 'low')
+			mergedBestTimesMap.set(key, {
 				...prev,
-				totalIncidents: Number(prev.totalIncidents ?? 0) + Number((store as any).totalIncidents ?? 0),
-				totalValueStolen:
-					Number(prev.totalValueStolen ?? 0) + Number((store as any).totalValueStolen ?? 0),
-				totalValueRecovered:
-					Number(prev.totalValueRecovered ?? 0) + Number((store as any).totalValueRecovered ?? 0),
-				totalValueLost: Number(prev.totalValueLost ?? 0) + Number((store as any).totalValueLost ?? 0),
+				expectedIncidents: Number(prev.expectedIncidents ?? 0) + Number(rec.expectedIncidents ?? 0),
+				recommendedOfficers: Math.max(
+					Number(prev.recommendedOfficers ?? 0),
+					Number(rec.recommendedOfficers ?? 0)
+				),
+				priority:
+					priorityWeight[nextPriority] >= priorityWeight[prevPriority]
+						? rec.priority
+						: prev.priority,
+				reason:
+					String(prev.reason ?? '') === String(rec.reason ?? '')
+						? prev.reason
+						: `${String(prev.reason ?? '')}; ${String(rec.reason ?? '')}`,
+			})
+		})
+	})
+	const mergedBestTimes = Array.from(mergedBestTimesMap.values()).sort(
+		(a, b) => Number(b.expectedIncidents ?? 0) - Number(a.expectedIncidents ?? 0)
+	)
+
+	const mergedStoreRankingsMap = new Map<string, any>()
+	datasets.forEach((dataset) => {
+		(dataset.deploymentRecommendations.storeRankings || []).forEach((ranking) => {
+			const key = toSiteIdString(ranking.storeId)
+			const prev = mergedStoreRankingsMap.get(key)
+			if (!prev) {
+				mergedStoreRankingsMap.set(key, { ...ranking })
+				return
+			}
+
+			const prevCount = Number(prev.incidentCount ?? 0)
+			const nextCount = Number(ranking.incidentCount ?? 0)
+			const totalCount = prevCount + nextCount
+			const weightedRisk =
+				totalCount > 0
+					? ((Number(prev.riskScore ?? 0) * prevCount) + (Number(ranking.riskScore ?? 0) * nextCount)) /
+					  totalCount
+					: Math.max(Number(prev.riskScore ?? 0), Number(ranking.riskScore ?? 0))
+			const prevRisk = String(prev.riskLevel ?? 'low')
+			const nextRisk = String(ranking.riskLevel ?? 'low')
+
+			mergedStoreRankingsMap.set(key, {
+				...prev,
+				...ranking,
+				incidentCount: totalCount,
+				riskScore: weightedRisk,
+				riskLevel: priorityWeight[nextRisk] >= priorityWeight[prevRisk] ? ranking.riskLevel : prev.riskLevel,
+				trend:
+					trendWeight[String(ranking.trend ?? 'stable')] >=
+					trendWeight[String(prev.trend ?? 'stable')]
+						? ranking.trend
+						: prev.trend,
+				recommendedHours: Array.from(
+					new Set([...(prev.recommendedHours || []), ...(ranking.recommendedHours || [])])
+				),
+			})
+		})
+	})
+	const mergedStoreRankings = Array.from(mergedStoreRankingsMap.values()).sort(
+		(a, b) => Number(b.riskScore ?? 0) - Number(a.riskScore ?? 0)
+	)
+
+	const mergedMostActiveOffendersMap = new Map<string, any>()
+	datasets.forEach((dataset) => {
+		(dataset.repeatOffenders.mostActive || []).forEach((offender) => {
+			const key = String(offender.offenderId ?? offender.name ?? '')
+			if (!key) return
+			const prev = mergedMostActiveOffendersMap.get(key)
+			if (!prev) {
+				mergedMostActiveOffendersMap.set(key, { ...offender })
+				return
+			}
+			mergedMostActiveOffendersMap.set(key, {
+				...prev,
+				incidentCount: Number(prev.incidentCount ?? 0) + Number(offender.incidentCount ?? 0),
+				totalValue: Number(prev.totalValue ?? 0) + Number(offender.totalValue ?? 0),
+				storesTargeted: Array.from(new Set([...(prev.storesTargeted || []), ...(offender.storesTargeted || [])])),
+				modusOperandi: Array.from(new Set([...(prev.modusOperandi || []), ...(offender.modusOperandi || [])])),
 			})
 		})
 	})
 
 	const merged = datasets[0]
+	const metadataStart = datasets
+		.map((d) => d.metadata?.dateRange?.start)
+		.filter(Boolean)
+		.sort()[0] ?? merged.metadata.dateRange.start
+	const metadataEnd = datasets
+		.map((d) => d.metadata?.dateRange?.end)
+		.filter(Boolean)
+		.sort()
+		.slice(-1)[0] ?? merged.metadata.dateRange.end
+
 	return {
 		...merged,
 		crimeTrends: {
 			...merged.crimeTrends,
-			storeDrilldown: mergedStoreDrilldown,
+			dayOfWeek: mergedDayOfWeek,
+			timeOfDay: mergedTimeOfDay,
 			incidentTypes: mergedIncidentTypes,
+			storeDrilldown: mergedStoreDrilldown,
+			recoveryTrend: mergedRecoveryTrend,
 			totalIncidents,
 		},
-		financialSummary,
-		storeRecoveryComparisons: mergedStoreRecoveryComparisons,
 		hotProducts: {
 			...merged.hotProducts,
-			storeHeatmap: Array.from(mergedStoreHeatmapMap.values()),
+			topProducts: mergedTopProducts,
+			topRecoveredProducts: mergedTopRecoveredProducts,
+			worstRecoveryProducts: mergedWorstRecoveryProducts,
+			storeHeatmap: mergedStoreHeatmap,
 			totalValueStolen: financialSummary.totalStolenValue,
 			totalValueRecovered: financialSummary.totalRecoveredValue,
 			totalValueLost: financialSummary.totalLostValue,
 			recoveryRate: financialSummary.recoveryRate,
+		},
+		financialSummary,
+		storeRecoveryComparisons: mergedStoreRecoveryComparisons,
+		deploymentRecommendations: {
+			...merged.deploymentRecommendations,
+			bestTimes: mergedBestTimes,
+			storeRankings: mergedStoreRankings,
+			overallStrategy:
+				datasets.map((d) => d.deploymentRecommendations.overallStrategy).find((s) => String(s).trim().length > 0) ??
+				merged.deploymentRecommendations.overallStrategy,
+			lastUpdated: datasets
+				.map((d) => d.deploymentRecommendations.lastUpdated)
+				.filter(Boolean)
+				.sort()
+				.slice(-1)[0] ?? merged.deploymentRecommendations.lastUpdated,
+		},
+		repeatOffenders: {
+			...merged.repeatOffenders,
+			mostActive: Array.from(mergedMostActiveOffendersMap.values()).sort(
+				(a, b) => Number(b.incidentCount ?? 0) - Number(a.incidentCount ?? 0)
+			),
+			totalOffenders: mergedMostActiveOffendersMap.size,
+		},
+		metadata: {
+			...merged.metadata,
+			dateRange: {
+				start: metadataStart,
+				end: metadataEnd,
+			},
+			generatedAt: new Date().toISOString(),
 		},
 	}
 }
