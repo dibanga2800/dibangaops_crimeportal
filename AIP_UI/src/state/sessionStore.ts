@@ -13,6 +13,11 @@ const ROLE_MIGRATION_MAP: Record<string, UserRole> = {
 	'advantageoneofficer': 'store',
 	'customersitemanager': 'store',
 	'customerhomanager': 'manager',
+	'store user': 'store',
+	'store-user': 'store',
+	'store_user': 'store',
+	'security officer': 'security-officer',
+	'security_officer': 'security-officer',
 }
 
 const normalizeRole = (role: string | undefined): UserRole => {

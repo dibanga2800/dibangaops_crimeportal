@@ -1,13 +1,53 @@
 const SITE_SCOPED_ROLES = new Set(['manager', 'security-officer', 'store'])
 
-const toRole = (value: unknown): string =>
-	String(value ?? '')
-		.trim()
-		.toLowerCase()
+const ROLE_ALIAS_MAP: Record<string, string> = {
+	'store user': 'store',
+	'store-user': 'store',
+	'store_user': 'store',
+	'security officer': 'security-officer',
+	'security_officer': 'security-officer',
+}
+
+const normalizeRole = (value: unknown): string => {
+	const rawRole = String(value ?? '').trim().toLowerCase()
+	return ROLE_ALIAS_MAP[rawRole] ?? rawRole
+}
+
+const normalizeSiteId = (value: unknown): string =>
+	String(value ?? '').trim()
+
+const parseSiteIds = (value: unknown): string[] => {
+	if (!value) return []
+
+	if (Array.isArray(value)) {
+		return value.map(normalizeSiteId).filter((id) => id.length > 0)
+	}
+
+	if (typeof value !== 'string') {
+		return [normalizeSiteId(value)].filter((id) => id.length > 0)
+	}
+
+	const rawValue = value.trim()
+	if (!rawValue) return []
+
+	try {
+		const parsed = JSON.parse(rawValue) as unknown
+		if (Array.isArray(parsed)) {
+			return parsed.map(normalizeSiteId).filter((id) => id.length > 0)
+		}
+	} catch {
+		// Fallback to CSV parsing when value is not JSON
+	}
+
+	return rawValue
+		.split(',')
+		.map(normalizeSiteId)
+		.filter((id) => id.length > 0)
+}
 
 export const getUserRole = (user: unknown): string => {
 	const source = user as Record<string, unknown> | null | undefined
-	return toRole(source?.role ?? source?.pageAccessRole)
+	return normalizeRole(source?.role ?? source?.pageAccessRole)
 }
 
 export const isSiteScopeEnforcedForUser = (user: unknown): boolean =>
@@ -15,21 +55,21 @@ export const isSiteScopeEnforcedForUser = (user: unknown): boolean =>
 
 export const getAssignedSiteIds = (user: unknown): string[] => {
 	const source = user as Record<string, unknown> | null | undefined
-	const assignedSiteIds = source?.assignedSiteIds ?? source?.AssignedSiteIds
-	const primarySiteId = source?.primarySiteId ?? source?.PrimarySiteId
+	const assignedSiteIdsRaw = source?.assignedSiteIds ?? source?.AssignedSiteIds
+	const primarySiteId =
+		source?.primarySiteId ??
+		source?.PrimarySiteId ??
+		source?.siteId ??
+		source?.SiteId
 
-	if (Array.isArray(assignedSiteIds)) {
-		return Array.from(
-			new Set(
-				assignedSiteIds
-					.map((id) => String(id ?? '').trim())
-					.filter((id) => id.length > 0)
-			)
-		)
+	const assignedSiteIds = parseSiteIds(assignedSiteIdsRaw)
+	if (assignedSiteIds.length > 0) {
+		return Array.from(new Set(assignedSiteIds))
 	}
 
-	if (primarySiteId !== undefined && primarySiteId !== null && String(primarySiteId).trim().length > 0) {
-		return [String(primarySiteId).trim()]
+	const normalizedPrimarySiteId = normalizeSiteId(primarySiteId)
+	if (normalizedPrimarySiteId.length > 0) {
+		return [normalizedPrimarySiteId]
 	}
 
 	return []
