@@ -63,7 +63,7 @@ variable "keyvault_name_prefix" {
 }
 
 variable "key_vault_soft_delete_retention_days" {
-  description = "Key Vault soft-delete retention in days (security baseline: 90)"
+  description = "Key Vault soft-delete retention in days (7–90). Used when the vault is first created; Azure does not allow changing this on an existing vault, so Terraform ignores in-place updates (see lifecycle on azurerm_key_vault.kv)."
   type        = number
   default     = 90
   validation {

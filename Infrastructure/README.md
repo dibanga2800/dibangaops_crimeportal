@@ -51,6 +51,8 @@ terraform init -backend-config=backend.hcl
 ## Local plan/apply example
 
 ```bash
+cp terraform.dev.tfvars.example terraform.dev.tfvars   # optional: edit for your dev profile
+
 terraform plan \
   -var-file="terraform.dev.tfvars" \
   -var="backend_image=mcr.microsoft.com/azuredocs/containerapps-helloworld:latest" \
@@ -58,6 +60,8 @@ terraform plan \
 ```
 
 ```bash
+cp terraform.prod.tfvars.example terraform.prod.tfvars   # then edit with real values (file is gitignored)
+
 terraform apply \
   -var-file="terraform.prod.tfvars" \
   -var="backend_image=<acr-login-server>/crimeportal-backend:<tag>" \
@@ -66,8 +70,8 @@ terraform apply \
 
 ## Environment profiles
 
-- `terraform.dev.tfvars`: lower-cost non-production tuning
-- `terraform.prod.tfvars`: production reliability tuning
+- `terraform.dev.tfvars.example` → copy to **`terraform.dev.tfvars`** (gitignored) for local dev plans
+- `terraform.prod.tfvars.example` → copy to **`terraform.prod.tfvars`** (gitignored) for production applies
 
 Use `TF_VAR_budget_alert_emails` for alert recipients, for example:
 
@@ -79,6 +83,8 @@ export TF_VAR_budget_alert_emails='["team@yourcompany.com"]'
 
 For GitHub Actions:
 
+- `TERRAFORM_PROD_TFVARS` — **full multiline contents** of your production `terraform.prod.tfvars` (same keys as `terraform.prod.tfvars.example`). Required for deploy workflows; never commit the real file.
+- `TERRAFORM_PLAN_TFVARS` — **optional**; if set, used by pull-request `terraform plan` so planned changes match what is deployed (paste the same body you use for real plans, often identical to prod tfvars). If unset, CI uses `terraform.dev.tfvars.example` only (validate still runs; plan may be noisy or misleading).
 - `AZURE_CLIENT_ID`
 - `AZURE_TENANT_ID`
 - `AZURE_SUBSCRIPTION_ID`
@@ -103,5 +109,5 @@ Default alert thresholds:
 
 ## Notes
 
-- `terraform.tfvars` is intentionally gitignored; use CI vars/secrets instead.
+- `terraform.tfvars`, `terraform.prod.tfvars`, and `terraform.dev.tfvars` are **gitignored**; keep real values in local files or CI secrets (`TERRAFORM_PROD_TFVARS`). Commit only the `*.tfvars.example` templates.
 - `.terraform` and local state files are intentionally ignored.

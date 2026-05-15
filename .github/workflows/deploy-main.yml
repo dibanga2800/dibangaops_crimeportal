@@ -43,6 +43,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Write terraform.prod.tfvars from secret
+        uses: ./.github/actions/write-terraform-prod-tfvars
+        with:
+          content: ${{ secrets.TERRAFORM_PROD_TFVARS }}
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
         with:
@@ -170,6 +175,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Write terraform.prod.tfvars from secret
+        uses: ./.github/actions/write-terraform-prod-tfvars
+        with:
+          content: ${{ secrets.TERRAFORM_PROD_TFVARS }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4

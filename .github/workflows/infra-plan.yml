@@ -6,6 +6,7 @@ on:
       - 'Infrastructure/**'
       - '.github/workflows/infra-plan.yml'
       - '.github/workflows/deploy-main.yml'
+      - '.github/actions/write-terraform-prod-tfvars/**'
   workflow_dispatch:
 
 permissions:
@@ -26,6 +27,21 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      # Prefer secret TERRAFORM_PLAN_TFVARS (e.g. copy of real prod/dev tfvars) so plan matches deployed config.
+      # Without it, the example is used — validate still passes but planned changes may not reflect production.
+      - name: Prepare terraform.dev.tfvars for plan
+        working-directory: Infrastructure
+        env:
+          PLAN_TFVARS: ${{ secrets.TERRAFORM_PLAN_TFVARS }}
+        run: |
+          set -euo pipefail
+          if [ -n "${PLAN_TFVARS}" ]; then
+            printf '%s\n' "${PLAN_TFVARS}" > terraform.dev.tfvars
+          else
+            cp terraform.dev.tfvars.example terraform.dev.tfvars
+            echo "::warning::TERRAFORM_PLAN_TFVARS unset — using terraform.dev.tfvars.example (plan may diverge from deployed infra)."
+          fi
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4

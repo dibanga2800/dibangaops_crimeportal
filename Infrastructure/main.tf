@@ -85,6 +85,12 @@ resource "azurerm_key_vault" "kv" {
   purge_protection_enabled      = var.key_vault_purge_protection_enabled
   rbac_authorization_enabled    = true
   public_network_access_enabled = true
+
+  # Azure does not allow changing soft-delete retention after the vault is created; applies would fail with:
+  # "once soft_delete_retention_days has been configured it cannot be modified".
+  lifecycle {
+    ignore_changes = [soft_delete_retention_days]
+  }
 }
 
 resource "azurerm_role_assignment" "terraform_kv_admin" {

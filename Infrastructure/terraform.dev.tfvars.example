@@ -1,3 +1,6 @@
+# Copy to terraform.dev.tfvars for local non-prod plans (gitignored), or rely on CI which copies this file for PR plans.
+# Replace placeholders with your non-production values.
+
 # Non-production cost-conscious profile
 enable_application_insights  = false
 log_analytics_retention_days = 7
@@ -17,8 +20,6 @@ sql_max_size_gb = 2
 monthly_budget_amount = 25
 enable_budget_alert   = true
 budget_start_date     = "2026-01-01T00:00:00Z"
-budget_alert_emails   = ["crimeportalai@gmail.com"]
+budget_alert_emails   = ["dev-plan@example.com"]
 
-# Set via TF_VAR_budget_alert_emails in CI/CLI.
-# Example:
-# export TF_VAR_budget_alert_emails='["team@yourcompany.com"]'
+# Optional: override via TF_VAR_budget_alert_emails

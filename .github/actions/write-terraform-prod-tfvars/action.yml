@@ -1,0 +1,22 @@
+# Materializes Infrastructure/terraform.prod.tfvars from a secret so real prod values are not in git.
+name: Write terraform.prod.tfvars
+description: Writes Infrastructure/terraform.prod.tfvars from the repository secret body (multiline).
+inputs:
+  content:
+    description: Full contents of the production tfvars file (same shape as terraform.prod.tfvars.example).
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Write terraform.prod.tfvars
+      shell: bash
+      working-directory: Infrastructure
+      env:
+        CONTENT: ${{ inputs.content }}
+      run: |
+        set -euo pipefail
+        if [ -z "${CONTENT}" ]; then
+          echo "::error::Missing tfvars content. Set repository secret TERRAFORM_PROD_TFVARS to the full terraform.prod.tfvars file."
+          exit 1
+        fi
+        printf '%s\n' "$CONTENT" > terraform.prod.tfvars
