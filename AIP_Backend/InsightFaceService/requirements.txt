@@ -1,11 +1,8 @@
-# InsightFace REST API for face detection and embedding
-# Python 3.8+
-fastapi>=0.104.0
-uvicorn[standard]>=0.24.0
-python-multipart>=0.0.6
-numpy>=1.21.0
-opencv-python-headless>=4.5.0
-onnxruntime>=1.14.0
-# InsightFace: install from PyPI or GitHub
-# pip install insightface  (or from source for latest)
-insightface>=0.7.0
+# Pinned for reproducible CI/container builds (InsightFace + onnxruntime + numpy must stay aligned).
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+python-multipart==0.0.20
+numpy==1.26.4
+opencv-python-headless==4.10.0.84
+onnxruntime==1.19.2
+insightface==0.7.3

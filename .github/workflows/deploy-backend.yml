@@ -83,7 +83,7 @@ jobs:
       - name: Build and push backend image
         run: |
           set -euo pipefail
-          docker build \
+          docker build --pull \
             -f AIP_Backend/Dockerfile \
             -t "${{ steps.image-vars.outputs.backend_image }}" \
             AIP_Backend
@@ -92,7 +92,7 @@ jobs:
       - name: Build and push AI image
         run: |
           set -euo pipefail
-          docker build \
+          docker build --pull \
             -f AIP_Backend/InsightFaceService/Dockerfile \
             -t "${{ steps.image-vars.outputs.ai_image }}" \
             AIP_Backend/InsightFaceService
@@ -162,12 +162,54 @@ jobs:
           exit 1
 
       - name: Update AI image
+        id: update_ai
         run: |
           set -euo pipefail
-          az containerapp update \
+          AI_LATEST_REVISION="$(az containerapp update \
             --resource-group "${{ env.RESOURCE_GROUP }}" \
             --name "${{ env.AI_APP_NAME }}" \
-            --image "${{ needs.build-and-push-images.outputs.ai_image }}"
+            --image "${{ needs.build-and-push-images.outputs.ai_image }}" \
+            --query "properties.latestRevisionName" -o tsv)"
+          echo "ai_latest_revision=${AI_LATEST_REVISION}" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for AI revision readiness
+        run: |
+          set -euo pipefail
+          TARGET_REV="${{ steps.update_ai.outputs.ai_latest_revision }}"
+          if [ -z "${TARGET_REV}" ]; then
+            echo "AI latest revision was not returned by update step."
+            exit 1
+          fi
+
+          echo "Waiting for AI revision '${TARGET_REV}' to become ready..."
+          for attempt in $(seq 1 45); do
+            READY_REV="$(az containerapp show \
+              --resource-group "${{ env.RESOURCE_GROUP }}" \
+              --name "${{ env.AI_APP_NAME }}" \
+              --query "properties.latestReadyRevisionName" -o tsv)"
+
+            if [ "${READY_REV}" = "${TARGET_REV}" ]; then
+              echo "AI revision is ready: ${READY_REV}"
+              exit 0
+            fi
+
+            echo "Attempt ${attempt}/45: latest ready revision is '${READY_REV}', waiting..."
+            sleep 10
+          done
+
+          echo "AI revision '${TARGET_REV}' did not become ready in time."
+          echo "Revision snapshot:"
+          az containerapp revision list \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --name "${{ env.AI_APP_NAME }}" \
+            --query "[].{name:name,active:properties.active,runningState:properties.runningState,healthState:properties.healthState,image:properties.template.containers[0].image}" -o table
+          echo "Recent logs from target revision:"
+          az containerapp logs show \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --name "${{ env.AI_APP_NAME }}" \
+            --revision "${TARGET_REV}" \
+            --tail 200 || true
+          exit 1
 
       - name: Verify running images
         run: |
@@ -186,3 +228,9 @@ jobs:
             --resource-group "${{ env.RESOURCE_GROUP }}" \
             --name "${{ env.AI_APP_NAME }}" \
             --query "properties.template.containers[0].image" -o tsv
+          echo "AI revision mode / ready revision:"
+          az containerapp show \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --name "${{ env.AI_APP_NAME }}" \
+            --query "{activeRevisionsMode:properties.configuration.activeRevisionsMode,latestReadyRevisionName:properties.latestReadyRevisionName,latestRevisionName:properties.latestRevisionName}" \
+            -o json
