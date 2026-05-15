@@ -35,8 +35,8 @@ jobs:
     outputs:
       backend_image: ${{ steps.image-vars.outputs.backend_image }}
       ai_image: ${{ steps.image-vars.outputs.ai_image }}
-      acr_name: ${{ steps.acr-vars.outputs.acr_name }}
-      acr_login_server: ${{ steps.acr-vars.outputs.acr_login_server }}
+      acr_name: ${{ steps.acr_vars.outputs.acr_name }}
+      acr_login_server: ${{ steps.acr_vars.outputs.acr_login_server }}
 
     steps:
       - name: Checkout
@@ -50,7 +50,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Resolve ACR details
-        id: acr-vars
+        id: acr_vars
         run: |
           set -euo pipefail
           ACR_ID="$(az acr list --resource-group "${{ env.RESOURCE_GROUP }}" --query '[0].id' -o tsv)"
@@ -62,15 +62,22 @@ jobs:
           echo "acr_login_server=$(az acr show --ids "${ACR_ID}" --query loginServer -o tsv)" >> "$GITHUB_OUTPUT"
 
       - name: Login to ACR
-        run: az acr login --name "${{ steps.acr-vars.outputs.acr_name }}"
+        run: |
+          set -euo pipefail
+          ACR_NAME="${{ steps.acr_vars.outputs.acr_name }}"
+          if [ -z "${ACR_NAME}" ]; then
+            echo "Resolved ACR name is empty. Check Resolve ACR details step output."
+            exit 1
+          fi
+          az acr login --name "${ACR_NAME}"
 
       - name: Define image tags
         id: image-vars
         run: |
           set -euo pipefail
           TAG="${GITHUB_SHA::7}"
-          echo "backend_image=${{ steps.acr-vars.outputs.acr_login_server }}/${{ env.BACKEND_IMAGE_NAME }}:${TAG}" >> "$GITHUB_OUTPUT"
-          echo "ai_image=${{ steps.acr-vars.outputs.acr_login_server }}/${{ env.AI_IMAGE_NAME }}:${TAG}" >> "$GITHUB_OUTPUT"
+          echo "backend_image=${{ steps.acr_vars.outputs.acr_login_server }}/${{ env.BACKEND_IMAGE_NAME }}:${TAG}" >> "$GITHUB_OUTPUT"
+          echo "ai_image=${{ steps.acr_vars.outputs.acr_login_server }}/${{ env.AI_IMAGE_NAME }}:${TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push backend image
         run: |
