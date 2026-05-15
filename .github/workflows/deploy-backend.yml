@@ -112,12 +112,63 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Update backend image
+        id: update_backend
         run: |
           set -euo pipefail
-          az containerapp update \
+          BACKEND_LATEST_REVISION="$(az containerapp update \
             --resource-group "${{ env.RESOURCE_GROUP }}" \
             --name "${{ env.BACKEND_APP_NAME }}" \
-            --image "${{ needs.build-and-push-images.outputs.backend_image }}"
+            --image "${{ needs.build-and-push-images.outputs.backend_image }}" \
+            --query "properties.latestRevisionName" -o tsv)"
+          echo "backend_latest_revision=${BACKEND_LATEST_REVISION}" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for backend revision readiness
+        run: |
+          set -euo pipefail
+          TARGET_REV="${{ steps.update_backend.outputs.backend_latest_revision }}"
+          if [ -z "${TARGET_REV}" ]; then
+            echo "Backend latest revision was not returned by update step."
+            exit 1
+          fi
+
+          echo "Waiting for backend revision '${TARGET_REV}' to become ready..."
+          for attempt in $(seq 1 30); do
+            READY_REV="$(az containerapp show \
+              --resource-group "${{ env.RESOURCE_GROUP }}" \
+              --name "${{ env.BACKEND_APP_NAME }}" \
+              --query "properties.latestReadyRevisionName" -o tsv)"
+
+            if [ "${READY_REV}" = "${TARGET_REV}" ]; then
+              echo "Backend revision is ready: ${READY_REV}"
+              exit 0
+            fi
+
+            echo "Attempt ${attempt}/30: latest ready revision is '${READY_REV}', waiting..."
+            sleep 10
+          done
+
+          echo "Backend revision '${TARGET_REV}' did not become ready in time."
+          echo "Revision snapshot:"
+          az containerapp revision list \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --name "${{ env.BACKEND_APP_NAME }}" \
+            --query "[].{name:name,active:properties.active,runningState:properties.runningState,healthState:properties.healthState,image:properties.template.containers[0].image}" -o table
+          echo "Recent logs from target revision:"
+          az containerapp logs show \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --name "${{ env.BACKEND_APP_NAME }}" \
+            --revision "${TARGET_REV}" \
+            --tail 200 || true
+          exit 1
+
+      - name: Route backend traffic to latest ready revision
+        run: |
+          set -euo pipefail
+          TARGET_REV="${{ steps.update_backend.outputs.backend_latest_revision }}"
+          az containerapp ingress traffic set \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --name "${{ env.BACKEND_APP_NAME }}" \
+            --revision-weight "${TARGET_REV}=100"
 
       - name: Update AI image
         run: |
@@ -134,6 +185,10 @@ jobs:
             --resource-group "${{ env.RESOURCE_GROUP }}" \
             --name "${{ env.BACKEND_APP_NAME }}" \
             --query "properties.template.containers[0].image" -o tsv
+          az containerapp show \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --name "${{ env.BACKEND_APP_NAME }}" \
+            --query "properties.configuration.ingress.traffic" -o json
           az containerapp show \
             --resource-group "${{ env.RESOURCE_GROUP }}" \
             --name "${{ env.AI_APP_NAME }}" \
