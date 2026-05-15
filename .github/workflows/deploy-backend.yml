@@ -131,7 +131,7 @@ jobs:
             exit 1
           fi
 
-          echo "Waiting for backend revision '${TARGET_REV}' to become ready..."
+          echo "Waiting for backend revision '${TARGET_REV}' to become ready (single-revision mode: traffic uses this revision automatically when healthy)..."
           for attempt in $(seq 1 30); do
             READY_REV="$(az containerapp show \
               --resource-group "${{ env.RESOURCE_GROUP }}" \
@@ -161,15 +161,6 @@ jobs:
             --tail 200 || true
           exit 1
 
-      - name: Route backend traffic to latest ready revision
-        run: |
-          set -euo pipefail
-          TARGET_REV="${{ steps.update_backend.outputs.backend_latest_revision }}"
-          az containerapp ingress traffic set \
-            --resource-group "${{ env.RESOURCE_GROUP }}" \
-            --name "${{ env.BACKEND_APP_NAME }}" \
-            --revision-weight "${TARGET_REV}=100"
-
       - name: Update AI image
         run: |
           set -euo pipefail
@@ -185,10 +176,12 @@ jobs:
             --resource-group "${{ env.RESOURCE_GROUP }}" \
             --name "${{ env.BACKEND_APP_NAME }}" \
             --query "properties.template.containers[0].image" -o tsv
+          echo "Backend revision mode / ready revision (single-revision apps have no ingress traffic split):"
           az containerapp show \
             --resource-group "${{ env.RESOURCE_GROUP }}" \
             --name "${{ env.BACKEND_APP_NAME }}" \
-            --query "properties.configuration.ingress.traffic" -o json
+            --query "{activeRevisionsMode:properties.configuration.activeRevisionsMode,latestReadyRevisionName:properties.latestReadyRevisionName,latestRevisionName:properties.latestRevisionName}" \
+            -o json
           az containerapp show \
             --resource-group "${{ env.RESOURCE_GROUP }}" \
             --name "${{ env.AI_APP_NAME }}" \
