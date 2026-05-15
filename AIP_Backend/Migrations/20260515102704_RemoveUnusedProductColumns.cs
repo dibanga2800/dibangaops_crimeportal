@@ -10,28 +10,23 @@ namespace AIPBackend.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropIndex(
-                name: "IX_Products_Category",
-                table: "Products");
-
-            migrationBuilder.DropColumn(
-                name: "Brand",
-                table: "Products");
-
-            migrationBuilder.DropColumn(
-                name: "Category",
-                table: "Products");
-
-            migrationBuilder.DropColumn(
-                name: "Manufacturer",
-                table: "Products");
-
-            migrationBuilder.DropColumn(
-                name: "Section",
-                table: "Products");
-
-            // L8Name was removed from the model earlier; drop if still present on legacy databases.
+            // Production may already match target schema (manual SQL / drift). Keep idempotent.
             migrationBuilder.Sql("""
+                IF EXISTS (
+                    SELECT 1
+                    FROM sys.indexes i
+                    WHERE i.name = N'IX_Products_Category'
+                      AND i.object_id = OBJECT_ID(N'dbo.Products'))
+                    DROP INDEX IX_Products_Category ON dbo.Products;
+
+                IF COL_LENGTH('dbo.Products', 'Brand') IS NOT NULL
+                    ALTER TABLE dbo.Products DROP COLUMN Brand;
+                IF COL_LENGTH('dbo.Products', 'Category') IS NOT NULL
+                    ALTER TABLE dbo.Products DROP COLUMN Category;
+                IF COL_LENGTH('dbo.Products', 'Manufacturer') IS NOT NULL
+                    ALTER TABLE dbo.Products DROP COLUMN Manufacturer;
+                IF COL_LENGTH('dbo.Products', 'Section') IS NOT NULL
+                    ALTER TABLE dbo.Products DROP COLUMN Section;
                 IF COL_LENGTH('dbo.Products', 'L8Name') IS NOT NULL
                     ALTER TABLE dbo.Products DROP COLUMN L8Name;
                 """);
