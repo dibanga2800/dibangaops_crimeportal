@@ -53,13 +53,14 @@ jobs:
         id: acr_vars
         run: |
           set -euo pipefail
-          ACR_ID="$(az acr list --resource-group "${{ env.RESOURCE_GROUP }}" --query '[0].id' -o tsv)"
-          if [ -z "${ACR_ID}" ]; then
+          ACR_NAME="$(az acr list --resource-group "${{ env.RESOURCE_GROUP }}" --query '[0].name' -o tsv)"
+          ACR_LOGIN_SERVER="$(az acr list --resource-group "${{ env.RESOURCE_GROUP }}" --query '[0].loginServer' -o tsv)"
+          if [ -z "${ACR_NAME}" ] || [ -z "${ACR_LOGIN_SERVER}" ]; then
             echo "No ACR found in resource group '${{ env.RESOURCE_GROUP }}'."
             exit 1
           fi
-          echo "acr_name=$(az acr show --ids "${ACR_ID}" --query name -o tsv)" >> "$GITHUB_OUTPUT"
-          echo "acr_login_server=$(az acr show --ids "${ACR_ID}" --query loginServer -o tsv)" >> "$GITHUB_OUTPUT"
+          echo "acr_name=${ACR_NAME}" >> "$GITHUB_OUTPUT"
+          echo "acr_login_server=${ACR_LOGIN_SERVER}" >> "$GITHUB_OUTPUT"
 
       - name: Login to ACR
         run: |
