@@ -36,7 +36,7 @@ const IMPORT_TIMEOUT_MS = 120_000
 
 const mapHttpError = (status: number, message: string): string => {
 	if (status === 401) return 'You must sign in again to import the catalog.'
-	if (status === 403) return 'Only administrators can import the barcode catalog.'
+	if (status === 403) return 'You do not have permission to import the barcode catalog.'
 	return message
 }
 

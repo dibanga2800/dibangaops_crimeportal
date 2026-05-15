@@ -59,10 +59,18 @@ import type { AnalyticsHubData } from '@/types/analytics'
 import type { AlertSummary } from '@/types/alertInstances'
 import type { IncidentAnalyticsSummary, RiskIndicator } from '@/types/classification'
 import type { Incident } from '@/types/incidents'
-import type { IncidentsResponse } from '@/types/api'
+import { IncidentType } from '@/types/incidents'
+import type { IncidentsResponse, IncidentListSummary, PaginationInfo } from '@/types/api'
 import { BASE_API_URL } from '@/config/api'
 import { sessionStore } from '@/state/sessionStore'
-import { getAssignedSiteIds } from '@/utils/siteAccess'
+import { getAssignedSiteIds, isSiteScopeEnforcedForUser } from '@/utils/siteAccess'
+import { toast } from '@/components/ui/use-toast'
+import {
+	dismissAllNotificationsFromServer,
+	getDismissedAlertInstanceIds,
+	getDismissedAlertUiKeys,
+	NOTIFICATIONS_DISMISSED_EVENT,
+} from '@/lib/notifications/dismissed-notifications'
 
 const officerStats = [
   // Top Performers
@@ -265,6 +273,13 @@ const getIncidentFinancials = (incident: any) => {
   }
 }
 
+const isIncidentTypeShoplifting = (inc: Incident) => {
+  const raw = (inc.incidentType || inc.type || '').trim().toLowerCase()
+  if (!raw) return false
+  const shoplifting = IncidentType.SHOPLIFTING.toLowerCase()
+  return raw === shoplifting || raw.includes('shoplifting')
+}
+
 interface AdminDashboardProps {
   viewRole?: 'administrator' | 'manager' | 'security-officer' | 'store'
 }
@@ -314,9 +329,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
   const [toDateInput, setToDateInput] = React.useState('');
   const [dateRangeError, setDateRangeError] = React.useState<string | null>(null);
   const [loadedIncidents, setLoadedIncidents] = React.useState<Incident[]>([]);
+  const [incidentsPagination, setIncidentsPagination] = React.useState<PaginationInfo | null>(null)
+  const [incidentsSummary, setIncidentsSummary] = React.useState<IncidentListSummary | null>(null)
   const [incidentsLoading, setIncidentsLoading] = React.useState(true);
   const [alertSummary, setAlertSummary] = React.useState<AlertSummary | null>(null);
   const [aiAnalytics, setAiAnalytics] = React.useState<IncidentAnalyticsSummary | null>(null);
+  const [, bumpNotificationDismissals] = React.useReducer((n: number) => n + 1, 0);
+
+  React.useEffect(() => {
+    const onDismissed = () => bumpNotificationDismissals()
+    window.addEventListener(NOTIFICATIONS_DISMISSED_EVENT, onDismissed)
+    return () => window.removeEventListener(NOTIFICATIONS_DISMISSED_EVENT, onDismissed)
+  }, []);
+
   const isDateRangeActive = Boolean(fromDate || toDate);
   const viewBadgeLabel =
     viewRole === 'administrator'
@@ -403,7 +428,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
           siteId?: string
         } = {
           page: 1,
-          pageSize: 500
+          pageSize: 1000
         }
         if (effectiveCustomerId != null) {
           incidentQueryParams.customerId = String(effectiveCustomerId)
@@ -413,6 +438,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
         }
 
         const response = await incidentsApi.getIncidents(incidentQueryParams);
+        const typed = response as IncidentsResponse
         
         // Extract incidents from response (handle data, Data, items formats)
         type ResWithAlternates = IncidentsResponse & { Data?: unknown[]; items?: unknown[] }
@@ -531,6 +557,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
 
         if (isActive) {
           setLoadedIncidents(scopedTransformedIncidents);
+          setIncidentsPagination(typed.pagination ?? null)
+          setIncidentsSummary(typed.summary ?? null)
           console.log('✅ Loaded incidents:', scopedTransformedIncidents.length);
           
           if (scopedTransformedIncidents.length > 0) {
@@ -575,6 +603,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
         // Set empty array on error - dashboard will use analyticsData as fallback
         if (isActive) {
           setLoadedIncidents([]);
+          setIncidentsPagination(null)
+          setIncidentsSummary(null)
           console.log('ℹ️ Dashboard will display analytics data as fallback');
         }
       } finally {
@@ -772,48 +802,84 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
 
   // Use filtered incidents for all calculations
   const customerMetrics = React.useMemo(() => {
+    const enforceSiteScope = isSiteScopeEnforcedForUser(sessionUser)
+
+    const sumFromIncidents = (incidents: Incident[]) => {
+      let totalValue = 0
+      let totalLostValue = 0
+      for (const inc of incidents) {
+        const f = getIncidentFinancials(inc)
+        totalValue += f.totalRecoveredValue
+        totalLostValue += f.totalLostValue
+      }
+      return {
+        totalIncidents: incidents.length,
+        totalValue,
+        totalLostValue,
+      }
+    }
+
+    const totalCount = incidentsPagination?.totalCount
+    const hasFullDatasetLoaded =
+      totalCount != null && totalCount > 0 && filteredIncidents.length >= totalCount
+    const isClientFiltered = selectedRegion !== 'all' || isDateRangeActive
+
+    let totalIncidents: number
+    let totalValue: number
+    let totalLostValue: number
+
+    if (isClientFiltered) {
+      ;({ totalIncidents, totalValue, totalLostValue } = sumFromIncidents(filteredIncidents))
+    } else if (hasFullDatasetLoaded || enforceSiteScope) {
+      ;({ totalIncidents, totalValue, totalLostValue } = sumFromIncidents(filteredIncidents))
+    } else if (incidentsSummary) {
+      totalIncidents = incidentsSummary.totalIncidents
+      totalValue = incidentsSummary.totalAmountRecovered
+      totalLostValue = incidentsSummary.totalAmountLost
+    } else {
+      ;({ totalIncidents, totalValue, totalLostValue } = sumFromIncidents(filteredIncidents))
+    }
+
     const todayIncidents = filteredIncidents.filter(inc => {
-      const incDate = new Date(inc.dateOfIncident)
+      const incidentDateValue = inc.dateOfIncident || inc.date
+      if (!incidentDateValue) return false
+      const incDate = new Date(incidentDateValue)
+      if (Number.isNaN(incDate.getTime())) return false
       const today = new Date()
       return incDate.toDateString() === today.toDateString()
     }).length
+
     const highPriority = filteredIncidents.filter(inc => inc.priority === 'high').length
-    const totalValue = filteredIncidents.reduce((sum, inc) => sum + (inc.totalValueRecovered || inc.value || 0), 0)
-    const totalLostValue = filteredIncidents.reduce((sum, inc) => {
-      if (typeof (inc as any).totalLostValue === 'number' && !Number.isNaN((inc as any).totalLostValue)) {
-        return sum + (inc as any).totalLostValue
-      }
-      if (typeof (inc as any).lostValue === 'number' && !Number.isNaN((inc as any).lostValue)) {
-        return sum + (inc as any).lostValue
-      }
-      return sum + getIncidentFinancials(inc).totalLostValue
-    }, 0)
+
     const pending = filteredIncidents.filter(inc => inc.status === 'pending').length
     const resolved = filteredIncidents.filter(inc => inc.status === 'resolved').length
-    
-    // Count incidents involving theft (case-insensitive check in incident type)
-    const theftIncidents = filteredIncidents.filter(inc => {
-      const type = (inc.incidentType || '').toLowerCase()
-      return type.includes('theft') || type.includes('stolen') || type.includes('shoplifting')
-    }).length
-    
-    // Calculate theft percentage
-    const theftPercentage = filteredIncidents.length > 0 
-      ? Math.round((theftIncidents / filteredIncidents.length) * 100) 
-      : 0
+
+    const shopliftingIncidents = filteredIncidents.filter(isIncidentTypeShoplifting).length
+
+    const shopliftingPercentage =
+      filteredIncidents.length > 0
+        ? Math.round((shopliftingIncidents / filteredIncidents.length) * 100)
+        : 0
 
     return {
-      totalIncidents: filteredIncidents.length,
+      totalIncidents,
       todayIncidents,
       highPriority,
       totalValue,
       totalLostValue,
       pending,
       resolved,
-      theftIncidents,
-      theftPercentage
+      shopliftingIncidents,
+      shopliftingPercentage,
     }
-  }, [filteredIncidents])
+  }, [
+    filteredIncidents,
+    incidentsPagination?.totalCount,
+    incidentsSummary,
+    selectedRegion,
+    isDateRangeActive,
+    sessionUser,
+  ])
 
   // Get recent incidents for table – use real backend data
   const recentIncidents = React.useMemo(() => {
@@ -896,7 +962,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
     return []
   }, [filteredIncidents, analyticsData, selectedRegion, isDateRangeActive])
 
-  const scopedRecentAlerts = React.useMemo(() => {
+  const scopedRecentAlertsBase = React.useMemo(() => {
     if (!alertSummary) {
       return []
     }
@@ -917,6 +983,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
       return scopedIncidentIds.has(Number(alert.incidentId))
     })
   }, [alertSummary, isScopedRole, loadedIncidents])
+
+  const scopedRecentAlerts = React.useMemo(() => {
+    const dismissedInstances = getDismissedAlertInstanceIds()
+    return scopedRecentAlertsBase.filter((a) => {
+      const id = Number(a.alertInstanceId)
+      return Number.isFinite(id) && !dismissedInstances.has(id)
+    })
+  }, [scopedRecentAlertsBase, bumpNotificationDismissals])
 
   const scopedNewAlertCount = React.useMemo(() => {
     if (scopedRecentAlerts.length === 0) {
@@ -953,13 +1027,39 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
       return []
     }
 
-    return [
+    const dismissedUi = getDismissedAlertUiKeys()
+    const placeholders = [
       { id: '1', type: 'warning' as const, title: 'High Priority Incident Reported', message: 'New high-priority incident requires immediate attention', time: '15 minutes ago', priority: 'high' as const, status: 'new' },
       { id: '2', type: 'info' as const, title: 'Alert Rule Triggered', message: 'Bulk theft alert rule matched', time: '1 hour ago', priority: 'medium' as const, status: 'new' },
       { id: '3', type: 'error' as const, title: 'Police Involvement Required', message: 'Incident requires police assistance — URN assigned', time: '2 hours ago', priority: 'high' as const, status: 'acknowledged' },
       { id: '4', type: 'warning' as const, title: 'Repeat Offender Detected', message: 'Known repeat offender identified', time: '3 hours ago', priority: 'medium' as const, status: 'new' }
     ]
-  }, [scopedRecentAlerts, isScopedRole])
+    return placeholders.filter((row) => !dismissedUi.has(row.id))
+  }, [scopedRecentAlerts, isScopedRole, bumpNotificationDismissals])
+
+  const handleClearDashboardNotifications = React.useCallback(() => {
+    const fromSummary = (alertSummary?.recentAlerts ?? [])
+      .map((a) => Number(a.alertInstanceId))
+      .filter((n) => Number.isFinite(n))
+    const fromBase = scopedRecentAlertsBase
+      .map((a) => Number(a.alertInstanceId))
+      .filter((n) => Number.isFinite(n))
+    const fromVisibleRows = alerts
+      .map((row) => Number(row.id))
+      .filter((n) => Number.isFinite(n))
+    const explicitInstanceIds = [...new Set([...fromSummary, ...fromBase, ...fromVisibleRows])]
+
+    void dismissAllNotificationsFromServer({
+      customerId: effectiveCustomerId ?? undefined,
+      explicitInstanceIds,
+    }).then(() => {
+      toast({
+        title: 'Notifications cleared',
+        description:
+          'These alerts are hidden until new alerts arrive. This does not resolve alerts on the server.',
+      })
+    })
+  }, [alertSummary, scopedRecentAlertsBase, alerts, effectiveCustomerId])
 
   // Use real backend data for quick statistics
   const quickStats = React.useMemo(() => {
@@ -1365,7 +1465,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
               </CardHeader>
               <CardContent className="p-3 md:p-4 pt-1 md:pt-2 z-10 relative">
                 <div className="text-xl font-bold md:text-2xl lg:text-3xl text-white">{quickStats.totalIncidents}</div>
-                <div className="text-xs text-white/60 mt-1">All time</div>
+                <div className="text-xs text-white/60 mt-1">
+                  {selectedRegion !== 'all' || isDateRangeActive
+                    ? 'Within selected filters'
+                    : incidentsPagination?.totalCount != null &&
+                      filteredIncidents.length < incidentsPagination.totalCount
+                      ? 'Server total (all pages)'
+                      : 'All loaded'}
+                </div>
               </CardContent>
             </Card>
           </Link>
@@ -1412,21 +1519,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
             </Card>
           </Link>
 
-          {/* Theft Incidents */}
-          <Link to="/operations/incident-report?incidentType=Theft" className="block" aria-label="View theft incidents">
-            <Card className="min-w-[140px] bg-red-600 text-white border-0 shadow-md overflow-hidden relative cursor-pointer transition-shadow hover:shadow-lg">
+          {/* Shoplifting incidents */}
+          <Link
+            to="/operations/incident-report?incidentType=Shoplifting"
+            className="block"
+            aria-label="View shoplifting incidents"
+          >
+            <Card className="min-w-[140px] bg-indigo-600 text-white border-0 shadow-md overflow-hidden relative cursor-pointer transition-shadow hover:shadow-lg">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 md:p-4 pb-2 md:pb-3">
                 <CardTitle className="text-xs font-medium md:text-sm text-white">
-                  Theft Incidents
+                  Shoplifting
                 </CardTitle>
                 <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
                   <Shield className="h-4 w-4 text-white" />
                 </div>
               </CardHeader>
               <CardContent className="p-3 md:p-4 pt-1 md:pt-2 z-10 relative">
-                <div className="text-xl font-bold md:text-2xl lg:text-3xl text-white">{quickStats.theftIncidents}</div>
+                <div className="text-xl font-bold md:text-2xl lg:text-3xl text-white">{quickStats.shopliftingIncidents}</div>
                 <div className="text-xs text-white/60 mt-1">
-                  {quickStats.theftPercentage}% of all incidents
+                  {quickStats.shopliftingPercentage}% of incidents in view
                 </div>
               </CardContent>
             </Card>
@@ -1639,18 +1750,37 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
 
             {/* Alerts */}
             <Card>
-              <CardHeader className="p-2 md:p-4 flex flex-row items-center justify-between">
+              <CardHeader className="p-2 md:p-4 flex flex-row items-center justify-between gap-2 flex-wrap">
                 <CardTitle className="text-base font-medium md:text-lg lg:text-xl flex items-center gap-2">
                   <Bell className="h-4 w-4" />
                   Alerts
                 </CardTitle>
-                <Badge variant="destructive" className="text-xs">
-                  {scopedNewAlertCount || alerts.filter(a => a.priority === 'high').length} New
-                </Badge>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="text-xs h-8"
+                    onClick={handleClearDashboardNotifications}
+                    aria-label="Clear notifications from dashboard and bell"
+                  >
+                    Clear notifications
+                  </Button>
+                  {alerts.length > 0 && (
+                  <Badge variant="destructive" className="text-xs">
+                    {scopedNewAlertCount || alerts.filter(a => a.priority === 'high').length} New
+                  </Badge>
+                  )}
+                </div>
               </CardHeader>
               <CardContent className="p-0">
                 <div className="divide-y">
-                  {alerts.map((alert) => (
+                  {alerts.length === 0 ? (
+                    <div className="p-6 text-center text-sm text-muted-foreground" role="status">
+                      No alerts to display
+                    </div>
+                  ) : (
+                  alerts.map((alert) => (
                     <div 
                       key={alert.id} 
                       className={`p-3 hover:bg-muted/50 transition-colors ${
@@ -1677,7 +1807,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
                         </div>
                       </div>
                     </div>
-                  ))}
+                  ))
+                  )}
                 </div>
               </CardContent>
             </Card>

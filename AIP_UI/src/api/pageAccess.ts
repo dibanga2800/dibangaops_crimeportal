@@ -1,4 +1,5 @@
 import { ApiResponse, api } from '@/config/api';
+import { withoutAdministratorOnlyPageIds } from '@/config/administration-access';
 import { PAGE_DEFINITIONS, type PageDefinition } from '@/config/navigation/pageDefinitions';
 
 export interface PageAccess {
@@ -159,6 +160,10 @@ const normalizeSettings = (dto: BackendPageAccessSettingsDto): PageAccessSetting
 	if (!managerPages.includes('data-analytics-hub')) {
 		normalizedPageAccessByRole['manager'] = [...managerPages, 'data-analytics-hub'];
 	}
+	// User / employee / company setup are administrator-only; strip from manager if present in stored settings
+	normalizedPageAccessByRole['manager'] = withoutAdministratorOnlyPageIds(
+		normalizedPageAccessByRole['manager'] || []
+	);
 	
 	return {
 		pageAccessByRole: normalizedPageAccessByRole,
@@ -196,7 +201,6 @@ const buildDefaultSettings = (): PageAccessSettings => {
 			administrator: availablePages.map(page => page.id),
 			manager: [
 				'dashboard', 'profile', 'alert-rules', 'data-analytics-hub',
-				'user-setup', 'employee-registration', 'customer-setup',
 				'incident-report', 'incident-graph', 'crime-intelligence',
 				'crm-dashboard', 'crm-contacts',
 				'crm-leads', 'crm-deals', 'crm-pipeline', 'crm-tasks',

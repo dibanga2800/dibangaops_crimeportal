@@ -21,120 +21,151 @@ export const IncidentDetailView = ({ incident }: IncidentDetailViewProps) => {
 			? incident.totalLostValue
 			: Math.max(totalStolenValue - totalRecoveredValue, 0)
 
+	const showOffenderBlock =
+		Boolean(incident.offenderName?.trim()) ||
+		Boolean(incident.offenderId?.trim()) ||
+		(incident.modusOperandi?.length ?? 0) > 0
+
 	return (
-		<div className="bg-[#F8F3F1]">
-			<div className="w-full max-w-[98%] mx-auto px-4 py-4">
+		<div className="bg-muted/30 dark:bg-slate-950/40">
+			<div className="mx-auto w-full max-w-[98%] px-4 py-4">
 				{/* Basic Information */}
-				<div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
-					<div className="flex items-center gap-2 mb-4">
+				<div className="mb-4 rounded-lg border border-gray-200 bg-card p-4 shadow-sm dark:border-slate-700">
+					<div className="mb-4 flex items-center gap-2">
 						<div className="h-6 w-6 text-blue-600">📋</div>
-						<h2 className="text-lg font-medium text-gray-900">Basic Information</h2>
+						<h2 className="text-lg font-medium text-card-foreground">Basic Information</h2>
 					</div>
-					<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+					<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
 						<div>
-							<label className="text-sm font-medium text-gray-500">Company Name</label>
-							<p className="mt-1 text-sm text-gray-900">{incident.customerName || 'N/A'}</p>
+							<label className="text-sm font-medium text-muted-foreground">Company Name</label>
+							<p className="mt-1 text-sm text-card-foreground">{incident.customerName || 'N/A'}</p>
 						</div>
 						<div>
-						<label className="text-sm font-medium text-gray-500">Store Name</label>
-						<p className="mt-1 text-sm text-gray-900">{incident.siteName || 'N/A'}</p>
-					</div>
-					<div>
-						<label className="text-sm font-medium text-gray-500">Staff Member Name</label>
-						<p className="mt-1 text-sm text-gray-900">{incident.officerName || 'N/A'}</p>
+							<label className="text-sm font-medium text-muted-foreground">Store Name</label>
+							<p className="mt-1 text-sm text-card-foreground">{incident.siteName || 'N/A'}</p>
 						</div>
 						<div>
-							<label className="text-sm font-medium text-gray-500">Assigned To</label>
-							<p className="mt-1 text-sm text-gray-900">{incident.assignedTo || 'N/A'}</p>
+							<label className="text-sm font-medium text-muted-foreground">Staff Member Name</label>
+							<p className="mt-1 text-sm text-card-foreground">{incident.officerName || 'N/A'}</p>
 						</div>
+						{incident.officerRole && (
+							<div>
+								<label className="text-sm font-medium text-muted-foreground">Officer Role</label>
+								<p className="mt-1 text-sm text-card-foreground">{incident.officerRole}</p>
+							</div>
+						)}
+						{incident.dutyManagerName && (
+							<div>
+								<label className="text-sm font-medium text-muted-foreground">Duty Manager</label>
+								<p className="mt-1 text-sm text-card-foreground">{incident.dutyManagerName}</p>
+							</div>
+						)}
+						{incident.reportNumber && (
+							<div>
+								<label className="text-sm font-medium text-muted-foreground">Report Number</label>
+								<p className="mt-1 text-sm text-card-foreground">{incident.reportNumber}</p>
+							</div>
+						)}
+						{incident.location && (
+							<div>
+								<label className="text-sm font-medium text-muted-foreground">Location / Area</label>
+								<p className="mt-1 text-sm text-card-foreground">{incident.location}</p>
+							</div>
+						)}
 						<div>
-							<label className="text-sm font-medium text-gray-500">Status</label>
-							<p className="mt-1 text-sm text-gray-900">{incident.status || 'N/A'}</p>
-						</div>
-						<div>
-							<label className="text-sm font-medium text-gray-500">Date</label>
-							<p className="mt-1 text-sm text-gray-900">
+							<label className="text-sm font-medium text-muted-foreground">Date</label>
+							<p className="mt-1 text-sm text-card-foreground">
 								{incident.dateOfIncident
 									? format(new Date(incident.dateOfIncident), 'dd MMM yyyy')
-									: 'N/A'}
+									: incident.date
+										? format(new Date(incident.date), 'dd MMM yyyy')
+										: 'N/A'}
 							</p>
 						</div>
 					</div>
 				</div>
 
 				{/* Incident Details */}
-				<div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
-					<div className="flex items-center gap-2 mb-4">
+				<div className="mb-4 rounded-lg border border-gray-200 bg-card p-4 shadow-sm dark:border-slate-700">
+					<div className="mb-4 flex items-center gap-2">
 						<div className="h-6 w-6 text-blue-600">🕒</div>
-						<h2 className="text-lg font-medium text-gray-900">Incident Details</h2>
+						<h2 className="text-lg font-medium text-card-foreground">Incident Details</h2>
 					</div>
-					<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+					<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
 						<div>
-							<label className="text-sm font-medium text-gray-500">Date of Incident</label>
-							<p className="mt-1 text-sm text-gray-900">
+							<label className="text-sm font-medium text-muted-foreground">Date of Incident</label>
+							<p className="mt-1 text-sm text-card-foreground">
 								{incident.dateOfIncident
 									? format(new Date(incident.dateOfIncident), 'dd MMM yyyy')
-									: 'N/A'}
+									: incident.date
+										? format(new Date(incident.date), 'dd MMM yyyy')
+										: 'N/A'}
 							</p>
 						</div>
 						<div>
-							<label className="text-sm font-medium text-gray-500">Time</label>
-							<p className="mt-1 text-sm text-gray-900">{incident.timeOfIncident || 'N/A'}</p>
+							<label className="text-sm font-medium text-muted-foreground">Time</label>
+							<p className="mt-1 text-sm text-card-foreground">{incident.timeOfIncident || 'N/A'}</p>
 						</div>
 						<div>
-							<label className="text-sm font-medium text-gray-500">Priority</label>
-							<p className="mt-1 text-sm text-gray-900">{incident.priority || 'N/A'}</p>
+							<label className="text-sm font-medium text-muted-foreground">Priority</label>
+							<p className="mt-1 text-sm text-card-foreground">{incident.priority || 'N/A'}</p>
 						</div>
 						<div>
-							<label className="text-sm font-medium text-gray-500">Incident Type</label>
-							<p className="mt-1 text-sm text-gray-900">{incident.incidentType || 'N/A'}</p>
+							<label className="text-sm font-medium text-muted-foreground">Incident Type</label>
+							<p className="mt-1 text-sm text-card-foreground">{incident.incidentType || incident.type || 'N/A'}</p>
+						</div>
+						{incident.actionCode && (
+							<div>
+								<label className="text-sm font-medium text-muted-foreground">Action Code</label>
+								<p className="mt-1 text-sm text-card-foreground">{incident.actionCode}</p>
+							</div>
+						)}
+						<div>
+							<label className="text-sm font-medium text-muted-foreground">Total Value Stolen</label>
+							<p className="mt-1 text-sm text-card-foreground">£{totalStolenValue.toFixed(2)}</p>
 						</div>
 						<div>
-							<label className="text-sm font-medium text-gray-500">Total Value Stolen</label>
-							<p className="mt-1 text-sm text-gray-900">£{totalStolenValue.toFixed(2)}</p>
+							<label className="text-sm font-medium text-muted-foreground">Value Saved</label>
+							<p className="mt-1 text-sm text-emerald-700 dark:text-emerald-400">£{totalRecoveredValue.toFixed(2)}</p>
 						</div>
 						<div>
-							<label className="text-sm font-medium text-gray-500">Value Saved</label>
-							<p className="mt-1 text-sm text-emerald-700">£{totalRecoveredValue.toFixed(2)}</p>
-						</div>
-						<div>
-							<label className="text-sm font-medium text-gray-500">Value Lost</label>
-							<p className="mt-1 text-sm text-rose-700">£{totalLostValue.toFixed(2)}</p>
+							<label className="text-sm font-medium text-muted-foreground">Value Lost</label>
+							<p className="mt-1 text-sm text-rose-700 dark:text-rose-400">£{totalLostValue.toFixed(2)}</p>
 						</div>
 						{incident.regionName && (
 							<div>
-								<label className="text-sm font-medium text-gray-500">Region</label>
-								<p className="mt-1 text-sm text-gray-900">{incident.regionName}</p>
+								<label className="text-sm font-medium text-muted-foreground">Region</label>
+								<p className="mt-1 text-sm text-card-foreground">{incident.regionName}</p>
 							</div>
 						)}
 					</div>
 				</div>
 
 				{/* Description */}
-				<div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
-					<div className="flex items-center gap-2 mb-4">
+				<div className="mb-4 rounded-lg border border-gray-200 bg-card p-4 shadow-sm dark:border-slate-700">
+					<div className="mb-4 flex items-center gap-2">
 						<div className="h-6 w-6 text-blue-600">📝</div>
-						<h2 className="text-lg font-medium text-gray-900">Description</h2>
+						<h2 className="text-lg font-medium text-card-foreground">Description</h2>
 					</div>
 					<div className="space-y-4">
 						<div>
-							<label className="text-sm font-medium text-gray-500">Incident Details</label>
-							<p className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">
+							<label className="text-sm font-medium text-muted-foreground">Incident Details</label>
+							<p className="mt-1 whitespace-pre-wrap text-sm text-card-foreground">
 								{incident.description || incident.incidentDetails || 'N/A'}
 							</p>
 						</div>
 						{incident.storeComments && (
 							<div>
-								<label className="text-sm font-medium text-gray-500">Store Comments</label>
-								<p className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">
+								<label className="text-sm font-medium text-muted-foreground">Store Comments</label>
+								<p className="mt-1 whitespace-pre-wrap text-sm text-card-foreground">
 									{incident.storeComments}
 								</p>
 							</div>
 						)}
 						{incident.actionTaken && (
 							<div>
-								<label className="text-sm font-medium text-gray-500">Action Taken</label>
-								<p className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">
+								<label className="text-sm font-medium text-muted-foreground">Action Taken</label>
+								<p className="mt-1 whitespace-pre-wrap text-sm text-card-foreground">
 									{incident.actionTaken}
 								</p>
 							</div>
@@ -142,39 +173,82 @@ export const IncidentDetailView = ({ incident }: IncidentDetailViewProps) => {
 					</div>
 				</div>
 
+				{incident.arrestSaveComment && (
+					<div className="mb-4 rounded-lg border border-gray-200 bg-card p-4 shadow-sm dark:border-slate-700">
+						<div className="mb-4 flex items-center gap-2">
+							<div className="h-6 w-6 text-blue-600">⚖️</div>
+							<h2 className="text-lg font-medium text-card-foreground">Arrest / Save</h2>
+						</div>
+						<p className="whitespace-pre-wrap text-sm text-card-foreground">{incident.arrestSaveComment}</p>
+					</div>
+				)}
+
+				{(incident.offenderDetailsVerified != null ||
+					incident.verificationMethod ||
+					incident.verificationEvidenceImage) && (
+					<div className="mb-4 rounded-lg border border-gray-200 bg-card p-4 shadow-sm dark:border-slate-700">
+						<div className="mb-4 flex items-center gap-2">
+							<div className="h-6 w-6 text-blue-600">✅</div>
+							<h2 className="text-lg font-medium text-card-foreground">Offender verification</h2>
+						</div>
+						<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+							<div>
+								<label className="text-sm font-medium text-muted-foreground">Details verified</label>
+								<p className="mt-1 text-sm text-card-foreground">
+									{incident.offenderDetailsVerified ? 'Yes' : incident.offenderDetailsVerified === false ? 'No' : 'N/A'}
+								</p>
+							</div>
+							{incident.verificationMethod && (
+								<div>
+									<label className="text-sm font-medium text-muted-foreground">Verification method</label>
+									<p className="mt-1 text-sm text-card-foreground">{incident.verificationMethod}</p>
+								</div>
+							)}
+							{incident.verificationEvidenceImage && (
+								<div className="sm:col-span-2">
+									<label className="text-sm font-medium text-muted-foreground">Verification evidence</label>
+									<p className="mt-1 truncate text-sm text-card-foreground" title={incident.verificationEvidenceImage}>
+										{incident.verificationEvidenceImage}
+									</p>
+								</div>
+							)}
+						</div>
+					</div>
+				)}
+
 				{/* Police Involvement */}
-				<div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
-					<div className="flex items-center gap-2 mb-4">
+				<div className="mb-4 rounded-lg border border-gray-200 bg-card p-4 shadow-sm dark:border-slate-700">
+					<div className="mb-4 flex items-center gap-2">
 						<div className="h-6 w-6 text-blue-600">👮</div>
-						<h2 className="text-lg font-medium text-gray-900">Police Involvement</h2>
+						<h2 className="text-lg font-medium text-card-foreground">Police Involvement</h2>
 					</div>
 					<div className="space-y-4">
 						<div>
-							<label className="text-sm font-medium text-gray-500">Was Police Involved?</label>
-							<p className="mt-1 text-sm text-gray-900">
+							<label className="text-sm font-medium text-muted-foreground">Was Police Involved?</label>
+							<p className="mt-1 text-sm text-card-foreground">
 								{incident.policeInvolvement ? 'Yes' : 'No'}
 							</p>
 						</div>
 						{incident.policeInvolvement && (
-							<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+							<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
 								{incident.urnNumber && (
 									<div>
-										<label className="text-sm font-medium text-gray-500">URN Number</label>
-										<p className="mt-1 text-sm text-gray-900">{incident.urnNumber}</p>
+										<label className="text-sm font-medium text-muted-foreground">URN Number</label>
+										<p className="mt-1 text-sm text-card-foreground">{incident.urnNumber}</p>
 									</div>
 								)}
 								{incident.crimeRefNumber && (
 									<div>
-										<label className="text-sm font-medium text-gray-500">
+										<label className="text-sm font-medium text-muted-foreground">
 											Crime Reference Number
 										</label>
-										<p className="mt-1 text-sm text-gray-900">{incident.crimeRefNumber}</p>
+										<p className="mt-1 text-sm text-card-foreground">{incident.crimeRefNumber}</p>
 									</div>
 								)}
 								{incident.policeID && (
 									<div>
-										<label className="text-sm font-medium text-gray-500">Police ID</label>
-										<p className="mt-1 text-sm text-gray-900">{incident.policeID}</p>
+										<label className="text-sm font-medium text-muted-foreground">Police ID</label>
+										<p className="mt-1 text-sm text-card-foreground">{incident.policeID}</p>
 									</div>
 								)}
 							</div>
@@ -183,64 +257,80 @@ export const IncidentDetailView = ({ incident }: IncidentDetailViewProps) => {
 				</div>
 
 				{/* Offender Details */}
-				{incident.offenderName && (
-					<div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
-						<div className="flex items-center gap-2 mb-4">
+				{showOffenderBlock && (
+					<div className="mb-4 rounded-lg border border-gray-200 bg-card p-4 shadow-sm dark:border-slate-700">
+						<div className="mb-4 flex items-center gap-2">
 							<div className="h-6 w-6 text-blue-600">👤</div>
-							<h2 className="text-lg font-medium text-gray-900">Offender Details</h2>
+							<h2 className="text-lg font-medium text-card-foreground">Offender Details</h2>
 						</div>
-						<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+						<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
 							<div>
-								<label className="text-sm font-medium text-gray-500">Name</label>
-								<p className="mt-1 text-sm text-gray-900">{incident.offenderName}</p>
+								<label className="text-sm font-medium text-muted-foreground">Name</label>
+								<p className="mt-1 text-sm text-card-foreground">{incident.offenderName?.trim() || 'N/A'}</p>
 							</div>
+							{incident.offenderId && (
+								<div>
+									<label className="text-sm font-medium text-muted-foreground">Offender ID</label>
+									<p className="mt-1 text-sm text-card-foreground">{incident.offenderId}</p>
+								</div>
+							)}
 							<div>
-								<label className="text-sm font-medium text-gray-500">Sex/Gender</label>
-								<p className="mt-1 text-sm text-gray-900">
+								<label className="text-sm font-medium text-muted-foreground">Sex/Gender</label>
+								<p className="mt-1 text-sm text-card-foreground">
 									{incident.offenderSex || incident.gender || 'N/A'}
 								</p>
 							</div>
 							{incident.offenderDOB && (
 								<div>
-									<label className="text-sm font-medium text-gray-500">Date of Birth</label>
-									<p className="mt-1 text-sm text-gray-900">
+									<label className="text-sm font-medium text-muted-foreground">Date of Birth</label>
+									<p className="mt-1 text-sm text-card-foreground">
 										{format(new Date(incident.offenderDOB), 'dd MMM yyyy')}
 									</p>
 								</div>
 							)}
 							{incident.offenderPlaceOfBirth && (
 								<div>
-									<label className="text-sm font-medium text-gray-500">Place of Birth</label>
-									<p className="mt-1 text-sm text-gray-900">{incident.offenderPlaceOfBirth}</p>
+									<label className="text-sm font-medium text-muted-foreground">Place of Birth</label>
+									<p className="mt-1 text-sm text-card-foreground">{incident.offenderPlaceOfBirth}</p>
 								</div>
 							)}
 							{incident.offenderMarks && (
 								<div>
-									<label className="text-sm font-medium text-gray-500">Distinguishing Marks</label>
-									<p className="mt-1 text-sm text-gray-900">{incident.offenderMarks}</p>
+									<label className="text-sm font-medium text-muted-foreground">Distinguishing Marks</label>
+									<p className="mt-1 text-sm text-card-foreground">{incident.offenderMarks}</p>
 								</div>
 							)}
 							{incident.offenderAddress && (
 								<>
 									<div>
-										<label className="text-sm font-medium text-gray-500">Address</label>
-										<p className="mt-1 text-sm text-gray-900">
+										<label className="text-sm font-medium text-muted-foreground">Address</label>
+										<p className="mt-1 text-sm text-card-foreground">
 											{incident.offenderAddress.numberAndStreet || 'N/A'}
 										</p>
 									</div>
 									<div>
-										<label className="text-sm font-medium text-gray-500">Town</label>
-										<p className="mt-1 text-sm text-gray-900">
+										<label className="text-sm font-medium text-muted-foreground">Town</label>
+										<p className="mt-1 text-sm text-card-foreground">
 											{incident.offenderAddress.town || 'N/A'}
 										</p>
 									</div>
 									<div>
-										<label className="text-sm font-medium text-gray-500">Post Code</label>
-										<p className="mt-1 text-sm text-gray-900">
+										<label className="text-sm font-medium text-muted-foreground">Post Code</label>
+										<p className="mt-1 text-sm text-card-foreground">
 											{incident.offenderAddress.postCode || 'N/A'}
 										</p>
 									</div>
 								</>
+							)}
+							{incident.modusOperandi && incident.modusOperandi.length > 0 && (
+								<div className="sm:col-span-2 lg:col-span-3">
+									<label className="text-sm font-medium text-muted-foreground">Modus operandi</label>
+									<ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-card-foreground">
+										{incident.modusOperandi.map((m, i) => (
+											<li key={i}>{m}</li>
+										))}
+									</ul>
+								</div>
 							)}
 						</div>
 					</div>
@@ -248,16 +338,16 @@ export const IncidentDetailView = ({ incident }: IncidentDetailViewProps) => {
 
 				{/* Incident Categories */}
 				{incident.incidentInvolved && incident.incidentInvolved.length > 0 && (
-					<div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
-						<div className="flex items-center gap-2 mb-4">
+					<div className="mb-4 rounded-lg border border-gray-200 bg-card p-4 shadow-sm dark:border-slate-700">
+						<div className="mb-4 flex items-center gap-2">
 							<div className="h-6 w-6 text-blue-600">🏷️</div>
-							<h2 className="text-lg font-medium text-gray-900">Incident Categories</h2>
+							<h2 className="text-lg font-medium text-card-foreground">Incident Categories</h2>
 						</div>
-						<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+						<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
 							{incident.incidentInvolved.map((type, index) => (
 								<div key={index} className="flex items-center gap-2">
 									<div className="h-2 w-2 rounded-full bg-blue-600"></div>
-									<p className="text-sm text-gray-900">{type}</p>
+									<p className="text-sm text-card-foreground">{type}</p>
 								</div>
 							))}
 						</div>
@@ -266,25 +356,37 @@ export const IncidentDetailView = ({ incident }: IncidentDetailViewProps) => {
 
 				{/* Stolen Items */}
 				{incident.stolenItems && incident.stolenItems.length > 0 && (
-					<div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-						<div className="flex items-center gap-2 mb-4">
+					<div className="rounded-lg border border-gray-200 bg-card p-4 shadow-sm dark:border-slate-700">
+						<div className="mb-4 flex items-center gap-2">
 							<div className="h-6 w-6 text-blue-600">💰</div>
-							<h2 className="text-lg font-medium text-gray-900">Stolen Items</h2>
+							<h2 className="text-lg font-medium text-card-foreground">Stolen Items</h2>
 						</div>
 						<div className="overflow-x-auto">
 							<table className="w-full">
 								<thead>
-									<tr className="border-b">
-										<th className="text-left py-2 text-sm font-medium text-gray-500">Category</th>
-										<th className="text-left py-2 text-sm font-medium text-gray-500">Product Name</th>
-										<th className="text-left py-2 text-sm font-medium text-gray-500">Description</th>
-										<th className="text-right py-2 text-sm font-medium text-gray-500">Cost</th>
-										<th className="text-right py-2 text-sm font-medium text-gray-500">Qty</th>
-										<th className="text-right py-2 text-sm font-medium text-gray-500">Total</th>
-										<th className="text-center py-2 text-sm font-medium text-gray-500">Recovered</th>
-										<th className="text-right py-2 text-sm font-medium text-gray-500">Recovered Qty</th>
-										<th className="text-right py-2 text-sm font-medium text-gray-500">Saved</th>
-										<th className="text-right py-2 text-sm font-medium text-gray-500">Lost</th>
+									<tr className="border-b border-border">
+										<th className="py-2 text-left text-sm font-medium text-muted-foreground">
+											Category
+										</th>
+										<th className="py-2 text-left text-sm font-medium text-muted-foreground">
+											Product Name
+										</th>
+										<th className="py-2 text-left text-sm font-medium text-muted-foreground">
+											Description
+										</th>
+										<th className="py-2 text-right text-sm font-medium text-muted-foreground">Cost</th>
+										<th className="py-2 text-right text-sm font-medium text-muted-foreground">Qty</th>
+										<th className="py-2 text-right text-sm font-medium text-muted-foreground">
+											Total
+										</th>
+										<th className="py-2 text-center text-sm font-medium text-muted-foreground">
+											Recovered
+										</th>
+										<th className="py-2 text-right text-sm font-medium text-muted-foreground">
+											Recovered Qty
+										</th>
+										<th className="py-2 text-right text-sm font-medium text-muted-foreground">Saved</th>
+										<th className="py-2 text-right text-sm font-medium text-muted-foreground">Lost</th>
 									</tr>
 								</thead>
 								<tbody>
@@ -309,43 +411,51 @@ export const IncidentDetailView = ({ incident }: IncidentDetailViewProps) => {
 												? item.lostAmount
 												: totalAmount - recoveredAmount
 										return (
-											<tr key={index} className="border-b">
-												<td className="py-2 text-sm text-gray-900">{item.category || 'N/A'}</td>
-												<td className="py-2 text-sm text-gray-900">{item.productName || 'N/A'}</td>
-												<td className="py-2 text-sm text-gray-900">{item.description || 'N/A'}</td>
-												<td className="py-2 text-sm text-gray-900 text-right">£{cost.toFixed(2)}</td>
-												<td className="py-2 text-sm text-gray-900 text-right">{quantity}</td>
-												<td className="py-2 text-sm text-gray-900 text-right">
+											<tr key={index} className="border-b border-border">
+												<td className="py-2 text-sm text-card-foreground">{item.category || 'N/A'}</td>
+												<td className="py-2 text-sm text-card-foreground">
+													{item.productName || 'N/A'}
+												</td>
+												<td className="py-2 text-sm text-card-foreground">
+													{item.description || 'N/A'}
+												</td>
+												<td className="py-2 text-right text-sm text-card-foreground">
+													£{cost.toFixed(2)}
+												</td>
+												<td className="py-2 text-right text-sm text-card-foreground">{quantity}</td>
+												<td className="py-2 text-right text-sm text-card-foreground">
 													£{totalAmount.toFixed(2)}
 												</td>
-												<td className="py-2 text-sm text-gray-900 text-center">
+												<td className="py-2 text-center text-sm text-card-foreground">
 													{item.wasRecovered ? 'Yes' : 'No'}
 												</td>
-												<td className="py-2 text-sm text-gray-900 text-right">{recoveredQuantity}</td>
-												<td className="py-2 text-sm text-emerald-700 text-right">
+												<td className="py-2 text-right text-sm text-card-foreground">
+													{recoveredQuantity}
+												</td>
+												<td className="py-2 text-right text-sm text-emerald-700 dark:text-emerald-400">
 													£{recoveredAmount.toFixed(2)}
 												</td>
-												<td className="py-2 text-sm text-rose-700 text-right">
+												<td className="py-2 text-right text-sm text-rose-700 dark:text-rose-400">
 													£{lostAmount.toFixed(2)}
 												</td>
 											</tr>
 										)
 									})}
-									<tr className="bg-gray-50">
-										<td colSpan={6} className="py-2 text-sm font-medium text-gray-900">
+									<tr className="bg-muted/50 dark:bg-slate-800/50">
+										<td colSpan={5} className="py-2 text-sm font-medium text-card-foreground">
 											Totals
 										</td>
-										<td className="py-2 text-sm font-medium text-gray-900 text-right">
+										<td className="py-2 text-right text-sm font-medium text-card-foreground">
 											£{totalStolenValue.toFixed(2)}
 										</td>
-										<td className="py-2 text-sm font-medium text-gray-900 text-center">-</td>
-										<td className="py-2 text-sm font-medium text-gray-900 text-right">
-											{incident.totalRecoveredQuantity ?? 0}
+										<td className="py-2 text-center text-sm font-medium text-card-foreground">—</td>
+										<td className="py-2 text-right text-sm font-medium text-card-foreground">
+											{incident.totalRecoveredQuantity ?? '—'}
 										</td>
-										<td className="py-2 text-sm font-medium text-emerald-700 text-right">
+										<td className="py-2 text-right text-sm font-medium text-emerald-700 dark:text-emerald-400">
 											£{totalRecoveredValue.toFixed(2)}
 										</td>
-										<td className="py-2 text-sm font-medium text-rose-700 text-right">
+										<td className="py-2 text-right text-sm font-medium text-rose-700 dark:text-rose-400">
 											£{totalLostValue.toFixed(2)}
 										</td>
 									</tr>

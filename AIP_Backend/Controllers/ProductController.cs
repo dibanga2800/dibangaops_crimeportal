@@ -140,7 +140,7 @@ namespace AIPBackend.Controllers
         /// Update retail price for a product (administrator only).
         /// </summary>
         [HttpPatch("{id}/price")]
-        [Authorize(Roles = "administrator")]
+        [Authorize(Roles = "administrator,manager")]
         public async Task<ActionResult<ApiResponseDto<ProductDto>>> UpdateProductPrice(
             int id,
             [FromBody] UpdateProductPriceRequestDto request)

@@ -249,7 +249,7 @@ const router = createBrowserRouter([
           {
             path: 'administration/user-setup',
             element: (
-              <ProtectedRoute allowedRoles={['administrator', 'manager'] as UserRole[]}>
+              <ProtectedRoute allowedRoles={['administrator'] as UserRole[]}>
                 <UserSetup />
               </ProtectedRoute>
             ),
@@ -257,7 +257,7 @@ const router = createBrowserRouter([
           {
             path: 'administration/employee-registration',
             element: (
-              <ProtectedRoute allowedRoles={['administrator', 'manager'] as UserRole[]}>
+              <ProtectedRoute allowedRoles={['administrator'] as UserRole[]}>
                 <Suspense fallback={<LoadingFallback />}>
                   <EmployeeRegistration />
                 </Suspense>
@@ -267,7 +267,7 @@ const router = createBrowserRouter([
           {
             path: 'administration/customer-setup',
             element: (
-              <ProtectedRoute allowedRoles={['administrator', 'manager'] as UserRole[]}>
+              <ProtectedRoute allowedRoles={['administrator'] as UserRole[]}>
                 <CustomerSetup />
               </ProtectedRoute>
             ),
@@ -276,7 +276,7 @@ const router = createBrowserRouter([
             path: 'administration/barcode-catalog-import',
             element: (
               <ProtectedRoute
-                allowedRoles={['administrator'] as UserRole[]}
+                allowedRoles={['administrator', 'manager'] as UserRole[]}
                 accessPath="/administration/barcode-catalog-import"
               >
                 <Suspense fallback={<LoadingFallback />}>
@@ -289,7 +289,7 @@ const router = createBrowserRouter([
             path: 'administration/product-catalog',
             element: (
               <ProtectedRoute
-                allowedRoles={['administrator'] as UserRole[]}
+                allowedRoles={['administrator', 'manager'] as UserRole[]}
                 accessPath="/administration/product-catalog"
               >
                 <Suspense fallback={<LoadingFallback />}>

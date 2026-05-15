@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { settingsService } from '@/services/settingsService'
 import { PageAccess } from '@/api/pageAccess'
+import { ADMINISTRATOR_ONLY_PAGE_IDS, withoutAdministratorOnlyPageIds } from '@/config/administration-access'
 import { LoadingSpinner } from "@/components/ui/loading-state"
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
@@ -61,7 +62,9 @@ const Settings = () => {
   ];
 
   // Mandatory pages that managers must always have access to
-  const mandatoryManagerPageIds: string[] = ['data-analytics-hub'];
+  const mandatoryManagerPageIds: string[] = ['data-analytics-hub']
+
+  const administratorOnlyPageIdSet = new Set<string>(ADMINISTRATOR_ONLY_PAGE_IDS)
 
   const { 
     availablePages, 
@@ -126,7 +129,7 @@ const Settings = () => {
       const currentManagerPages = syncedSettings.manager || [];
       const managerPageSet = new Set<string>(currentManagerPages);
       mandatoryManagerPageIds.forEach(id => managerPageSet.add(id));
-      syncedSettings.manager = Array.from(managerPageSet);
+      syncedSettings.manager = withoutAdministratorOnlyPageIds(Array.from(managerPageSet))
       
       setPageAccessByRole(syncedSettings);
       
@@ -416,6 +419,16 @@ const Settings = () => {
       return;
     }
 
+    // Prevent assigning administrator-only administration pages to managers
+    if (roleId === 'manager' && administratorOnlyPageIdSet.has(pageId)) {
+      toast({
+        title: 'Administrators only',
+        description: 'User Setup, Employee Registration, and Company Setup are restricted to administrators.',
+        variant: 'destructive',
+      })
+      return
+    }
+
     // Prevent disabling mandatory pages for managers
     if (roleId === 'manager' && mandatoryManagerPageIds.includes(pageId)) {
       toast({
@@ -476,7 +489,7 @@ const Settings = () => {
     const currentManagerPages = pageAccessByRole.manager || [];
     const managerPageSet = new Set<string>(currentManagerPages);
     mandatoryManagerPageIds.forEach(id => managerPageSet.add(id));
-    const managerPagesWithMandatory = Array.from(managerPageSet);
+    const managerPagesWithMandatory = withoutAdministratorOnlyPageIds(Array.from(managerPageSet))
     
     const settingsToSave = {
       ...pageAccessByRole,

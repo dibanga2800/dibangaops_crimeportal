@@ -54,6 +54,16 @@ export const NAVIGATION_ITEMS = [
         title: "Company Setup",
         href: "/administration/customer-setup",
         description: "Manage customer accounts"
+      },
+      {
+        title: "Barcode catalog import",
+        href: "/administration/barcode-catalog-import",
+        description: "Import product barcodes from CSV"
+      },
+      {
+        title: "Product catalog",
+        href: "/administration/product-catalog",
+        description: "Browse and update product prices"
       }
     ]
   },

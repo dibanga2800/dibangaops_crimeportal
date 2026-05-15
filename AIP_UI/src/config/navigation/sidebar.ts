@@ -82,36 +82,37 @@ export const SIDEBAR_SECTIONS: SidebarSection[] = [
 		id: 'administration',
 		label: 'Administration',
 		icon: UserCog,
-		// Remove section-level guard - let individual links be controlled by page access settings
-		// This allows CustomerHOManager to see User Setup if granted in settings
+		// Section visibility follows link guards + page access settings
 		guard: undefined,
 		links: [
 			{
 				path: '/administration/user-setup',
 				label: 'User Setup',
 				icon: User,
+				guard: (ctx) => ctx.isAdministrator,
 			},
 			{
 				path: '/administration/employee-registration',
 				label: 'Employee Registration',
 				icon: UserPlus,
+				guard: (ctx) => ctx.isAdministrator,
 			},
 			{
 				path: '/administration/customer-setup',
 				label: 'Company Setup',
 				icon: Building,
+				guard: (ctx) => ctx.isAdministrator,
 			},
 			{
 				path: '/administration/barcode-catalog-import',
 				label: 'Barcode catalog import',
 				icon: ScanBarcode,
-				guard: (ctx) => ctx.isAdministrator,
+				// Visibility controlled by Settings page access (same as User Setup / Company Setup)
 			},
 			{
 				path: '/administration/product-catalog',
 				label: 'Product catalog',
 				icon: Package,
-				guard: (ctx) => ctx.isAdministrator,
 			},
 		],
 	},

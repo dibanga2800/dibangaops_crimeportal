@@ -1,13 +1,8 @@
 import { useState, useCallback, useEffect, useMemo, useRef, Suspense, lazy } from "react"
-import { Incident, IncidentType, StolenItem } from "@/types/incidents"
+import { Incident, StolenItem } from "@/types/incidents"
+import { IncidentDetailView } from '@/components/operations/IncidentDetailView'
 const IncidentForm = lazy(() =>
   import('@/components/operations/IncidentForm').then((m) => ({ default: m.IncidentForm })),
-)
-const IncidentClassificationBadge = lazy(() =>
-  import('@/components/operations/IncidentClassificationBadge').then((m) => ({ default: m.IncidentClassificationBadge })),
-)
-const EvidenceTimeline = lazy(() =>
-  import('@/components/operations/EvidenceTimeline').then((m) => ({ default: m.EvidenceTimeline })),
 )
 
 const LazyLoadingFallback = () => (
@@ -544,11 +539,6 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
 
   const hasIncidents = paginatedIncidents.length > 0
   const isSearchActive = Boolean(searchTerm)
-  const viewingIncidentNumericId = useMemo(() => {
-    if (!viewingIncident?.id) return null
-    const parsed = Number(viewingIncident.id)
-    return Number.isFinite(parsed) ? parsed : null
-  }, [viewingIncident?.id])
 
   const handlePageChange = useCallback((page: number) => {
     if (page < 1 || page > totalPages) return
@@ -784,17 +774,6 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
                   className="h-9 text-xs sm:text-sm"
                 >
                   Month
-                </Button>
-                <Button
-                  variant={incidentTypeFilter === IncidentType.THEFT ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => {
-                    setIncidentTypeFilter((current) => current === IncidentType.THEFT ? null : IncidentType.THEFT)
-                    setCurrentPage(1)
-                  }}
-                  className="h-9 text-xs sm:text-sm"
-                >
-                  Theft
                 </Button>
                 <Button
                   variant="ghost"
@@ -1188,7 +1167,7 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
         open={!!viewingIncident} 
         onOpenChange={(isOpen) => !isOpen && setViewingIncident(null)}
       >
-        <DialogContent className="w-[calc(100%-16px)] sm:w-[calc(100%-32px)] max-w-[95vw] sm:max-w-[92vw] md:max-w-[90vw] lg:max-w-[90vw] xl:max-w-[85vw] 2xl:max-w-[80vw] h-[90vh] p-0">
+        <DialogContent className="flex h-[90vh] max-h-[90vh] flex-col w-[calc(100%-16px)] sm:w-[calc(100%-32px)] max-w-[95vw] sm:max-w-[92vw] md:max-w-[90vw] lg:max-w-[90vw] xl:max-w-[85vw] 2xl:max-w-[80vw] p-0">
             <DialogHeader className="px-4 py-3 border-b bg-background">
             <DialogTitle className="text-xl font-bold">View Incident Details</DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground">
@@ -1196,271 +1175,9 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
             </DialogDescription>
           </DialogHeader>
           {viewingIncident && (
-            <div className="flex-1 overflow-y-auto">
-              <div className="bg-muted/30">
-                <div className="w-full max-w-[98%] mx-auto px-4 py-4">
-                  {/* Basic Information */}
-                  <div className="bg-card rounded-lg shadow-sm border border-border p-4 mb-4">
-                    <div className="flex items-center gap-2 mb-4">
-                      <div className="h-6 w-6 text-blue-600">📋</div>
-                      <h2 className="text-lg font-medium text-card-foreground">Basic Information</h2>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground">Company Name</label>
-                        <p className="mt-1 text-sm text-card-foreground">{viewingIncident.customerName || 'N/A'}</p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground">Store Name</label>
-                        <p className="mt-1 text-sm text-card-foreground">{viewingIncident.siteName || 'N/A'}</p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground">Staff Member Name</label>
-                        <p className="mt-1 text-sm text-card-foreground">{viewingIncident.officerName || 'N/A'}</p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground">Assigned To</label>
-                        <p className="mt-1 text-sm text-card-foreground">{viewingIncident.assignedTo || 'N/A'}</p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground">Status</label>
-                        <p className="mt-1 text-sm text-card-foreground">{viewingIncident.status || 'N/A'}</p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground">Date</label>
-                        <p className="mt-1 text-sm text-card-foreground">
-                          {viewingIncident.date ? new Date(viewingIncident.date).toLocaleDateString() : 'N/A'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Incident Details */}
-                  <div className="bg-card rounded-lg shadow-sm border border-border p-4 mb-4">
-                    <div className="flex items-center gap-2 mb-4">
-                      <div className="h-6 w-6 text-blue-600">🕒</div>
-                      <h2 className="text-lg font-medium text-card-foreground">Incident Details</h2>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground">Date of Incident</label>
-                        <p className="mt-1 text-sm text-card-foreground">
-                          {viewingIncident.date ? new Date(viewingIncident.date).toLocaleDateString() : 'N/A'}
-                        </p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground">Priority</label>
-                        <p className="mt-1 text-sm text-card-foreground">{viewingIncident.priority || 'N/A'}</p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground">Incident Type</label>
-                        <p className="mt-1 text-sm text-card-foreground">{viewingIncident.incidentType || 'N/A'}</p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground">Total Value Recovered</label>
-                        <p className="mt-1 text-sm text-card-foreground">
-                          £{typeof viewingIncident.totalValueRecovered === 'number' && !isNaN(viewingIncident.totalValueRecovered)
-                            ? viewingIncident.totalValueRecovered.toFixed(2)
-                            : '0.00'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Description */}
-                  <div className="bg-card rounded-lg shadow-sm border border-border p-4 mb-4">
-                    <div className="flex items-center gap-2 mb-4">
-                      <div className="h-6 w-6 text-blue-600">📝</div>
-                      <h2 className="text-lg font-medium text-card-foreground">Description</h2>
-                    </div>
-                    <div className="space-y-4">
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground">Incident Details</label>
-                        <p className="mt-1 text-sm text-card-foreground whitespace-pre-wrap">{viewingIncident.description || 'N/A'}</p>
-                      </div>
-                      {viewingIncident.storeComments && (
-                        <div>
-                          <label className="text-sm font-medium text-muted-foreground">Store Comments</label>
-                          <p className="mt-1 text-sm text-card-foreground whitespace-pre-wrap">{viewingIncident.storeComments}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Police Involvement */}
-                  <div className="bg-card rounded-lg shadow-sm border border-border p-4 mb-4">
-                    <div className="flex items-center gap-2 mb-4">
-                      <div className="h-6 w-6 text-blue-600">👮</div>
-                      <h2 className="text-lg font-medium text-card-foreground">Police Involvement</h2>
-                    </div>
-                    <div className="space-y-4">
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground">Was Police Involved?</label>
-                        <p className="mt-1 text-sm text-card-foreground">{viewingIncident.policeInvolvement ? "Yes" : "No"}</p>
-                      </div>
-                      {viewingIncident.policeInvolvement && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          {viewingIncident.urnNumber && (
-                            <div>
-                              <label className="text-sm font-medium text-muted-foreground">URN Number</label>
-                              <p className="mt-1 text-sm text-card-foreground">{viewingIncident.urnNumber}</p>
-                            </div>
-                          )}
-                          {viewingIncident.crimeRefNumber && (
-                            <div>
-                              <label className="text-sm font-medium text-muted-foreground">Crime Reference Number</label>
-                              <p className="mt-1 text-sm text-card-foreground">{viewingIncident.crimeRefNumber}</p>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Offender Details */}
-                  {viewingIncident.offenderName && (
-                    <div className="bg-card rounded-lg shadow-sm border border-border p-4 mb-4">
-                      <div className="flex items-center gap-2 mb-4">
-                        <div className="h-6 w-6 text-blue-600">👤</div>
-                        <h2 className="text-lg font-medium text-card-foreground">Offender Details</h2>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <div>
-                          <label className="text-sm font-medium text-muted-foreground">Name</label>
-                          <p className="mt-1 text-sm text-card-foreground">{viewingIncident.offenderName}</p>
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium text-muted-foreground">Sex</label>
-                          <p className="mt-1 text-sm text-card-foreground">{viewingIncident.offenderSex || 'N/A'}</p>
-                        </div>
-                        {viewingIncident.offenderDOB && (
-                          <div>
-                            <label className="text-sm font-medium text-muted-foreground">Date of Birth</label>
-                            <p className="mt-1 text-sm text-card-foreground">
-                              {new Date(viewingIncident.offenderDOB).toLocaleDateString()}
-                            </p>
-                          </div>
-                        )}
-                        {viewingIncident.offenderAddress && (
-                          <>
-                            <div>
-                              <label className="text-sm font-medium text-muted-foreground">Address</label>
-                              <p className="mt-1 text-sm text-card-foreground">{viewingIncident.offenderAddress.numberAndStreet || 'N/A'}</p>
-                            </div>
-                            <div>
-                              <label className="text-sm font-medium text-muted-foreground">Town</label>
-                              <p className="mt-1 text-sm text-card-foreground">{viewingIncident.offenderAddress.town || 'N/A'}</p>
-                            </div>
-                            <div>
-                              <label className="text-sm font-medium text-muted-foreground">Post Code</label>
-                              <p className="mt-1 text-sm text-card-foreground">{viewingIncident.offenderAddress.postCode || 'N/A'}</p>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Incident Categories */}
-                  {viewingIncident.incidentInvolved && viewingIncident.incidentInvolved.length > 0 && (
-                    <div className="bg-card rounded-lg shadow-sm border border-border p-4 mb-4">
-                      <div className="flex items-center gap-2 mb-4">
-                        <div className="h-6 w-6 text-blue-600">🏷️</div>
-                        <h2 className="text-lg font-medium text-card-foreground">Incident Categories</h2>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {viewingIncident.incidentInvolved.map((type, index) => (
-                          <div key={index} className="flex items-center gap-2">
-                            <div className="h-2 w-2 rounded-full bg-blue-600"></div>
-                            <p className="text-sm text-card-foreground">{type}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Stolen Items */}
-                  {viewingIncident.stolenItems && viewingIncident.stolenItems.length > 0 && (
-                    <div className="bg-card rounded-lg shadow-sm border border-border p-4">
-                      <div className="flex items-center gap-2 mb-4">
-                        <div className="h-6 w-6 text-blue-600">💰</div>
-                        <h2 className="text-lg font-medium text-card-foreground">Stolen Items</h2>
-                      </div>
-                      <div className="overflow-x-auto">
-                        <table className="w-full">
-                          <thead>
-                            <tr className="border-b border-border">
-                              <th className="text-left py-2 text-sm font-medium text-muted-foreground">Category</th>
-                              <th className="text-left py-2 text-sm font-medium text-muted-foreground">Product Name</th>
-                              <th className="text-left py-2 text-sm font-medium text-muted-foreground">Description</th>
-                              <th className="text-right py-2 text-sm font-medium text-muted-foreground">Cost</th>
-                              <th className="text-right py-2 text-sm font-medium text-muted-foreground">Qty</th>
-                              <th className="text-right py-2 text-sm font-medium text-muted-foreground">Total</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {viewingIncident.stolenItems.map((item, index) => {
-                              const cost = typeof item.cost === 'number' && !isNaN(item.cost) ? item.cost : 0
-                              const quantity = typeof item.quantity === 'number' && !isNaN(item.quantity) ? item.quantity : 0
-                              // Fallback: calculate totalAmount if not present
-                              const totalAmount = typeof item.totalAmount === 'number' && !isNaN(item.totalAmount)
-                                ? item.totalAmount
-                                : cost * quantity
-                              return (
-                                <tr key={index} className="border-b border-border">
-                                  <td className="py-2 text-sm text-card-foreground">{item.category || 'N/A'}</td>
-                                  <td className="py-2 text-sm text-card-foreground">{item.productName || 'N/A'}</td>
-                                  <td className="py-2 text-sm text-card-foreground">{item.description || 'N/A'}</td>
-                                  <td className="py-2 text-sm text-card-foreground text-right">£{cost.toFixed(2)}</td>
-                                  <td className="py-2 text-sm text-card-foreground text-right">{quantity}</td>
-                                  <td className="py-2 text-sm text-card-foreground text-right">£{totalAmount.toFixed(2)}</td>
-                                </tr>
-                              )
-                            })}
-                            <tr className="bg-muted/40">
-                              <td colSpan={5} className="py-2 text-sm font-medium text-card-foreground">Total Value</td>
-                              <td className="py-2 text-sm font-medium text-card-foreground text-right">
-                                £{Array.isArray(viewingIncident?.stolenItems)
-                                    ? (() => {
-                                        const total = viewingIncident.stolenItems.reduce(
-                                          (sum, item) => {
-                                            const cost = typeof item.cost === 'number' && !isNaN(item.cost) ? item.cost : 0
-                                            const quantity = typeof item.quantity === 'number' && !isNaN(item.quantity) ? item.quantity : 0
-                                            const totalAmount = typeof item.totalAmount === 'number' && !isNaN(item.totalAmount)
-                                              ? item.totalAmount
-                                              : cost * quantity
-                                            return sum + totalAmount
-                                          },
-                                          0
-                                        )
-                                        return typeof total === 'number' && !isNaN(total) ? total.toFixed(2) : '0.00'
-                                      })()
-                                    : '0.00'}
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-                  {/* AI Classification */}
-                  {viewingIncidentNumericId !== null && (
-                    <div className="mb-4">
-                      <Suspense fallback={<LazyLoadingFallback />}>
-                        <IncidentClassificationBadge incidentId={viewingIncidentNumericId} />
-                      </Suspense>
-                    </div>
-                  )}
-
-                  {/* Evidence Chain */}
-                  {viewingIncidentNumericId !== null && (
-                    <div className="mb-4">
-                      <Suspense fallback={<LazyLoadingFallback />}>
-                        <EvidenceTimeline incidentId={viewingIncidentNumericId} />
-                      </Suspense>
-                    </div>
-                  )}
-                </div>
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <IncidentDetailView incident={viewingIncident} />
               </div>
 
               {/* Form Actions */}

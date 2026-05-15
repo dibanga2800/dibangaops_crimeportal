@@ -10,7 +10,7 @@ namespace AIPBackend.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize(Roles = "administrator")] // Only administrators can import products
+    [Authorize] // Per-action roles: Excel = administrators only; barcode CSV = administrators + managers
     public class ProductImportController : ControllerBase
     {
         private const long MaxImportFileSizeBytes = 10 * 1024 * 1024;
@@ -50,6 +50,7 @@ namespace AIPBackend.Controllers
         /// Import products from Excel file
         /// </summary>
         [HttpPost("excel")]
+        [Authorize(Roles = "administrator")]
         [Consumes("multipart/form-data")]
         [ApiExplorerSettings(IgnoreApi = true)] // Exclude from Swagger to avoid IFormFile generation issues
         public async Task<ActionResult<ApiResponseDto<ImportResultDto>>> ImportFromExcel(
@@ -148,6 +149,7 @@ namespace AIPBackend.Controllers
         /// Import or update products from barcode CSV (Barcode, Department, VMECode, ProductName, RetailPrice).
         /// </summary>
         [HttpPost("barcode-csv")]
+        [Authorize(Roles = "administrator,manager")]
         [Consumes("multipart/form-data")]
         [RequestSizeLimit(MaxBarcodeCsvFileSizeBytes)]
         [ApiExplorerSettings(IgnoreApi = true)]

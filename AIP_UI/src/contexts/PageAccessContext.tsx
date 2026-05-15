@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import { PageAccess, PageAccessSettings, pageAccessApi } from '@/api/pageAccess';
 import { AuthContext } from '@/contexts/AuthContext';
 import { customerPageAccessCache } from '@/services/customerPageAccessCache';
+import { isAdministratorOnlyPath } from '@/config/administration-access';
 import { PAGE_DEFINITIONS } from '@/config/navigation/pageDefinitions';
 import { sessionStore } from '@/state/sessionStore';
 import { subscribeToPageAccessUpdates } from '@/lib/pageAccessBroadcast';
@@ -245,6 +246,12 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 			// Without availablePages we cannot resolve paths. Deny by default; allow only minimal fallback for store/officer.
 			if (availablePages.length === 0) {
 				if (currentRole?.toLowerCase() === 'administrator' || currentRole?.toLowerCase() === 'manager') {
+					let earlyPath = path.split('?')[0].split('#')[0];
+					earlyPath = (earlyPath.endsWith('/') && earlyPath !== '/' ? earlyPath.slice(0, -1) : earlyPath) || '/';
+					if (earlyPath === '/') earlyPath = '/dashboard';
+					if (currentRole?.toLowerCase() !== 'administrator' && isAdministratorOnlyPath(earlyPath)) {
+						return false;
+					}
 					return true;
 				}
 				if (currentRole?.toLowerCase() === 'store' || currentRole?.toLowerCase() === 'security-officer') {
@@ -274,6 +281,10 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 			normalizedPath = normalizedPath.endsWith('/') && normalizedPath !== '/' ? normalizedPath.slice(0, -1) : normalizedPath;
 			// Treat root as dashboard for access checks
 			if (normalizedPath === '/') normalizedPath = '/dashboard';
+
+			if (currentRole.toLowerCase() !== 'administrator' && isAdministratorOnlyPath(normalizedPath)) {
+				return false;
+			}
 
 			// Store and security-officer users: always allow dashboard and profile (prevents lockout).
 			// Operations pages (incident-report, etc.) are controlled by Settings - no hardcoded bypass.

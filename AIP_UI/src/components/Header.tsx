@@ -51,8 +51,10 @@ import {
 	DollarSign,
 	GitBranch,
 	CheckSquare,
-  TrendingUp,
-	Brain
+	TrendingUp,
+	Brain,
+	ScanBarcode,
+	Package,
 } from "lucide-react"
 import { usePageAccess, PageAccessContext } from "@/contexts/PageAccessContext"
 import { Input } from "@/components/ui/input"
@@ -65,7 +67,9 @@ import { Logo } from "./header/Logo";
 import { SearchInput } from "./header/SearchInput";
 import { UserAvatar } from "./common/UserAvatar";
 import { useAuth } from "@/contexts/AuthContext"
+import { useCustomerSelection } from "@/contexts/CustomerSelectionContext"
 import { useAlertCount } from "@/hooks/useAlertCount"
+import { setAlertCountCustomerScope } from "@/lib/alert-count/alert-count-store"
 
 // Define navigation items structure
 interface NavItem {
@@ -158,6 +162,12 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const pageAccessContext = React.useContext(PageAccessContext);
   const { user: authenticatedUser } = useAuth();
+  const { selectedCustomerId } = useCustomerSelection();
+
+  React.useEffect(() => {
+    setAlertCountCustomerScope(selectedCustomerId);
+  }, [selectedCustomerId]);
+
   const isAuthenticated = !!authenticatedUser;
   
   // If context is not available, return minimal header
@@ -205,18 +215,30 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
           title: "User Setup",
           href: "/administration/user-setup",
           icon: <User className="h-4 w-4" />,
-          roles: ['administrator', 'manager'],
+          roles: ['administrator'],
         },
         {
           title: "Employee Registration",
           href: "/administration/employee-registration",
           icon: <Users className="h-4 w-4" />,
-          roles: ['administrator', 'manager'],
+          roles: ['administrator'],
         },
         {
           title: "Company Setup",
           href: "/administration/customer-setup",
           icon: <Building2 className="h-4 w-4" />,
+          roles: ['administrator'],
+        },
+        {
+          title: "Barcode catalog import",
+          href: "/administration/barcode-catalog-import",
+          icon: <ScanBarcode className="h-4 w-4" />,
+          roles: ['administrator', 'manager'],
+        },
+        {
+          title: "Product catalog",
+          href: "/administration/product-catalog",
+          icon: <Package className="h-4 w-4" />,
           roles: ['administrator', 'manager'],
         }
       ]
@@ -347,7 +369,7 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
         {/* Right: Theme, notifications and user profile */}
         <div className="flex items-center gap-3 text-header-text dark:text-white">
           <ThemeToggle />
-          <NotificationBell alertCount={alertCount} isLoading={alertCountLoading} />
+          <NotificationBell alertCount={alertCount} isLoading={alertCountLoading} alertCustomerId={selectedCustomerId} />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <div className="flex items-center gap-2 cursor-pointer">
@@ -377,7 +399,7 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
 		{/* Right: Theme, notifications and user profile */}
 				<div className="flex items-center gap-4 text-header-text dark:text-white">
           <ThemeToggle />
-          <NotificationBell alertCount={alertCount} isLoading={alertCountLoading} />
+          <NotificationBell alertCount={alertCount} isLoading={alertCountLoading} alertCustomerId={selectedCustomerId} />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <div className="flex items-center gap-2 cursor-pointer">

@@ -29,14 +29,27 @@ public class ProductBarcodeCsvImportIntegrationTests : IClassFixture<SecurityWeb
 	}
 
 	[Fact]
-	public async Task BarcodeCsvImport_Post_ReturnsForbidden_WhenNotAdministrator()
+	public async Task BarcodeCsvImport_Post_ReturnsForbidden_WhenStoreUser()
 	{
-		var client = CreateAuthenticatedClient("u1", "manager");
+		var client = CreateAuthenticatedClient("u1", "store");
 		await ResetDatabaseAsync();
 
 		using var content = BuildMultipart("a.csv", $"{StandardHeaders}\n1,PROVISIONS,A,B,1\n");
 		var response = await client.PostAsync("/api/ProductImport/barcode-csv", content);
 		Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+	}
+
+	[Fact]
+	public async Task BarcodeCsvImport_Post_CreatesProduct_WhenManager()
+	{
+		var client = CreateAuthenticatedClient("mgr-1", "manager");
+		await ResetDatabaseAsync();
+
+		const string csv = "barcode,Department,VMECode,ProductName,RetailPrice\n5012345678900,PROVISIONS,VME-001,Milk 1L,3.99\n";
+		using var multipart = BuildMultipart("catalog.csv", csv);
+
+		var response = await client.PostAsync("/api/ProductImport/barcode-csv", multipart);
+		Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 	}
 
 	[Fact]
