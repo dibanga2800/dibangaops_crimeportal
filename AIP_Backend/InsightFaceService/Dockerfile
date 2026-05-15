@@ -1,13 +1,15 @@
 # InsightFace REST service (Python)
-FROM python:3.11-slim
+# Use bookworm — `python:3.11-slim` tracks trixie/sid and CI apt can 404 when security pockets move.
+FROM python:3.11-slim-bookworm
 
 WORKDIR /app
 
 # Install system deps for OpenCV/ONNX if needed
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libgl1 \
-    libglib2.0-0 \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        libgl1 \
+        libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
