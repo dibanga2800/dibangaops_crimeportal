@@ -2,6 +2,24 @@
 enable_application_insights  = true
 log_analytics_retention_days = 30
 
+# Security hardening (no domain-resource changes)
+key_vault_soft_delete_retention_days   = 90
+key_vault_purge_protection_enabled     = true
+backend_allow_insecure_connections     = false
+ai_allow_insecure_connections          = false
+sql_allow_azure_services_firewall_rule = true
+sql_allowed_ip_ranges = [
+  {
+    name     = "home"
+    start_ip = "80.41.143.174"
+    end_ip   = "80.41.143.174"
+  }
+]
+storage_blob_delete_retention_days      = 30
+storage_container_delete_retention_days = 7
+storage_blob_versioning_enabled         = true
+storage_change_feed_enabled             = true
+
 backend_container_cpu    = 0.5
 backend_container_memory = "1Gi"
 backend_min_replicas     = 1

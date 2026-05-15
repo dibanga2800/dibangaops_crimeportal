@@ -196,7 +196,7 @@ Grounded in [`ApplicationDbContext`](../AIP_Backend/Data/ApplicationDbContext.cs
 - **HTTPS** enforced for production API host (`UseHttpsRedirection` when not in development).
 - **CORS** policy `AllowSpecificOrigin` ([`Program.cs`](../AIP_Backend/Program.cs)):
   - **Development:** localhost / loopback origins, credentials allowed.
-  - **Production:** explicit allow-list including documented Vercel host patterns and **additional origins** from configuration key `FrontendUrl` (comma-separated).
+  - **Production:** explicit allow-list (default `https://www.dibangops.com` and `https://dibangops.com`) plus **additional origins** from configuration key `FrontendUrl` (comma-separated).
 
 ### 6.2 Authentication tokens
 

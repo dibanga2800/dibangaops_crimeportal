@@ -62,6 +62,22 @@ variable "keyvault_name_prefix" {
   default     = "crimeportal-kv"
 }
 
+variable "key_vault_soft_delete_retention_days" {
+  description = "Key Vault soft-delete retention in days (security baseline: 90)"
+  type        = number
+  default     = 90
+  validation {
+    condition     = var.key_vault_soft_delete_retention_days >= 7 && var.key_vault_soft_delete_retention_days <= 90
+    error_message = "key_vault_soft_delete_retention_days must be between 7 and 90."
+  }
+}
+
+variable "key_vault_purge_protection_enabled" {
+  description = "Enable Key Vault purge protection (recommended for production; irreversible once enabled)"
+  type        = bool
+  default     = true
+}
+
 variable "terraform_kv_admin_principal_object_id" {
   description = "Object ID to assign Key Vault Administrator for Terraform runs (use CI service principal object ID)"
   type        = string
@@ -88,6 +104,18 @@ variable "ai_target_port" {
   description = "AI container ingress target port. Set null to auto-detect based on image."
   type        = number
   default     = null
+}
+
+variable "backend_allow_insecure_connections" {
+  description = "Allow HTTP for backend ingress (keep false in production)"
+  type        = bool
+  default     = false
+}
+
+variable "ai_allow_insecure_connections" {
+  description = "Allow HTTP for AI ingress (internal-only; keep false for consistency)"
+  type        = bool
+  default     = false
 }
 
 variable "sql_admin_username" {
@@ -356,6 +384,54 @@ variable "sql_max_size_gb" {
   description = "Maximum SQL database size in GB"
   type        = number
   default     = 5
+}
+
+variable "sql_allow_azure_services_firewall_rule" {
+  description = "Whether to keep the 0.0.0.0 SQL firewall rule that allows Azure service connectivity"
+  type        = bool
+  default     = true
+}
+
+variable "sql_allowed_ip_ranges" {
+  description = "Additional SQL firewall rules for explicit ingress allow-list entries"
+  type = list(object({
+    name     = string
+    start_ip = string
+    end_ip   = string
+  }))
+  default = []
+}
+
+variable "storage_blob_delete_retention_days" {
+  description = "Retention days for soft-deleted blobs"
+  type        = number
+  default     = 30
+  validation {
+    condition     = var.storage_blob_delete_retention_days >= 1 && var.storage_blob_delete_retention_days <= 365
+    error_message = "storage_blob_delete_retention_days must be between 1 and 365."
+  }
+}
+
+variable "storage_container_delete_retention_days" {
+  description = "Retention days for soft-deleted containers"
+  type        = number
+  default     = 7
+  validation {
+    condition     = var.storage_container_delete_retention_days >= 1 && var.storage_container_delete_retention_days <= 365
+    error_message = "storage_container_delete_retention_days must be between 1 and 365."
+  }
+}
+
+variable "storage_blob_versioning_enabled" {
+  description = "Enable blob versioning for recovery and forensic support"
+  type        = bool
+  default     = true
+}
+
+variable "storage_change_feed_enabled" {
+  description = "Enable storage account blob change feed for auditing and incident review"
+  type        = bool
+  default     = true
 }
 
 variable "monthly_budget_amount" {

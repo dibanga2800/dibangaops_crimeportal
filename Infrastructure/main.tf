@@ -37,7 +37,7 @@ locals {
   jwt_signing_key_value          = var.jwt_signing_key != null && var.jwt_signing_key != "" ? var.jwt_signing_key : random_password.jwt_signing_key.result
   backend_container_fqdn         = "https://${azurerm_container_app.backend.latest_revision_fqdn}"
   ai_container_fqdn              = "https://${var.ai_name}.internal.${azurerm_container_app_environment.env.default_domain}"
-  effective_frontend_url = var.frontend_url != null && var.frontend_url != "" ? trimspace(var.frontend_url) : "https://${azurerm_static_web_app.frontend.default_host_name}"
+  effective_frontend_url         = var.frontend_url != null && var.frontend_url != "" ? trimspace(var.frontend_url) : "https://${azurerm_static_web_app.frontend.default_host_name}"
   effective_insightface_base_url = var.insightface_base_url != null && var.insightface_base_url != "" ? var.insightface_base_url : local.ai_container_fqdn
 }
 
@@ -81,8 +81,8 @@ resource "azurerm_key_vault" "kv" {
   resource_group_name           = azurerm_resource_group.rg.name
   tenant_id                     = data.azurerm_client_config.current.tenant_id
   sku_name                      = "standard"
-  soft_delete_retention_days    = 7
-  purge_protection_enabled      = false
+  soft_delete_retention_days    = var.key_vault_soft_delete_retention_days
+  purge_protection_enabled      = var.key_vault_purge_protection_enabled
   rbac_authorization_enabled    = true
   public_network_access_enabled = true
 }
@@ -106,10 +106,23 @@ resource "azurerm_mssql_server" "sql_server" {
 }
 
 resource "azurerm_mssql_firewall_rule" "allow_azure_services" {
+  count = var.sql_allow_azure_services_firewall_rule ? 1 : 0
+
   name             = "AllowAzureServices"
   server_id        = azurerm_mssql_server.sql_server.id
   start_ip_address = "0.0.0.0"
   end_ip_address   = "0.0.0.0"
+}
+
+resource "azurerm_mssql_firewall_rule" "explicit_allowed_ranges" {
+  for_each = {
+    for range in var.sql_allowed_ip_ranges : range.name => range
+  }
+
+  name             = each.value.name
+  server_id        = azurerm_mssql_server.sql_server.id
+  start_ip_address = each.value.start_ip
+  end_ip_address   = each.value.end_ip
 }
 
 resource "azurerm_mssql_database" "sql_db" {
@@ -184,6 +197,19 @@ resource "azurerm_storage_account" "storage" {
   allow_nested_items_to_be_public = false
   public_network_access_enabled   = true
   shared_access_key_enabled       = true
+
+  blob_properties {
+    versioning_enabled  = var.storage_blob_versioning_enabled
+    change_feed_enabled = var.storage_change_feed_enabled
+
+    delete_retention_policy {
+      days = var.storage_blob_delete_retention_days
+    }
+
+    container_delete_retention_policy {
+      days = var.storage_container_delete_retention_days
+    }
+  }
 }
 
 resource "azurerm_storage_container" "images" {
@@ -439,9 +465,10 @@ resource "azurerm_container_app" "backend" {
   }
 
   ingress {
-    external_enabled = true
-    target_port      = local.backend_target_port
-    transport        = "auto"
+    external_enabled           = true
+    target_port                = local.backend_target_port
+    transport                  = "auto"
+    allow_insecure_connections = var.backend_allow_insecure_connections
     traffic_weight {
       latest_revision = true
       percentage      = 100
@@ -480,9 +507,10 @@ resource "azurerm_container_app" "ai" {
   }
 
   ingress {
-    external_enabled = false
-    target_port      = local.ai_target_port
-    transport        = "auto"
+    external_enabled           = false
+    target_port                = local.ai_target_port
+    transport                  = "auto"
+    allow_insecure_connections = var.ai_allow_insecure_connections
     traffic_weight {
       latest_revision = true
       percentage      = 100

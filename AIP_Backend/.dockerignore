@@ -5,6 +5,7 @@ publish/
 .vscode/
 .venv/
 venv/
+tests/
 **/*.user
 **/*.suo
 **/*.cache

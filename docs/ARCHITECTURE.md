@@ -173,11 +173,11 @@ User (Browser)
 | Environment | Frontend | Backend | Database |
 |------------|----------|---------|----------|
 | **Development** | localhost:5173 | localhost:5128 | Local SQL Server |
-| **Production** | Vercel (coop-aip-ui.vercel.app) | IIS (dedicated server) | Production SQL Server |
+| **Production** | Azure Static Web Apps (`www.dibangops.com`) | IIS (dedicated server) | Production SQL Server |
 
 ### CORS Policy
 - Development: localhost origins
-- Production: Vercel domains + configurable `FrontendUrl`
+- Production: explicit custom domain allow-list + configurable `FrontendUrl`
 
 ## 6. Current Capability Gaps (Pre-Enhancement)
 
