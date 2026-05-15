@@ -25,10 +25,10 @@ namespace AIPBackend.Controllers
 
         /// <summary>
         /// Get page access settings (used by frontend)
-        /// This endpoint is accessible without authentication to allow initial page load
+        /// Requires authentication to avoid exposing role/page policy mappings publicly.
         /// </summary>
         [HttpGet("settings")]
-        [AllowAnonymous]
+        [Authorize]
         public async Task<ActionResult<ApiResponseDto<PageAccessSettingsDto>>> GetPageAccessSettings()
         {
             try

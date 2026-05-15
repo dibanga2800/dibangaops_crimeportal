@@ -7,191 +7,180 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AIPBackend.Services
 {
-    public class ProductService : IProductService
-    {
-        private readonly ApplicationDbContext _context;
+	public class ProductService : IProductService
+	{
+		private readonly ApplicationDbContext _context;
 
-        public ProductService(ApplicationDbContext context)
-        {
-            _context = context;
-        }
+		public ProductService(ApplicationDbContext context)
+		{
+			_context = context;
+		}
 
-        public async Task<ProductDto?> GetProductByEANAsync(string ean)
-        {
-            var product = await _context.Products
-                .Where(p => p.EAN == ean && p.IsActive)
-                .Select(p => new ProductDto
-                {
-                    ProductId = p.ProductId,
-                    EAN = p.EAN,
-                    ProductName = p.ProductName,
-                    Section = p.Section,
-                    Category = p.Category,
-                    Department = p.Department,
-                    Description = p.Description,
-                    Price = p.Price,
-                    Brand = p.Brand,
-                    Manufacturer = p.Manufacturer,
-                    IsActive = p.IsActive
-                })
-                .FirstOrDefaultAsync();
+		private static ProductDto MapToDto(Product p) => new()
+		{
+			ProductId = p.ProductId,
+			EAN = p.EAN,
+			ProductName = p.ProductName,
+			Department = p.Department,
+			Description = p.Description,
+			Price = p.Price,
+			IsActive = p.IsActive,
+		};
 
-            return product;
-        }
+		public async Task<ProductDto?> GetProductByEANAsync(string ean)
+		{
+			var product = await _context.Products
+				.Where(p => p.EAN == ean && p.IsActive)
+				.FirstOrDefaultAsync();
 
-        public async Task<ProductDto?> GetProductByIdAsync(int productId)
-        {
-            var product = await _context.Products
-                .Where(p => p.ProductId == productId && p.IsActive)
-                .Select(p => new ProductDto
-                {
-                    ProductId = p.ProductId,
-                    EAN = p.EAN,
-                    ProductName = p.ProductName,
-                    Section = p.Section,
-                    Category = p.Category,
-                    Department = p.Department,
-                    Description = p.Description,
-                    Price = p.Price,
-                    Brand = p.Brand,
-                    Manufacturer = p.Manufacturer,
-                    IsActive = p.IsActive
-                })
-                .FirstOrDefaultAsync();
+			return product == null ? null : MapToDto(product);
+		}
 
-            return product;
-        }
+		public async Task<ProductDto?> GetProductByIdAsync(int productId)
+		{
+			var product = await _context.Products
+				.Where(p => p.ProductId == productId && p.IsActive)
+				.FirstOrDefaultAsync();
 
-        public async Task<List<ProductDto>> GetProductsAsync(int page = 1, int pageSize = 10, string? search = null, string? category = null)
-        {
-            var query = _context.Products.Where(p => p.IsActive).AsQueryable();
+			return product == null ? null : MapToDto(product);
+		}
 
-            if (!string.IsNullOrEmpty(search))
-            {
-                query = query.Where(p => 
-                    p.ProductName.Contains(search) || 
-                    p.EAN.Contains(search) ||
-                    (p.Section != null && p.Section.Contains(search)) ||
-                    (p.Description != null && p.Description.Contains(search)));
-            }
+		public async Task<ProductListResponseDto> GetProductsAsync(int page = 1, int pageSize = 10, string? search = null)
+		{
+			page = Math.Max(1, page);
+			pageSize = Math.Clamp(pageSize, 1, 200);
 
-            if (!string.IsNullOrEmpty(category))
-            {
-                query = query.Where(p => p.Category == category);
-            }
+			var query = _context.Products.Where(p => p.IsActive).AsQueryable();
 
-            var products = await query
-                .OrderBy(p => p.ProductName)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .Select(p => new ProductDto
-                {
-                    ProductId = p.ProductId,
-                    EAN = p.EAN,
-                    ProductName = p.ProductName,
-                    Section = p.Section,
-                    Category = p.Category,
-                    Department = p.Department,
-                    Description = p.Description,
-                    Price = p.Price,
-                    Brand = p.Brand,
-                    Manufacturer = p.Manufacturer,
-                    IsActive = p.IsActive
-                })
-                .ToListAsync();
+			if (!string.IsNullOrEmpty(search))
+			{
+				query = query.Where(p =>
+					p.ProductName.Contains(search) ||
+					p.EAN.Contains(search) ||
+					(p.Description != null && p.Description.Contains(search)) ||
+					(p.Department != null && p.Department.Contains(search)));
+			}
 
-            return products;
-        }
+			var totalCount = await query.CountAsync();
 
-        public async Task<ProductDto> CreateProductAsync(ProductCreateRequestDto productDto, string createdBy)
-        {
-            var product = new Product
-            {
-                EAN = productDto.EAN,
-                ProductName = productDto.ProductName,
-                Section = productDto.Section,
-                Category = productDto.Category,
-                Department = productDto.Department,
-                Description = productDto.Description,
-                Price = productDto.Price,
-                Brand = productDto.Brand,
-                Manufacturer = productDto.Manufacturer,
-                CreatedBy = createdBy,
-                CreatedAt = DateTime.UtcNow,
-                IsActive = true
-            };
+			var products = await query
+				.OrderBy(p => p.ProductName)
+				.Skip((page - 1) * pageSize)
+				.Take(pageSize)
+				.Select(p => new ProductDto
+				{
+					ProductId = p.ProductId,
+					EAN = p.EAN,
+					ProductName = p.ProductName,
+					Department = p.Department,
+					Description = p.Description,
+					Price = p.Price,
+					IsActive = p.IsActive,
+				})
+				.ToListAsync();
 
-            _context.Products.Add(product);
-            await _context.SaveChangesAsync();
+			return new ProductListResponseDto
+			{
+				Items = products,
+				TotalCount = totalCount,
+				Page = page,
+				PageSize = pageSize,
+			};
+		}
 
-            return new ProductDto
-            {
-                ProductId = product.ProductId,
-                EAN = product.EAN,
-                ProductName = product.ProductName,
-                Section = product.Section,
-                Category = product.Category,
-                Department = product.Department,
-                Description = product.Description,
-                Price = product.Price,
-                Brand = product.Brand,
-                Manufacturer = product.Manufacturer,
-                IsActive = product.IsActive
-            };
-        }
+		public async Task<IReadOnlyList<string>> GetDistinctDepartmentsAsync()
+		{
+			var raw = await _context.Products
+				.AsNoTracking()
+				.Where(p => p.IsActive && p.Department != null && p.Department != "")
+				.Select(p => p.Department!)
+				.ToListAsync();
 
-        public async Task<ProductDto?> UpdateProductAsync(int productId, ProductCreateRequestDto productDto, string updatedBy)
-        {
-            var product = await _context.Products.FindAsync(productId);
-            if (product == null || !product.IsActive)
-            {
-                return null;
-            }
+			return raw
+				.Select(d => d.Trim())
+				.Where(d => d.Length > 0)
+				.GroupBy(d => d, StringComparer.OrdinalIgnoreCase)
+				.Select(g => g.First())
+				.OrderBy(d => d, StringComparer.OrdinalIgnoreCase)
+				.ToList();
+		}
 
-            product.EAN = productDto.EAN;
-            product.ProductName = productDto.ProductName;
-            product.Section = productDto.Section;
-            product.Category = productDto.Category;
-            product.Department = productDto.Department;
-            product.Description = productDto.Description;
-            product.Price = productDto.Price;
-            product.Brand = productDto.Brand;
-            product.Manufacturer = productDto.Manufacturer;
-            product.UpdatedBy = updatedBy;
-            product.UpdatedAt = DateTime.UtcNow;
+		public async Task<ProductDto> CreateProductAsync(ProductCreateRequestDto productDto, string createdBy)
+		{
+			var product = new Product
+			{
+				EAN = productDto.EAN,
+				ProductName = productDto.ProductName,
+				Department = productDto.Department,
+				Description = productDto.Description,
+				Price = productDto.Price,
+				CreatedBy = createdBy,
+				CreatedAt = DateTime.UtcNow,
+				IsActive = true,
+			};
 
-            await _context.SaveChangesAsync();
+			_context.Products.Add(product);
+			await _context.SaveChangesAsync();
 
-            return new ProductDto
-            {
-                ProductId = product.ProductId,
-                EAN = product.EAN,
-                ProductName = product.ProductName,
-                Section = product.Section,
-                Category = product.Category,
-                Department = product.Department,
-                Description = product.Description,
-                Price = product.Price,
-                Brand = product.Brand,
-                Manufacturer = product.Manufacturer,
-                IsActive = product.IsActive
-            };
-        }
+			return MapToDto(product);
+		}
 
-        public async Task<bool> DeleteProductAsync(int productId)
-        {
-            var product = await _context.Products.FindAsync(productId);
-            if (product == null)
-            {
-                return false;
-            }
+		public async Task<ProductDto?> UpdateProductAsync(int productId, ProductCreateRequestDto productDto, string updatedBy)
+		{
+			var product = await _context.Products.FindAsync(productId);
+			if (product == null || !product.IsActive)
+			{
+				return null;
+			}
 
-            product.IsActive = false;
-            product.UpdatedAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync();
+			product.EAN = productDto.EAN;
+			product.ProductName = productDto.ProductName;
+			product.Department = productDto.Department;
+			product.Description = productDto.Description;
+			product.Price = productDto.Price;
+			product.UpdatedBy = updatedBy;
+			product.UpdatedAt = DateTime.UtcNow;
 
-            return true;
-        }
-    }
+			await _context.SaveChangesAsync();
+
+			return MapToDto(product);
+		}
+
+		public async Task<ProductDto?> UpdateProductPriceAsync(int productId, decimal? price, string updatedBy)
+		{
+			if (price.HasValue && price.Value < 0)
+			{
+				throw new ArgumentOutOfRangeException(nameof(price), "Price cannot be negative.");
+			}
+
+			var product = await _context.Products.FindAsync(productId);
+			if (product == null || !product.IsActive)
+			{
+				return null;
+			}
+
+			product.Price = price;
+			product.UpdatedBy = updatedBy;
+			product.UpdatedAt = DateTime.UtcNow;
+
+			await _context.SaveChangesAsync();
+
+			return MapToDto(product);
+		}
+
+		public async Task<bool> DeleteProductAsync(int productId)
+		{
+			var product = await _context.Products.FindAsync(productId);
+			if (product == null)
+			{
+				return false;
+			}
+
+			product.IsActive = false;
+			product.UpdatedAt = DateTime.UtcNow;
+			await _context.SaveChangesAsync();
+
+			return true;
+		}
+	}
 }
-

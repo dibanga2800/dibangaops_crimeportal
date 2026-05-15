@@ -28,14 +28,25 @@ namespace AIPBackend.Services
             _userManager = userManager;
             _logger = logger;
 
-            var jwtKey = _configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT Key is not configured");
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
-            _signingCredentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+            var jwtSigningKeys = GetJwtSigningKeys(_configuration);
+            if (jwtSigningKeys.Count == 0)
+            {
+                throw new InvalidOperationException("No JWT signing keys were configured.");
+            }
+
+            var primaryKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSigningKeys[0]));
+            var validationKeys = jwtSigningKeys
+                .Select(signingKey => new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)))
+                .Cast<SecurityKey>()
+                .ToList();
+            _signingCredentials = new SigningCredentials(primaryKey, SecurityAlgorithms.HmacSha256);
+            _logger.LogInformation("JWT service initialized with {ValidationKeyCount} validation key(s).", validationKeys.Count);
 
             _tokenValidationParameters = new TokenValidationParameters
             {
                 ValidateIssuerSigningKey = true,
-                IssuerSigningKey = key,
+                IssuerSigningKey = primaryKey,
+                IssuerSigningKeys = validationKeys,
                 ValidateIssuer = true,
                 ValidIssuer = _configuration["Jwt:Issuer"],
                 ValidateAudience = true,
@@ -162,14 +173,8 @@ namespace AIPBackend.Services
         {
             try
             {
-                var tokenValidationParameters = new TokenValidationParameters
-                {
-                    ValidateAudience = false,
-                    ValidateIssuer = false,
-                    ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = _signingCredentials.Key,
-                    ValidateLifetime = false // We want to get the principal from expired token
-                };
+                var tokenValidationParameters = _tokenValidationParameters.Clone();
+                tokenValidationParameters.ValidateLifetime = false;
 
                 var tokenHandler = new JwtSecurityTokenHandler();
                 var principal = tokenHandler.ValidateToken(token, tokenValidationParameters, out SecurityToken securityToken);
@@ -290,6 +295,38 @@ namespace AIPBackend.Services
         {
             var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(refreshToken));
             return Convert.ToHexString(bytes);
+        }
+
+        private static List<string> GetJwtSigningKeys(IConfiguration configuration)
+        {
+            var primaryKey = configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT Key is not configured");
+            var keys = new List<string> { primaryKey };
+
+            var previousKeySection = configuration.GetSection("Jwt:PreviousKeys");
+            if (previousKeySection.Exists())
+            {
+                foreach (var child in previousKeySection.GetChildren())
+                {
+                    if (!string.IsNullOrWhiteSpace(child.Value))
+                    {
+                        keys.Add(child.Value.Trim());
+                    }
+                }
+            }
+
+            var previousKeysCsv = configuration["Jwt:PreviousKeysCsv"];
+            if (!string.IsNullOrWhiteSpace(previousKeysCsv))
+            {
+                foreach (var item in previousKeysCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    keys.Add(item);
+                }
+            }
+
+            return keys
+                .Where(key => !string.IsNullOrWhiteSpace(key))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
         }
 
         public Task<string?> GetUserIdFromTokenAsync(string token)

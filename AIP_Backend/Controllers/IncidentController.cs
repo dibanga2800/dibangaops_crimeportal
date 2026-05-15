@@ -42,7 +42,8 @@ namespace AIPBackend.Controllers
 			[FromQuery] string? siteName = null,
 			[FromQuery] string? siteId = null,
 			[FromQuery] string? status = null,
-			[FromQuery] string? customerId = null)
+			[FromQuery] string? customerId = null,
+			[FromQuery] string? regionId = null)
 		{
 			try
 			{
@@ -57,7 +58,8 @@ namespace AIPBackend.Controllers
 					SiteName = siteName,
 					SiteId = siteId,
 					Status = status,
-					CustomerId = customerId
+					CustomerId = customerId,
+					RegionId = regionId
 				};
 
 				var result = await _incidentService.GetIncidentsAsync(query);
@@ -151,7 +153,7 @@ namespace AIPBackend.Controllers
 				return StatusCode(500, new IncidentResponseDto
 				{
 					Success = false,
-					Message = $"Error creating incident: {ex.Message}"
+					Message = "Error creating incident"
 				});
 			}
 		}
@@ -200,7 +202,7 @@ namespace AIPBackend.Controllers
 				return StatusCode(500, new IncidentResponseDto
 				{
 					Success = false,
-					Message = $"Error updating incident: {ex.Message}"
+					Message = "Error updating incident"
 				});
 			}
 		}
@@ -229,7 +231,7 @@ namespace AIPBackend.Controllers
 			catch (Exception ex)
 			{
 				_logger.LogError(ex, "Error deleting incident {Id}", id);
-				return StatusCode(500, new { success = false, message = $"Error deleting incident: {ex.Message}" });
+				return StatusCode(500, new { success = false, message = "Error deleting incident" });
 			}
 		}
 
@@ -237,7 +239,6 @@ namespace AIPBackend.Controllers
 		/// Search for repeat offenders by name, DOB, or distinguishing marks
 		/// </summary>
 		[HttpGet("repeat-offenders")]
-		[AllowAnonymous] // Remove in production - add proper authorization
 		public async Task<ActionResult<RepeatOffenderSearchResponseDto>> SearchRepeatOffenders(
 			[FromQuery] RepeatOffenderSearchQueryDto query)
 		{
@@ -255,6 +256,11 @@ namespace AIPBackend.Controllers
 					Message = ex.Message
 				});
 			}
+			catch (ForbiddenAccessException ex)
+			{
+				_logger.LogWarning(ex, "Forbidden repeat offender search request");
+				return Forbid();
+			}
 			catch (Exception ex)
 			{
 				_logger.LogError(ex, "Error searching repeat offenders");
@@ -270,7 +276,6 @@ namespace AIPBackend.Controllers
 		/// Get crime intelligence insights for a customer
 		/// </summary>
 		[HttpGet("insights")]
-		[AllowAnonymous] // Remove in production - add proper authorization
 		public async Task<ActionResult<CrimeIntelligenceResponseDto>> GetCrimeInsights(
 			[FromQuery] CrimeIntelligenceQueryDto query)
 		{
@@ -287,6 +292,11 @@ namespace AIPBackend.Controllers
 					Success = false,
 					Message = ex.Message
 				});
+			}
+			catch (ForbiddenAccessException ex)
+			{
+				_logger.LogWarning(ex, "Forbidden crime insight request");
+				return Forbid();
 			}
 			catch (Exception ex)
 			{

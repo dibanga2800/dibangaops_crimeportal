@@ -12,11 +12,16 @@ namespace AIPBackend.Services
 	{
 		private readonly ApplicationDbContext _context;
 		private readonly ILogger<EvidenceService> _logger;
+		private readonly IUserContextService _userContextService;
 
-		public EvidenceService(ApplicationDbContext context, ILogger<EvidenceService> logger)
+		public EvidenceService(
+			ApplicationDbContext context,
+			ILogger<EvidenceService> logger,
+			IUserContextService userContextService)
 		{
 			_context = context;
 			_logger = logger;
+			_userContextService = userContextService;
 		}
 
 		public async Task<EvidenceItemDto> RegisterEvidenceAsync(int incidentId, RegisterEvidenceDto dto, string userId)
@@ -24,6 +29,7 @@ namespace AIPBackend.Services
 			var incident = await _context.Incidents.FindAsync(incidentId);
 			if (incident == null)
 				throw new KeyNotFoundException($"Incident {incidentId} not found");
+			_userContextService.EnsureCanAccessRecord(incident.CustomerId, incident.CreatedBy);
 
 			var evidence = new EvidenceItem
 			{
@@ -62,17 +68,27 @@ namespace AIPBackend.Services
 		public async Task<EvidenceItemDto> GetByIdAsync(int evidenceItemId)
 		{
 			var evidence = await _context.EvidenceItems
+				.Include(e => e.Incident)
 				.Include(e => e.CustodyEvents.OrderBy(c => c.EventTimestamp))
 				.FirstOrDefaultAsync(e => e.EvidenceItemId == evidenceItemId);
 
 			if (evidence == null)
 				throw new KeyNotFoundException($"Evidence item {evidenceItemId} not found");
+			if (evidence.Incident == null)
+				throw new KeyNotFoundException($"Incident for evidence item {evidenceItemId} not found");
+			_userContextService.EnsureCanAccessRecord(evidence.Incident.CustomerId, evidence.Incident.CreatedBy);
 
 			return MapToDto(evidence);
 		}
 
 		public async Task<EvidenceListResponseDto> GetByIncidentAsync(int incidentId)
 		{
+			var incident = await _context.Incidents
+				.FirstOrDefaultAsync(i => i.IncidentId == incidentId && !i.RecordIsDeletedYN);
+			if (incident == null)
+				throw new KeyNotFoundException($"Incident {incidentId} not found");
+			_userContextService.EnsureCanAccessRecord(incident.CustomerId, incident.CreatedBy);
+
 			var items = await _context.EvidenceItems
 				.Include(e => e.CustodyEvents.OrderBy(c => c.EventTimestamp))
 				.Where(e => e.IncidentId == incidentId)
@@ -102,6 +118,9 @@ namespace AIPBackend.Services
 					Message = $"No evidence found for barcode {dto.Barcode}"
 				};
 			}
+			if (evidence.Incident == null)
+				throw new KeyNotFoundException($"Incident for barcode {dto.Barcode} not found");
+			_userContextService.EnsureCanAccessRecord(evidence.Incident.CustomerId, evidence.Incident.CreatedBy);
 
 			if (!string.IsNullOrWhiteSpace(dto.ScanLocation))
 			{
@@ -130,9 +149,14 @@ namespace AIPBackend.Services
 		public async Task<EvidenceCustodyEventDto> RecordCustodyEventAsync(
 			int evidenceItemId, RecordCustodyEventDto dto, string userId)
 		{
-			var evidence = await _context.EvidenceItems.FindAsync(evidenceItemId);
+			var evidence = await _context.EvidenceItems
+				.Include(e => e.Incident)
+				.FirstOrDefaultAsync(e => e.EvidenceItemId == evidenceItemId);
 			if (evidence == null)
 				throw new KeyNotFoundException($"Evidence item {evidenceItemId} not found");
+			if (evidence.Incident == null)
+				throw new KeyNotFoundException($"Incident for evidence item {evidenceItemId} not found");
+			_userContextService.EnsureCanAccessRecord(evidence.Incident.CustomerId, evidence.Incident.CreatedBy);
 
 			var custodyEvent = new EvidenceCustodyEvent
 			{

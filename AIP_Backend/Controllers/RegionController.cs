@@ -27,7 +27,6 @@ namespace AIPBackend.Controllers
         /// Get all regions with optional filtering
         /// </summary>
         [HttpGet]
-        [AllowAnonymous] // Temporary for development - remove in production
         public async Task<ActionResult<ApiResponseDto<List<RegionDto>>>> GetRegions(
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 10,
@@ -63,7 +62,6 @@ namespace AIPBackend.Controllers
         /// Get a specific region by ID
         /// </summary>
         [HttpGet("{id}")]
-        [AllowAnonymous] // Temporary for development - remove in production
         public async Task<ActionResult<ApiResponseDto<RegionDto>>> GetRegion(int id)
         {
             try
@@ -103,7 +101,6 @@ namespace AIPBackend.Controllers
         /// Get regions by customer ID
         /// </summary>
         [HttpGet("customer/{customerId}")]
-        [AllowAnonymous] // Temporary for development - remove in production
         public async Task<ActionResult<ApiResponseDto<List<RegionDto>>>> GetRegionsByCustomer(int customerId)
         {
             try
@@ -135,7 +132,6 @@ namespace AIPBackend.Controllers
         /// Create a new region
         /// </summary>
         [HttpPost]
-        [AllowAnonymous] // Temporary for development - remove in production
         public async Task<ActionResult<ApiResponseDto<RegionDto>>> CreateRegion([FromBody] RegionCreateRequestDto createRegionDto)
         {
             try
@@ -167,7 +163,6 @@ namespace AIPBackend.Controllers
         /// Update an existing region
         /// </summary>
         [HttpPut("{id}")]
-        [AllowAnonymous] // Temporary for development - remove in production
         public async Task<ActionResult<ApiResponseDto<RegionDto>>> UpdateRegion(int id, [FromBody] RegionUpdateRequestDto updateRegionDto)
         {
             try
@@ -207,7 +202,6 @@ namespace AIPBackend.Controllers
         /// Delete a region
         /// </summary>
         [HttpDelete("{id}")]
-        [AllowAnonymous] // Temporary for development - remove in production
         public async Task<ActionResult<ApiResponseDto<object>>> DeleteRegion(int id)
         {
             try

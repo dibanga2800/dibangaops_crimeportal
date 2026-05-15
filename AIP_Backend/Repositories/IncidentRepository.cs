@@ -4,6 +4,7 @@ using AIPBackend.Data;
 using AIPBackend.Models;
 using AIPBackend.Models.DTOs;
 using AIPBackend.Repositories.Models;
+using AIPBackend.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace AIPBackend.Repositories
@@ -49,13 +50,100 @@ namespace AIPBackend.Repositories
 			DateTime? toDate = null,
 			string? createdByUserId = null)
 		{
-			var query = _context.Incidents
-				.Include(i => i.StolenItems)
-				.Include(i => i.Customer)
-				.Where(i => !i.RecordIsDeletedYN)
-				.AsQueryable();
+			var query = ApplyListFilters(
+				_context.Incidents
+					.Include(i => i.StolenItems)
+					.Include(i => i.Customer)
+					.Where(i => !i.RecordIsDeletedYN),
+				search,
+				customerId,
+				siteId,
+				regionId,
+				incidentType,
+				status,
+				fromDate,
+				toDate,
+				createdByUserId);
 
-			// Apply filters
+			var totalCount = await query.CountAsync();
+
+			var incidents = await query
+				.OrderByDescending(i => i.DateOfIncident)
+				.ThenByDescending(i => i.DateInputted)
+				.Skip((page - 1) * pageSize)
+				.Take(pageSize)
+				.ToListAsync();
+
+			return (incidents, totalCount);
+		}
+
+		public async Task<IncidentListSummaryDto> GetSummaryAsync(
+			string? search = null,
+			int? customerId = null,
+			string? siteId = null,
+			string? regionId = null,
+			string? incidentType = null,
+			string? status = null,
+			DateTime? fromDate = null,
+			DateTime? toDate = null,
+			string? createdByUserId = null)
+		{
+			var query = ApplyListFilters(
+				_context.Incidents.Where(i => !i.RecordIsDeletedYN),
+				search,
+				customerId,
+				siteId,
+				regionId,
+				incidentType,
+				status,
+				fromDate,
+				toDate,
+				createdByUserId);
+
+			var incidents = await query
+				.AsNoTracking()
+				.Include(i => i.StolenItems)
+				.ToListAsync();
+
+			var uniqueSiteKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			decimal totalRecovered = 0m;
+			decimal totalLost = 0m;
+
+			foreach (var incident in incidents)
+			{
+				totalRecovered += IncidentFinancials.GetRecoveredValue(incident);
+				totalLost += IncidentFinancials.GetLostValue(incident);
+
+				var siteKey = !string.IsNullOrWhiteSpace(incident.SiteId)
+					? incident.SiteId
+					: incident.StoreName;
+				if (!string.IsNullOrWhiteSpace(siteKey))
+				{
+					uniqueSiteKeys.Add(siteKey.Trim());
+				}
+			}
+
+			return new IncidentListSummaryDto
+			{
+				TotalIncidents = incidents.Count,
+				TotalAmountRecovered = totalRecovered,
+				TotalAmountLost = totalLost,
+				UniqueSites = uniqueSiteKeys.Count,
+			};
+		}
+
+		private IQueryable<Incident> ApplyListFilters(
+			IQueryable<Incident> query,
+			string? search,
+			int? customerId,
+			string? siteId,
+			string? regionId,
+			string? incidentType,
+			string? status,
+			DateTime? fromDate,
+			DateTime? toDate,
+			string? createdByUserId)
+		{
 			if (customerId.HasValue)
 			{
 				query = query.Where(i => i.CustomerId == customerId.Value);
@@ -97,30 +185,18 @@ namespace AIPBackend.Repositories
 				query = query.Where(i => i.DateOfIncident < exclusiveEndDate);
 			}
 
-			// Apply search
 			if (!string.IsNullOrWhiteSpace(search))
 			{
 				var searchLower = search.ToLower();
 				query = query.Where(i =>
-			i.StoreName.ToLower().Contains(searchLower) ||
-				i.StaffMemberName.ToLower().Contains(searchLower) ||
+					i.StoreName.ToLower().Contains(searchLower) ||
+					i.StaffMemberName.ToLower().Contains(searchLower) ||
 					(i.Description != null && i.Description.ToLower().Contains(searchLower)) ||
 					(i.IncidentType != null && i.IncidentType.ToLower().Contains(searchLower)) ||
 					(i.Customer != null && i.Customer.CompanyName.ToLower().Contains(searchLower)));
 			}
 
-			// Get total count before pagination
-			var totalCount = await query.CountAsync();
-
-			// Apply pagination and ordering
-			var incidents = await query
-				.OrderByDescending(i => i.DateOfIncident)
-				.ThenByDescending(i => i.DateInputted)
-				.Skip((page - 1) * pageSize)
-				.Take(pageSize)
-				.ToListAsync();
-
-			return (incidents, totalCount);
+			return query;
 		}
 
 		public async Task<Incident> CreateAsync(Incident incident)
@@ -267,6 +343,16 @@ namespace AIPBackend.Repositories
 			var query = _context.Incidents
 				.Where(i => !i.RecordIsDeletedYN && !string.IsNullOrEmpty(i.OffenderName))
 				.AsQueryable();
+
+			if (filter.AccessibleCustomerIds.Count > 0)
+			{
+				query = query.Where(i => filter.AccessibleCustomerIds.Contains(i.CustomerId));
+			}
+
+			if (filter.AccessibleSiteIds.Count > 0)
+			{
+				query = query.Where(i => i.SiteId != null && filter.AccessibleSiteIds.Contains(i.SiteId));
+			}
 
 			if (!string.IsNullOrWhiteSpace(filter.Name))
 			{

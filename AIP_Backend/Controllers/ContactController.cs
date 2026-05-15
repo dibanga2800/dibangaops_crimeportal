@@ -16,7 +16,22 @@ namespace AIPBackend.Controllers
 	{
 		private readonly IEmailService _emailService;
 		private const string ToEmail = "david.ibanga@advantage1.co.uk";
+		private const long MaxAttachmentSizeBytes = 5 * 1024 * 1024;
 		private static readonly string[] CcEmails = { "dibanga2800@gmail.com" };
+		private static readonly HashSet<string> AllowedAttachmentExtensions = new(StringComparer.OrdinalIgnoreCase)
+		{
+			".pdf", ".txt", ".doc", ".docx", ".jpg", ".jpeg", ".png", ".webp"
+		};
+		private static readonly HashSet<string> AllowedAttachmentContentTypes = new(StringComparer.OrdinalIgnoreCase)
+		{
+			"application/pdf",
+			"text/plain",
+			"application/msword",
+			"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+			"image/jpeg",
+			"image/png",
+			"image/webp"
+		};
 
 		public ContactController(IEmailService emailService)
 		{
@@ -62,7 +77,7 @@ namespace AIPBackend.Controllers
 
 			if (attachment != null && attachment.Length > 0)
 			{
-				if (attachment.Length > 5 * 1024 * 1024) // 5MB
+				if (attachment.Length > MaxAttachmentSizeBytes)
 				{
 					return BadRequest(new ApiResponseDto<object>
 					{
@@ -70,6 +85,21 @@ namespace AIPBackend.Controllers
 						Message = "Attachment must be 5MB or less."
 					});
 				}
+
+				var extension = Path.GetExtension(attachment.FileName);
+				var contentType = attachment.ContentType?.Trim();
+				if (string.IsNullOrWhiteSpace(extension) ||
+					!AllowedAttachmentExtensions.Contains(extension) ||
+					string.IsNullOrWhiteSpace(contentType) ||
+					!AllowedAttachmentContentTypes.Contains(contentType))
+				{
+					return BadRequest(new ApiResponseDto<object>
+					{
+						Success = false,
+						Message = "Attachment type is not allowed."
+					});
+				}
+
 				attachmentStream = attachment.OpenReadStream();
 				attachmentFileName = attachment.FileName;
 			}

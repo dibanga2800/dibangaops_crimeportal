@@ -27,7 +27,6 @@ namespace AIPBackend.Controllers
         /// Get all sites with optional filtering
         /// </summary>
         [HttpGet]
-        [AllowAnonymous] // Temporary for development - remove in production
         public async Task<ActionResult<ApiResponseDto<List<SiteDto>>>> GetSites(
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 10,
@@ -64,7 +63,6 @@ namespace AIPBackend.Controllers
         /// Get a specific site by ID
         /// </summary>
         [HttpGet("{id}")]
-        [AllowAnonymous] // Temporary for development - remove in production
         public async Task<ActionResult<ApiResponseDto<SiteDto>>> GetSite(int id)
         {
             try
@@ -104,7 +102,6 @@ namespace AIPBackend.Controllers
         /// Get sites by customer ID
         /// </summary>
         [HttpGet("customer/{customerId}")]
-        [AllowAnonymous] // Temporary for development - remove in production
         public async Task<ActionResult<ApiResponseDto<List<SiteDto>>>> GetSitesByCustomer(int customerId)
         {
             try
@@ -136,7 +133,6 @@ namespace AIPBackend.Controllers
         /// Get sites by region ID
         /// </summary>
         [HttpGet("region/{regionId}")]
-        [AllowAnonymous] // Temporary for development - remove in production
         public async Task<ActionResult<ApiResponseDto<List<SiteDto>>>> GetSitesByRegion(int regionId)
         {
             try
@@ -168,7 +164,6 @@ namespace AIPBackend.Controllers
         /// Create a new site
         /// </summary>
         [HttpPost]
-        [AllowAnonymous] // Temporary for development - remove in production
         public async Task<ActionResult<ApiResponseDto<SiteDto>>> CreateSite([FromBody] SiteCreateRequestDto createSiteDto)
         {
             try
@@ -200,7 +195,6 @@ namespace AIPBackend.Controllers
         /// Update an existing site
         /// </summary>
         [HttpPut("{id}")]
-        [AllowAnonymous] // Temporary for development - remove in production
         public async Task<ActionResult<ApiResponseDto<SiteDto>>> UpdateSite(int id, [FromBody] SiteUpdateRequestDto updateSiteDto)
         {
             try
@@ -240,7 +234,6 @@ namespace AIPBackend.Controllers
         /// Delete a site
         /// </summary>
         [HttpDelete("{id}")]
-        [AllowAnonymous] // Temporary for development - remove in production
         public async Task<ActionResult<ApiResponseDto<object>>> DeleteSite(int id)
         {
             try

@@ -29,7 +29,6 @@ namespace AIPBackend.Controllers
         /// Get all customers with optional filtering and pagination
         /// </summary>
         [HttpGet]
-        [AllowAnonymous] // Temporary for development - remove in production
         public async Task<ActionResult<ApiResponseDto<CustomerListResponseDto>>> GetCustomers(
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 10,
@@ -68,7 +67,6 @@ namespace AIPBackend.Controllers
         /// Get customer by ID
         /// </summary>
         [HttpGet("{id}")]
-        [AllowAnonymous] // Temporary for development - remove in production
         public async Task<ActionResult<ApiResponseDto<CustomerDetailResponseDto>>> GetCustomer(int id)
         {
             try

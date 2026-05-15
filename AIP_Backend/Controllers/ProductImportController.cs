@@ -13,15 +13,37 @@ namespace AIPBackend.Controllers
     [Authorize(Roles = "administrator")] // Only administrators can import products
     public class ProductImportController : ControllerBase
     {
+        private const long MaxImportFileSizeBytes = 10 * 1024 * 1024;
+        private static readonly HashSet<string> AllowedContentTypes = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.ms-excel"
+        };
+        private const long MaxBarcodeCsvFileSizeBytes = 5 * 1024 * 1024;
+        private static readonly HashSet<string> AllowedBarcodeCsvContentTypes = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "text/csv",
+            "application/csv",
+            "text/plain",
+            "application/octet-stream",
+            "application/vnd.ms-excel"
+        };
+
         private readonly IExcelImportService _excelImportService;
+        private readonly IProductBarcodeCsvImportService _barcodeCsvImportService;
         private readonly ILogger<ProductImportController> _logger;
+        private readonly IWebHostEnvironment _environment;
 
         public ProductImportController(
-            IExcelImportService excelImportService, 
-            ILogger<ProductImportController> logger)
+            IExcelImportService excelImportService,
+            IProductBarcodeCsvImportService barcodeCsvImportService,
+            ILogger<ProductImportController> logger,
+            IWebHostEnvironment environment)
         {
             _excelImportService = excelImportService;
+            _barcodeCsvImportService = barcodeCsvImportService;
             _logger = logger;
+            _environment = environment;
         }
 
         /// <summary>
@@ -47,6 +69,14 @@ namespace AIPBackend.Controllers
                         Message = "No file uploaded"
                     });
                 }
+                if (file.Length > MaxImportFileSizeBytes)
+                {
+                    return BadRequest(new ApiResponseDto<ImportResultDto>
+                    {
+                        Success = false,
+                        Message = "File must be 10MB or less"
+                    });
+                }
 
                 // Validate file type
                 var allowedExtensions = new[] { ".xlsx", ".xls" };
@@ -57,6 +87,14 @@ namespace AIPBackend.Controllers
                     {
                         Success = false,
                         Message = "Invalid file type. Only Excel files (.xlsx, .xls) are allowed"
+                    });
+                }
+                if (!string.IsNullOrWhiteSpace(file.ContentType) && !AllowedContentTypes.Contains(file.ContentType.Trim()))
+                {
+                    return BadRequest(new ApiResponseDto<ImportResultDto>
+                    {
+                        Success = false,
+                        Message = "Invalid content type for Excel import file"
                     });
                 }
 
@@ -101,23 +139,138 @@ namespace AIPBackend.Controllers
                 return StatusCode(500, new ApiResponseDto<ImportResultDto>
                 {
                     Success = false,
-                    Message = "An error occurred while importing products",
-                    Errors = new List<string> { ex.Message }
+                    Message = "An error occurred while importing products"
                 });
             }
+        }
+
+        /// <summary>
+        /// Import or update products from barcode CSV (Barcode, Department, VMECode, ProductName, RetailPrice).
+        /// </summary>
+        [HttpPost("barcode-csv")]
+        [Consumes("multipart/form-data")]
+        [RequestSizeLimit(MaxBarcodeCsvFileSizeBytes)]
+        [ApiExplorerSettings(IgnoreApi = true)]
+        public async Task<ActionResult<ApiResponseDto<BarcodeCsvImportResultDto>>> ImportBarcodeCsv(
+            [FromForm] IFormFile file,
+            CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var currentUserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "System";
+                _logger.LogInformation("Barcode CSV import request by user {CurrentUserId}", currentUserId);
+
+                if (file == null || file.Length == 0)
+                {
+                    return BadRequest(new ApiResponseDto<BarcodeCsvImportResultDto>
+                    {
+                        Success = false,
+                        Message = "No file uploaded"
+                    });
+                }
+
+                if (file.Length > MaxBarcodeCsvFileSizeBytes)
+                {
+                    return BadRequest(new ApiResponseDto<BarcodeCsvImportResultDto>
+                    {
+                        Success = false,
+                        Message = "File must be 5MB or less"
+                    });
+                }
+
+                var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+                if (extension != ".csv")
+                {
+                    return BadRequest(new ApiResponseDto<BarcodeCsvImportResultDto>
+                    {
+                        Success = false,
+                        Message = "Invalid file type. Only .csv files are allowed"
+                    });
+                }
+
+                if (!string.IsNullOrWhiteSpace(file.ContentType) &&
+                    !AllowedBarcodeCsvContentTypes.Contains(file.ContentType.Trim()))
+                {
+                    return BadRequest(new ApiResponseDto<BarcodeCsvImportResultDto>
+                    {
+                        Success = false,
+                        Message = "Invalid content type for CSV import file"
+                    });
+                }
+
+                await using var readStream = file.OpenReadStream();
+                BarcodeCsvImportResultDto result;
+                try
+                {
+                    result = await _barcodeCsvImportService.ImportAsync(
+                        readStream,
+                        file.FileName,
+                        currentUserId,
+                        cancellationToken);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    return BadRequest(new ApiResponseDto<BarcodeCsvImportResultDto>
+                    {
+                        Success = false,
+                        Message = ex.Message
+                    });
+                }
+                catch (ArgumentException ex)
+                {
+                    return BadRequest(new ApiResponseDto<BarcodeCsvImportResultDto>
+                    {
+                        Success = false,
+                        Message = ex.Message
+                    });
+                }
+
+                return Ok(new ApiResponseDto<BarcodeCsvImportResultDto>
+                {
+                    Success = result.ImportCompleted,
+                    Message = BuildBarcodeImportSummaryMessage(result),
+                    Data = result
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error importing barcode CSV");
+                return StatusCode(500, new ApiResponseDto<BarcodeCsvImportResultDto>
+                {
+                    Success = false,
+                    Message = "An error occurred while importing the barcode CSV"
+                });
+            }
+        }
+
+        private static string BuildBarcodeImportSummaryMessage(BarcodeCsvImportResultDto result)
+        {
+            if (!result.ImportCompleted)
+            {
+                return result.ErrorMessage
+                    ?? $"Import stopped partway: {result.CreatedCount} created, {result.UpdatedCount} updated before failure.";
+            }
+
+            return $"Import finished: {result.CreatedCount} created, {result.UpdatedCount} updated, " +
+                   $"{result.InvalidRows} invalid/skipped rows, {result.ValidRows} valid rows processed.";
         }
 
         /// <summary>
         /// Import products from local Excel file path (for development/testing)
         /// </summary>
         [HttpPost("excel/path")]
-        [AllowAnonymous] // Temporary for development - remove in production
         public async Task<ActionResult<ApiResponseDto<ImportResultDto>>> ImportFromExcelPath(
             [FromBody] ExcelImportRequestDto request,
             CancellationToken cancellationToken = default)
         {
             try
             {
+                if (!_environment.IsDevelopment())
+                {
+                    _logger.LogWarning("Blocked use of development-only import endpoint in non-development environment");
+                    return NotFound();
+                }
+
                 var currentUserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "System";
                 _logger.LogInformation("Product import from path request by user {CurrentUserId}", currentUserId);
 
@@ -153,8 +306,7 @@ namespace AIPBackend.Controllers
                 return NotFound(new ApiResponseDto<ImportResultDto>
                 {
                     Success = false,
-                    Message = $"Excel file not found: {request.FilePath}",
-                    Errors = new List<string> { ex.Message }
+                    Message = "Excel file not found"
                 });
             }
             catch (Exception ex)
@@ -163,8 +315,7 @@ namespace AIPBackend.Controllers
                 return StatusCode(500, new ApiResponseDto<ImportResultDto>
                 {
                     Success = false,
-                    Message = "An error occurred while importing products",
-                    Errors = new List<string> { ex.Message }
+                    Message = "An error occurred while importing products"
                 });
             }
         }

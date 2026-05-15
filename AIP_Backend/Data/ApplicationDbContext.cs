@@ -343,9 +343,6 @@ namespace AIPBackend.Data
                 .HasIndex(p => p.EAN)
                 .IsUnique();
 
-            modelBuilder.Entity<Product>()
-                .HasIndex(p => p.Category);
-
             // Configure DailyActivityReport relationships
             modelBuilder.Entity<DailyActivityReport>()
                 .HasOne(dar => dar.Customer)

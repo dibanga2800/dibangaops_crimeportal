@@ -4,6 +4,7 @@ using AIPBackend.Models;
 using AIPBackend.Models.DTOs;
 using AIPBackend.Repositories;
 using AIPBackend.Repositories.Models;
+using AIPBackend.Exceptions;
 using Microsoft.Extensions.Logging;
 using System.Globalization;
 using System.Text.Json;
@@ -15,6 +16,8 @@ namespace AIPBackend.Services
 	/// </summary>
 	public class IncidentService : IIncidentService
 	{
+		private const int MinPageSize = 1;
+		private const int MaxPageSize = 100;
 		private readonly IIncidentRepository _repository;
 		private readonly ISiteRepository _siteRepository;
 		private readonly ILogger<IncidentService> _logger;
@@ -67,6 +70,8 @@ namespace AIPBackend.Services
 		public async Task<IncidentsResponseDto> GetIncidentsAsync(GetIncidentsQueryDto query)
 		{
 			var context = _userContext.GetCurrentContext();
+			query.Page = query.Page < 1 ? 1 : query.Page;
+			query.PageSize = Math.Clamp(query.PageSize, MinPageSize, MaxPageSize);
 
 			DateTime? fromDate = null;
 			DateTime? toDate = null;
@@ -143,13 +148,26 @@ namespace AIPBackend.Services
 
 			}
 
+			var regionIdFilter = string.IsNullOrWhiteSpace(query.RegionId) ? null : query.RegionId;
+
 			var (incidents, totalCount) = await _repository.GetPagedAsync(
 				page: query.Page,
 				pageSize: query.PageSize,
 				search: query.Search,
 				customerId: customerId,
 				siteId: siteIdFilter,
-				regionId: null, // Can be added if needed
+				regionId: regionIdFilter,
+				incidentType: query.IncidentType,
+				status: query.Status,
+				fromDate: fromDate,
+				toDate: toDate,
+				createdByUserId: null);
+
+			var summary = await _repository.GetSummaryAsync(
+				search: query.Search,
+				customerId: customerId,
+				siteId: siteIdFilter,
+				regionId: regionIdFilter,
 				incidentType: query.IncidentType,
 				status: query.Status,
 				fromDate: fromDate,
@@ -169,7 +187,8 @@ namespace AIPBackend.Services
 					TotalCount = totalCount,
 					HasPrevious = query.Page > 1,
 					HasNext = query.Page < totalPages
-				}
+				},
+				Summary = summary
 			};
 		}
 
@@ -421,6 +440,8 @@ namespace AIPBackend.Services
 
 		public async Task<RepeatOffenderSearchResponseDto> SearchRepeatOffendersAsync(RepeatOffenderSearchQueryDto query)
 		{
+			var context = _userContext.GetCurrentContext();
+
 			if (string.IsNullOrWhiteSpace(query.Name) &&
 				string.IsNullOrWhiteSpace(query.Marks) &&
 				string.IsNullOrWhiteSpace(query.DateOfBirth))
@@ -441,7 +462,9 @@ namespace AIPBackend.Services
 				Marks = query.Marks,
 				DateOfBirth = parsedDob,
 				Page = query.Page < 1 ? 1 : query.Page,
-				PageSize = query.PageSize < 1 ? 10 : query.PageSize
+				PageSize = query.PageSize < 1 ? 10 : query.PageSize,
+				AccessibleCustomerIds = context.IsAdministrator ? Array.Empty<int>() : context.AccessibleCustomerIds,
+				AccessibleSiteIds = context.IsAdministrator ? Array.Empty<string>() : context.AccessibleSiteIds
 			};
 
 			var (results, totalCount) = await _repository.SearchRepeatOffendersAsync(filter);
@@ -472,6 +495,9 @@ namespace AIPBackend.Services
 				throw new ArgumentException("CustomerId is required", nameof(query.CustomerId));
 			}
 
+			_userContext.EnsureCanAccessCustomer(query.CustomerId);
+			var context = _userContext.GetCurrentContext();
+
 			var effectiveQuery = new CrimeIntelligenceQueryDto
 			{
 				CustomerId = query.CustomerId,
@@ -481,7 +507,22 @@ namespace AIPBackend.Services
 				EndDate = query.EndDate ?? DateTime.UtcNow
 			};
 
+			if (!context.IsAdministrator && context.AccessibleSiteIds.Count > 0)
+			{
+				if (!string.IsNullOrWhiteSpace(effectiveQuery.SiteId) &&
+					!context.AccessibleSiteIds.Contains(effectiveQuery.SiteId))
+				{
+					throw new ForbiddenAccessException("You do not have permission to access this site.");
+				}
+			}
+
 			var incidents = await _repository.GetIncidentsWithDetailsAsync(effectiveQuery);
+			if (!context.IsAdministrator && context.AccessibleSiteIds.Count > 0)
+			{
+				incidents = incidents
+					.Where(i => !string.IsNullOrWhiteSpace(i.SiteId) && context.AccessibleSiteIds.Contains(i.SiteId))
+					.ToList();
+			}
 
 			if (!incidents.Any())
 			{

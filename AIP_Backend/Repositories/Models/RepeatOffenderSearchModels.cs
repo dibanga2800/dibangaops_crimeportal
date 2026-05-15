@@ -10,6 +10,8 @@ namespace AIPBackend.Repositories.Models
 		public string? Marks { get; set; }
 		public int Page { get; set; } = 1;
 		public int PageSize { get; set; } = 10;
+		public IReadOnlyCollection<int> AccessibleCustomerIds { get; set; } = Array.Empty<int>();
+		public IReadOnlyCollection<string> AccessibleSiteIds { get; set; } = Array.Empty<string>();
 	}
 
 	public class RepeatOffenderRepositoryIncident

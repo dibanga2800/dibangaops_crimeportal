@@ -13,8 +13,25 @@ using Microsoft.OpenApi.Models;
 using Microsoft.Extensions.FileProviders;
 using System.Text;
 using System.Security.Claims;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.Mvc;
 
 var builder = WebApplication.CreateBuilder(args);
+var enableSwaggerInProduction = builder.Configuration.GetValue<bool>("Security:EnableSwaggerInProduction");
+var enableSwaggerUiInProduction = builder.Configuration.GetValue<bool>("Security:EnableSwaggerUiInProduction");
+var allowWildcardVercelOrigins = builder.Configuration.GetValue<bool>("Security:AllowWildcardVercelOrigins");
+var enableRateLimiting = builder.Configuration.GetValue<bool?>("Security:EnableRateLimiting") ?? builder.Environment.IsProduction();
+var globalRateLimitPermitLimit = builder.Configuration.GetValue<int?>("Security:GlobalRateLimitPermitLimit") ?? 120;
+var globalRateLimitWindowSeconds = builder.Configuration.GetValue<int?>("Security:GlobalRateLimitWindowSeconds") ?? 60;
+var enableUploadsStaticFilesInProduction = builder.Configuration.GetValue<bool>("Security:EnableUploadsStaticFilesInProduction");
+var requireAuthForUploads = builder.Configuration.GetValue<bool?>("Security:RequireAuthForUploads") ?? !builder.Environment.IsDevelopment();
+var runMigrationsOnStartup = builder.Configuration.GetValue<bool?>("Security:RunMigrationsOnStartup") ?? !builder.Environment.IsEnvironment("Testing");
+var runPageAccessInitializationOnStartup = builder.Configuration.GetValue<bool?>("Security:RunPageAccessInitializationOnStartup") ?? !builder.Environment.IsEnvironment("Testing");
+var maxMultipartBodyLengthBytes =
+	builder.Configuration.GetValue<long?>("Security:MaxMultipartBodyLengthBytes") ?? 10 * 1024 * 1024;
 
 if (builder.Environment.IsDevelopment())
 {
@@ -31,6 +48,38 @@ static bool IsMissingOrPlaceholderStorageConnectionString(string? value)
 static bool RequiresBlobStorage(string? mode)
 {
 	return mode?.Trim().ToLowerInvariant() is "blob" or "both";
+}
+
+static List<string> GetJwtSigningKeys(IConfiguration configuration)
+{
+	var primaryKey = configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT Key is not configured");
+	var keys = new List<string> { primaryKey };
+
+	var previousKeySection = configuration.GetSection("Jwt:PreviousKeys");
+	if (previousKeySection.Exists())
+	{
+		foreach (var child in previousKeySection.GetChildren())
+		{
+			if (!string.IsNullOrWhiteSpace(child.Value))
+			{
+				keys.Add(child.Value.Trim());
+			}
+		}
+	}
+
+	var previousKeyCsv = configuration["Jwt:PreviousKeysCsv"];
+	if (!string.IsNullOrWhiteSpace(previousKeyCsv))
+	{
+		foreach (var item in previousKeyCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+		{
+			keys.Add(item);
+		}
+	}
+
+	return keys
+		.Where(key => !string.IsNullOrWhiteSpace(key))
+		.Distinct(StringComparer.Ordinal)
+		.ToList();
 }
 
 // Configure for IIS deployment
@@ -108,6 +157,10 @@ builder.Services.AddSingleton<IBlobService, BlobService>();
 builder.Services.AddScoped<IFileStorageService, FileStorageService>();
 builder.Services.AddScoped<IIncidentImageStorageService, IncidentImageStorageService>();
 builder.Services.AddHttpClient();
+builder.Services.Configure<FormOptions>(options =>
+{
+	options.MultipartBodyLengthLimit = maxMultipartBodyLengthBytes;
+});
 
 builder.Services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
 {
@@ -133,8 +186,15 @@ builder.Services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
 
 // Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");
-var jwtKey = jwtSettings["Key"] ?? throw new InvalidOperationException("JWT Key is not configured");
-var key = Encoding.UTF8.GetBytes(jwtKey);
+var jwtSigningKeys = GetJwtSigningKeys(builder.Configuration);
+var securityKeys = jwtSigningKeys
+	.Select(signingKey => new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)))
+	.Cast<SecurityKey>()
+	.ToList();
+if (securityKeys.Count == 0)
+{
+	throw new InvalidOperationException("No JWT signing keys were configured.");
+}
 
 builder.Services.AddAuthentication(options =>
 {
@@ -145,7 +205,7 @@ builder.Services.AddAuthentication(options =>
 .AddJwtBearer(options =>
 {
     options.SaveToken = true;
-    options.RequireHttpsMetadata = false;
+    options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuer = true,
@@ -154,7 +214,8 @@ builder.Services.AddAuthentication(options =>
         ValidateIssuerSigningKey = true,
         ValidIssuer = jwtSettings["Issuer"],
         ValidAudience = jwtSettings["Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(key),
+        IssuerSigningKey = securityKeys[0],
+        IssuerSigningKeys = securityKeys,
         ClockSkew = TimeSpan.Zero,
         // Map role claims from JWT token
         RoleClaimType = ClaimTypes.Role
@@ -168,6 +229,34 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("ManagerAndAbove", policy => policy.RequireRole("administrator", "manager"));
     options.AddPolicy("AllRoles", policy => policy.RequireRole("administrator", "manager", "security-officer", "store"));
 });
+
+if (enableRateLimiting)
+{
+	builder.Services.AddRateLimiter(options =>
+	{
+		options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+		options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+		{
+			var key =
+				httpContext.User.Identity?.IsAuthenticated == true
+					? httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier) ??
+					  httpContext.Connection.RemoteIpAddress?.ToString() ??
+					  "authenticated-unknown"
+					: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
+
+			return RateLimitPartition.GetFixedWindowLimiter(
+				partitionKey: key,
+				factory: _ => new FixedWindowRateLimiterOptions
+				{
+					PermitLimit = globalRateLimitPermitLimit,
+					Window = TimeSpan.FromSeconds(globalRateLimitWindowSeconds),
+					QueueLimit = 0,
+					QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+					AutoReplenishment = true
+				});
+		});
+	});
+}
 
 // Register Repositories
 builder.Services.AddScoped<IRegionRepository, RegionRepository>();
@@ -199,6 +288,7 @@ builder.Services.AddScoped<IUserContextService, UserContextService>();
 builder.Services.AddScoped<IIncidentService, IncidentService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IExcelImportService, ExcelImportService>();
+builder.Services.AddScoped<IProductBarcodeCsvImportService, ProductBarcodeCsvImportService>();
 builder.Services.AddScoped<IDailyActivityReportService, DailyActivityReportService>();
 builder.Services.AddScoped<IAlertRuleService, AlertRuleService>();
 // AI classification: Azure OpenAI with rule-based fallback
@@ -256,8 +346,8 @@ builder.Services.AddCors(options =>
 				// In production, use specific origins
 				var allowedOrigins = new List<string>
 				{
-					"https://coop-aip-ui.vercel.app",  // Production domain
-					"https://coop-aip-ui-*.vercel.app"  // Preview deployments
+					"https://www.dibangops.com",
+					"https://dibangops.com"
 				};
 				
 				// Add custom domain(s): comma-separated for apex + www (e.g. https://www.example.com,https://example.com)
@@ -270,6 +360,12 @@ builder.Services.AddCors(options =>
 							allowedOrigins.Add(part);
 					}
 				}
+
+				allowedOrigins = allowedOrigins
+					.Where(origin => Uri.TryCreate(origin, UriKind.Absolute, out var uri) &&
+						string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+					.Distinct(StringComparer.OrdinalIgnoreCase)
+					.ToList();
 				
 				policy.SetIsOriginAllowed(origin =>
 					{
@@ -279,9 +375,10 @@ builder.Services.AddCors(options =>
 						if (allowedOrigins.Any(allowed => allowed == origin))
 							return true;
 						
-						// Allow any Vercel domain (for testing - can be narrowed down later)
-						// This covers all Vercel deployments: production, preview, and branch deployments
-						if (origin.StartsWith("https://") && origin.EndsWith(".vercel.app"))
+						// Optional fallback for preview URLs. Keep disabled in production unless explicitly needed.
+						if (allowWildcardVercelOrigins &&
+							origin.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
+							origin.EndsWith(".vercel.app", StringComparison.OrdinalIgnoreCase))
 						{
 							return true;
 						}
@@ -300,6 +397,7 @@ builder.Services.AddControllers()
     {
         options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
     });
+builder.Services.AddProblemDetails();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -351,84 +449,98 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 var app = builder.Build();
+app.Logger.LogInformation("JWT validation key count configured: {ValidationKeyCount}", securityKeys.Count);
 
 // Apply pending EF migrations (Azure SQL and local DBs are often empty until this runs).
-using (var scope = app.Services.CreateScope())
+if (runMigrationsOnStartup)
 {
-    var migrateLogger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    try
-    {
-        migrateLogger.LogInformation("Applying database migrations if needed...");
-        db.Database.Migrate();
-        migrateLogger.LogInformation("Database migrations complete.");
-    }
-    catch (Exception ex)
-    {
-        migrateLogger.LogError(ex, "Database migration failed.");
-        throw;
-    }
+	using (var scope = app.Services.CreateScope())
+	{
+		var migrateLogger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+		var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+		try
+		{
+			if (db.Database.IsRelational())
+			{
+				migrateLogger.LogInformation("Applying database migrations if needed...");
+				db.Database.Migrate();
+				migrateLogger.LogInformation("Database migrations complete.");
+			}
+			else
+			{
+				migrateLogger.LogInformation("Skipping database migrations because provider is non-relational.");
+			}
+		}
+		catch (Exception ex)
+		{
+			migrateLogger.LogError(ex, "Database migration failed.");
+			throw;
+		}
+	}
 }
 
 // Ensure page access is initialized on startup (database-first approach)
 // Run initialization in background after app starts
-_ = Task.Run(async () =>
+if (runPageAccessInitializationOnStartup)
 {
-    // Wait for app to be fully ready
-    await Task.Delay(3000);
-    
-    using (var scope = app.Services.CreateScope())
-    {
-        var services = scope.ServiceProvider;
-        var logger = services.GetRequiredService<ILogger<Program>>();
-        
-        try
-        {
-            logger.LogInformation("=== STARTING PAGE ACCESS INITIALIZATION ===");
+	_ = Task.Run(async () =>
+	{
+		// Wait for app to be fully ready
+		await Task.Delay(3000);
+		
+		using (var scope = app.Services.CreateScope())
+		{
+			var services = scope.ServiceProvider;
+			var logger = services.GetRequiredService<ILogger<Program>>();
+			
+			try
+			{
+				logger.LogInformation("=== STARTING PAGE ACCESS INITIALIZATION ===");
 
-            // Migrate User_Roles lookup table to 3-tier model (runs on every startup, idempotent)
-            var dataSeedingService = services.GetRequiredService<IDataSeedingService>();
-            await dataSeedingService.MigrateUserRolesAsync();
-            
-            var pageAccessService = services.GetRequiredService<IPageAccessService>();
-            var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
-            
-            // Try to get an admin user, or use null (FK allows nulls now)
-            var adminUser = await userManager.FindByEmailAsync("admin@advantageone.com");
-            var userId = adminUser?.Id ?? null;
-            
-            logger.LogInformation("Admin user found: {Found}, UserId: {UserId}", adminUser != null, userId ?? "null");
-            
-            // Initialize pages - this is idempotent and safe to call multiple times
-            logger.LogInformation("Calling InitializeDefaultPageAccessAsync...");
-            var result = await pageAccessService.InitializeDefaultPageAccessAsync(userId ?? "System");
-            
-            logger.LogInformation("=== PAGE ACCESS INITIALIZATION COMPLETED: {Result} ===", result);
-            
-            // Verify pages were created
-            var context = services.GetRequiredService<ApplicationDbContext>();
-            var pageCount = await context.PageAccesses.CountAsync();
-            logger.LogInformation("Total pages in database after initialization: {Count}", pageCount);
-            
-            if (pageCount == 0)
-            {
-                logger.LogWarning("WARNING: No pages found after initialization! This may indicate an error.");
-            }
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "=== ERROR DURING PAGE ACCESS INITIALIZATION ===");
-            logger.LogError("Exception Type: {Type}", ex.GetType().Name);
-            logger.LogError("Exception Message: {Message}", ex.Message);
-            logger.LogError("Stack Trace: {StackTrace}", ex.StackTrace);
-            
-            if (ex.InnerException != null)
-            {
-                logger.LogError("Inner Exception: {InnerMessage}", ex.InnerException.Message);
-            }
-        }
-    }
-});
+				// Migrate User_Roles lookup table to 3-tier model (runs on every startup, idempotent)
+				var dataSeedingService = services.GetRequiredService<IDataSeedingService>();
+				await dataSeedingService.MigrateUserRolesAsync();
+				
+				var pageAccessService = services.GetRequiredService<IPageAccessService>();
+				var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
+				
+				// Try to get an admin user, or use null (FK allows nulls now)
+				var adminUser = await userManager.FindByEmailAsync("admin@advantageone.com");
+				var userId = adminUser?.Id ?? null;
+				
+				logger.LogInformation("Admin user found: {Found}, UserId: {UserId}", adminUser != null, userId ?? "null");
+				
+				// Initialize pages - this is idempotent and safe to call multiple times
+				logger.LogInformation("Calling InitializeDefaultPageAccessAsync...");
+				var result = await pageAccessService.InitializeDefaultPageAccessAsync(userId ?? "System");
+				
+				logger.LogInformation("=== PAGE ACCESS INITIALIZATION COMPLETED: {Result} ===", result);
+				
+				// Verify pages were created
+				var context = services.GetRequiredService<ApplicationDbContext>();
+				var pageCount = await context.PageAccesses.CountAsync();
+				logger.LogInformation("Total pages in database after initialization: {Count}", pageCount);
+				
+				if (pageCount == 0)
+				{
+					logger.LogWarning("WARNING: No pages found after initialization! This may indicate an error.");
+				}
+			}
+			catch (Exception ex)
+			{
+				logger.LogError(ex, "=== ERROR DURING PAGE ACCESS INITIALIZATION ===");
+				logger.LogError("Exception Type: {Type}", ex.GetType().Name);
+				logger.LogError("Exception Message: {Message}", ex.Message);
+				logger.LogError("Stack Trace: {StackTrace}", ex.StackTrace);
+				
+				if (ex.InnerException != null)
+				{
+					logger.LogError("Inner Exception: {InnerMessage}", ex.InnerException.Message);
+				}
+			}
+		}
+	});
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -439,31 +551,92 @@ if (app.Environment.IsDevelopment())
 }
 else
 {
-    // Enable Swagger in Production for API documentation
-    app.UseSwagger();
-    app.UseSwaggerUI();
+	app.UseExceptionHandler(errorApp =>
+	{
+		errorApp.Run(async context =>
+		{
+			var exceptionHandler = context.Features.Get<IExceptionHandlerFeature>();
+			var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+			if (exceptionHandler?.Error != null)
+			{
+				logger.LogError(exceptionHandler.Error, "Unhandled exception for request {Method} {Path}",
+					context.Request.Method,
+					context.Request.Path.Value);
+			}
+
+			context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+			context.Response.ContentType = "application/problem+json";
+			var problem = new ProblemDetails
+			{
+				Status = StatusCodes.Status500InternalServerError,
+				Title = "An unexpected error occurred.",
+				Type = "https://httpstatuses.com/500"
+			};
+			await context.Response.WriteAsJsonAsync(problem);
+		});
+	});
+
+    if (enableSwaggerInProduction)
+    {
+		app.UseSwagger();
+		if (enableSwaggerUiInProduction)
+		{
+			app.UseSwaggerUI();
+		}
+    }
+
+	app.UseHsts();
     app.UseHttpsRedirection();
 }
 
 // Use CORS
 app.UseCors("AllowSpecificOrigin");
 
-// Enable static file serving for uploads
-var uploadsPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "uploads");
-if (!Directory.Exists(uploadsPath))
+if (enableRateLimiting)
 {
-	Directory.CreateDirectory(uploadsPath);
+	app.UseRateLimiter();
 }
-
-app.UseStaticFiles(new StaticFileOptions
-{
-	FileProvider = new PhysicalFileProvider(uploadsPath),
-	RequestPath = "/uploads"
-});
 
 app.UseAuthentication();
 app.UseAuthorization();
 
+var enableUploadsStaticFiles = app.Environment.IsDevelopment() || enableUploadsStaticFilesInProduction;
+if (enableUploadsStaticFiles)
+{
+	var uploadsPath = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "uploads");
+	if (!Directory.Exists(uploadsPath))
+	{
+		Directory.CreateDirectory(uploadsPath);
+	}
+
+	app.UseWhen(
+		context => context.Request.Path.StartsWithSegments("/uploads"),
+		uploadsApp =>
+		{
+			if (requireAuthForUploads)
+			{
+				uploadsApp.Use(async (context, next) =>
+				{
+					if (context.User.Identity?.IsAuthenticated != true)
+					{
+						context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+						return;
+					}
+
+					await next();
+				});
+			}
+
+			uploadsApp.UseStaticFiles(new StaticFileOptions
+			{
+				FileProvider = new PhysicalFileProvider(uploadsPath),
+				RequestPath = "/uploads"
+			});
+		});
+}
+
 app.MapControllers();
 
 app.Run();
+
+public partial class Program { }

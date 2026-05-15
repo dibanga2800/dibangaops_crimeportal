@@ -2,6 +2,7 @@
 
 using AIPBackend.Models.DTOs;
 using AIPBackend.Services;
+using AIPBackend.Exceptions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -43,6 +44,10 @@ namespace AIPBackend.Controllers
 			{
 				return NotFound(new { message = ex.Message });
 			}
+			catch (ForbiddenAccessException)
+			{
+				return Forbid();
+			}
 		}
 
 		[HttpGet("{evidenceItemId}")]
@@ -57,6 +62,10 @@ namespace AIPBackend.Controllers
 			{
 				return NotFound();
 			}
+			catch (ForbiddenAccessException)
+			{
+				return Forbid();
+			}
 		}
 
 		[HttpGet("incidents/{incidentId}")]
@@ -70,6 +79,10 @@ namespace AIPBackend.Controllers
 			{
 				return NotFound();
 			}
+			catch (ForbiddenAccessException)
+			{
+				return Forbid();
+			}
 
 			var result = await _evidenceService.GetByIncidentAsync(incidentId);
 			return Ok(result);
@@ -78,8 +91,19 @@ namespace AIPBackend.Controllers
 		[HttpPost("scan")]
 		public async Task<ActionResult<BarcodeScanResultDto>> ScanBarcode([FromBody] BarcodeScanDto dto)
 		{
-			var result = await _evidenceService.ScanBarcodeAsync(dto);
-			return Ok(result);
+			try
+			{
+				var result = await _evidenceService.ScanBarcodeAsync(dto);
+				return Ok(result);
+			}
+			catch (KeyNotFoundException)
+			{
+				return NotFound();
+			}
+			catch (ForbiddenAccessException)
+			{
+				return Forbid();
+			}
 		}
 
 		[HttpPost("{evidenceItemId}/custody")]
@@ -95,6 +119,10 @@ namespace AIPBackend.Controllers
 			catch (KeyNotFoundException ex)
 			{
 				return NotFound(new { message = ex.Message });
+			}
+			catch (ForbiddenAccessException)
+			{
+				return Forbid();
 			}
 		}
 	}

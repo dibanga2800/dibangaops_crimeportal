@@ -747,6 +747,8 @@ namespace AIPBackend.Services
                 new PageAccessDto { Id = 5, PageId = "user-setup", Title = "User Setup", Path = "/administration/user-setup", Category = "Administration", Description = "User management and setup", IsActive = true, SortOrder = 5, CreatedAt = DateTime.UtcNow, CreatedBy = "System", UpdatedAt = null, UpdatedBy = "" },
                 new PageAccessDto { Id = 6, PageId = "employee-registration", Title = "Employee Registration", Path = "/administration/employee-registration", Category = "Administration", Description = "Employee registration and management", IsActive = true, SortOrder = 6, CreatedAt = DateTime.UtcNow, CreatedBy = "System", UpdatedAt = null, UpdatedBy = "" },
                 new PageAccessDto { Id = 7, PageId = "customer-setup", Title = "Customer Setup", Path = "/administration/customer-setup", Category = "Administration", Description = "Customer, region, and site management", IsActive = true, SortOrder = 7, CreatedAt = DateTime.UtcNow, CreatedBy = "System", UpdatedAt = null, UpdatedBy = "" },
+                new PageAccessDto { Id = 13, PageId = "barcode-catalog-import", Title = "Barcode Catalog Import", Path = "/administration/barcode-catalog-import", Category = "Administration", Description = "CSV barcode import (barcode, VMECode, ProductName; optional RetailPrice)", IsActive = true, SortOrder = 13, CreatedAt = DateTime.UtcNow, CreatedBy = "System", UpdatedAt = null, UpdatedBy = "" },
+                new PageAccessDto { Id = 14, PageId = "product-catalog", Title = "Product Catalog", Path = "/administration/product-catalog", Category = "Administration", Description = "Browse products by barcode and update retail prices", IsActive = true, SortOrder = 14, CreatedAt = DateTime.UtcNow, CreatedBy = "System", UpdatedAt = null, UpdatedBy = "" },
                 new PageAccessDto { Id = 8, PageId = "incident-report", Title = "Incident Report", Path = "/operations/incident-report", Category = "Operations", Description = "Report security incidents", IsActive = true, SortOrder = 8, CreatedAt = DateTime.UtcNow, CreatedBy = "System", UpdatedAt = null, UpdatedBy = "" },
                 new PageAccessDto { Id = 9, PageId = "incident-graph", Title = "Incident Graph", Path = "/operations/incident-graph", Category = "Operations", Description = "Visualize incident data", IsActive = true, SortOrder = 9, CreatedAt = DateTime.UtcNow, CreatedBy = "System", UpdatedAt = null, UpdatedBy = "" },
                 new PageAccessDto { Id = 10, PageId = "crime-intelligence", Title = "Crime Intelligence", Path = "/operations/crime-intelligence", Category = "Operations", Description = "Crime intelligence and analysis", IsActive = true, SortOrder = 10, CreatedAt = DateTime.UtcNow, CreatedBy = "System", UpdatedAt = null, UpdatedBy = "" },
@@ -815,6 +817,8 @@ namespace AIPBackend.Services
                     new PageAccess { PageId = "user-setup", Title = "User Setup", Path = "/administration/user-setup", Category = "Administration", Description = "User management and setup", SortOrder = 10 },
                     new PageAccess { PageId = "employee-registration", Title = "Employee Registration", Path = "/administration/employee-registration", Category = "Administration", Description = "Employee registration", SortOrder = 11 },
                     new PageAccess { PageId = "customer-setup", Title = "Customer Setup", Path = "/administration/customer-setup", Category = "Administration", Description = "Customer management", SortOrder = 12 },
+                    new PageAccess { PageId = "barcode-catalog-import", Title = "Barcode Catalog Import", Path = "/administration/barcode-catalog-import", Category = "Administration", Description = "CSV columns barcode, VMECode, ProductName; optional RetailPrice", SortOrder = 13 },
+                    new PageAccess { PageId = "product-catalog", Title = "Product Catalog", Path = "/administration/product-catalog", Category = "Administration", Description = "Browse products by barcode and update retail prices", SortOrder = 14 },
 
                     // Operations
                     new PageAccess { PageId = "incident-report", Title = "Incident Report", Path = "/operations/incident-report", Category = "Operations", Description = "Report security incidents", SortOrder = 20 },
@@ -955,6 +959,11 @@ namespace AIPBackend.Services
 					await _context.SaveChangesAsync();
 					_logger.LogInformation("Page sync completed: {Created} created, {Updated} updated", 
 						pagesToAdd.Count, updatedCount);
+
+					if (pagesToAdd.Any())
+					{
+						await EnsureRoleAccessForNewPagesAsync(pagesToAdd, validUserId);
+					}
 				}
 				else
 				{
@@ -1232,6 +1241,71 @@ namespace AIPBackend.Services
             {
                 _logger.LogError(ex, "Error ensuring officer role access");
                 // Don't throw - this is a best-effort migration
+            }
+        }
+
+        private async Task EnsureRoleAccessForNewPagesAsync(IReadOnlyCollection<PageAccess> newPages, string validUserId)
+        {
+            if (newPages.Count == 0)
+            {
+                return;
+            }
+
+            var newPageIds = newPages.Select(p => p.Id).ToList();
+            var existing = await _context.RolePageAccesses
+                .Where(r => newPageIds.Contains(r.PageAccessId))
+                .ToListAsync();
+
+            static string AccessKey(string roleName, int pageAccessId) =>
+                $"{roleName.ToLowerInvariant()}|{pageAccessId}";
+
+            var existingKeys = existing
+                .Select(r => AccessKey(r.RoleName, r.PageAccessId))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var additions = new List<RolePageAccess>();
+
+            foreach (var page in newPages)
+            {
+                if (!existingKeys.Contains(AccessKey("administrator", page.Id)))
+                {
+                    additions.Add(new RolePageAccess
+                    {
+                        RoleName = "administrator",
+                        PageAccessId = page.Id,
+                        HasAccess = true,
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedBy = validUserId,
+                        PagePath = page.Path
+                    });
+                    existingKeys.Add(AccessKey("administrator", page.Id));
+                }
+
+                var managerEligible =
+                    page.Category != "Customer" ||
+                    string.Equals(page.PageId, "customer-reporting-page", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(page.PageId, "customer-views-config", StringComparison.OrdinalIgnoreCase);
+
+                if (managerEligible && !existingKeys.Contains(AccessKey("manager", page.Id)))
+                {
+                    additions.Add(new RolePageAccess
+                    {
+                        RoleName = "manager",
+                        PageAccessId = page.Id,
+                        HasAccess = true,
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedBy = validUserId,
+                        PagePath = page.Path
+                    });
+                    existingKeys.Add(AccessKey("manager", page.Id));
+                }
+            }
+
+            if (additions.Count > 0)
+            {
+                _context.RolePageAccesses.AddRange(additions);
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Granted default RolePageAccess for {Count} newly added page(s)", additions.Count);
             }
         }
 

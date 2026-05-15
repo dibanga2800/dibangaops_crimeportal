@@ -17,6 +17,7 @@ namespace AIPBackend.Controllers
 	[Authorize]
 	public class OffenderRecognitionController : ControllerBase
 	{
+		private const int MaxImageBytes = 5 * 1024 * 1024;
 		private readonly IOffenderRecognitionService _offenderRecognitionService;
 
 		public OffenderRecognitionController(IOffenderRecognitionService offenderRecognitionService)
@@ -53,6 +54,8 @@ namespace AIPBackend.Controllers
 			}
 			if (imageBytes == null || imageBytes.Length == 0)
 				return BadRequest(new { message = "Provide JSON body with imageBase64." });
+			if (imageBytes.Length > MaxImageBytes)
+				return BadRequest(new { message = "Image payload exceeds the 5MB limit." });
 			var result = await _offenderRecognitionService.DetectFaceOnlyAsync(imageBytes, cancellationToken, imageWidth, imageHeight);
 			return Ok(result);
 		}
@@ -70,6 +73,14 @@ namespace AIPBackend.Controllers
 			if (Request.HasFormContentType && Request.Form.Files.Count > 0)
 			{
 				var file = Request.Form.Files[0];
+				if (!file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+				{
+					return BadRequest(new { message = "Only image uploads are supported." });
+				}
+				if (file.Length > MaxImageBytes)
+				{
+					return BadRequest(new { message = "Image payload exceeds the 5MB limit." });
+				}
 				await using var ms = new MemoryStream();
 				await file.CopyToAsync(ms, cancellationToken);
 				imageBytes = ms.ToArray();
@@ -99,6 +110,10 @@ namespace AIPBackend.Controllers
 			if (imageBytes == null || imageBytes.Length == 0)
 			{
 				return BadRequest(new { message = "Provide image via multipart/form-data (file) or JSON body with imageBase64." });
+			}
+			if (imageBytes.Length > MaxImageBytes)
+			{
+				return BadRequest(new { message = "Image payload exceeds the 5MB limit." });
 			}
 
 			var result = await _offenderRecognitionService.SearchByImageAsync(imageBytes, cancellationToken);

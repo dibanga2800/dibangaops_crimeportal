@@ -19,6 +19,8 @@ namespace AIPBackend.Services
 		private readonly string _networkShareRootPath;
 		private readonly string _localUploadsRootPath;
 		private readonly Dictionary<string, string> _networkFolderOverrides;
+		private readonly long _maxFileSizeBytes;
+		private readonly HashSet<string> _blockedExtensions;
 
 		public FileStorageService(
 			IWebHostEnvironment environment,
@@ -53,6 +55,16 @@ namespace AIPBackend.Services
 				["manager-support"] = _configuration["FileStorage:ManagerSupportNetworkPath"]
 					?? Path.Combine(_networkShareRootPath, "Manager Support")
 			};
+
+			_maxFileSizeBytes = _configuration.GetValue<long?>("FileStorage:MaxFileSizeBytes") ?? 10 * 1024 * 1024;
+			_blockedExtensions = (_configuration.GetSection("FileStorage:BlockedExtensions").Get<string[]>() ??
+				new[]
+				{
+					".exe", ".dll", ".bat", ".cmd", ".com", ".msi", ".ps1", ".sh", ".js", ".jar", ".scr"
+				})
+				.Where(value => !string.IsNullOrWhiteSpace(value))
+				.Select(value => value.Trim().ToLowerInvariant())
+				.ToHashSet(StringComparer.OrdinalIgnoreCase);
 		}
 
 		/// <summary>
@@ -69,6 +81,7 @@ namespace AIPBackend.Services
 			{
 				throw new ArgumentException("Folder name is required", nameof(folderName));
 			}
+			ValidateFileUpload(file);
 
 			var fileExtension = Path.GetExtension(file.FileName);
 			var uniqueFileName = $"{Guid.NewGuid()}{fileExtension}";
@@ -118,6 +131,20 @@ namespace AIPBackend.Services
 					.Select(segment => segment.Replace("\\", "/")));
 
 			return relativePath;
+		}
+
+		private void ValidateFileUpload(IFormFile file)
+		{
+			if (file.Length > _maxFileSizeBytes)
+			{
+				throw new InvalidOperationException($"File exceeds maximum allowed size of {_maxFileSizeBytes} bytes.");
+			}
+
+			var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+			if (!string.IsNullOrWhiteSpace(extension) && _blockedExtensions.Contains(extension))
+			{
+				throw new InvalidOperationException($"File type '{extension}' is not allowed.");
+			}
 		}
 
 		/// <summary>

@@ -214,7 +214,11 @@ namespace AIPBackend.Services
 				if (customerId.HasValue)
 					query = query.Where(a => a.AlertRule.CustomerId == customerId.Value);
 
-				var active = await query.Where(a => a.Status != "resolved").ToListAsync();
+				var activeQuery = query.Where(a => a.Status != "resolved");
+				var totalActive = await activeQuery.CountAsync();
+				var newCount = await activeQuery.CountAsync(a => a.Status == "new");
+				var acknowledgedCount = await activeQuery.CountAsync(a => a.Status == "acknowledged");
+				var escalatedCount = await activeQuery.CountAsync(a => a.Status == "escalated");
 				var resolvedToday = await query
 					.Where(a => a.Status == "resolved" && a.ResolvedAt != null && a.ResolvedAt.Value.Date == DateTime.UtcNow.Date)
 					.CountAsync();
@@ -226,10 +230,10 @@ namespace AIPBackend.Services
 
 				return new AlertSummaryDto
 				{
-					TotalActive = active.Count,
-					NewCount = active.Count(a => a.Status == "new"),
-					AcknowledgedCount = active.Count(a => a.Status == "acknowledged"),
-					EscalatedCount = active.Count(a => a.Status == "escalated"),
+					TotalActive = totalActive,
+					NewCount = newCount,
+					AcknowledgedCount = acknowledgedCount,
+					EscalatedCount = escalatedCount,
 					ResolvedTodayCount = resolvedToday,
 					RecentAlerts = recent.Select(MapToDto).ToList()
 				};

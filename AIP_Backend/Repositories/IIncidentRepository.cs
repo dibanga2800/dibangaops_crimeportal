@@ -25,6 +25,17 @@ namespace AIPBackend.Repositories
 			DateTime? fromDate = null,
 			DateTime? toDate = null,
 			string? createdByUserId = null);
+
+		Task<IncidentListSummaryDto> GetSummaryAsync(
+			string? search = null,
+			int? customerId = null,
+			string? siteId = null,
+			string? regionId = null,
+			string? incidentType = null,
+			string? status = null,
+			DateTime? fromDate = null,
+			DateTime? toDate = null,
+			string? createdByUserId = null);
 		Task<Incident> CreateAsync(Incident incident);
 		Task<Incident> UpdateAsync(Incident incident);
 		Task<bool> DeleteAsync(int incidentId);

@@ -60,11 +60,6 @@ namespace AIPBackend.Services
                     "L8Name", "L8NAME", "L8_Name", "l8_name"
                 });
                 
-                // Find SECTION column (will be stored in Section field in database)
-                var sectionColumn = FindColumn(worksheet, headerRow, new[] { 
-                    "SECTION", "Section", "section", "Section Name", "section name"
-                });
-                
                 // Then find product name column - prioritize standard names first, then use L8NAME
                 var productNameColumn = FindColumn(worksheet, headerRow, new[] { 
                     "ProductName", "productname", "Product Name", "product name", "Name", "name",
@@ -77,10 +72,6 @@ namespace AIPBackend.Services
                 {
                     productNameColumn = l8NameColumn;
                 }
-                var categoryColumn = FindColumn(worksheet, headerRow, new[] { 
-                    "CATEGORY", "Category", "category", "Cat", "cat",
-                    "Product Category", "product category"
-                });
                 var descriptionColumn = FindColumn(worksheet, headerRow, new[] { 
                     "Description", "description", "Desc", "desc", "DESCRIPTION",
                     "Product Description", "product description", "Details", "details"
@@ -142,8 +133,6 @@ namespace AIPBackend.Services
                     l8NameColumn = productNameColumn; // This should be L8NAME if no standard ProductName column exists
                 }
                 
-                // Note: Section field in database will store SECTION value from Excel
-
                 var productsToAdd = new List<Product>();
                 var existingEANsList = await _context.Products
                     .Where(p => p.IsActive)
@@ -174,9 +163,6 @@ namespace AIPBackend.Services
                             continue;
                         }
 
-                        // Get SECTION value (will be stored in Section field in database)
-                        var sectionValue = sectionColumn != -1 ? worksheet.Cells[row, sectionColumn].Value?.ToString()?.Trim() : null;
-                        var categoryValue = categoryColumn != -1 ? worksheet.Cells[row, categoryColumn].Value?.ToString()?.Trim() : null;
                         var descriptionValue = descriptionColumn != -1 ? worksheet.Cells[row, descriptionColumn].Value?.ToString()?.Trim() : null;
                         
                         // Try to parse price
@@ -190,17 +176,10 @@ namespace AIPBackend.Services
                             }
                         }
 
-                        // Use CATEGORY column from Excel (no fallback)
-                        var finalCategory = categoryValue;
-
-                        // L8NAME from Excel is used as ProductName
-                        // SECTION from Excel is stored in Section field in database
                         var product = new Product
                         {
-                            EAN = eanValue,
-                            ProductName = productNameValue, // This is L8NAME from Excel
-                            Section = sectionValue, // Store SECTION from Excel in Section field
-                            Category = finalCategory,
+                            EAN = eanValue, // barcode
+                            ProductName = productNameValue,
                             Description = descriptionValue,
                             Price = priceValue,
                             CreatedBy = createdBy,

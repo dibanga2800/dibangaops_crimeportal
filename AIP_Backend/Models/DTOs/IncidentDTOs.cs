@@ -153,12 +153,24 @@ namespace AIPBackend.Models.DTOs
 	}
 
 	/// <summary>
+	/// Aggregate totals for the current incident list filters (all matching rows, not just the page).
+	/// </summary>
+	public class IncidentListSummaryDto
+	{
+		public int TotalIncidents { get; set; }
+		public decimal TotalAmountRecovered { get; set; }
+		public decimal TotalAmountLost { get; set; }
+		public int UniqueSites { get; set; }
+	}
+
+	/// <summary>
 	/// Paginated incidents response (matches frontend structure)
 	/// </summary>
 	public class IncidentsResponseDto
 	{
 		public List<IncidentDto> Data { get; set; } = new();
 		public PaginationInfoDto Pagination { get; set; } = new();
+		public IncidentListSummaryDto Summary { get; set; } = new();
 	}
 
 	/// <summary>
@@ -340,6 +352,7 @@ namespace AIPBackend.Models.DTOs
 		public string? SiteId { get; set; }
 		public string? Status { get; set; }
 		public string? CustomerId { get; set; }
+		public string? RegionId { get; set; }
 	}
 
 	public class RepeatOffenderIncidentSummaryDto

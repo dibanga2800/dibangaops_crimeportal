@@ -13,6 +13,8 @@ namespace AIPBackend.Controllers
     [Authorize]
     public class ProductController : ControllerBase
     {
+        private const int MaxProductPageSize = 200;
+
         private readonly IProductService _productService;
         private readonly ILogger<ProductController> _logger;
 
@@ -26,7 +28,6 @@ namespace AIPBackend.Controllers
         /// Get product by EAN/barcode
         /// </summary>
         [HttpGet("ean/{ean}")]
-        [AllowAnonymous] // Temporary for development - remove in production
         public async Task<ActionResult<ApiResponseDto<ProductLookupResponseDto>>> GetProductByEAN(string ean)
         {
             try
@@ -50,7 +51,7 @@ namespace AIPBackend.Controllers
                     ProductId = product.ProductId,
                     EAN = product.EAN,
                     ProductName = product.ProductName,
-                    Category = product.Category,
+                    Department = product.Department,
                     Description = product.Description,
                     Price = product.Price
                 };
@@ -68,8 +69,34 @@ namespace AIPBackend.Controllers
                 return StatusCode(500, new ApiResponseDto<ProductLookupResponseDto>
                 {
                     Success = false,
-                    Message = "An error occurred while retrieving the product",
-                    Errors = new List<string> { ex.Message }
+                    Message = "An error occurred while retrieving the product"
+                });
+            }
+        }
+
+        /// <summary>
+        /// Distinct department values from the product catalog (for incident stolen-item dropdown).
+        /// </summary>
+        [HttpGet("departments")]
+        public async Task<ActionResult<ApiResponseDto<List<string>>>> GetProductDepartments()
+        {
+            try
+            {
+                var departments = await _productService.GetDistinctDepartmentsAsync();
+                return Ok(new ApiResponseDto<List<string>>
+                {
+                    Success = true,
+                    Message = "Product departments retrieved successfully",
+                    Data = departments.ToList()
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving product departments");
+                return StatusCode(500, new ApiResponseDto<List<string>>
+                {
+                    Success = false,
+                    Message = "An error occurred while retrieving product departments"
                 });
             }
         }
@@ -78,35 +105,88 @@ namespace AIPBackend.Controllers
         /// Get all products with optional filtering and pagination
         /// </summary>
         [HttpGet]
-        [AllowAnonymous] // Temporary for development - remove in production
-        public async Task<ActionResult<ApiResponseDto<List<ProductDto>>>> GetProducts(
+        public async Task<ActionResult<ApiResponseDto<ProductListResponseDto>>> GetProducts(
             [FromQuery] int page = 1,
-            [FromQuery] int pageSize = 10,
-            [FromQuery] string? search = null,
-            [FromQuery] string? category = null)
+            [FromQuery] int pageSize = 50,
+            [FromQuery] string? search = null)
         {
             try
             {
                 var currentUserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 _logger.LogInformation("Get products request by user {CurrentUserId}", currentUserId);
 
-                var products = await _productService.GetProductsAsync(page, pageSize, search, category);
+                pageSize = Math.Clamp(pageSize, 1, MaxProductPageSize);
+                var result = await _productService.GetProductsAsync(page, pageSize, search);
 
-                return Ok(new ApiResponseDto<List<ProductDto>>
+                return Ok(new ApiResponseDto<ProductListResponseDto>
                 {
                     Success = true,
                     Message = "Products retrieved successfully",
-                    Data = products
+                    Data = result
                 });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error retrieving products");
-                return StatusCode(500, new ApiResponseDto<List<ProductDto>>
+                return StatusCode(500, new ApiResponseDto<ProductListResponseDto>
                 {
                     Success = false,
-                    Message = "An error occurred while retrieving products",
-                    Errors = new List<string> { ex.Message }
+                    Message = "An error occurred while retrieving products"
+                });
+            }
+        }
+
+        /// <summary>
+        /// Update retail price for a product (administrator only).
+        /// </summary>
+        [HttpPatch("{id}/price")]
+        [Authorize(Roles = "administrator")]
+        public async Task<ActionResult<ApiResponseDto<ProductDto>>> UpdateProductPrice(
+            int id,
+            [FromBody] UpdateProductPriceRequestDto request)
+        {
+            try
+            {
+                var currentUserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "System";
+                _logger.LogInformation("Update product price for ID {ProductId} by user {CurrentUserId}", id, currentUserId);
+
+                ProductDto? product;
+                try
+                {
+                    product = await _productService.UpdateProductPriceAsync(id, request.Price, currentUserId);
+                }
+                catch (ArgumentOutOfRangeException ex)
+                {
+                    return BadRequest(new ApiResponseDto<ProductDto>
+                    {
+                        Success = false,
+                        Message = ex.Message
+                    });
+                }
+
+                if (product == null)
+                {
+                    return NotFound(new ApiResponseDto<ProductDto>
+                    {
+                        Success = false,
+                        Message = $"Product with ID '{id}' not found"
+                    });
+                }
+
+                return Ok(new ApiResponseDto<ProductDto>
+                {
+                    Success = true,
+                    Message = "Product price updated successfully",
+                    Data = product
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating product price for ID: {ProductId}", id);
+                return StatusCode(500, new ApiResponseDto<ProductDto>
+                {
+                    Success = false,
+                    Message = "An error occurred while updating the product price"
                 });
             }
         }
@@ -115,7 +195,6 @@ namespace AIPBackend.Controllers
         /// Get product by ID
         /// </summary>
         [HttpGet("{id}")]
-        [AllowAnonymous] // Temporary for development - remove in production
         public async Task<ActionResult<ApiResponseDto<ProductDto>>> GetProductById(int id)
         {
             try
@@ -147,8 +226,7 @@ namespace AIPBackend.Controllers
                 return StatusCode(500, new ApiResponseDto<ProductDto>
                 {
                     Success = false,
-                    Message = "An error occurred while retrieving the product",
-                    Errors = new List<string> { ex.Message }
+                    Message = "An error occurred while retrieving the product"
                 });
             }
         }
