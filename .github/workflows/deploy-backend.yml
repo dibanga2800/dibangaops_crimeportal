@@ -165,10 +165,13 @@ jobs:
         id: update_ai
         run: |
           set -euo pipefail
+          # buffalo_l + ONNX needs more than 1Gi in practice; undersized apps get ActivationFailed / OOM.
           AI_LATEST_REVISION="$(az containerapp update \
             --resource-group "${{ env.RESOURCE_GROUP }}" \
             --name "${{ env.AI_APP_NAME }}" \
             --image "${{ needs.build-and-push-images.outputs.ai_image }}" \
+            --cpu 1.0 \
+            --memory 2.0Gi \
             --query "properties.latestRevisionName" -o tsv)"
           echo "ai_latest_revision=${AI_LATEST_REVISION}" >> "$GITHUB_OUTPUT"
 

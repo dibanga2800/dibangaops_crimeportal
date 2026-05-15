@@ -357,15 +357,15 @@ variable "backend_max_replicas" {
 }
 
 variable "ai_container_cpu" {
-  description = "CPU cores for AI container app"
+  description = "CPU cores for AI container app (InsightFace buffalo_l + ONNX needs ~1 CPU for stable activation)"
   type        = number
-  default     = 0.5
+  default     = 1.0
 }
 
 variable "ai_container_memory" {
-  description = "Memory for AI container app"
+  description = "Memory for AI container app (buffalo_l models exceed 1Gi at load; use 2Gi+)"
   type        = string
-  default     = "1Gi"
+  default     = "2Gi"
 }
 
 variable "ai_min_replicas" {
