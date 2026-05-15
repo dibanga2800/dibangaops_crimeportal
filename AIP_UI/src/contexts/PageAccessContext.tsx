@@ -119,8 +119,16 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 		return normalized;
 	}, [pageAccessByRole, normalizeRoleName]);
 
-	// Load page access settings from API (AllowAnonymous endpoint - safe to call without token)
+	// Load page access settings from API (requires authenticated session)
 	const loadPageAccessSettings = useCallback(async (): Promise<PageAccessSettings> => {
+		if (!hasAuthToken()) {
+			setStatus('idle')
+			setError(null)
+			setPageAccessByRole({})
+			setAvailablePages([])
+			return EMPTY_PAGE_ACCESS_SETTINGS
+		}
+
 		try {
 			const data = await pageAccessApi.getSettings();
 			
@@ -293,6 +301,15 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 					return true;
 				}
 				// For store and security-officer, fall through to Settings-based check below
+			}
+
+			// Administrators: routes in PAGE_DEFINITIONS are part of the shipped app. Allow access even when
+			// PageAccess API has not yet been re-seeded (avoids "denied" right after adding a new admin page).
+			if (currentRole.toLowerCase() === 'administrator') {
+				const inAppCatalog = PAGE_DEFINITIONS.some((d) => d.path === normalizedPath);
+				if (inAppCatalog) {
+					return true;
+				}
 			}
 
 			// Find page by path (exact match first, then try without leading slash)
@@ -764,7 +781,11 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 				setIsLoading(true);
 				setStatus('loading');
 
-				// Load page access settings (AllowAnonymous endpoint - works without token)
+				if (!hasAuthToken()) {
+					setStatus('idle')
+					return
+				}
+
 				await loadPageAccessSettings();
 
 				// Set role from user (requires token for customer assignments)

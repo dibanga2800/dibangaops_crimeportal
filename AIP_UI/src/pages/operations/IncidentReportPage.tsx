@@ -78,6 +78,8 @@ import BarcodeScanner from '@/components/BarcodeScanner'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { incidentsApi } from "@/services/api/incidents"
 import { productService } from "@/services/productService"
+import { mapProductToStolenItem } from "@/lib/stolen-items/map-product-to-stolen-item"
+import { mergeCatalogDepartment } from "@/lib/stolen-items/catalog-departments"
 import { regionService } from "@/services/regionService"
 import type { Region } from "@/types/customer"
 import { Toaster } from '@/components/ui/toaster'
@@ -159,6 +161,7 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
   const [regionFilter, setRegionFilter] = useState<string>('all')
   const [regions, setRegions] = useState<Region[]>([])
   const [isLoadingRegions, setIsLoadingRegions] = useState(false)
+  const [catalogDepartments, setCatalogDepartments] = useState<string[]>([])
   const itemsPerPage = 10
   const enforceSiteScope = isSiteScopeEnforcedForUser(user)
   const hasAssignedSites = getAssignedSiteIds(user).length > 0
@@ -458,29 +461,47 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
     })
   }, [incidentsResponse.data, isClientFilterActive, fromDate, toDate, incidentTypeFilter, regionFilter, regions, user])
 
-  // Calculate statistics using useMemo with null checks
+  // Calculate statistics — same rules as the Saved/Lost column (getIncidentFinancials).
   const stats = useMemo(() => {
-    // Use filtered data when a date or region/type filter is active,
-    // otherwise use the current page data and the server-reported totalCount.
-    const statsData = isClientFilterActive || enforceSiteScope ? filteredIncidents : incidentsResponse.data
-    
-    return {
-      totalAmountSaved: Array.prototype.reduce.call(
-        statsData,
-        (acc: number, incident: Incident) => acc + getIncidentFinancials(incident).totalRecoveredValue,
+    const sumFromIncidents = (incidents: Incident[]) => ({
+      totalAmountRecovered: incidents.reduce(
+        (acc, incident) => acc + getIncidentFinancials(incident).totalRecoveredValue,
         0
       ),
-      totalAmountLost: Array.prototype.reduce.call(
-        statsData,
-        (acc: number, incident: Incident) => acc + getIncidentFinancials(incident).totalLostValue,
+      totalAmountLost: incidents.reduce(
+        (acc, incident) => acc + getIncidentFinancials(incident).totalLostValue,
         0
       ),
-      uniqueSites: new Set(statsData.map(incident => incident?.siteName).filter(Boolean)).size,
-      totalIncidents: isClientFilterActive || enforceSiteScope
-        ? filteredIncidents.length
-        : incidentsResponse.pagination?.totalCount || statsData.length
+      uniqueSites: new Set(incidents.map((incident) => incident?.siteName).filter(Boolean)).size,
+      totalIncidents: incidents.length,
+    })
+
+    const totalCount = incidentsResponse.pagination?.totalCount
+    const hasFullDatasetLoaded =
+      totalCount != null && totalCount > 0 && filteredIncidents.length >= totalCount
+
+    // When every matching row is on screen, sum the table rows directly (guarantees card = column totals).
+    if (hasFullDatasetLoaded || enforceSiteScope) {
+      return sumFromIncidents(filteredIncidents)
     }
-  }, [incidentsResponse.data, incidentsResponse.pagination?.totalCount, isClientFilterActive, filteredIncidents, enforceSiteScope])
+
+    // Paginated list: server summary across all pages (same financial rules as getIncidentFinancials).
+    if (incidentsResponse.summary) {
+      return {
+        totalAmountRecovered: incidentsResponse.summary.totalAmountRecovered,
+        totalAmountLost: incidentsResponse.summary.totalAmountLost,
+        uniqueSites: incidentsResponse.summary.uniqueSites,
+        totalIncidents: incidentsResponse.summary.totalIncidents,
+      }
+    }
+
+    return sumFromIncidents(filteredIncidents)
+  }, [
+    incidentsResponse.summary,
+    incidentsResponse.pagination?.totalCount,
+    filteredIncidents,
+    enforceSiteScope,
+  ])
 
   const handleSubmit = useCallback((incident: Incident) => {
     mutation.mutate(incident)
@@ -534,13 +555,19 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
     setCurrentPage(page)
   }, [totalPages])
 
+  useEffect(() => {
+    productService
+      .getDepartments()
+      .then(setCatalogDepartments)
+      .catch(() => setCatalogDepartments([]))
+  }, [])
+
   const handleBarcodeScanned = useCallback(async (barcode: string) => {
     try {
       setIsLoadingProduct(true)
-      
-      // Call product API to fetch product details by EAN/barcode
+
       const productData = await productService.getProductByEAN(barcode)
-      
+
       if (!productData) {
         toast({
           title: 'Product Not Found',
@@ -549,117 +576,45 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
         })
         return
       }
-      
-      // Create stolen item from product data
-      // Map Excel categories to form categories
-      // Note: Ambient, Fresh, and Non Food are now direct categories in the form dropdown
-      const categoryMap: Record<string, string> = {
-        // Direct matches - categories that exist in the form dropdown
-        'alcohol': 'alcohol',
-        'tobacco': 'tobacco',
-        'meat': 'meat',
-        'fish': 'fish',
-        'dairy': 'dairy',
-        'confectionery': 'confectionery',
-        'health-beauty': 'health-beauty',
-        'household': 'household',
-        'grocery': 'grocery',
-        'frozen': 'frozen',
-        'produce': 'produce',
-        'bakery': 'bakery',
-        // These categories are now direct options - keep as-is
-        'ambient': 'ambient',
-        'fresh': 'fresh',
-        'non-food': 'non-food',
-        // Handle variations for non-food (with spaces)
-        'non food': 'non-food',
-        'nonfood': 'non-food',
-      }
-      
-      // Get original category from backend and normalize
-      const originalCategory = productData.category || ''
-      let mappedCategory = originalCategory.toLowerCase().trim() || ''
-      
-      // Debug log to help troubleshoot
-      if (import.meta.env.DEV) {
-        console.log('🏷️ [Barcode] Category mapping started:', {
-          original: originalCategory,
-          normalized: mappedCategory,
-          productName: productData.productName
-        })
-      }
-      
-      if (mappedCategory) {
-        // Handle "non food" variations first (with spaces) - normalize to "non-food"
-        if (mappedCategory.includes('non') && mappedCategory.includes('food')) {
-          mappedCategory = 'non-food'
-        }
-        // Normalize spaces to dashes for categories that might have spaces (e.g., "health beauty" -> "health-beauty")
-        else if (mappedCategory.includes(' ')) {
-          mappedCategory = mappedCategory.replace(/\s+/g, '-')
-        }
-        
-        // Check for exact match in the category map
-        if (categoryMap[mappedCategory]) {
-          mappedCategory = categoryMap[mappedCategory]
-        } else {
-          // Try to find a partial match
-          const matchedKey = Object.keys(categoryMap).find(key => {
-            const normalizedKey = key.toLowerCase().trim().replace(/\s+/g, '-')
-            return mappedCategory === normalizedKey || 
-                   mappedCategory.includes(normalizedKey) || 
-                   normalizedKey.includes(mappedCategory)
-          })
-          if (matchedKey) {
-            mappedCategory = categoryMap[matchedKey]
-          } else {
-            // Default to 'other' if no match found
-            mappedCategory = 'other'
-          }
-        }
-      } else {
-        // No category provided, default to 'other'
-        mappedCategory = 'other'
-      }
-      
-      // Final debug log
-      if (import.meta.env.DEV) {
-        console.log('✅ [Barcode] Final mapped category:', mappedCategory, 'from original:', originalCategory)
-      }
 
-      const newItem: StolenItem = {
-        id: Date.now().toString(),
+      let departments = catalogDepartments
+      if (departments.length === 0) {
+        departments = await productService.getDepartments()
+      }
+      departments = mergeCatalogDepartment(departments, productData.department)
+      setCatalogDepartments(departments)
+
+      const newItem = mapProductToStolenItem(
         barcode,
-        category: mappedCategory,
-        productName: productData.productName || '',
-        description: '',
-        cost: 0,
-        quantity: 1,
-        totalAmount: 0,
-        wasRecovered: false,
-        recoveredQuantity: 0,
-        recoveredAmount: 0,
-        lostAmount: 0,
-      }
+        {
+          productName: productData.productName,
+          department: productData.department,
+          description: productData.description,
+          price: productData.price,
+        },
+        departments
+      )
 
-      // Update editingIncident if it exists, or initialize a new one
       if (editingIncident?.id?.trim()) {
         setEditingIncident({
           ...editingIncident,
-          stolenItems: [...(editingIncident.stolenItems || []), newItem]
+          stolenItems: [...(editingIncident.stolenItems || []), newItem],
         })
       } else {
-        // Keep create flow separate from edit mode.
         setEditingIncident(null)
         setCreatePrefilledStolenItems((prev) => [...prev, newItem])
-        setOpen(true) // Open the form dialog
+        setOpen(true)
       }
-      
+
+      const filled: string[] = ['product name']
+      if (newItem.category) filled.push('department')
+      if (newItem.description) filled.push('VME code')
+      if (newItem.cost > 0) filled.push('retail price')
+
       toast({
         title: 'Product Added',
-        description: `${productData.productName} has been added. Category and Product Name are auto-filled. Please complete description, cost, and quantity manually.`,
+        description: `${productData.productName} added with ${filled.join(', ')} from the catalog. Adjust quantity if needed.`,
       })
-      
     } catch (error) {
       console.error('Error with barcode:', error)
       toast({
@@ -671,7 +626,7 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
       setIsLoadingProduct(false)
       setScanningBarcode(false)
     }
-  }, [editingIncident, toast])
+  }, [editingIncident, catalogDepartments, toast])
 
   // Loading state
   // If we were navigated here with ?open=new, avoid showing the loading screen/blink.
@@ -763,11 +718,11 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 min-w-0">
             <Card className="bg-gradient-to-br from-emerald-800 to-emerald-900 border-emerald-700 shadow-md col-span-1 min-w-0">
               <CardHeader className="flex flex-row items-center justify-between p-3 md:p-4 pb-1 md:pb-2">
-                <CardTitle className="text-xs sm:text-sm font-medium text-white">Total Value Saved</CardTitle>
+                <CardTitle className="text-xs sm:text-sm font-medium text-white">Total Value Recovered</CardTitle>
                 <PoundSterling className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-300 flex-shrink-0" />
               </CardHeader>
               <CardContent className="p-3 md:p-4 pt-0 md:pt-1">
-                <div className="text-base sm:text-lg md:text-xl font-bold text-white truncate">£{stats.totalAmountSaved.toFixed(2)}</div>
+                <div className="text-base sm:text-lg md:text-xl font-bold text-white truncate">£{stats.totalAmountRecovered.toFixed(2)}</div>
               </CardContent>
             </Card>
             <Card className="bg-gradient-to-br from-rose-800 to-rose-900 border-rose-700 shadow-md col-span-1 min-w-0">
@@ -1031,8 +986,8 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
 
           {/* Desktop Table Layout - visible on medium screens and above */}
           {hasIncidents && (
-            <div className="hidden md:block overflow-x-auto min-w-0 -mx-px">
-              <div className="min-w-[480px]">
+            <div className="hidden md:block min-w-0 -mx-px">
+              <div className="min-w-[480px] overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-gray-50 dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800">
@@ -1042,7 +997,7 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
                       <TableHead className="font-medium text-sm text-gray-900 dark:text-gray-200 py-3 whitespace-nowrap hidden lg:table-cell">
                         <div className="flex items-center gap-2">
                           <Calendar className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-                          <span>Incident Date</span>
+                          <span>Incident Date / Time</span>
                         </div>
                       </TableHead>
                       <TableHead className="font-medium text-sm text-gray-900 dark:text-gray-200 py-3 whitespace-nowrap">Saved / Lost</TableHead>
@@ -1054,25 +1009,38 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
                     {paginatedIncidents.map((incident) => (
                       <TableRow 
                         key={incident.id}
-                        className="hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors text-sm text-gray-900 dark:text-gray-100"
+                        className="text-sm text-gray-900 dark:text-gray-100 odd:bg-white odd:dark:bg-slate-900 even:bg-gray-50/60 even:dark:bg-slate-800/40 hover:bg-blue-50/70 dark:hover:bg-slate-700/60 transition-colors"
                       >
                         <TableCell className="py-3 font-medium whitespace-nowrap">
                           {incident.customerName || 'N/A'}
                         </TableCell>
-                        <TableCell className="py-3 font-medium whitespace-nowrap max-w-[140px] truncate" title={incident.siteName}>
+                        <TableCell className="py-3 font-medium whitespace-nowrap max-w-[140px] truncate text-gray-800 dark:text-gray-100" title={incident.siteName}>
                           {incident.siteName}
                         </TableCell>
-                        <TableCell className="py-3 whitespace-nowrap max-w-[120px] truncate" title={incident.officerName || 'N/A'}>{incident.officerName || 'N/A'}</TableCell>
+                        <TableCell className="py-3 whitespace-nowrap max-w-[120px] truncate text-gray-700 dark:text-gray-200" title={incident.officerName || 'N/A'}>{incident.officerName || 'N/A'}</TableCell>
                         <TableCell className="py-3 hidden lg:table-cell whitespace-nowrap">
-                          {incident.date ? new Date(incident.date).toLocaleDateString() : 'N/A'}
+                          {incident.dateOfIncident || incident.date ? (
+                            <div className="flex items-center gap-2 tabular-nums">
+                              <span className="text-gray-900 dark:text-gray-100">{new Date(incident.dateOfIncident || incident.date || '').toLocaleDateString()}</span>
+                              <span className="text-blue-600 dark:text-blue-400 text-xs font-semibold bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded-md">
+                                {incident.timeOfIncident || new Date(incident.dateOfIncident || incident.date || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                          ) : (
+                            'N/A'
+                          )}
                         </TableCell>
                         <TableCell className="py-3 whitespace-nowrap">
                           <div className="flex flex-col">
-                            <span className="text-emerald-600">Saved £{getIncidentFinancials(incident).totalRecoveredValue.toFixed(2)}</span>
-                            <span className="text-rose-600 text-xs">Lost £{getIncidentFinancials(incident).totalLostValue.toFixed(2)}</span>
+                            <span className="text-emerald-700 dark:text-emerald-400 font-medium">Saved £{getIncidentFinancials(incident).totalRecoveredValue.toFixed(2)}</span>
+                            <span className="text-rose-700 dark:text-rose-400 text-xs font-medium">Lost £{getIncidentFinancials(incident).totalLostValue.toFixed(2)}</span>
                           </div>
                         </TableCell>
-                        <TableCell className="py-3 hidden lg:table-cell whitespace-nowrap">{incident.incidentType}</TableCell>
+                        <TableCell className="py-3 hidden lg:table-cell whitespace-nowrap">
+                          <span className="inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-xs font-medium text-slate-700 dark:text-slate-200">
+                            {incident.incidentType}
+                          </span>
+                        </TableCell>
                         <TableCell className="py-3">
                           <div className="flex items-center justify-end gap-1.5">
                             <Button

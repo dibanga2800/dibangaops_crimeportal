@@ -13,7 +13,7 @@ export interface CreateStockItemRequest {
   issuedBy: string
 }
 
-export interface UpdateStockItemRequest extends Partial<CreateStockItemRequest> {}
+export type UpdateStockItemRequest = Partial<CreateStockItemRequest>
 
 export interface IssueStockRequest {
   quantityToIssue: number

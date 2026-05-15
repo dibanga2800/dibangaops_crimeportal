@@ -181,6 +181,23 @@ export const PAGE_DEFINITIONS: PageDefinition[] = [
 		description: 'Company management',
 		sortOrder: 12,
 	},
+	{
+		pageId: 'barcode-catalog-import',
+		title: 'Barcode catalog import',
+		path: '/administration/barcode-catalog-import',
+		category: 'Administration',
+		description:
+			'CSV import: barcode, Department, VMECode, ProductName, RetailPrice (empty Department/VME/RetailPrice on update preserves existing values)',
+		sortOrder: 13,
+	},
+	{
+		pageId: 'product-catalog',
+		title: 'Product catalog',
+		path: '/administration/product-catalog',
+		category: 'Administration',
+		description: 'Browse products by barcode and update retail prices',
+		sortOrder: 14,
+	},
 
 	// Operations
 	{

@@ -24,6 +24,27 @@ export const api = axios.create({
   timeout: DEFAULT_API_TIMEOUT_MS
 })
 
+const PUBLIC_AUTH_ENDPOINTS = new Set([
+  '/auth/2fa/complete',
+  '/auth/login',
+  '/auth/refresh',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+])
+
+const isPublicEndpoint = (url?: string): boolean => {
+  if (!url) return false
+
+  try {
+    const normalizedPath = new URL(url, BASE_API_URL).pathname.toLowerCase()
+    return Array.from(PUBLIC_AUTH_ENDPOINTS).some(endpoint =>
+      normalizedPath.endsWith(endpoint)
+    )
+  } catch {
+    return false
+  }
+}
+
 // Add request interceptor to include auth token
 api.interceptors.request.use(
   (config) => {
@@ -37,9 +58,10 @@ api.interceptors.request.use(
       })
     }
     
-    // Skip authentication for test endpoints
-    if (config.url?.includes('/test')) {
-      console.log('🔓 [API Interceptor] Skipping authentication for test endpoint')
+    if (isPublicEndpoint(config.url)) {
+      if (isDevelopment) {
+        console.log('🔓 [API Interceptor] Skipping authentication for public auth endpoint')
+      }
       return config
     }
     

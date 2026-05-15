@@ -12,6 +12,7 @@ import { CustomerSelectionUrlSync } from '@/components/customer/CustomerSelectio
 import { LoadingFallback } from '@/components/LoadingFallback';
 import { SessionTimeoutManager } from '@/components/session/SessionTimeoutManager';
 import { RootRedirect } from '@/components/RootRedirect';
+import { env, isDevelopment } from '@/config/env';
 
 // Component to normalize paths and fix double slashes
 const PathNormalizer = () => {
@@ -125,6 +126,8 @@ const NavigationTracker = () => {
 const UserSetup = lazy(() => import('@/pages/administration/UserSetup'));
 const EmployeeRegistration = lazy(() => import('@/pages/administration/EmployeeRegistration'));
 const CustomerSetup = lazy(() => import('@/pages/administration/CustomerSetup'));
+const BarcodeCatalogImportPage = lazy(() => import('@/pages/administration/BarcodeCatalogImportPage'));
+const ProductCatalogPage = lazy(() => import('@/pages/administration/ProductCatalogPage'));
 
 // Operations pages
 const IncidentReportPage = lazy(() => import('@/pages/operations/IncidentReportPage'));
@@ -145,6 +148,7 @@ const AboutPage = lazy(() => import('@/pages/AboutPage'));
 const PrivacyPage = lazy(() => import('@/pages/PrivacyPage'));
 const TermsPage = lazy(() => import('@/pages/TermsPage'));
 const ContactPage = lazy(() => import('@/pages/ContactPage'));
+const shouldExposeTestRoutes = isDevelopment || env.VITE_ENABLE_TEST_ROUTES;
 
 const router = createBrowserRouter([
   {
@@ -192,10 +196,14 @@ const router = createBrowserRouter([
           </Suspense>
         ),
       },
-      {
-        path: 'test/barcode',
-        element: <BarcodeTestPage />,
-      },
+      ...(shouldExposeTestRoutes
+        ? [
+            {
+              path: 'test/barcode',
+              element: <BarcodeTestPage />,
+            },
+          ]
+        : []),
       {
         element: <Layout />,
         children: [
@@ -261,6 +269,32 @@ const router = createBrowserRouter([
             element: (
               <ProtectedRoute allowedRoles={['administrator', 'manager'] as UserRole[]}>
                 <CustomerSetup />
+              </ProtectedRoute>
+            ),
+          },
+          {
+            path: 'administration/barcode-catalog-import',
+            element: (
+              <ProtectedRoute
+                allowedRoles={['administrator'] as UserRole[]}
+                accessPath="/administration/barcode-catalog-import"
+              >
+                <Suspense fallback={<LoadingFallback />}>
+                  <BarcodeCatalogImportPage />
+                </Suspense>
+              </ProtectedRoute>
+            ),
+          },
+          {
+            path: 'administration/product-catalog',
+            element: (
+              <ProtectedRoute
+                allowedRoles={['administrator'] as UserRole[]}
+                accessPath="/administration/product-catalog"
+              >
+                <Suspense fallback={<LoadingFallback />}>
+                  <ProductCatalogPage />
+                </Suspense>
               </ProtectedRoute>
             ),
           },

@@ -26,6 +26,7 @@ export interface RecentIncident {
   id: string;
   customerId: number;
   date: string;
+  timeOfIncident?: string;
   regionId: string;
   regionName: string;
   siteId: string;

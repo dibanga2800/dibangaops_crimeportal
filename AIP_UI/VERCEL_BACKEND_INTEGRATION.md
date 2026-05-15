@@ -1,38 +1,39 @@
-# Vercel Frontend + IIS Backend Integration Guide
+# Azure Static Web App + IIS Backend Integration Guide
 
 ## Overview
 
-Your frontend is hosted on **Vercel** and your backend is hosted on **IIS Server**. This guide explains how to connect them.
+Your frontend is hosted on **Azure Static Web Apps** and your backend is hosted on **IIS Server**. This guide explains how to connect them.
 
 ## Backend Configuration
 
 ### ✅ CORS is Already Configured
 
 The backend (`Program.cs`) already has CORS configured to allow requests from:
-- `https://coop-aip-ui.vercel.app` (Production)
-- `https://coop-aip-ui-*.vercel.app` (Preview deployments)
+- `https://www.dibangops.com` (Production)
+- `https://dibangops.com` (Apex redirect domain)
+- Any additional domains configured in backend `FrontendUrl`
 
 ### Backend URLs
 
 Your backend is accessible at:
 - **HTTPS (Production)**: `https://coopaip.advantage1.co.uk`
-- **HTTP (Local/Testing)**: `http://localhost:5000` (won't work from Vercel)
+- **HTTP (Local/Testing)**: `http://localhost:5000` (won't work from public HTTPS frontend)
 
-**For Vercel, you MUST use the HTTPS URL**: `https://coopaip.advantage1.co.uk`
+**For production frontend hosting, you MUST use the HTTPS URL**: `https://coopaip.advantage1.co.uk`
 
 ## Frontend Configuration
 
-### Step 1: Set Environment Variable in Vercel
+### Step 1: Set Environment Variable in Frontend Hosting
 
-1. Go to your Vercel Dashboard
-2. Navigate to your project → **Settings** → **Environment Variables**
+1. Go to your frontend hosting dashboard
+2. Navigate to your project → **Configuration** → **Environment Variables**
 3. Add the following variable:
 
    **Variable Name:** `VITE_API_BASE_URL`
    
    **Value:** `https://coopaip.advantage1.co.uk/api`
    
-   **Environment:** Select **Production** (and optionally **Preview** and **Development**)
+   **Environment:** Select **Production** (and optionally **Staging** and **Development**)
 
    ⚠️ **Important Notes:**
    - The URL must include `/api` at the end
@@ -49,12 +50,12 @@ https://coopaip.advantage1.co.uk/api
 **NOT:**
 - ❌ `https://coopaip.advantage1.co.uk` (missing `/api`)
 - ❌ `http://coopaip.advantage1.co.uk/api` (must be HTTPS)
-- ❌ `https://localhost:5000/api` (won't work from Vercel)
+- ❌ `https://localhost:5000/api` (won't work from a hosted public frontend)
 
 ### Step 3: Redeploy Frontend
 
 After adding the environment variable:
-1. Go to **Deployments** tab in Vercel
+1. Go to your hosting provider's **Deployments** tab
 2. Click **Redeploy** on your latest deployment
 3. Or push a new commit to trigger a new deployment
 
@@ -63,13 +64,13 @@ After adding the environment variable:
 ### Request Flow
 
 ```
-User Browser (Vercel Frontend)
+User Browser (Azure Static Web App Frontend)
     ↓
 HTTPS Request to: https://coopaip.advantage1.co.uk/api/Auth/login
     ↓
 IIS Server (Backend)
     ↓
-CORS Check: Is origin "https://coop-aip-ui.vercel.app" allowed? ✅ YES
+CORS Check: Is origin "https://www.dibangops.com" allowed? ✅ YES
     ↓
 Process Request & Return Response
     ↓
@@ -79,7 +80,7 @@ Response sent back to Frontend
 ### CORS Headers
 
 The backend will automatically add these headers to responses:
-- `Access-Control-Allow-Origin: https://coop-aip-ui.vercel.app`
+- `Access-Control-Allow-Origin: https://www.dibangops.com`
 - `Access-Control-Allow-Credentials: true`
 - `Access-Control-Allow-Methods: *`
 - `Access-Control-Allow-Headers: *`
@@ -88,7 +89,7 @@ The backend will automatically add these headers to responses:
 
 ### 1. Check Environment Variable
 
-After deployment, open your Vercel app and check the browser console:
+After deployment, open your frontend app and check the browser console:
 ```javascript
 // Should show your API URL
 console.log(import.meta.env.VITE_API_BASE_URL)
@@ -97,7 +98,7 @@ console.log(import.meta.env.VITE_API_BASE_URL)
 
 ### 2. Test Login
 
-Try logging in through your Vercel frontend. If it works, the connection is successful!
+Try logging in through your frontend. If it works, the connection is successful.
 
 ### 3. Check Network Tab
 
@@ -109,10 +110,10 @@ Open browser DevTools → Network tab:
 
 ### Issue: CORS Error
 
-**Error:** `Access to fetch at 'https://coopaip.advantage1.co.uk/api/...' from origin 'https://coop-aip-ui.vercel.app' has been blocked by CORS policy`
+**Error:** `Access to fetch at 'https://coopaip.advantage1.co.uk/api/...' from origin 'https://www.dibangops.com' has been blocked by CORS policy`
 
 **Solution:**
-1. Verify your Vercel domain matches exactly: `https://coop-aip-ui.vercel.app`
+1. Verify your frontend domain matches exactly: `https://www.dibangops.com`
 2. Check backend CORS configuration in `Program.cs`
 3. Ensure backend is using HTTPS
 
@@ -129,7 +130,7 @@ Open browser DevTools → Network tab:
 **Solution:**
 1. Verify backend is running: `https://coopaip.advantage1.co.uk/swagger`
 2. Check SSL certificate is valid
-3. Verify environment variable is set correctly in Vercel
+3. Verify environment variable is set correctly in frontend hosting
 
 ### Issue: 404 Not Found
 
@@ -150,14 +151,14 @@ Open browser DevTools → Network tab:
 
 ## Environment Variables Summary
 
-### For Vercel Production:
+### For Production:
 
 ```env
 VITE_API_BASE_URL=https://coopaip.advantage1.co.uk/api
 VITE_APP_ENV=production
 ```
 
-### For Vercel Preview/Staging:
+### For Staging:
 
 ```env
 VITE_API_BASE_URL=https://coopaip.advantage1.co.uk/api
@@ -180,11 +181,11 @@ VITE_APP_ENV=development
 
 ## Next Steps
 
-1. ✅ Set `VITE_API_BASE_URL` in Vercel dashboard
+1. ✅ Set `VITE_API_BASE_URL` in frontend hosting dashboard
 2. ✅ Redeploy your frontend
 3. ✅ Test login functionality
 4. ✅ Verify all API endpoints work correctly
 
 ---
 
-**Status:** Ready to connect! Just set the environment variable in Vercel and redeploy.
+**Status:** Ready to connect! Set the environment variable in your hosting dashboard and redeploy.

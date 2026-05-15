@@ -14,6 +14,7 @@ const envSchema = z.object({
 	// Feature Flags
 	VITE_ENABLE_ANALYTICS: z.string().transform(val => val === 'true').default('false'),
 	VITE_ENABLE_ERROR_TRACKING: z.string().transform(val => val === 'true').default('false'),
+	VITE_ENABLE_TEST_ROUTES: z.string().transform(val => val === 'true').default('false'),
 	
 	// Application Settings
 	VITE_APP_NAME: z.string().default('Central Co-op Interactive Portal'),
@@ -48,6 +49,7 @@ function validateEnv(): Env {
 			VITE_APP_ENV: import.meta.env.VITE_APP_ENV,
 			VITE_ENABLE_ANALYTICS: import.meta.env.VITE_ENABLE_ANALYTICS,
 			VITE_ENABLE_ERROR_TRACKING: import.meta.env.VITE_ENABLE_ERROR_TRACKING,
+			VITE_ENABLE_TEST_ROUTES: import.meta.env.VITE_ENABLE_TEST_ROUTES,
 			VITE_APP_NAME: import.meta.env.VITE_APP_NAME,
 			VITE_APP_VERSION: import.meta.env.VITE_APP_VERSION,
 			VITE_SENTRY_DSN: import.meta.env.VITE_SENTRY_DSN,
@@ -97,6 +99,7 @@ if (isDevelopment) {
 		features: {
 			analytics: env.VITE_ENABLE_ANALYTICS,
 			errorTracking: env.VITE_ENABLE_ERROR_TRACKING,
+			testRoutes: env.VITE_ENABLE_TEST_ROUTES,
 		}
 	})
 }

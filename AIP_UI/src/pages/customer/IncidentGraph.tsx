@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { DatePicker } from '@/components/ui/date-picker'
+import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
 	BarChart,
@@ -58,6 +58,14 @@ interface IncidentGraphProps {
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
+
+const toDateInputValue = (date: Date) => format(date, 'yyyy-MM-dd')
+
+const fromDateInputValue = (value: string): Date | null => {
+	if (!value) return null
+	const parsed = new Date(`${value}T00:00:00`)
+	return Number.isNaN(parsed.getTime()) ? null : parsed
+}
 
 const COLOR_PALETTE = [
 	'#3b82f6',
@@ -715,10 +723,46 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 
 						</div>
 
-						{/* Date pickers — always visible */}
+						{/* Date range — native HTML date inputs */}
 						<div className="flex flex-col sm:flex-row gap-3 mt-4 pt-4 border-t border-slate-800">
-							<DatePicker date={startDate} setDate={v => v && setStartDate(v)} />
-							<DatePicker date={endDate} setDate={v => v && setEndDate(v)} />
+							<div className="flex-1 space-y-1.5">
+								<Label htmlFor="incident-graph-start-date" className="text-xs sm:text-sm text-slate-300">
+									Start date
+								</Label>
+								<Input
+									id="incident-graph-start-date"
+									type="date"
+									value={toDateInputValue(startDate)}
+									onChange={(e) => {
+										const parsed = fromDateInputValue(e.target.value)
+										if (parsed) {
+											setStartDate(parsed)
+											setCurrentPage(1)
+										}
+									}}
+									className="h-9 w-full bg-white border-slate-300 text-slate-900 text-sm"
+									aria-label="Start date"
+								/>
+							</div>
+							<div className="flex-1 space-y-1.5">
+								<Label htmlFor="incident-graph-end-date" className="text-xs sm:text-sm text-slate-300">
+									End date
+								</Label>
+								<Input
+									id="incident-graph-end-date"
+									type="date"
+									value={toDateInputValue(endDate)}
+									onChange={(e) => {
+										const parsed = fromDateInputValue(e.target.value)
+										if (parsed) {
+											setEndDate(parsed)
+											setCurrentPage(1)
+										}
+									}}
+									className="h-9 w-full bg-white border-slate-300 text-slate-900 text-sm"
+									aria-label="End date"
+								/>
+							</div>
 						</div>
 					</CardContent>
 				</Card>

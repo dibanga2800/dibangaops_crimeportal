@@ -20,8 +20,17 @@ export interface PaginatedResponse<T> extends ApiResponse<T> {
   pagination: PaginationInfo
 }
 
-export interface IncidentResponse extends ApiResponse<Incident> {}
-export interface IncidentsResponse extends PaginatedResponse<Incident[]> {}
+export interface IncidentListSummary {
+	totalIncidents: number
+	totalAmountRecovered: number
+	totalAmountLost: number
+	uniqueSites: number
+}
+
+export type IncidentResponse = ApiResponse<Incident>
+export type IncidentsResponse = PaginatedResponse<Incident[]> & {
+	summary?: IncidentListSummary
+}
 
 // Query parameters for incidents
 export interface GetIncidentsParams {

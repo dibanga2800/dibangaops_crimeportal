@@ -34,9 +34,9 @@ export const Layout = ({ children }: LayoutProps) => {
     <div className="min-h-screen flex flex-col overflow-hidden">
       <div className="flex flex-1">
         {/* Desktop Sidebar - hidden on mobile */}
-        <aside className="hidden lg:flex w-64 flex-col fixed h-screen bg-[#1A1A1A] text-white border-r border-[#2A2A2A] z-30" style={{ backgroundColor: '#1A1A1A' }}>
+        <aside className="hidden lg:flex w-64 flex-col fixed h-screen bg-gradient-to-b from-black via-slate-950 to-black text-white border-r border-slate-800 z-30">
           {/* Logo Section */}
-          <div className="h-[var(--header-height)] border-b border-[#2A2A2A] px-6 pt-[27px] flex items-center">
+          <div className="h-[var(--header-height)] border-b border-slate-800 px-6 pt-[27px] flex items-center">
             <Logo />
           </div>
 
@@ -54,9 +54,9 @@ export const Layout = ({ children }: LayoutProps) => {
 
         {/* Mobile Sidebar */}
         {isMobileOpen && (
-          <aside className="fixed inset-y-0 left-0 z-50 lg:hidden w-64 flex flex-col bg-[#1A1A1A] text-white border-r border-[#2A2A2A]" style={{ backgroundColor: '#1A1A1A' }}>
+          <aside className="fixed inset-y-0 left-0 z-50 lg:hidden w-64 flex flex-col bg-gradient-to-b from-black via-slate-950 to-black text-white border-r border-slate-800">
             {/* Logo Section */}
-            <div className="h-[var(--header-height)] border-b border-[#2A2A2A] px-6 pt-[27px] flex items-center justify-between">
+            <div className="h-[var(--header-height)] border-b border-slate-800 px-6 pt-[27px] flex items-center justify-between">
               <Logo />
               <button
                 onClick={() => setIsMobileOpen(false)}

@@ -48,7 +48,8 @@ import type {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { DatePicker } from '@/components/ui/date-picker'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
@@ -79,6 +80,12 @@ const DEFAULT_RANGE_DAYS = 90
 
 const toIsoDate = (date?: Date | null): string | undefined =>
 	date ? date.toISOString().split('T')[0] : undefined
+
+const fromDateInputValue = (value: string): Date | undefined => {
+	if (!value) return undefined
+	const parsed = new Date(`${value}T00:00:00`)
+	return Number.isNaN(parsed.getTime()) ? undefined : parsed
+}
 
 const formatCurrency = (value: number): string => {
 	if (!Number.isFinite(value) || value === 0) return '£0'
@@ -1104,12 +1111,36 @@ export default function CustomerCrimeIntelligence() {
 					</CardHeader>
 					<CardContent className="px-5 py-4 grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
 						<div className="space-y-1.5">
-							<p className="text-xs font-medium text-slate-500">Start Date</p>
-							<DatePicker date={startDate} setDate={setStartDate} />
+							<Label htmlFor="crime-intel-start-date" className="text-xs font-medium text-slate-500">
+								Start date
+							</Label>
+							<Input
+								id="crime-intel-start-date"
+								type="date"
+								value={toIsoDate(startDate) ?? ''}
+								onChange={(e) => {
+									setStartDate(fromDateInputValue(e.target.value))
+									setFiltersVersion((v) => v + 1)
+								}}
+								className="h-9 text-sm w-full"
+								aria-label="Start date"
+							/>
 						</div>
 						<div className="space-y-1.5">
-							<p className="text-xs font-medium text-slate-500">End Date</p>
-							<DatePicker date={endDate} setDate={setEndDate} />
+							<Label htmlFor="crime-intel-end-date" className="text-xs font-medium text-slate-500">
+								End date
+							</Label>
+							<Input
+								id="crime-intel-end-date"
+								type="date"
+								value={toIsoDate(endDate) ?? ''}
+								onChange={(e) => {
+									setEndDate(fromDateInputValue(e.target.value))
+									setFiltersVersion((v) => v + 1)
+								}}
+								className="h-9 text-sm w-full"
+								aria-label="End date"
+							/>
 						</div>
 						<div className="space-y-1.5">
 							<p className="text-xs font-medium text-slate-500">Region</p>

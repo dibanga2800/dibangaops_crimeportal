@@ -65,6 +65,7 @@ import { Logo } from "./header/Logo";
 import { SearchInput } from "./header/SearchInput";
 import { UserAvatar } from "./common/UserAvatar";
 import { useAuth } from "@/contexts/AuthContext"
+import { useAlertCount } from "@/hooks/useAlertCount"
 
 // Define navigation items structure
 interface NavItem {
@@ -263,6 +264,8 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
     setIsSheetOpen(false);
   };
 
+  const { alertCount, isLoading: alertCountLoading } = useAlertCount();
+
   return (
     <header className="sticky top-0 z-50 w-full bg-header-bg dark:bg-gray-900 border-b border-header-border dark:border-gray-800 shadow-sm text-header-text dark:text-white">
       {/* Mobile Header */}
@@ -344,7 +347,7 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
         {/* Right: Theme, notifications and user profile */}
         <div className="flex items-center gap-3 text-header-text dark:text-white">
           <ThemeToggle />
-          <NotificationBell />
+          <NotificationBell alertCount={alertCount} isLoading={alertCountLoading} />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <div className="flex items-center gap-2 cursor-pointer">
@@ -374,7 +377,7 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
 		{/* Right: Theme, notifications and user profile */}
 				<div className="flex items-center gap-4 text-header-text dark:text-white">
           <ThemeToggle />
-          <NotificationBell />
+          <NotificationBell alertCount={alertCount} isLoading={alertCountLoading} />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <div className="flex items-center gap-2 cursor-pointer">

@@ -45,7 +45,7 @@ export interface CustomerSurveyResponse {
   };
 }
 
-export interface CustomerSurveyRequest extends Omit<CustomerSurvey, 'id' | 'customerId' | 'createdAt' | 'updatedAt'> {}
+export type CustomerSurveyRequest = Omit<CustomerSurvey, 'id' | 'customerId' | 'createdAt' | 'updatedAt'>
 
 export interface CustomerSurveyUpdateRequest extends Partial<CustomerSurveyRequest> {
   id: string;

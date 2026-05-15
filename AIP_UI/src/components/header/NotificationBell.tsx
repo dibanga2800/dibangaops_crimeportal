@@ -1,13 +1,13 @@
 import { Bell } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useAlertCount } from "@/hooks/useAlertCount";
 
 interface NotificationBellProps {
   className?: string;
+  alertCount: number;
+  isLoading: boolean;
 }
 
-export const NotificationBell = ({ className = "" }: NotificationBellProps) => {
-  const { alertCount, isLoading } = useAlertCount();
+export const NotificationBell = ({ className = "", alertCount, isLoading }: NotificationBellProps) => {
 
   // Only show badge if there are tasks
   const showBadge = alertCount > 0;

@@ -29,10 +29,7 @@ const fixFramerMotionPlugin = () => {
             '@tanstack/react-query-devtools',
             'lucide-react'
           ],
-          force: true,
-          esbuildOptions: {
-            target: 'esnext'
-          }
+          force: true
         }
       }
     }
@@ -145,6 +142,9 @@ export default defineConfig(({ mode }) => ({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
+    // Fork workers can time out on some Windows paths; threads pool is more reliable locally/CI.
+    pool: 'threads',
+    maxWorkers: 1,
   },
   build: {
     outDir: 'dist',
@@ -169,12 +169,16 @@ export default defineConfig(({ mode }) => ({
     },
     rollupOptions: {
       output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'ui-vendor': ['framer-motion', '@radix-ui/react-primitive', 'lucide-react'],
-          'state-vendor': ['@reduxjs/toolkit', 'react-redux', '@tanstack/react-query'],
-          'form-vendor': ['react-hook-form', 'zod', '@hookform/resolvers'],
-          'chart-vendor': ['recharts'],
+        manualChunks: (id: string) => {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-router-dom')) return 'react-vendor'
+            if (id.includes('framer-motion') || id.includes('@radix-ui') || id.includes('lucide-react')) return 'ui-vendor'
+            if (id.includes('@reduxjs/toolkit') || id.includes('react-redux') || id.includes('@tanstack/react-query')) return 'state-vendor'
+            if (id.includes('react-hook-form') || id.includes('zod') || id.includes('@hookform/resolvers')) return 'form-vendor'
+            if (id.includes('recharts')) return 'chart-vendor'
+          }
+
+          return undefined
         },
         assetFileNames: (assetInfo) => {
           let extType = assetInfo.name?.split('.').at(-1) || 'asset';

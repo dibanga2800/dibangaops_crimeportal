@@ -62,14 +62,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const response = await api.get<BackendApiResponse<User>>('/Auth/me', {
         timeout: AUTH_REQUEST_TIMEOUT_MS,
       });
-      // Backend returns ApiResponseDto with capital Data property
-      const apiResponse = response.data;
-      if (apiResponse.Success && apiResponse.Data) {
-        sessionStore.setUser(apiResponse.Data);
+      // ApiResponseDto: backend JSON uses camelCase (success/data) per Program.cs
+      const apiResponse = response.data as BackendApiResponse<User> & {
+        success?: boolean;
+        data?: User;
+        message?: string;
+      };
+      const isSuccess = apiResponse?.Success ?? apiResponse?.success ?? false;
+      const userData = apiResponse?.Data ?? apiResponse?.data;
+      const message = apiResponse?.Message ?? apiResponse?.message;
+
+      if (isSuccess && userData) {
+        sessionStore.setUser(userData);
         setUser(sessionStore.getUser());
         setError(null);
       } else {
-        throw new Error(apiResponse.Message || 'Failed to fetch user data');
+        throw new Error(message || 'Failed to fetch user data');
       }
     } catch (err: any) {
       // Only clear token if it's a 401 (unauthorized) - token is invalid

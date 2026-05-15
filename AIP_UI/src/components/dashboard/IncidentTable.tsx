@@ -10,6 +10,7 @@ interface IncidentReport {
   siteName?: string // Add siteName as alternative to store
   officerName: string
   date: string
+  timeOfIncident?: string
   amount: number
   recoveredValue?: number
   lostValue?: number
@@ -44,15 +45,9 @@ export function IncidentTable({ data }: DataTableProps) {
   const filteredAndSortedData = useMemo(() => {
     let processed = [...data]
 
-    // Debug logging
-    console.log('🔍 IncidentTable - Data received:', data)
-    console.log('🔍 IncidentTable - Data length:', data?.length || 0)
-    console.log('🔍 IncidentTable - First item structure:', data?.[0])
-
     // If data is empty, return empty array
     if (!data || data.length === 0) {
-      console.log('❌ IncidentTable - No data provided')
-      return [];
+      return []
     }
 
     // Filter
@@ -70,7 +65,6 @@ export function IncidentTable({ data }: DataTableProps) {
           (item.lostValue ?? 0).toString().includes(query) ||
           item.incidentType.toLowerCase().includes(query)
       )
-      console.log('🔍 IncidentTable - After filtering:', processed.length)
       // Reset to first page when filtering
       setCurrentPage(1)
     }
@@ -106,7 +100,6 @@ export function IncidentTable({ data }: DataTableProps) {
       })
     }
 
-    console.log('🔍 IncidentTable - Final processed data:', processed.length)
     return processed
   }, [data, searchQuery, sortConfig])
 
@@ -131,20 +124,33 @@ export function IncidentTable({ data }: DataTableProps) {
     return sortConfig.direction === 'asc' ? '↑' : '↓'
   }
 
+  const getDisplayTime = (report: IncidentReport): string => {
+    if (report.timeOfIncident && report.timeOfIncident.trim() !== '') {
+      return report.timeOfIncident
+    }
+
+    const parsedDate = new Date(report.date)
+    if (Number.isNaN(parsedDate.getTime())) {
+      return 'N/A'
+    }
+
+    return parsedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between py-2 md:py-4">
-        <div className="flex items-center gap-2">
-          <Search className="h-4 w-4 text-muted-foreground" />
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search incidents..."
             value={searchQuery}
             onChange={handleSearchChange}
-            className="h-8 w-[150px] text-xs md:text-sm lg:w-[250px]"
+            className="h-9 w-[180px] pl-8 text-xs md:text-sm lg:w-[280px] border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
           />
         </div>
         {filteredAndSortedData.length > 0 && (
-          <div className="text-xs md:text-sm text-muted-foreground">
+          <div className="text-xs md:text-sm text-muted-foreground rounded-md border border-slate-200 dark:border-slate-700 px-2.5 py-1 bg-slate-50/70 dark:bg-slate-900/70">
             Showing {startIndex + 1}-{Math.min(endIndex, filteredAndSortedData.length)} of {filteredAndSortedData.length}
           </div>
         )}
@@ -158,7 +164,7 @@ export function IncidentTable({ data }: DataTableProps) {
           </div>
         ) : currentPageData.length > 0 ? (
           currentPageData.map((report) => (
-            <div key={report.id} className="rounded-md border bg-card p-4 space-y-2 shadow-sm">
+            <div key={report.id} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-card p-4 space-y-2 shadow-sm">
               <div className="flex justify-between items-start gap-2">
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-sm truncate">{report.customerName}</div>
@@ -186,12 +192,19 @@ export function IncidentTable({ data }: DataTableProps) {
                   <div className="font-medium truncate">{report.officerName}</div>
                 </div>
                 <div>
-                  <span className="text-muted-foreground">Date:</span>
-                  <div className="font-medium">{new Date(report.date).toLocaleDateString()}</div>
+                  <span className="text-muted-foreground">Date / Time:</span>
+                  <div className="font-medium flex items-center gap-1.5">
+                    <span>{new Date(report.date).toLocaleDateString()}</span>
+                    <span className="text-blue-600 dark:text-blue-400 text-[11px] font-semibold bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded-md">
+                      {getDisplayTime(report)}
+                    </span>
+                  </div>
                 </div>
                 <div className="col-span-2">
                   <span className="text-muted-foreground">Type:</span>
-                  <div className="font-medium">{report.incidentType}</div>
+                  <div className="mt-0.5 inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[11px] font-medium text-slate-700 dark:text-slate-200">
+                    {report.incidentType}
+                  </div>
                 </div>
               </div>
             </div>
@@ -204,13 +217,13 @@ export function IncidentTable({ data }: DataTableProps) {
       </div>
       
       {/* Desktop Table Layout - visible on medium screens and above */}
-      <div className="hidden md:block rounded-md border overflow-hidden">
+      <div className="hidden md:block rounded-xl border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full caption-bottom text-sm">
           <thead>
-            <tr className="border-b bg-muted/50">
+            <tr className="border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 dark:from-slate-700 dark:via-slate-700 dark:to-slate-700">
               <th 
-                  className="h-12 px-4 text-left align-middle font-semibold tracking-tight text-muted-foreground cursor-pointer hover:bg-muted/70"
+                  className="h-12 px-4 text-left align-middle font-semibold tracking-tight text-slate-700 dark:text-slate-100 cursor-pointer hover:bg-slate-200/60 dark:hover:bg-white/10"
                 onClick={() => sortData('customerName')}
               >
                 <div className="flex items-center gap-1">
@@ -218,7 +231,7 @@ export function IncidentTable({ data }: DataTableProps) {
                 </div>
               </th>
               <th 
-                  className="h-12 px-4 text-left align-middle font-semibold tracking-tight text-muted-foreground cursor-pointer hover:bg-muted/70"
+                  className="h-12 px-4 text-left align-middle font-semibold tracking-tight text-slate-700 dark:text-slate-100 cursor-pointer hover:bg-slate-200/60 dark:hover:bg-white/10"
                 onClick={() => sortData('store')}
               >
                 <div className="flex items-center gap-1">
@@ -226,7 +239,7 @@ export function IncidentTable({ data }: DataTableProps) {
                 </div>
               </th>
               <th 
-                  className="h-12 px-4 text-left align-middle font-semibold tracking-tight text-muted-foreground cursor-pointer hover:bg-muted/70"
+                  className="h-12 px-4 text-left align-middle font-semibold tracking-tight text-slate-700 dark:text-slate-100 cursor-pointer hover:bg-slate-200/60 dark:hover:bg-white/10"
                 onClick={() => sortData('officerName')}
               >
                 <div className="flex items-center gap-1">
@@ -234,15 +247,15 @@ export function IncidentTable({ data }: DataTableProps) {
                 </div>
               </th>
               <th 
-                  className="h-12 px-4 text-left align-middle font-semibold tracking-tight text-muted-foreground cursor-pointer hover:bg-muted/70"
+                  className="h-12 px-4 text-left align-middle font-semibold tracking-tight text-slate-700 dark:text-slate-100 cursor-pointer hover:bg-slate-200/60 dark:hover:bg-white/10"
                 onClick={() => sortData('date')}
               >
                 <div className="flex items-center gap-1">
-                  Incident Date {getSortIcon('date')}
+                  Incident Date / Time {getSortIcon('date')}
                 </div>
               </th>
               <th 
-                  className="h-12 px-4 text-right align-middle font-semibold tracking-tight text-muted-foreground cursor-pointer hover:bg-muted/70"
+                  className="h-12 px-4 text-right align-middle font-semibold tracking-tight text-slate-700 dark:text-slate-100 cursor-pointer hover:bg-slate-200/60 dark:hover:bg-white/10"
                 onClick={() => sortData('recoveredValue')}
               >
                 <div className="flex items-center justify-end gap-1">
@@ -250,7 +263,7 @@ export function IncidentTable({ data }: DataTableProps) {
                 </div>
               </th>
               <th 
-                  className="h-12 px-4 text-right align-middle font-semibold tracking-tight text-muted-foreground cursor-pointer hover:bg-muted/70"
+                  className="h-12 px-4 text-right align-middle font-semibold tracking-tight text-slate-700 dark:text-slate-100 cursor-pointer hover:bg-slate-200/60 dark:hover:bg-white/10"
                 onClick={() => sortData('lostValue')}
               >
                 <div className="flex items-center justify-end gap-1">
@@ -258,14 +271,14 @@ export function IncidentTable({ data }: DataTableProps) {
                 </div>
               </th>
               <th 
-                  className="h-12 px-4 text-left align-middle font-semibold tracking-tight text-muted-foreground cursor-pointer hover:bg-muted/70"
+                  className="h-12 px-4 text-left align-middle font-semibold tracking-tight text-slate-700 dark:text-slate-100 cursor-pointer hover:bg-slate-200/60 dark:hover:bg-white/10"
                 onClick={() => sortData('incidentType')}
               >
                 <div className="flex items-center gap-1">
                   Incident Type {getSortIcon('incidentType')}
                 </div>
               </th>
-              <th className="h-12 px-4 text-left align-middle font-semibold tracking-tight text-muted-foreground">
+              <th className="h-12 px-4 text-left align-middle font-semibold tracking-tight text-slate-700 dark:text-slate-100">
                 AI Insight
               </th>
             </tr>
@@ -281,12 +294,17 @@ export function IncidentTable({ data }: DataTableProps) {
             
             {currentPageData.length > 0 ? (
               currentPageData.map((report) => (
-                <tr key={report.id} className="border-b transition-colors hover:bg-muted/50">
-                    <td className="p-4 align-middle font-medium leading-relaxed">{report.customerName}</td>
-                    <td className="p-4 align-middle text-muted-foreground leading-relaxed">{report.store || report.siteName}</td>
-                    <td className="p-4 align-middle text-muted-foreground leading-relaxed">{report.officerName}</td>
-                    <td className="p-4 align-middle text-muted-foreground tabular-nums leading-relaxed">
-                    {new Date(report.date).toLocaleDateString()}
+                <tr key={report.id} className="border-b border-slate-100 dark:border-slate-800 odd:bg-white odd:dark:bg-slate-900 even:bg-slate-50/40 even:dark:bg-slate-800/30 transition-colors hover:bg-blue-50/60 dark:hover:bg-slate-800/70">
+                    <td className="p-4 align-middle font-semibold leading-relaxed text-slate-900 dark:text-slate-100">{report.customerName}</td>
+                    <td className="p-4 align-middle text-slate-700 dark:text-slate-200 leading-relaxed">{report.store || report.siteName}</td>
+                    <td className="p-4 align-middle text-slate-700 dark:text-slate-200 leading-relaxed">{report.officerName}</td>
+                    <td className="p-4 align-middle text-slate-700 dark:text-slate-200 tabular-nums leading-relaxed">
+                    <div className="flex items-center gap-2">
+                      <span>{new Date(report.date).toLocaleDateString()}</span>
+                      <span className="text-blue-600 dark:text-blue-400 text-xs font-semibold bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded-md">
+                        {getDisplayTime(report)}
+                      </span>
+                    </div>
                   </td>
                     <td className="p-4 align-middle text-right font-medium tabular-nums leading-relaxed text-green-600 dark:text-green-400">
                     £{(report.recoveredValue ?? report.amount).toLocaleString(undefined, {
@@ -300,13 +318,17 @@ export function IncidentTable({ data }: DataTableProps) {
                       maximumFractionDigits: 2
                     })}
                   </td>
-                    <td className="p-4 align-middle text-muted-foreground leading-relaxed">{report.incidentType}</td>
+                    <td className="p-4 align-middle leading-relaxed">
+                      <span className="inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-xs font-medium text-slate-700 dark:text-slate-200">
+                        {report.incidentType}
+                      </span>
+                    </td>
                     <td className="p-4 align-middle text-xs space-y-1">
                       {report.incidentCategory && (
-                        <div className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-800">
+                        <div className="inline-flex items-center rounded-full bg-indigo-50 dark:bg-indigo-900/40 px-2 py-0.5 text-[11px] font-medium text-indigo-700 dark:text-indigo-300">
                           {report.incidentCategory}
                           {typeof report.incidentCategoryConfidence === 'number' && (
-                            <span className="ml-1 text-[10px] text-slate-500">
+                            <span className="ml-1 text-[10px] text-indigo-500 dark:text-indigo-300/80">
                               ({Math.round(report.incidentCategoryConfidence * 100)}% conf.)
                             </span>
                           )}
@@ -316,10 +338,10 @@ export function IncidentTable({ data }: DataTableProps) {
                         <div
                           className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${
                             report.riskLevel === 'high'
-                              ? 'bg-red-100 text-red-700'
+                              ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300'
                               : report.riskLevel === 'medium'
-                              ? 'bg-amber-100 text-amber-700'
-                              : 'bg-emerald-100 text-emerald-700'
+                              ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'
+                              : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
                           }`}
                         >
                           Risk: {report.riskLevel}

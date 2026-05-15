@@ -44,6 +44,8 @@ import { customerService } from "@/services/customerService"
 import { siteService } from "@/services/siteService"
 import { regionService } from "@/services/regionService"
 import { lookupTableService } from "@/services/lookupTableService"
+import { productService } from "@/services/productService"
+import { mergeCatalogDepartment } from "@/lib/stolen-items/catalog-departments"
 import type { Customer, Region, Site } from "@/types/customer"
 import type { LookupTableItem } from "@/services/lookupTableService"
 import { filterByAssignedSiteIds, getAssignedSiteIds, isSiteScopeEnforcedForUser } from '@/utils/siteAccess'
@@ -283,8 +285,8 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
   const [incidentCategoriesFromDb, setIncidentCategoriesFromDb] = useState<LookupTableItem[]>([])
   const [isLoadingIncidentCategories, setIsLoadingIncidentCategories] = useState(false)
 
-  // State for product departments from lookup table
-  const [productDepartments, setProductDepartments] = useState<LookupTableItem[]>([])
+  // Distinct departments from product catalog (GET /api/product/departments)
+  const [catalogDepartments, setCatalogDepartments] = useState<string[]>([])
   const [isLoadingDepartments, setIsLoadingDepartments] = useState(false)
   
   // State for manual barcode entry
@@ -591,9 +593,8 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
       setIsLoadingPositions(true)
       setIsLoadingIncidentTypes(true)
       setIsLoadingIncidentCategories(true)
-      setIsLoadingDepartments(true)
       try {
-        const [fetchedCounties, fetchedPositions, fetchedIncidentTypes, fetchedIncidentCategories, fetchedDepartments] = await Promise.all([
+        const [fetchedCounties, fetchedPositions, fetchedIncidentTypes, fetchedIncidentCategories] = await Promise.all([
           lookupTableService.getByCategory('UK_Counties'),
           lookupTableService.getByCategory('Positions'),
           lookupTableService.getByCategory('IncidentTypes').catch(async () => {
@@ -604,19 +605,16 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
               return lookupTableService.getByCategory('IncidentInvolved').catch(() => [])
             })
           }),
-          lookupTableService.getByCategory('ProductDepartments'),
         ])
         setCounties(fetchedCounties)
         setPositions(fetchedPositions)
         setIncidentTypesFromDb(fetchedIncidentTypes)
         setIncidentCategoriesFromDb(fetchedIncidentCategories)
-        setProductDepartments(fetchedDepartments)
         console.log(
           '✅ [IncidentForm] Loaded counties:', fetchedCounties.length,
           '| positions:', fetchedPositions.length,
           '| incident types:', fetchedIncidentTypes.length,
-          '| incident categories:', fetchedIncidentCategories.length,
-          '| departments:', fetchedDepartments.length
+          '| incident categories:', fetchedIncidentCategories.length
         )
       } catch (error) {
         console.error('❌ [IncidentForm] Failed to load lookup tables:', error)
@@ -624,18 +622,45 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
         setPositions([])
         setIncidentTypesFromDb([])
         setIncidentCategoriesFromDb([])
-        setProductDepartments([])
       } finally {
         setIsLoadingCounties(false)
         setIsLoadingPositions(false)
         setIsLoadingIncidentTypes(false)
         setIsLoadingIncidentCategories(false)
-        setIsLoadingDepartments(false)
       }
     }
 
     fetchLookups()
   }, [])
+
+  useEffect(() => {
+    const loadCatalogDepartments = async () => {
+      setIsLoadingDepartments(true)
+      try {
+        const departments = await productService.getDepartments()
+        setCatalogDepartments(departments)
+      } catch (error) {
+        console.error('❌ [IncidentForm] Failed to load catalog departments:', error)
+        setCatalogDepartments([])
+      } finally {
+        setIsLoadingDepartments(false)
+      }
+    }
+
+    void loadCatalogDepartments()
+  }, [])
+
+  useEffect(() => {
+    setCatalogDepartments((prev) => {
+      let next = prev
+      for (const item of stolenItems) {
+        if (item.category) {
+          next = mergeCatalogDepartment(next, item.category)
+        }
+      }
+      return next
+    })
+  }, [stolenItems])
   
   // Fetch sites and regions when customer changes
   useEffect(() => {
@@ -1156,8 +1181,8 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
       
       if (!lastItem.category) incompleteFields.push('Department')
       if (!lastItem.productName) incompleteFields.push('Product Name')
-      if (!lastItem.description) incompleteFields.push('Description')
-      if (!lastItem.cost || lastItem.cost <= 0) incompleteFields.push('Cost')
+      if (!lastItem.description) incompleteFields.push('VMECode')
+      if (!lastItem.cost || lastItem.cost <= 0) incompleteFields.push('Retail price')
       if (!lastItem.quantity || lastItem.quantity <= 0) incompleteFields.push('Quantity')
 
       if (incompleteFields.length > 0) {
@@ -2604,7 +2629,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                     </Button>
                   </div>
                   <p className="text-xs text-gray-500 mt-2">
-                    Enter the barcode number and press Enter or click "Add Product" to automatically add the product
+                    Enter a barcode to add the product with department, name, VME code, and retail price from the catalog when available.
                   </p>
                 </div>
               )}
@@ -2627,10 +2652,10 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                     <Label className="text-base font-medium">Product Name</Label>
                   </div>
                   <div className="col-span-2">
-                    <Label className="text-base font-medium">Description</Label>
+                    <Label className="text-base font-medium">VMECode</Label>
                   </div>
                   <div className="col-span-1">
-                    <Label className="text-base font-medium">Cost</Label>
+                    <Label className="text-base font-medium">Retail price</Label>
                   </div>
                   <div className="col-span-1">
                     <Label className="text-base font-medium">Qty</Label>
@@ -2660,12 +2685,12 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                               }
                             </SelectTrigger>
                             <SelectContent>
-                              {productDepartments.length === 0 && !isLoadingDepartments && (
-                                <div className="px-3 py-2 text-sm text-gray-400">No departments available</div>
+                              {catalogDepartments.length === 0 && !isLoadingDepartments && (
+                                <div className="px-3 py-2 text-sm text-gray-400">No departments in catalog yet</div>
                               )}
-                              {productDepartments.map((dept) => (
-                                <SelectItem key={dept.lookupId} value={dept.value}>
-                                  {dept.value}
+                              {catalogDepartments.map((dept) => (
+                                <SelectItem key={dept} value={dept}>
+                                  {dept}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -2681,16 +2706,16 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                           />
                         </div>
                         <div className="w-full sm:col-span-2">
-                          <Label className="sm:hidden mb-1 block text-sm font-medium">Description</Label>
+                          <Label className="sm:hidden mb-1 block text-sm font-medium">VMECode</Label>
                           <Input
                             className="h-11"
                             value={item.description}
                             onChange={(e) => updateStolenItem(index, "description", e.target.value)}
-                            placeholder="Item description"
+                            placeholder="VME code"
                           />
                         </div>
                         <div className="w-full sm:col-span-1">
-                          <Label className="sm:hidden mb-1 block text-sm font-medium">Cost</Label>
+                          <Label className="sm:hidden mb-1 block text-sm font-medium">Retail price</Label>
                           <Input
                             className="h-11"
                             type="number"

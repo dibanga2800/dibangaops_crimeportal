@@ -30,6 +30,8 @@ import {
 	Cog,
 	Brain,
 	Bell,
+	ScanBarcode,
+	Package,
 } from 'lucide-react'
 
 import type { LucideIcon } from 'lucide-react'
@@ -98,6 +100,18 @@ export const SIDEBAR_SECTIONS: SidebarSection[] = [
 				path: '/administration/customer-setup',
 				label: 'Company Setup',
 				icon: Building,
+			},
+			{
+				path: '/administration/barcode-catalog-import',
+				label: 'Barcode catalog import',
+				icon: ScanBarcode,
+				guard: (ctx) => ctx.isAdministrator,
+			},
+			{
+				path: '/administration/product-catalog',
+				label: 'Product catalog',
+				icon: Package,
+				guard: (ctx) => ctx.isAdministrator,
 			},
 		],
 	},
