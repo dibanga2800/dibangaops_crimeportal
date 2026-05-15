@@ -1,5 +1,5 @@
-# Backend + AI containers and Terraform release (updates Container Apps with new images).
-# Does not deploy the Static Web App — use Deploy Frontend for that.
+# Backend + AI image release only (no Terraform apply, no Key Vault/infra mutation).
+# Frontend deploy remains separate in deploy-frontend.yml.
 
 name: Deploy Backend
 
@@ -8,7 +8,6 @@ on:
     branches: [main]
     paths:
       - 'AIP_Backend/**'
-      - 'Infrastructure/**'
       - '.github/workflows/deploy-backend.yml'
   workflow_dispatch:
 
@@ -17,115 +16,27 @@ permissions:
   contents: read
 
 concurrency:
-  group: crimeportal-terraform-deploy-${{ github.ref }}
+  group: crimeportal-backend-release-${{ github.ref }}
   cancel-in-progress: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  TERRAFORM_VERSION: '1.13.4'
-  DOTNET_VERSION: '8.0.x'
-  NODE_VERSION: '20'
   BACKEND_IMAGE_NAME: 'crimeportal-backend'
   AI_IMAGE_NAME: 'crimeportal-ai'
+  RESOURCE_GROUP: 'crimeportal-rg'
+  BACKEND_APP_NAME: 'crimeportal-backend'
+  AI_APP_NAME: 'crimeportal-ai'
 
 jobs:
-  terraform-bootstrap:
-    name: Terraform Apply (Bootstrap)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: Infrastructure
-
-    outputs:
-      acr_name: ${{ steps.tf-output.outputs.acr_name }}
-      acr_login_server: ${{ steps.tf-output.outputs.acr_login_server }}
-      backend_url: ${{ steps.tf-output.outputs.backend_url }}
-      key_vault_name: ${{ steps.tf-output.outputs.key_vault_name }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Write terraform.prod.tfvars from secret
-        uses: ./.github/actions/write-terraform-prod-tfvars
-        with:
-          content: ${{ secrets.TERRAFORM_PROD_TFVARS }}
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v4
-        with:
-          terraform_version: ${{ env.TERRAFORM_VERSION }}
-
-      - name: Azure Login (OIDC)
-        uses: azure/login@v3
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Break orphaned Terraform state blob lease (if any)
-        run: |
-          set -euo pipefail
-          SA="${{ secrets.TF_STATE_STORAGE_ACCOUNT }}"
-          RG="${{ secrets.TF_STATE_RESOURCE_GROUP }}"
-          CONTAINER="${{ secrets.TF_STATE_CONTAINER }}"
-          BLOB="${{ secrets.TF_STATE_KEY }}"
-          KEY="$(az storage account keys list --resource-group "${RG}" --account-name "${SA}" --query '[0].value' -o tsv)"
-          az storage blob lease break \
-            --blob-name "${BLOB}" \
-            --container-name "${CONTAINER}" \
-            --account-name "${SA}" \
-            --account-key "${KEY}" \
-            || true
-
-      - name: Terraform Init
-        run: |
-          terraform init \
-            -backend-config="resource_group_name=${{ secrets.TF_STATE_RESOURCE_GROUP }}" \
-            -backend-config="storage_account_name=${{ secrets.TF_STATE_STORAGE_ACCOUNT }}" \
-            -backend-config="container_name=${{ secrets.TF_STATE_CONTAINER }}" \
-            -backend-config="key=${{ secrets.TF_STATE_KEY }}"
-
-      - name: Detect existing infrastructure
-        id: infra-check
-        run: |
-          EXISTS="$(az group exists --name "crimeportal-rg")"
-          echo "resource_group_exists=${EXISTS}" >> "$GITHUB_OUTPUT"
-
-      - name: Compute budget start date (current month UTC)
-        id: budget-date
-        run: echo "value=$(date -u +%Y-%m-01T00:00:00Z)" >> "$GITHUB_OUTPUT"
-
-      - name: Terraform Apply (create infra and ACR)
-        if: ${{ steps.infra-check.outputs.resource_group_exists != 'true' }}
-        env:
-          TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
-          TF_VAR_sql_admin_password: ${{ secrets.TF_VAR_SQL_ADMIN_PASSWORD }}
-          TF_VAR_smtp_password: ${{ secrets.TF_VAR_SMTP_PASSWORD }}
-        run: |
-          terraform apply -auto-approve \
-            -lock-timeout=10m \
-            -var-file="terraform.prod.tfvars" \
-            -var="budget_start_date=${{ steps.budget-date.outputs.value }}" \
-            -var="backend_image=mcr.microsoft.com/azuredocs/containerapps-helloworld:latest" \
-            -var="ai_image=mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
-
-      - name: Capture Terraform Outputs
-        id: tf-output
-        run: |
-          echo "acr_name=$(terraform output -raw acr_name)" >> "$GITHUB_OUTPUT"
-          echo "acr_login_server=$(terraform output -raw acr_login_server)" >> "$GITHUB_OUTPUT"
-          echo "backend_url=$(terraform output -raw backend_url)" >> "$GITHUB_OUTPUT"
-          echo "key_vault_name=$(terraform output -raw key_vault_name)" >> "$GITHUB_OUTPUT"
-
   build-and-push-images:
     name: Build and Push Containers
     runs-on: ubuntu-latest
-    needs: terraform-bootstrap
 
     outputs:
       backend_image: ${{ steps.image-vars.outputs.backend_image }}
       ai_image: ${{ steps.image-vars.outputs.ai_image }}
+      acr_name: ${{ steps.acr-vars.outputs.acr_name }}
+      acr_login_server: ${{ steps.acr-vars.outputs.acr_login_server }}
 
     steps:
       - name: Checkout
@@ -138,18 +49,32 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Resolve ACR details
+        id: acr-vars
+        run: |
+          set -euo pipefail
+          ACR_ID="$(az acr list --resource-group "${{ env.RESOURCE_GROUP }}" --query '[0].id' -o tsv)"
+          if [ -z "${ACR_ID}" ]; then
+            echo "No ACR found in resource group '${{ env.RESOURCE_GROUP }}'."
+            exit 1
+          fi
+          echo "acr_name=$(az acr show --ids "${ACR_ID}" --query name -o tsv)" >> "$GITHUB_OUTPUT"
+          echo "acr_login_server=$(az acr show --ids "${ACR_ID}" --query loginServer -o tsv)" >> "$GITHUB_OUTPUT"
+
       - name: Login to ACR
-        run: az acr login --name "${{ needs.terraform-bootstrap.outputs.acr_name }}"
+        run: az acr login --name "${{ steps.acr-vars.outputs.acr_name }}"
 
       - name: Define image tags
         id: image-vars
         run: |
+          set -euo pipefail
           TAG="${GITHUB_SHA::7}"
-          echo "backend_image=${{ needs.terraform-bootstrap.outputs.acr_login_server }}/${{ env.BACKEND_IMAGE_NAME }}:${TAG}" >> "$GITHUB_OUTPUT"
-          echo "ai_image=${{ needs.terraform-bootstrap.outputs.acr_login_server }}/${{ env.AI_IMAGE_NAME }}:${TAG}" >> "$GITHUB_OUTPUT"
+          echo "backend_image=${{ steps.acr-vars.outputs.acr_login_server }}/${{ env.BACKEND_IMAGE_NAME }}:${TAG}" >> "$GITHUB_OUTPUT"
+          echo "ai_image=${{ steps.acr-vars.outputs.acr_login_server }}/${{ env.AI_IMAGE_NAME }}:${TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push backend image
         run: |
+          set -euo pipefail
           docker build \
             -f AIP_Backend/Dockerfile \
             -t "${{ steps.image-vars.outputs.backend_image }}" \
@@ -158,37 +83,19 @@ jobs:
 
       - name: Build and push AI image
         run: |
+          set -euo pipefail
           docker build \
             -f AIP_Backend/InsightFaceService/Dockerfile \
             -t "${{ steps.image-vars.outputs.ai_image }}" \
             AIP_Backend/InsightFaceService
           docker push "${{ steps.image-vars.outputs.ai_image }}"
 
-  terraform-release:
-    name: Terraform Apply (Release Images)
+  update-container-app-images:
+    name: Update Container App Images
     runs-on: ubuntu-latest
-    needs: [terraform-bootstrap, build-and-push-images]
-    defaults:
-      run:
-        working-directory: Infrastructure
-
-    outputs:
-      backend_url: ${{ steps.tf-output.outputs.backend_url }}
+    needs: build-and-push-images
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Write terraform.prod.tfvars from secret
-        uses: ./.github/actions/write-terraform-prod-tfvars
-        with:
-          content: ${{ secrets.TERRAFORM_PROD_TFVARS }}
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v4
-        with:
-          terraform_version: ${{ env.TERRAFORM_VERSION }}
-
       - name: Azure Login (OIDC)
         uses: azure/login@v3
         with:
@@ -196,184 +103,30 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Break orphaned Terraform state blob lease (if any)
+      - name: Update backend image
         run: |
           set -euo pipefail
-          SA="${{ secrets.TF_STATE_STORAGE_ACCOUNT }}"
-          RG="${{ secrets.TF_STATE_RESOURCE_GROUP }}"
-          CONTAINER="${{ secrets.TF_STATE_CONTAINER }}"
-          BLOB="${{ secrets.TF_STATE_KEY }}"
-          KEY="$(az storage account keys list --resource-group "${RG}" --account-name "${SA}" --query '[0].value' -o tsv)"
-          az storage blob lease break \
-            --blob-name "${BLOB}" \
-            --container-name "${CONTAINER}" \
-            --account-name "${SA}" \
-            --account-key "${KEY}" \
-            || true
+          az containerapp update \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --name "${{ env.BACKEND_APP_NAME }}" \
+            --image "${{ needs.build-and-push-images.outputs.backend_image }}"
 
-      - name: Terraform Init
-        run: |
-          terraform init \
-            -backend-config="resource_group_name=${{ secrets.TF_STATE_RESOURCE_GROUP }}" \
-            -backend-config="storage_account_name=${{ secrets.TF_STATE_STORAGE_ACCOUNT }}" \
-            -backend-config="container_name=${{ secrets.TF_STATE_CONTAINER }}" \
-            -backend-config="key=${{ secrets.TF_STATE_KEY }}"
-
-      - name: Compute budget start date (current month UTC)
-        id: budget-date
-        run: echo "value=$(date -u +%Y-%m-01T00:00:00Z)" >> "$GITHUB_OUTPUT"
-
-      - name: Ensure Key Vault admin role assignment is in Terraform state
-        env:
-          TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
-          TF_VAR_sql_admin_password: ${{ secrets.TF_VAR_SQL_ADMIN_PASSWORD }}
-          TF_VAR_smtp_password: ${{ secrets.TF_VAR_SMTP_PASSWORD }}
+      - name: Update AI image
         run: |
           set -euo pipefail
-          KV_SCOPE="$(az keyvault show \
-            --name "${{ needs.terraform-bootstrap.outputs.key_vault_name }}" \
-            --resource-group "crimeportal-rg" \
-            --query id -o tsv)"
-          SP_OID="$(az ad sp show --id "${{ secrets.AZURE_CLIENT_ID }}" --query id -o tsv)"
-          RA_ID="$(az role assignment list \
-            --assignee "${SP_OID}" \
-            --scope "${KV_SCOPE}" \
-            --query "[?roleDefinitionName=='Key Vault Administrator'] | [0].id" -o tsv)"
+          az containerapp update \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --name "${{ env.AI_APP_NAME }}" \
+            --image "${{ needs.build-and-push-images.outputs.ai_image }}"
 
-          if [ -z "${RA_ID}" ] || [ "${RA_ID}" = "null" ]; then
-            echo "Key Vault Administrator assignment not found for CI SP; creating it now."
-            az role assignment create \
-              --assignee-object-id "${SP_OID}" \
-              --assignee-principal-type ServicePrincipal \
-              --role "Key Vault Administrator" \
-              --scope "${KV_SCOPE}" >/dev/null
-            RA_ID="$(az role assignment list \
-              --assignee "${SP_OID}" \
-              --scope "${KV_SCOPE}" \
-              --query "[?roleDefinitionName=='Key Vault Administrator'] | [0].id" -o tsv)"
-          fi
-
-          if [ -z "${RA_ID}" ] || [ "${RA_ID}" = "null" ]; then
-            echo "Unable to resolve Key Vault Administrator role assignment ID for CI SP."
-            exit 1
-          fi
-
-          STATE_RA_ID=""
-          if terraform state show azurerm_role_assignment.terraform_kv_admin >/dev/null 2>&1; then
-            STATE_RA_ID="$(terraform state show azurerm_role_assignment.terraform_kv_admin | awk -F' = ' '/^\s*id\s*=/{print $2}' | tr -d '"')"
-          fi
-
-          if [ "${STATE_RA_ID}" = "${RA_ID}" ]; then
-            echo "terraform_kv_admin state already points to CI service principal assignment."
-            exit 0
-          fi
-
-          if [ -n "${STATE_RA_ID}" ]; then
-            echo "Removing stale terraform_kv_admin state (${STATE_RA_ID})."
-            terraform state rm azurerm_role_assignment.terraform_kv_admin
-          fi
-
-          echo "Importing Key Vault Administrator assignment into Terraform state."
-          terraform import -lock-timeout=10m \
-            -var-file="terraform.prod.tfvars" \
-            -var="budget_start_date=${{ steps.budget-date.outputs.value }}" \
-            -var="backend_image=${{ needs.build-and-push-images.outputs.backend_image }}" \
-            -var="ai_image=${{ needs.build-and-push-images.outputs.ai_image }}" \
-            azurerm_role_assignment.terraform_kv_admin \
-            "${RA_ID}"
-
-      # Do not use -target here: backend is in the dependency graph of ACR role assignments, so a
-      # targeted apply still updates the Container App and can hit ContainerAppSecretRefNotFound if
-      # secrets/env are applied out of sync. A single full apply after image push is sufficient
-      # because bootstrap already created AcrPull before switching off the public placeholder image.
-
-      - name: Wait for RBAC propagation
-        run: sleep 30
-
-      - name: Import existing COOP database into Terraform state
-        env:
-          TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
-          TF_VAR_sql_admin_password: ${{ secrets.TF_VAR_SQL_ADMIN_PASSWORD }}
-          TF_VAR_smtp_password: ${{ secrets.TF_VAR_SMTP_PASSWORD }}
+      - name: Verify running images
         run: |
           set -euo pipefail
-          if terraform state show azurerm_mssql_database.sql_db >/dev/null 2>&1; then
-            DB_ID="$(terraform state show azurerm_mssql_database.sql_db | awk -F' = ' '/^\s*id\s*=/{print $2}' | tr -d '"')"
-            if [ -n "${DB_ID}" ] && [ "${DB_ID}" != *"/databases/COOP" ]; then
-              echo "State still points at old database (${DB_ID}); removing stale SQL database state."
-              terraform state rm azurerm_mssql_database.sql_db
-            else
-              echo "Terraform SQL database state already points to COOP."
-            fi
-          fi
-
-          if ! terraform state show azurerm_mssql_database.sql_db >/dev/null 2>&1; then
-            SQL_SERVER_ID="$(az sql server show \
-              --name "crimeportalsql0gf8g" \
-              --resource-group "crimeportal-rg" \
-              --query id -o tsv)"
-            COOP_DB_ID="${SQL_SERVER_ID}/databases/COOP"
-            if az sql db show --ids "${COOP_DB_ID}" --query id -o tsv >/dev/null 2>&1; then
-              echo "Importing existing COOP database into Terraform state."
-              terraform import -lock-timeout=10m \
-                -var-file="terraform.prod.tfvars" \
-                -var="budget_start_date=${{ steps.budget-date.outputs.value }}" \
-                -var="backend_image=${{ needs.build-and-push-images.outputs.backend_image }}" \
-                -var="ai_image=${{ needs.build-and-push-images.outputs.ai_image }}" \
-                azurerm_mssql_database.sql_db \
-                "${COOP_DB_ID}"
-            else
-              echo "COOP database does not exist yet; Terraform will create it."
-            fi
-          fi
-
-      - name: Import existing www Static Web App custom domain into Terraform state
-        env:
-          TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
-          TF_VAR_sql_admin_password: ${{ secrets.TF_VAR_SQL_ADMIN_PASSWORD }}
-          TF_VAR_smtp_password: ${{ secrets.TF_VAR_SMTP_PASSWORD }}
-        run: |
-          set -euo pipefail
-          if terraform state show 'azurerm_static_web_app_custom_domain.frontend_www_custom_domain[0]' >/dev/null 2>&1; then
-            echo "frontend_www_custom_domain already in Terraform state."
-            exit 0
-          fi
-          SUB="$(az account show --query id -o tsv)"
-          WWW_RESOURCE_ID="/subscriptions/${SUB}/resourceGroups/crimeportal-rg/providers/Microsoft.Web/staticSites/crimeportal-frontend/customDomains/www.dibangops.com"
-          if ! az resource show --ids "${WWW_RESOURCE_ID}" -o none 2>/dev/null; then
-            echo "www.dibangops.com custom domain not found in Azure; Terraform will create it on apply."
-            exit 0
-          fi
-          echo "Importing existing www.dibangops.com custom domain into Terraform state."
-          terraform import -lock-timeout=10m \
-            -var-file="terraform.prod.tfvars" \
-            -var="budget_start_date=${{ steps.budget-date.outputs.value }}" \
-            -var="backend_image=${{ needs.build-and-push-images.outputs.backend_image }}" \
-            -var="ai_image=${{ needs.build-and-push-images.outputs.ai_image }}" \
-            'azurerm_static_web_app_custom_domain.frontend_www_custom_domain[0]' \
-            "${WWW_RESOURCE_ID}"
-
-      - name: Terraform Apply (release images)
-        env:
-          TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
-          TF_VAR_sql_admin_password: ${{ secrets.TF_VAR_SQL_ADMIN_PASSWORD }}
-          TF_VAR_smtp_password: ${{ secrets.TF_VAR_SMTP_PASSWORD }}
-        run: |
-          set -euo pipefail
-          for attempt in 1 2 3 4 5; do
-            if terraform apply -auto-approve \
-              -lock-timeout=10m \
-              -var-file="terraform.prod.tfvars" \
-              -var="budget_start_date=${{ steps.budget-date.outputs.value }}" \
-              -var="backend_image=${{ needs.build-and-push-images.outputs.backend_image }}" \
-              -var="ai_image=${{ needs.build-and-push-images.outputs.ai_image }}"; then
-              exit 0
-            fi
-            echo "Terraform apply (release images) failed (attempt ${attempt}/5); retrying in 45s..."
-            sleep 45
-          done
-          exit 1
-
-      - name: Capture backend URL
-        id: tf-output
-        run: echo "backend_url=$(terraform output -raw backend_url)" >> "$GITHUB_OUTPUT"
+          az containerapp show \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --name "${{ env.BACKEND_APP_NAME }}" \
+            --query "properties.template.containers[0].image" -o tsv
+          az containerapp show \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --name "${{ env.AI_APP_NAME }}" \
+            --query "properties.template.containers[0].image" -o tsv
