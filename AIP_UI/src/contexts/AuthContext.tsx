@@ -88,6 +88,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const isTimeout = err?.code === 'ECONNABORTED' || err?.message?.includes('timeout');
       
       if (isUnauthorized) {
+        const refreshed = await tryRefreshAccessToken();
+        if (refreshed) {
+          try {
+            const retry = await api.get<BackendApiResponse<User>>('/Auth/me', {
+              timeout: AUTH_REQUEST_TIMEOUT_MS,
+            });
+            const retryBody = retry.data as BackendApiResponse<User> & {
+              success?: boolean;
+              data?: User;
+            };
+            const retrySuccess = retryBody?.Success ?? retryBody?.success ?? false;
+            const retryUser = retryBody?.Data ?? retryBody?.data;
+            if (retrySuccess && retryUser) {
+              sessionStore.setUser(retryUser);
+              setUser(sessionStore.getUser());
+              setError(null);
+              return;
+            }
+          } catch (retryErr) {
+            if (import.meta.env.DEV) {
+              console.warn('Failed to fetch current user after refresh:', retryErr);
+            }
+          }
+        }
+
         console.error('Failed to fetch current user - unauthorized:', err);
         sessionStore.clearAll();
         setUser(null);
@@ -285,6 +310,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(normalizedUser);
         setError(null);
       });
+
+      const verification = await verifyAuthenticatedSession();
+      if (!verification.ok) {
+        sessionStore.clearAll();
+        flushSync(() => {
+          setUser(null);
+        });
+        const sessionMessage = verification.likelyCookieBlocked
+          ? COOKIE_REQUIRED_MESSAGE
+          : 'Session could not be established. Please try again or contact support if the problem continues.';
+        setError(sessionMessage);
+        throw new Error(sessionMessage);
+      }
       
       if (import.meta.env.DEV) {
         console.log('✅ [AuthContext] Login successful:', {
@@ -294,7 +332,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
       }
       
-      return normalizedUser;
+      return sessionStore.getUser() ?? normalizedUser;
     } catch (err: any) {
       // Check if error was already handled (timeout or HTTP error)
       if (err instanceof Error && err.message) {

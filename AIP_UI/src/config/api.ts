@@ -208,11 +208,13 @@ api.interceptors.response.use(
 
       const shouldForceLogout =
         !config._skipAuthRedirect &&
-        ((isAuthValidation && !isLoginPage && hasSession) ||
-          (config._retry && !isLoginEndpoint && !isRefreshEndpoint))
+        config._retry &&
+        !isLoginEndpoint &&
+        !isRefreshEndpoint &&
+        hasSession
 
       if (shouldForceLogout) {
-        console.warn('⚠️ [API 401] Session invalid — clearing session and redirecting to /login')
+        console.warn('⚠️ [API 401] Session invalid after refresh — clearing session and redirecting to /login')
         sessionStore.clearAll()
         if (!isLoginPage) {
           window.location.href = '/login'

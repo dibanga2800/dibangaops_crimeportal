@@ -73,7 +73,7 @@ describe('api 401 interceptor', () => {
 		;(window as any).location = { href: '', pathname: '/dashboard' }
 	})
 
-	it('clears session and redirects on 401 from /Auth/me when user was cached', async () => {
+	it('clears session and redirects on 401 after failed refresh retry', async () => {
 		const { api } = await import('@/config/api')
 		sessionStore.setUser({ id: '1', role: 'administrator' } as any)
 
@@ -81,7 +81,12 @@ describe('api 401 interceptor', () => {
 		if (interceptor?.rejected) {
 			const mockError = {
 				response: { status: 401, statusText: 'Unauthorized', data: {} },
-				config: { url: '/Auth/me', method: 'get', headers: {} },
+				config: {
+					url: '/api/incidents',
+					method: 'get',
+					headers: {},
+					_retry: true,
+				},
 			}
 			try {
 				await interceptor.rejected(mockError)
