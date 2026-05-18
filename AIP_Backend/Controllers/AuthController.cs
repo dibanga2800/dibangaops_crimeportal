@@ -639,7 +639,7 @@ namespace AIPBackend.Controllers
                     User = userResponse
                 };
 
-                _authCookieService.SetAuthCookies(Response, newAccessToken, newRefreshToken, expiresAt);
+                response.CsrfToken = _authCookieService.SetAuthCookies(Response, newAccessToken, newRefreshToken, expiresAt);
                 _authCookieService.ApplyTokenVisibility(response);
 
                 _logger.LogInformation("Token refreshed successfully for user {UserId}", user.Id);
@@ -1277,7 +1277,7 @@ namespace AIPBackend.Controllers
                 return;
             }
 
-            _authCookieService.SetAuthCookies(
+            response.CsrfToken = _authCookieService.SetAuthCookies(
                 Response,
                 response.AccessToken,
                 response.RefreshToken,

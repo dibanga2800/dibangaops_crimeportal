@@ -1,6 +1,13 @@
+import { sessionStore } from '@/state/sessionStore'
+
 const CSRF_COOKIE_NAME = 'aip_csrf'
 
 export const getCsrfToken = (): string | null => {
+	const fromSession = sessionStore.getCsrfToken()
+	if (fromSession) {
+		return fromSession
+	}
+
 	if (typeof document === 'undefined') {
 		return null
 	}

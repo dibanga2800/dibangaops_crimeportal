@@ -5,6 +5,7 @@ type Listener = (user: User | null) => void
 const LEGACY_TOKEN_KEY = 'authToken'
 const LEGACY_REFRESH_TOKEN_KEY = 'refreshToken'
 const TOKEN_EXPIRES_AT_KEY = 'tokenExpiresAt'
+const CSRF_TOKEN_KEY = 'csrfToken'
 const USER_KEY = 'user'
 const PROFILE_PIC_KEY = 'profilePicture'
 
@@ -70,6 +71,27 @@ export const sessionStore = {
 		} catch (error) {
 			console.error('Error getting token expiry from session storage:', error)
 			return null
+		}
+	},
+
+	getCsrfToken: (): string | null => {
+		try {
+			return sessionStorage.getItem(CSRF_TOKEN_KEY)
+		} catch (error) {
+			console.error('Error getting CSRF token from session storage:', error)
+			return null
+		}
+	},
+
+	setCsrfToken: (token: string | null): void => {
+		try {
+			if (token) {
+				sessionStorage.setItem(CSRF_TOKEN_KEY, token)
+			} else {
+				sessionStorage.removeItem(CSRF_TOKEN_KEY)
+			}
+		} catch (error) {
+			console.error('Error setting CSRF token in session storage:', error)
 		}
 	},
 
@@ -148,6 +170,7 @@ export const sessionStore = {
 	clearAll: (): void => {
 		sessionStore.clearUser()
 		sessionStore.setTokenExpiresAt(null)
+		sessionStore.setCsrfToken(null)
 		purgeLegacyTokenStorage()
 	},
 

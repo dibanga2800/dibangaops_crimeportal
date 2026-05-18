@@ -9,7 +9,6 @@ import {
 import { usePageAccess } from '@/contexts/PageAccessContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { api, AUTH_REQUEST_TIMEOUT_MS } from '@/config/api'
-import { sessionStore } from '@/state/sessionStore'
 
 interface LoginError {
 	type: 'credentials' | 'network' | 'server' | 'validation'
@@ -36,7 +35,7 @@ export default function LoginPage() {
 	const formRef = useRef<HTMLFormElement>(null)
 	const navigate = useNavigate()
 	const { setCurrentRole } = usePageAccess()
-	const { login, clearError, error: authError, isLoading: authLoading } = useAuth()
+	const { login, completeSessionFromPayload, clearError, error: authError, isLoading: authLoading } = useAuth()
 
 	useEffect(() => {
 		clearError()
@@ -133,19 +132,13 @@ export default function LoginPage() {
 				throw new Error(message)
 			}
 
-			const loginData = data as any
-			const expiresAt = loginData?.ExpiresAt ?? loginData?.expiresAt
-			const user = loginData?.User ?? loginData?.user
+			const loggedInUser = completeSessionFromPayload(data as Record<string, unknown>)
 
-			if (!user) {
-				throw new Error('Invalid response from server: missing user data')
-			}
+			setCurrentRole(loggedInUser.role).catch(err => {
+				console.warn('⚠️ [LoginPage] Error setting role after 2FA:', err)
+			})
 
-			sessionStore.setTokenExpiresAt(expiresAt ?? null)
-			sessionStore.setUser(user)
-
-			// Reload app so AuthProvider picks up the new token/user cleanly
-			window.location.href = '/'
+			navigate('/dashboard', { replace: true })
 		} catch (err) {
 			setError({
 				type: 'credentials',

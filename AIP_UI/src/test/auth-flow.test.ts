@@ -16,11 +16,13 @@ describe('sessionStore (cookie auth)', () => {
 	it('clearAll removes user and expiry metadata', () => {
 		sessionStore.setUser({ id: '1', role: 'administrator' } as any)
 		sessionStore.setTokenExpiresAt(new Date().toISOString())
+		sessionStore.setCsrfToken('csrf-test')
 
 		sessionStore.clearAll()
 
 		expect(sessionStore.getUser()).toBeNull()
 		expect(sessionStore.getTokenExpiresAt()).toBeNull()
+		expect(sessionStore.getCsrfToken()).toBeNull()
 	})
 
 	it('hasSession reflects cached user', () => {
@@ -45,9 +47,9 @@ describe('services/auth', () => {
 		expect(isAuthenticated()).toBe(true)
 	})
 
-	it('getAuthFetchInit includes credentials and CSRF when cookie is present', async () => {
+	it('getAuthFetchInit includes credentials and CSRF from session storage', async () => {
 		const { getAuthFetchInit } = await import('@/services/auth')
-		document.cookie = 'aip_csrf=test-csrf-value'
+		sessionStore.setCsrfToken('test-csrf-value')
 
 		const init = getAuthFetchInit({ method: 'POST' })
 		expect(init.credentials).toBe('include')

@@ -94,9 +94,16 @@ const refreshAccessToken = async (): Promise<boolean> => {
       (refreshData?.ExpiresAt as string | undefined) ??
       (refreshData?.expiresAt as string | undefined)
     const user = (refreshData?.User ?? refreshData?.user) as Parameters<typeof sessionStore.setUser>[0] | undefined
+    const csrfToken =
+      (refreshData?.CsrfToken as string | undefined) ??
+      (refreshData?.csrfToken as string | undefined)
 
     if (expiresAt) {
       sessionStore.setTokenExpiresAt(expiresAt)
+    }
+
+    if (csrfToken) {
+      sessionStore.setCsrfToken(csrfToken)
     }
 
     if (user) {

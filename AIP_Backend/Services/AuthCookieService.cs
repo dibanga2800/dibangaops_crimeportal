@@ -18,7 +18,7 @@ public class AuthCookieService : IAuthCookieService
 		_configuration = configuration;
 	}
 
-	public void SetAuthCookies(HttpResponse response, string accessToken, string refreshToken, DateTime accessTokenExpiresAtUtc)
+	public string SetAuthCookies(HttpResponse response, string accessToken, string refreshToken, DateTime accessTokenExpiresAtUtc)
 	{
 		var sameSite = GetSameSiteMode();
 		var secure = _options.Secure;
@@ -61,6 +61,8 @@ public class AuthCookieService : IAuthCookieService
 				sameSite,
 				secure,
 				domain));
+
+		return csrfToken;
 	}
 
 	public void ClearAuthCookies(HttpResponse response)

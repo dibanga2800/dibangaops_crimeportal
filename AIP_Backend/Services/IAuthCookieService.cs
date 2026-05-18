@@ -4,7 +4,8 @@ namespace AIPBackend.Services;
 
 public interface IAuthCookieService
 {
-	void SetAuthCookies(HttpResponse response, string accessToken, string refreshToken, DateTime accessTokenExpiresAtUtc);
+	/// <returns>CSRF token (also set as a non-HttpOnly cookie for same-site clients).</returns>
+	string SetAuthCookies(HttpResponse response, string accessToken, string refreshToken, DateTime accessTokenExpiresAtUtc);
 
 	void ClearAuthCookies(HttpResponse response);
 

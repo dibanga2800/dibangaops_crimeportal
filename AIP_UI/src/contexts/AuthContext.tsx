@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { User } from '@/types/user';
 import { api, tryRefreshAccessToken, AUTH_REQUEST_TIMEOUT_MS } from '@/config/api';
 import { sessionStore } from '@/state/sessionStore';
+import { applyLoginPayload } from '@/utils/authSession';
 import { ApiResponse } from '@/types/api';
 
 // Backend ApiResponseDto structure (capital case)
@@ -27,6 +28,7 @@ interface AuthContextType {
   isLoading: boolean;
   error: string | null;
   login: (username: string, password: string) => Promise<User>;
+  completeSessionFromPayload: (loginData: Record<string, unknown>) => User;
   logout: () => void;
   clearError: () => void;
   updateProfilePicture: (dataUrl: string | null) => void;
@@ -318,6 +320,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const completeSessionFromPayload = (loginData: Record<string, unknown>): User => {
+    const normalizedUser = applyLoginPayload(loginData);
+    setUser(normalizedUser);
+    setError(null);
+    return normalizedUser;
+  };
+
   const logout = () => {
     void (async () => {
       try {
@@ -344,7 +353,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, error, login, logout, clearError, updateProfilePicture }}>
+    <AuthContext.Provider value={{ user, isLoading, error, login, completeSessionFromPayload, logout, clearError, updateProfilePicture }}>
       {children}
     </AuthContext.Provider>
   );

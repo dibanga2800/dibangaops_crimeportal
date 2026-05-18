@@ -28,6 +28,11 @@ namespace AIPBackend.Models.DTOs
         // For step 1: indicates that a second factor is required instead of tokens
         public bool RequiresTwoFactor { get; set; }
         public string[] TwoFactorMethods { get; set; } = Array.Empty<string>();
+
+        /// <summary>
+        /// CSRF token for cross-origin SPAs (cookie is host-only on the API domain).
+        /// </summary>
+        public string? CsrfToken { get; set; }
     }
 
     public class RefreshTokenRequestDto
@@ -44,6 +49,7 @@ namespace AIPBackend.Models.DTOs
         public string RefreshToken { get; set; } = string.Empty;
         public DateTime ExpiresAt { get; set; }
         public UserResponseDto? User { get; set; }
+        public string? CsrfToken { get; set; }
     }
 
     public class LogoutRequestDto
