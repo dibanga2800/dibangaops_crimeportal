@@ -65,11 +65,16 @@ jobs:
         working-directory: Infrastructure
         run: |
           set -euo pipefail
-          FD_URL="$(terraform output -raw api_front_door_url 2>/dev/null || true)"
-          if [ -n "${FD_URL}" ] && [ "${FD_URL}" != "null" ]; then
-            echo "backend_url=${FD_URL}" >> "$GITHUB_OUTPUT"
-            exit 0
+          FD_URL=""
+          if terraform output -raw api_front_door_url > /tmp/api_front_door_url.txt 2>/dev/null; then
+            FD_URL="$(tr -d '\r\n' < /tmp/api_front_door_url.txt)"
           fi
+          case "${FD_URL}" in
+            https://*)
+              echo "backend_url=${FD_URL}" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+          esac
           FQDN="$(az containerapp show \
             --resource-group "${{ env.RESOURCE_GROUP }}" \
             --name "${{ env.BACKEND_APP_NAME }}" \
