@@ -1,8 +1,8 @@
-# DibangaOps Crime Portal™
+# DibangOps Crime Portal™
 
 ## Overview
 
-DibangaOps Crime Portal™ is a production-grade, API-driven security incident management and crime intelligence platform designed for multi-organisation retail environments.
+DibangOps Crime Portal™ is a production-grade, API-driven security incident management and crime intelligence platform designed for multi-organisation retail environments.
 
 The system is currently used to support operations across organisations including **Heart of England Co-operative** and **Central England Co-operative**, enabling real-time incident reporting, intelligence sharing, and data-driven decision-making across multiple store locations.
 

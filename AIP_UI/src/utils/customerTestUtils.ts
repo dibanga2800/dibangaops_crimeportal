@@ -76,9 +76,6 @@ export const testCompleteWorkflow = () => {
   const expectedGatehousePages = [
     'incident-graph',
     'incident-report',
-    'satisfaction-report',
-    'be-safe-be-secure',
-    'officer-support'
   ];
 
   const hasRequiredPages = expectedGatehousePages.every(page => 

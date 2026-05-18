@@ -41,17 +41,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   const fetchCurrentUser = useCallback(async () => {
-    const token = sessionStore.getToken();
-    if (!token) {
+    const cachedUser = sessionStore.getUser();
+    if (!cachedUser) {
       setUser(null);
-      sessionStore.setUser(null);
-      setError(null); // Clear any stale errors when there's no token
+      setError(null);
       setIsLoading(false);
       return;
     }
 
     // Restore user from localStorage first for immediate UI rendering
-    const cachedUser = sessionStore.getUser();
     if (cachedUser) {
       setUser(cachedUser);
       setIsLoading(false);
@@ -87,10 +85,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (isUnauthorized) {
         console.error('Failed to fetch current user - unauthorized:', err);
-        sessionStore.clearToken();
+        sessionStore.clearAll();
         setUser(null);
-        sessionStore.setUser(null);
-        setError(null); // Clear error on unauthorized
+        setError(null);
       } else if (isTimeout) {
         // For timeout errors, don't set error state - just log and keep cached user
         console.warn('Failed to fetch current user - timeout (keeping cached user):', err);
@@ -131,10 +128,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const refreshIfNearExpiry = async () => {
       const expiresAt = sessionStore.getTokenExpiresAt()
-      const refreshToken = sessionStore.getRefreshToken()
-      const hasSession = !!sessionStore.getToken() && !!sessionStore.getUser()
+      const hasSession = sessionStore.hasSession()
 
-      if (!expiresAt || !refreshToken || !hasSession) {
+      if (!expiresAt || !hasSession) {
         return
       }
 
@@ -150,8 +146,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return
       }
 
-      const newToken = await tryRefreshAccessToken()
-      if (isMounted && newToken) {
+      const refreshed = await tryRefreshAccessToken()
+      if (isMounted && refreshed) {
         setUser(sessionStore.getUser())
       }
     }
@@ -261,23 +257,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { requiresTwoFactor: true, email: username } as any;
       }
 
-      const accessToken = loginData?.AccessToken ?? (loginData as any)?.accessToken;
-      const refreshToken = loginData?.RefreshToken ?? (loginData as any)?.refreshToken;
       const expiresAt = loginData?.ExpiresAt ?? (loginData as any)?.expiresAt;
       const user = (loginData as any)?.User ?? (loginData as any)?.user;
 
-      if (!accessToken || !user) {
-        console.error('❌ [AuthContext] Missing token or user in response:', {
-          hasAccessToken: !!accessToken,
+      if (!user) {
+        console.error('❌ [AuthContext] Missing user in response:', {
           hasUser: !!user,
           loginDataKeys: loginData ? Object.keys(loginData) : [],
           loginData
         });
-        throw new Error('Invalid response from server: missing token or user data');
+        throw new Error('Invalid response from server: missing user data');
       }
 
-      sessionStore.setToken(accessToken);
-      sessionStore.setRefreshToken(refreshToken ?? null);
       sessionStore.setTokenExpiresAt(expiresAt ?? null);
       sessionStore.setUser(user);
       const normalizedUser = sessionStore.getUser()!;
@@ -328,9 +319,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = () => {
-    sessionStore.clearAll();
-    setUser(null);
-    setError(null); // Clear error on logout
+    void (async () => {
+      try {
+        await api.post('/Auth/logout', {});
+      } catch {
+        // Local session is cleared even when the API is unreachable.
+      } finally {
+        sessionStore.clearAll();
+        setUser(null);
+        setError(null);
+      }
+    })();
   };
 
   const clearError = () => {

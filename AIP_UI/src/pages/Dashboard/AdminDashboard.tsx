@@ -413,11 +413,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
       try {
         setIncidentsLoading(true);
         
-        const token = sessionStore.getToken();
-        if (!token) {
-          console.warn('⚠️ No auth token found - incidents may not load');
-        }
-        
         console.log('🔄 Loading incidents using incidentsApi service');
         
         // Use the proper incidents API service which handles authentication
@@ -889,23 +884,26 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
         .slice()
         .sort((a, b) => new Date(b.dateOfIncident).getTime() - new Date(a.dateOfIncident).getTime())
         .slice(0, 10)
-        .map(incident => ({
-          id: incident.id,
-          customerName: incident.customerName,
-          store: incident.siteName || incident.store || 'N/A',
-          siteName: incident.siteName || 'N/A',
-          officerName: incident.officerName,
-          date: incident.dateOfIncident || incident.date || '',
-          timeOfIncident: incident.timeOfIncident,
-          amount: incident.totalValueRecovered || incident.value || 0,
-          recoveredValue: incident.totalValueRecovered || incident.value || 0,
-          lostValue: incident.totalLostValue || incident.lostValue || 0,
-          incidentType: incident.incidentType,
-          incidentCategory: incident.incidentCategory,
-          incidentCategoryConfidence: incident.incidentCategoryConfidence,
-          riskLevel: incident.riskLevel,
-          riskScore: incident.riskScore,
-        }))
+        .map(incident => {
+          const financials = getIncidentFinancials(incident)
+          return {
+            id: incident.id,
+            customerName: incident.customerName,
+            store: incident.siteName || incident.store || 'N/A',
+            siteName: incident.siteName || 'N/A',
+            officerName: incident.officerName,
+            date: incident.dateOfIncident || incident.date || '',
+            timeOfIncident: incident.timeOfIncident,
+            amount: financials.totalRecoveredValue,
+            recoveredValue: financials.totalRecoveredValue,
+            lostValue: financials.totalLostValue,
+            incidentType: incident.incidentType,
+            incidentCategory: incident.incidentCategory,
+            incidentCategoryConfidence: incident.incidentCategoryConfidence,
+            riskLevel: incident.riskLevel,
+            riskScore: incident.riskScore,
+          }
+        })
     }
 
     if (selectedRegion !== 'all' || isDateRangeActive) {
@@ -1466,12 +1464,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
               <CardContent className="p-3 md:p-4 pt-1 md:pt-2 z-10 relative">
                 <div className="text-xl font-bold md:text-2xl lg:text-3xl text-white">{quickStats.totalIncidents}</div>
                 <div className="text-xs text-white/60 mt-1">
-                  {selectedRegion !== 'all' || isDateRangeActive
+                  {isDateRangeActive || selectedRegion !== 'all'
                     ? 'Within selected filters'
-                    : incidentsPagination?.totalCount != null &&
-                      filteredIncidents.length < incidentsPagination.totalCount
-                      ? 'Server total (all pages)'
-                      : 'All loaded'}
+                    : 'All time'}
                 </div>
               </CardContent>
             </Card>

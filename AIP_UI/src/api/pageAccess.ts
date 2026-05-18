@@ -1,5 +1,6 @@
 import { ApiResponse, api } from '@/config/api';
 import { withoutAdministratorOnlyPageIds } from '@/config/administration-access';
+import { withoutRemovedPageIds, withoutRemovedPages } from '@/config/removedPages';
 import { PAGE_DEFINITIONS, type PageDefinition } from '@/config/navigation/pageDefinitions';
 
 export interface PageAccess {
@@ -58,7 +59,7 @@ const normalizeRoleKey = (roleKey: string): string => {
 
 const normalizeSettings = (dto: BackendPageAccessSettingsDto): PageAccessSettings => {
 	// First, normalize all pages to create a mapping from dbId to pageId
-	const normalizedPages = dto.availablePages?.map(normalizePage) ?? [];
+	const normalizedPages = withoutRemovedPages(dto.availablePages?.map(normalizePage) ?? []);
 	
 	// Create a mapping from database ID (number) to pageId (string)
 	const dbIdToPageIdMap = new Map<number, string>();
@@ -102,7 +103,7 @@ const normalizeSettings = (dto: BackendPageAccessSettingsDto): PageAccessSetting
 			const normalizedKey = normalizeRoleKey(roleKey);
 			// Convert all page IDs (which might be numeric database IDs) to pageId strings
 			const convertedPageIds = pageIds.map(convertToPageId);
-			normalizedPageAccessByRole[normalizedKey] = convertedPageIds;
+			normalizedPageAccessByRole[normalizedKey] = withoutRemovedPageIds(convertedPageIds);
 			
 			// Log conversion for debugging (only in dev mode)
 			if (import.meta.env.DEV && pageIds.length > 0) {
@@ -125,7 +126,7 @@ const normalizeSettings = (dto: BackendPageAccessSettingsDto): PageAccessSetting
 					);
 					
 					// Check for specific customer pages
-					const customerPages = ['customer-incident-report', 'customer-incident-graph', 'customer-satisfaction-report'];
+					const customerPages = ['customer-incident-report', 'customer-incident-graph', 'customer-crime-intelligence'];
 					customerPages.forEach(pageId => {
 						const index = convertedPageIds.indexOf(pageId);
 						const originalValue = index >= 0 ? pageIds[index] : 'NOT FOUND';
@@ -202,9 +203,7 @@ const buildDefaultSettings = (): PageAccessSettings => {
 			manager: [
 				'dashboard', 'profile', 'alert-rules', 'data-analytics-hub',
 				'incident-report', 'incident-graph', 'crime-intelligence',
-				'crm-dashboard', 'crm-contacts',
-				'crm-leads', 'crm-deals', 'crm-pipeline', 'crm-tasks',
-				'customer-mystery-shopper-report', 'customer-site-visit-reports', 'customer-crime-intelligence'
+				'barcode-catalog-import', 'product-catalog',
 			],
 			'security-officer': [
 				'dashboard', 'profile', 'incident-report'
@@ -236,19 +235,6 @@ export const pageAccessApi = {
 					console.log(`💾 [PageAccess API] Sample - ${sampleRole}: ${pageAccessByRole[sampleRole].slice(0, 5).join(', ')}${pageAccessByRole[sampleRole].length > 5 ? '...' : ''}`);
 				}
 				
-				// Log full payload for Customer Reporting debugging
-				if (pageAccessByRole['store']) {
-					const hasCustomerReporting = pageAccessByRole['store'].some(id => 
-						id === 'management-customer-reporting' || id.includes('customer-reporting')
-					);
-					if (hasCustomerReporting) {
-						console.log(`🔍 [PageAccess API] store role has Customer Reporting in payload:`, 
-							pageAccessByRole['store'].filter(id => 
-								id === 'management-customer-reporting' || id.includes('customer-reporting')
-							)
-						);
-					}
-				}
 			}
 			
 			console.log(`💾 [PageAccess API] Making PUT request to /PageAccess/settings`);
@@ -269,10 +255,14 @@ export const pageAccessApi = {
 			});
 			
 			if (responseData && isSuccess) {
-				const savedRoleCount = Object.keys(responseData.pageAccessByRole).length;
-				const savedTotalPages = Object.values(responseData.pageAccessByRole).reduce((sum, pages) => sum + pages.length, 0);
+				const settingsDto = responseData as BackendPageAccessSettingsDto;
+				const savedRoleCount = Object.keys(settingsDto.pageAccessByRole).length;
+				const savedTotalPages = Object.values(settingsDto.pageAccessByRole).reduce(
+					(sum, pages) => sum + pages.length,
+					0
+				);
 				console.log(`✅ [PageAccess API] Settings saved successfully: ${savedRoleCount} roles, ${savedTotalPages} total page assignments`);
-				return normalizeSettings(responseData);
+				return normalizeSettings(settingsDto);
 			}
 			
 			console.warn('⚠️ [PageAccess API] Save response missing data field');
@@ -307,7 +297,7 @@ export const pageAccessApi = {
 					const hasDefaultCustomerPages = [
 						'customer-incident-report',
 						'customer-incident-graph',
-						'customer-satisfaction-report'
+						'customer-crime-intelligence',
 					].some(pageId => officerPages.includes(pageId));
 					
 					if (hasDefaultCustomerPages) {

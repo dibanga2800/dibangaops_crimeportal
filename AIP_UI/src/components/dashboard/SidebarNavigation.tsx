@@ -219,31 +219,6 @@ export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({ onNavigate
 		isManager
 	}), [hasAccess, isCustomerRole, isAdministrator, isOfficerRole, isStoreUser, isManager]);
 
-	// Debug: Log current page access for officer role
-	React.useEffect(() => {
-		if (effectiveRole === 'store' && import.meta.env.DEV) {
-			const storePages = pageAccessByRole[effectiveRole] || [];
-			const customerReportingPages = storePages.filter(id => 
-				id === 'management-customer-reporting' || id.includes('customer-reporting')
-			);
-			const customerReportingPage = availablePages.find(p => 
-				p.path === '/management/customer-reporting' || 
-				p.id === 'management-customer-reporting'
-			);
-			
-			console.log(`🔍 [Sidebar] Store role page access:`, {
-				totalPages: storePages.length,
-				customerReporting: {
-					enabled: customerReportingPages.length > 0,
-					pageIds: customerReportingPages,
-					pageInAvailablePages: !!customerReportingPage,
-					pageId: customerReportingPage?.id,
-					hasAccess: customerReportingPage ? hasAccess('/management/customer-reporting') : false
-				}
-			});
-		}
-	}, [effectiveRole, pageAccessByRole, availablePages, hasAccess]);
-
 	// Create a key based on pageAccessByRole to force re-render when settings change
 	const settingsKey = React.useMemo(() => {
 		if (effectiveRole && pageAccessByRole[effectiveRole]) {
@@ -253,31 +228,6 @@ export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({ onNavigate
 	}, [effectiveRole, pageAccessByRole]);
 
 	const pages = availablePages || []
-	
-	// Debug: Log available pages and page access for Customer Reporting
-	React.useEffect(() => {
-		if (effectiveRole === 'store' && import.meta.env.DEV) {
-			const customerReportingPage = pages.find(p => 
-				p.path === '/management/customer-reporting' || 
-				p.id === 'management-customer-reporting'
-			);
-			const storePages = pageAccessByRole[effectiveRole] || [];
-			const hasCustomerReporting = storePages.includes('management-customer-reporting') || 
-			                               storePages.some(id => id.includes('customer-reporting'));
-			
-			console.log(`🔍 [Sidebar] Available pages and access check:`, {
-				totalAvailablePages: pages.length,
-				customerReportingPage: customerReportingPage ? {
-					id: customerReportingPage.id,
-					path: customerReportingPage.path,
-					title: customerReportingPage.title
-				} : 'NOT FOUND',
-				storeHasAccess: hasCustomerReporting,
-				storeAllowedPages: storePages.slice(0, 5),
-				willShowInSidebar: customerReportingPage ? guardContext.hasAccess('/management/customer-reporting') : false
-			});
-		}
-	}, [pages, effectiveRole, pageAccessByRole, guardContext]);
 	
 	const topLevelLinks = React.useMemo(() => {
 		let filtered = SIDEBAR_TOP_LINKS.filter((link) => canDisplayLink(link, guardContext, pages, effectiveRole));

@@ -3,6 +3,7 @@ import { PageAccess, PageAccessSettings, pageAccessApi } from '@/api/pageAccess'
 import { AuthContext } from '@/contexts/AuthContext';
 import { customerPageAccessCache } from '@/services/customerPageAccessCache';
 import { isAdministratorOnlyPath } from '@/config/administration-access';
+import { isRemovedPage, withoutRemovedPageIds } from '@/config/removedPages';
 import { PAGE_DEFINITIONS } from '@/config/navigation/pageDefinitions';
 import { sessionStore } from '@/state/sessionStore';
 import { subscribeToPageAccessUpdates } from '@/lib/pageAccessBroadcast';
@@ -82,7 +83,7 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 	// Stable check for auth token
 	const hasAuthToken = useCallback((): boolean => {
 		try {
-			return Boolean(sessionStore.getToken());
+			return sessionStore.hasSession();
 		} catch {
 			return false;
 		}
@@ -150,7 +151,6 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 				const defaultCustomerPages = [
 					'customer-incident-graph',
 					'customer-incident-report',
-					'customer-views-config',
 					'customer-crime-intelligence',
 				];
 				const hasAllDefaultCustomerPages = defaultCustomerPages.every(pageId => 
@@ -191,8 +191,19 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 				console.groupEnd();
 			}
 			
-			setPageAccessByRole(data.pageAccessByRole);
-			setAvailablePages(data.availablePages);
+			setPageAccessByRole(
+				Object.fromEntries(
+					Object.entries(data.pageAccessByRole).map(([role, pageIds]) => [
+						role,
+						withoutRemovedPageIds(pageIds),
+					])
+				)
+			);
+			setAvailablePages(
+				data.availablePages.filter(
+					(page) => !isRemovedPage({ id: page.id, path: page.path })
+				)
+			);
 			setStatus('ready');
 			setError(null);
 			return data;
@@ -492,11 +503,9 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 			// Store users are restricted to incident-report only (handled in sidebar)
 			const isOfficer = currentRole === 'security-officer';
 			const isCustomerPage = page.path?.startsWith('/customer') || page.category === 'Customer';
-			const isManagementCustomerReporting = page.path === '/management/customer-reporting' || page.id === 'management-customer-reporting';
-			
 			if (!hasRoleAccess && isOfficer) {
 				// Officers can access customer pages if granted in Settings (pageAccessByRole)
-				if (isCustomerPage || isManagementCustomerReporting) {
+				if (isCustomerPage) {
 					// Re-check using resolved allowedPageIds (Settings uses 'security-officer' key)
 					const officerPages = allowedPageIds || [];
 					const hasOfficerAccess = officerPages.some(allowedId => {
@@ -598,7 +607,7 @@ export const PageAccessProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 					pagePath: page.path
 				});
 				// Check all customer pages to see which ones are in the allowed list
-				const customerPageIds = ['customer-incident-report', 'customer-incident-graph', 'customer-satisfaction-report'];
+				const customerPageIds = ['customer-incident-report', 'customer-incident-graph', 'customer-crime-intelligence'];
 				const customerPageMatches = customerPageIds.map(customerPageId => {
 					const exactMatch = allowedPageIds.includes(customerPageId);
 					const caseInsensitiveMatch = allowedPageIds.some(id => String(id).toLowerCase().trim() === customerPageId.toLowerCase().trim());

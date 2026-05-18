@@ -1,18 +1,11 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
 import { sessionStore } from '@/state/sessionStore'
+import { applyCsrfHeader } from '@/utils/csrf'
 import { API_BASE_URL, isDevelopment } from './env'
 
-// Base API URL for the .NET backend
-// Validated and loaded from environment configuration
 export const BASE_API_URL = API_BASE_URL
 
-/** Default HTTP timeout for most API calls (slow networks / busy APIs). */
 export const DEFAULT_API_TIMEOUT_MS = 30_000
-
-/**
- * Longer timeout for auth endpoints (login, session, refresh).
- * Cloud backends (e.g. Azure Container Apps) can exceed 10s on cold start; short timeouts surface as false "connection timeout".
- */
 export const AUTH_REQUEST_TIMEOUT_MS = 90_000
 
 export const api = axios.create({
@@ -21,7 +14,8 @@ export const api = axios.create({
     'Content-Type': 'application/json',
     'Accept': 'application/json'
   },
-  timeout: DEFAULT_API_TIMEOUT_MS
+  timeout: DEFAULT_API_TIMEOUT_MS,
+  withCredentials: true,
 })
 
 const PUBLIC_AUTH_ENDPOINTS = new Set([
@@ -45,34 +39,20 @@ const isPublicEndpoint = (url?: string): boolean => {
   }
 }
 
-// Add request interceptor to include auth token
 api.interceptors.request.use(
   (config) => {
-    const token = sessionStore.getToken()
     if (isDevelopment) {
-      console.log('🔄 [API Interceptor] Making request', { 
-        url: config.url, 
+      console.log('🔄 [API Interceptor] Making request', {
+        url: config.url,
         method: config.method,
-        hasToken: !!token,
-        baseURL: config.baseURL
+        baseURL: config.baseURL,
       })
     }
-    
-    if (isPublicEndpoint(config.url)) {
-      if (isDevelopment) {
-        console.log('🔓 [API Interceptor] Skipping authentication for public auth endpoint')
-      }
-      return config
+
+    if (!isPublicEndpoint(config.url)) {
+      config.headers = applyCsrfHeader(config.headers as Record<string, string>)
     }
-    
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-      if (isDevelopment) {
-        console.log('🔑 [API Interceptor] Added Authorization header:', `Bearer ${token.substring(0, 20)}...`)
-      }
-    } else if (isDevelopment) {
-      console.info('ℹ️ [API Interceptor] Skipping Authorization header; no auth token for request:', config.url)
-    }
+
     return config
   },
   (error) => {
@@ -81,34 +61,19 @@ api.interceptors.request.use(
   }
 )
 
-// Simple in-memory refresh state to prevent concurrent refresh calls
 let isRefreshing = false
-let refreshPromise: Promise<string | null> | null = null
+let refreshPromise: Promise<boolean> | null = null
 
 type AxiosRequestConfigWithRetry = InternalAxiosRequestConfig & {
   _retry?: boolean
 }
 
-const refreshAccessToken = async (): Promise<string | null> => {
-  const refreshToken = sessionStore.getRefreshToken()
-  const currentAccessToken = sessionStore.getToken()
-  if (!refreshToken) {
-    return null
-  }
-
+const refreshAccessToken = async (): Promise<boolean> => {
   try {
-    // Use a bare axios instance to avoid interceptor recursion
-    const response = await axios.post(
-      `${BASE_API_URL}/Auth/refresh`,
-      { refreshToken },
+    const response = await api.post(
+      '/Auth/refresh',
+      {},
       {
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          // Backend refresh endpoint uses the (possibly expired) access token
-          // from Authorization to resolve the user identity.
-          ...(currentAccessToken ? { 'Authorization': `Bearer ${currentAccessToken}` } : {}),
-        },
         timeout: AUTH_REQUEST_TIMEOUT_MS,
       }
     )
@@ -121,56 +86,43 @@ const refreshAccessToken = async (): Promise<string | null> => {
       if (isDevelopment) {
         console.warn('⚠️ [Auth] Refresh token response invalid or unsuccessful:', apiResponse)
       }
-      return null
+      return false
     }
 
-    const loginData = data as any
-    const newAccessToken: string | undefined =
-      loginData?.AccessToken ?? loginData?.accessToken
-    const newRefreshToken: string | undefined =
-      loginData?.RefreshToken ?? loginData?.refreshToken
-    const expiresAt: string | undefined =
-      loginData?.ExpiresAt ?? loginData?.expiresAt
-    const user = loginData?.User ?? loginData?.user
+    const refreshData = data as Record<string, unknown>
+    const expiresAt =
+      (refreshData?.ExpiresAt as string | undefined) ??
+      (refreshData?.expiresAt as string | undefined)
+    const user = (refreshData?.User ?? refreshData?.user) as Parameters<typeof sessionStore.setUser>[0] | undefined
 
-    if (!newAccessToken || !user) {
-      if (isDevelopment) {
-        console.error('❌ [Auth] Refresh response missing token or user:', {
-          hasAccessToken: !!newAccessToken,
-          hasUser: !!user,
-        })
-      }
-      return null
+    if (expiresAt) {
+      sessionStore.setTokenExpiresAt(expiresAt)
     }
 
-    sessionStore.setToken(newAccessToken)
-    sessionStore.setRefreshToken(newRefreshToken ?? null)
-    sessionStore.setTokenExpiresAt(expiresAt ?? null)
-    sessionStore.setUser(user)
+    if (user) {
+      sessionStore.setUser(user)
+    }
 
     if (isDevelopment) {
-      console.log('✅ [Auth] Access token refreshed successfully')
+      console.log('✅ [Auth] Session refreshed successfully')
     }
 
-    return newAccessToken
+    return true
   } catch (error) {
     if (isDevelopment) {
-      console.error('❌ [Auth] Failed to refresh access token:', error)
+      console.error('❌ [Auth] Failed to refresh session:', error)
     }
-    return null
+    return false
   }
 }
 
-export const tryRefreshAccessToken = async (): Promise<string | null> => {
-  return refreshAccessToken()
-}
+export const tryRefreshAccessToken = async (): Promise<boolean> => refreshAccessToken()
 
-// Add response interceptor for error handling + token refresh
 api.interceptors.response.use(
   (response) => {
     if (isDevelopment) {
-      console.log('✅ [API Interceptor] Response received', { 
-        url: response.config.url, 
+      console.log('✅ [API Interceptor] Response received', {
+        url: response.config.url,
         status: response.status
       })
     }
@@ -179,101 +131,62 @@ api.interceptors.response.use(
   async (error: AxiosError) => {
     const status = error.response?.status;
     const url = (error.config as AxiosRequestConfigWithRetry)?.url || '';
-    
-    // For expected errors (404, etc.), log less verbosely
+
     const isExpectedError = status === 404 || status === 403;
-    
     const shouldLogVerbose = isDevelopment;
     const shouldLogWarningOnly = !shouldLogVerbose && isExpectedError;
 
     if (shouldLogWarningOnly) {
       console.warn(`⚠️ [API Interceptor] ${status} ${error.config?.method?.toUpperCase()} ${url}`);
     } else if (shouldLogVerbose) {
-      const errorDetails = {
-        url, 
-        method: error.config?.method,
-        status,
-        statusText: error.response?.statusText,
-        message: error.message,
-        responseData: error.response?.data,
-        requestData: error.config?.data,
-        headers: error.config?.headers,
-        authHeader: error.config?.headers?.Authorization ? 'Present' : 'Missing',
-      }
-      // Don't log network errors (backend might be down)
       const isNetworkError = !error.response && (error.message === 'Network Error' || error.message.includes('Failed to fetch'))
       if (!isNetworkError) {
-        console.error('❌ [API Interceptor] Response error:', errorDetails)
-        if (error.response?.data) {
-          console.error('❌ [API Interceptor] Error response data:', JSON.stringify(error.response.data, null, 2))
-        }
+        console.error('❌ [API Interceptor] Response error:', {
+          url,
+          method: error.config?.method,
+          status,
+          message: error.message,
+          responseData: error.response?.data,
+        })
       }
     }
-    
+
     if (status === 401) {
       const config = (error.config || {}) as AxiosRequestConfigWithRetry
-      const isSettingsEndpoint = url.includes('/PageAccess/settings') || url.includes('/pageaccess/settings')
       const isLoginPage = window.location.pathname.includes('/login')
       const isLoginEndpoint = url.includes('/Auth/login')
       const isRefreshEndpoint = url.includes('/Auth/refresh')
       const isAuthValidation = url.includes('/Auth/me') || isRefreshEndpoint
-      const hasToken = !!sessionStore.getToken()
+      const hasSession = sessionStore.hasSession()
 
-      console.warn('⚠️ [API 401]', {
-        url,
-        method: config?.method?.toUpperCase(),
-        isAuthValidation,
-        isLoginEndpoint,
-        isSettingsEndpoint,
-        isLoginPage,
-        hasToken,
-        hasRefreshToken: !!sessionStore.getRefreshToken(),
-      })
+      if (!isLoginEndpoint && !isRefreshEndpoint && !config._retry) {
+        config._retry = true
 
-      // Never try to refresh for login or refresh endpoints themselves
-      let refreshAttemptedAndFailed = false
+        try {
+          if (!isRefreshing) {
+            isRefreshing = true
+            refreshPromise = refreshAccessToken().finally(() => {
+              isRefreshing = false
+            })
+          }
 
-      if (!isLoginEndpoint && !isRefreshEndpoint) {
-        const refreshToken = sessionStore.getRefreshToken()
-
-        // Only attempt refresh if we have a refresh token and haven't retried this request yet
-        if (refreshToken && !config._retry) {
-          config._retry = true
-
-          try {
-            if (!isRefreshing) {
-              isRefreshing = true
-              refreshPromise = refreshAccessToken().finally(() => {
-                isRefreshing = false
-              })
-            }
-
-            const newAccessToken = await refreshPromise!
-
-            if (newAccessToken) {
-              // Update Authorization header and retry original request
-              config.headers = config.headers || {}
-              config.headers.Authorization = `Bearer ${newAccessToken}`
-              return api(config)
-            }
-            refreshAttemptedAndFailed = true
-          } catch (refreshError) {
-            if (isDevelopment) {
-              console.error('❌ [API] Error during token refresh:', refreshError)
-            }
-            refreshAttemptedAndFailed = true
+          const refreshed = await refreshPromise!
+          if (refreshed) {
+            return api(config)
+          }
+        } catch (refreshError) {
+          if (isDevelopment) {
+            console.error('❌ [API] Error during session refresh:', refreshError)
           }
         }
       }
 
-      // Log out when auth endpoints prove the session invalid, or when refresh was attempted and failed.
-      // Do not clear the session on arbitrary 401s when no refresh token exists (e.g. legacy access-only session).
       const shouldForceLogout =
-        (isAuthValidation && !isLoginPage && hasToken) ||
-        refreshAttemptedAndFailed
+        (isAuthValidation && !isLoginPage && hasSession) ||
+        (config._retry && !isLoginEndpoint && !isRefreshEndpoint)
 
       if (shouldForceLogout) {
-        console.warn('⚠️ [API 401] Token invalid/expired and refresh unavailable/failed — clearing session and redirecting to /login')
+        console.warn('⚠️ [API 401] Session invalid — clearing session and redirecting to /login')
         sessionStore.clearAll()
         if (!isLoginPage) {
           window.location.href = '/login'
@@ -284,7 +197,6 @@ api.interceptors.response.use(
   }
 )
 
-// Employee endpoints
 export const EMPLOYEE_ENDPOINTS = {
   LIST: '/employee',
   DETAIL: (id: string) => `/employee/${id}`,
@@ -296,7 +208,6 @@ export const EMPLOYEE_ENDPOINTS = {
   ACTIVE: '/employee/active',
 } as const
 
-// Customer endpoints
 export const CUSTOMER_ENDPOINTS = {
   LIST: '/customer',
   DETAIL: (id: string) => `/customer/${id}`,
@@ -307,7 +218,6 @@ export const CUSTOMER_ENDPOINTS = {
   PAGE_ASSIGNMENTS: (id: string) => `/customer/${id}/page-assignments`,
 } as const
 
-// Region endpoints
 export const REGION_ENDPOINTS = {
   LIST: '/region',
   DETAIL: (id: string) => `/region/${id}`,
@@ -317,7 +227,6 @@ export const REGION_ENDPOINTS = {
   BY_CUSTOMER: (customerId: string) => `/region/customer/${customerId}`,
 } as const
 
-// Site endpoints
 export const SITE_ENDPOINTS = {
   LIST: '/site',
   DETAIL: (id: string) => `/site/${id}`,
@@ -328,7 +237,6 @@ export const SITE_ENDPOINTS = {
   BY_REGION: (regionId: string) => `/site/region/${regionId}`,
 } as const
 
-// User endpoints
 export const USER_ENDPOINTS = {
   LIST: '/user',
   DETAIL: (id: string) => `/user/${id}`,
@@ -338,16 +246,6 @@ export const USER_ENDPOINTS = {
   ASSIGN_CUSTOMERS: (id: string) => `/user/${id}/assign-customers`,
 } as const
 
-// Site Visit endpoints
-export const SITE_VISIT_ENDPOINTS = {
-  LIST: '/site-visits',
-  DETAIL: (id: string) => `/site-visits/${id}`,
-  CREATE: '/site-visits',
-  UPDATE: (id: string) => `/site-visits/${id}`,
-  DELETE: (id: string) => `/site-visits/${id}`,
-} as const
-
-// Stock endpoints
 export const STOCK_ENDPOINTS = {
   LIST: '/Stock',
   DETAIL: (id: string) => `/Stock/${id}`,
@@ -361,22 +259,11 @@ export const STOCK_ENDPOINTS = {
   TEST_EMAIL: '/Stock/test-email',
 } as const
 
-// Mystery Shopper endpoints
-export const MYSTERY_SHOPPER_ENDPOINTS = {
-  OFFICERS: '/mystery-shopper/officers',
-  CUSTOMERS: '/mystery-shopper/customers',
-  LOCATIONS: '/mystery-shopper/locations',
-  EVALUATION_CRITERIA: '/mystery-shopper/evaluation-criteria',
-  EVALUATIONS: '/mystery-shopper/evaluations'
-} as const
-
-// Classification & AI endpoints
 export const CLASSIFICATION_ENDPOINTS = {
   CLASSIFY: '/Classification/classify',
   CLASSIFY_EXISTING: (id: number) => `/Classification/classify/${id}`,
 } as const
 
-// Analytics endpoints
 export const ANALYTICS_ENDPOINTS = {
   SUMMARY: '/Analytics/summary',
   HUB: '/Analytics/hub',
@@ -384,7 +271,6 @@ export const ANALYTICS_ENDPOINTS = {
   AI_RISK_SCORES: '/AiAnalytics/risk-scores',
 } as const
 
-// Evidence endpoints
 export const EVIDENCE_ENDPOINTS = {
   REGISTER: (incidentId: number) => `/Evidence/incidents/${incidentId}/evidence`,
   BY_INCIDENT: (incidentId: number) => `/Evidence/incidents/${incidentId}`,
@@ -393,7 +279,6 @@ export const EVIDENCE_ENDPOINTS = {
   CUSTODY_EVENT: (id: number) => `/Evidence/${id}/custody`,
 } as const
 
-// Alert Instance endpoints
 export const ALERT_INSTANCE_ENDPOINTS = {
   LIST: '/alerts',
   DETAIL: (id: number) => `/alerts/${id}`,
@@ -403,13 +288,11 @@ export const ALERT_INSTANCE_ENDPOINTS = {
   RESOLVE: (id: number) => `/alerts/${id}/resolve`,
 } as const
 
-// API Headers
 export const API_HEADERS = {
   'Content-Type': 'application/json',
   'Accept': 'application/json'
 } as const
 
-// API Response wrapper
 export interface ApiResponse<T> {
   success: boolean
   message: string
@@ -417,7 +300,6 @@ export interface ApiResponse<T> {
   errors?: string[]
 }
 
-// Error handling utilities
 export const handleApiError = (error: any): string => {
   const data = error?.response?.data
 
@@ -428,17 +310,14 @@ export const handleApiError = (error: any): string => {
   if (data?.errors) {
     const errors = data.errors
 
-    // If it's already a string, just return it
     if (typeof errors === 'string') {
       return errors
     }
 
-    // If it's an array, join it
     if (Array.isArray(errors)) {
       return errors.join(', ')
     }
 
-    // If it's a dictionary (e.g. ModelState errors), flatten values
     if (typeof errors === 'object') {
       const flattened = Object.values(errors)
         .flat()

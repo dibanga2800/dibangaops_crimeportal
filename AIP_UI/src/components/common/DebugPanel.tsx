@@ -9,11 +9,11 @@ export const DebugPanel = () => {
 	const [debugData, setDebugData] = useState<any>(null)
 
 	const refreshData = () => {
-		const authToken = sessionStore.getToken()
+		const hasSession = sessionStore.hasSession()
 		const currentUser = sessionStore.getUser()
 
 		setDebugData({
-			authToken: authToken ? '***' : null,
+			hasSession,
 			user: currentUser ? {
 				id: currentUser.id,
 				role: currentUser.role,

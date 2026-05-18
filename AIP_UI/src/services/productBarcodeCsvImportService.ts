@@ -1,5 +1,5 @@
 import { BASE_API_URL } from '@/config/api'
-import { sessionStore } from '@/state/sessionStore'
+import { applyCsrfHeader } from '@/utils/csrf'
 
 export interface BarcodeCsvImportRowError {
 	lineNumber: number
@@ -42,7 +42,6 @@ const mapHttpError = (status: number, message: string): string => {
 
 export const productBarcodeCsvImportService = {
 	importCsv: async (file: File): Promise<BarcodeCsvImportResult> => {
-		const token = sessionStore.getToken()
 		const form = new FormData()
 		form.append('file', file)
 
@@ -50,9 +49,8 @@ export const productBarcodeCsvImportService = {
 		try {
 			response = await fetch(`${BASE_API_URL}/ProductImport/barcode-csv`, {
 				method: 'POST',
-				headers: {
-					...(token ? { Authorization: `Bearer ${token}` } : {}),
-				},
+				credentials: 'include',
+				headers: applyCsrfHeader({}),
 				body: form,
 				signal: AbortSignal.timeout(IMPORT_TIMEOUT_MS),
 			})

@@ -1,5 +1,3 @@
-import { CalendarDays, Users, Building2, ClipboardList, BellRing, Settings as SettingsIcon } from "lucide-react"
-
 export const UK_COUNTIES = [
   "Derbyshire",
   "Gloucestershire",
@@ -175,31 +173,3 @@ export const SERVICES = SERVICE_CATEGORIES.reduce<string[]>((acc, category) => {
   }
   return acc;
 }, []);
-
-export const MENU_ITEMS = [
-  {
-    title: "Dashboard",
-    href: "/dashboard",
-    icon: Building2,
-  },
-  {
-    title: "Contacts",
-    href: "/crm/contacts",
-    icon: Users,
-  },
-  {
-    title: "Tasks",
-    href: "/tasks",
-    icon: ClipboardList,
-  },
-  {
-    title: "Notifications",
-    href: "/notifications",
-    icon: BellRing,
-  },
-  {
-    title: "Settings",
-    href: "/settings",
-    icon: SettingsIcon,
-  },
-]

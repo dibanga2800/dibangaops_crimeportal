@@ -134,18 +134,13 @@ export default function LoginPage() {
 			}
 
 			const loginData = data as any
-			const accessToken = loginData?.AccessToken ?? loginData?.accessToken
-			const refreshToken = loginData?.RefreshToken ?? loginData?.refreshToken
 			const expiresAt = loginData?.ExpiresAt ?? loginData?.expiresAt
 			const user = loginData?.User ?? loginData?.user
 
-			if (!accessToken || !user) {
-				throw new Error('Invalid response from server: missing token or user data')
+			if (!user) {
+				throw new Error('Invalid response from server: missing user data')
 			}
 
-			// Persist auth state so a full reload lands in an authenticated session
-			sessionStore.setToken(accessToken)
-			sessionStore.setRefreshToken(refreshToken ?? null)
 			sessionStore.setTokenExpiresAt(expiresAt ?? null)
 			sessionStore.setUser(user)
 
@@ -523,7 +518,7 @@ export default function LoginPage() {
 							DibangOps Crime Portal<span className="align-top text-[9px] ml-0.5">™</span>
 						</p>
 						<p className="text-[11px] text-muted-foreground">
-							&copy; {new Date().getFullYear()} DibangaOps – Developed by David Ibanga
+							&copy; {new Date().getFullYear()} DibangOps – Developed by David Ibanga
 						</p>
 						<p className="text-[11px] text-muted-foreground">
 							Proprietary &amp; Confidential.

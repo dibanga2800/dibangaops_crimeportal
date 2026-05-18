@@ -103,12 +103,8 @@ export const deleteUserAsync = createAsyncThunk(
 export const fetchUserCustomerAssignments = createAsyncThunk(
   'users/fetchUserCustomerAssignments',
   async (userId: string) => {
-    const token = sessionStore.getToken()
-    const response = await fetch(`/api/CustomerAssignment/user/${userId}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    })
+    const { getAuthFetchInit } = await import('@/services/auth')
+    const response = await fetch(`/api/CustomerAssignment/user/${userId}`, getAuthFetchInit())
     
     if (!response.ok) {
       throw new Error('Failed to fetch user customer assignments')
@@ -122,12 +118,11 @@ export const fetchUserCustomerAssignments = createAsyncThunk(
 export const checkUserHasCustomer = createAsyncThunk(
   'users/checkUserHasCustomer',
   async ({ userId, customerId }: { userId: string; customerId: number }) => {
-    const token = sessionStore.getToken()
-    const response = await fetch(`/api/CustomerAssignment/user/${userId}/has/${customerId}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    })
+    const { getAuthFetchInit } = await import('@/services/auth')
+    const response = await fetch(
+      `/api/CustomerAssignment/user/${userId}/has/${customerId}`,
+      getAuthFetchInit(),
+    )
     
     if (!response.ok) {
       throw new Error('Failed to check user customer assignment')

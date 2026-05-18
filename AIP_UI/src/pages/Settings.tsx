@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { UserCog, Search, Check, X, Save, AlertCircle, Eye } from 'lucide-react'
 import { Button } from "@/components/ui/button"
@@ -21,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { settingsService } from '@/services/settingsService'
 import { PageAccess } from '@/api/pageAccess'
 import { ADMINISTRATOR_ONLY_PAGE_IDS, withoutAdministratorOnlyPageIds } from '@/config/administration-access'
+import { isRemovedPage, withoutRemovedPageIds } from '@/config/removedPages'
 import { LoadingSpinner } from "@/components/ui/loading-state"
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
@@ -120,9 +120,14 @@ const Settings = () => {
       const allPageIds = pagesToUse.map(page => page.id);
       
       const syncedSettings: Record<string, string[]> = {
-        ...settings.pageAccessByRole,
-        administrator: allPageIds,  // Backend role key
-        admin: allPageIds,          // Legacy alias
+        ...Object.fromEntries(
+          Object.entries(settings.pageAccessByRole).map(([role, pageIds]) => [
+            role,
+            withoutRemovedPageIds(pageIds),
+          ])
+        ),
+        administrator: withoutRemovedPageIds(allPageIds),
+        admin: withoutRemovedPageIds(allPageIds),
       };
 
       // Ensure managers always have mandatory pages
@@ -172,19 +177,6 @@ const Settings = () => {
       return settingsService.savePageAccessSettings(settingsToSave, pagesToUse);
     },
     onSuccess: async (data) => {
-      // Log what was saved
-      if (import.meta.env.DEV) {
-        const officerPages = data.pageAccessByRole['store'] || [];
-        const customerReportingPages = officerPages.filter(id => 
-          id === 'management-customer-reporting' || id === 'customer-reporting' || id.includes('customer-reporting')
-        );
-        console.log(`💾 [Settings] Save successful - Officer pages:`, {
-          total: officerPages.length,
-          customerReporting: customerReportingPages,
-          allPages: officerPages
-        });
-      }
-      
       // Update the ref FIRST to mark this as synced to prevent infinite loop
       const newSettingsKey = JSON.stringify(data.pageAccessByRole);
       lastSyncedSettingsRef.current = newSettingsKey;
@@ -274,28 +266,18 @@ const Settings = () => {
     }
   });
 
-  const officerCustomerReportingEnabled = (() => {
-    const officerPages = pageAccessByRole['store'] || [];
-    return officerPages.includes('management-customer-reporting');
-  })();
-
   // Use pages from query result if available, otherwise fall back to context
   const pagesToUse = settings?.availablePages && settings.availablePages.length > 0 
     ? settings.availablePages 
     : availablePages;
 
-  // Exclude removed/legacy pages (e.g. Action Calendar – page no longer exists)
-  const excludedPageIds = ['action-calendar'];
-  const excludedPathPattern = /\/action-calendar/i;
-
   // Filter pages based on (debounced) search query
   const filteredPages = (pagesToUse || [])
     .filter(page => {
+      if (isRemovedPage({ id: page?.id, path: page?.path })) return false;
+      if (!debouncedSearch) return true;
       const id = page?.id?.toLowerCase() ?? '';
       const path = page?.path ?? '';
-      if (excludedPageIds.some(excluded => id === excluded || id.includes(excluded))) return false;
-      if (excludedPathPattern.test(path)) return false;
-      if (!debouncedSearch) return true;
       const title = page?.title?.toLowerCase() || '';
       const pathLower = path.toLowerCase();
       return title.includes(debouncedSearch) || pathLower.includes(debouncedSearch);
@@ -324,11 +306,9 @@ const Settings = () => {
 
   const categoryDisplayNames: Record<string, string> = {
     'dashboard': 'Dashboard',
-    'management': 'Management',
     'reports': 'Operations',
     'customer': 'Company',
     'settings': 'Settings',
-    'recruitment': 'Recruitment'
   };
 
   // Dynamic categorization function - uses database category, falls back to path-based
@@ -352,13 +332,11 @@ const Settings = () => {
     
     // Final fallback: Use page ID to infer category
     if (page.id.includes('customer-')) return 'Company';
-    if (page.id.includes('recruitment-') || page.id === 'cbt' || page.id === 'vetting') return 'Recruitment';
-    if (page.id.includes('compliance-')) return 'Compliance';
     
     return 'Other';
   };
 
-  const categoryOrder = ['dashboard', 'management', 'reports', 'customer', 'settings', 'recruitment'];
+  const categoryOrder = ['dashboard', 'reports', 'customer', 'settings'];
 
   // Group pages by subcategory for better organization (dynamic categorization)
   const pagesBySubcategory = filteredPages.reduce((acc, page) => {
@@ -374,11 +352,8 @@ const Settings = () => {
   const subcategoryOrder = [
     'Dashboard',
     'Administration',
-    'Recruitment',
-    'Compliance',
     'Operations',
     'Employee',
-    'Management',
     'Reports',
     'Customer',
     'Settings'
@@ -448,22 +423,6 @@ const Settings = () => {
     });
   };
 
-  // Handle save changes
-  // Handler for officer customer reporting toggle
-  const handleOfficerReportingToggle = (enabled: boolean) => {
-    updateRoleAccess('store', (pages) => {
-      if (enabled) {
-        pages.add('management-customer-reporting');
-      } else {
-        pages.delete('management-customer-reporting');
-      }
-    });
-    toast({
-      title: "Setting Updated",
-      description: `Store Company Reporting access has been ${enabled ? 'enabled' : 'disabled'}.`,
-    });
-  };
-
   const handleSave = () => {
     console.log('💾 [Settings] Save button clicked');
     console.log('💾 [Settings] Current pageAccessByRole:', pageAccessByRole);
@@ -491,12 +450,14 @@ const Settings = () => {
     mandatoryManagerPageIds.forEach(id => managerPageSet.add(id));
     const managerPagesWithMandatory = withoutAdministratorOnlyPageIds(Array.from(managerPageSet))
     
-    const settingsToSave = {
-      ...pageAccessByRole,
-      manager: managerPagesWithMandatory,
-      administrator: allPageIds,  // Force full access for admins; backend expects 'administrator'
-      admin: allPageIds,         // Legacy alias for compatibility
-    };
+    const settingsToSave = Object.fromEntries(
+      Object.entries({
+        ...pageAccessByRole,
+        manager: managerPagesWithMandatory,
+        administrator: allPageIds,
+        admin: allPageIds,
+      }).map(([role, pageIds]) => [role, withoutRemovedPageIds(pageIds)])
+    );
     
     console.log('💾 [Settings] Ensuring admin has all pages:', allPageIds.length);
     console.log('💾 [Settings] Calling saveSettings mutation...');
@@ -603,34 +564,6 @@ const Settings = () => {
               </AlertDescription>
             </Alert>
           )}
-
-          {/* Officer Customer Reporting Setting */}
-          <Card className="mb-4 border-border bg-card">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <UserCog className="h-4 w-4 text-primary" />
-                Officer Settings
-              </CardTitle>
-              <CardDescription className="text-sm">
-                Configure additional access permissions for officers
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between gap-3">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-card-foreground">Company Reporting Access</p>
-                  <p className="text-xs text-muted-foreground">
-                    Allow store users to access the Company Reporting page
-                  </p>
-                </div>
-                <Switch
-                  checked={officerCustomerReportingEnabled}
-                  onCheckedChange={handleOfficerReportingToggle}
-                  className="data-[state=checked]:bg-primary"
-                />
-              </div>
-            </CardContent>
-          </Card>
 
           {/* Search and Filter */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 sm:gap-3 mb-2 sm:mb-3 md:mb-4">

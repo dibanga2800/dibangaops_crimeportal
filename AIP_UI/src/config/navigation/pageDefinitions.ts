@@ -40,9 +40,6 @@ const sectionToCategory = (sectionId: string): string => {
 		'administration': 'Administration',
 		'operations': 'Operations',
 		'employee': 'Employee',
-		'management': 'Management',
-		'compliance': 'Compliance',
-		'recruitment': 'Recruitment',
 		'customer': 'Company',
 	}
 	return categoryMap[sectionId] || 'Other'
@@ -58,7 +55,7 @@ const extractPagesFromSidebar = (): PageDefinition[] => {
 	// Add top-level links from sidebar config
 	SIDEBAR_TOP_LINKS.forEach((link, index) => {
 		const pageId = pathToPageId(link.path)
-		const category = link.path.includes('/management/') ? 'Management' : 'Main'
+		const category = 'Main'
 		
 		pages.push({
 			pageId,
@@ -101,9 +98,6 @@ const getCategoryBaseSortOrder = (category: string): number => {
 		'Administration': 10,
 		'Operations': 30,
 		'Employee': 40,
-		'Management': 50,
-		'Compliance': 60,
-		'Recruitment': 70,
 		'Company': 80,
 	}
 	return categorySortMap[category] || 100

@@ -87,41 +87,6 @@ export interface Region {
   updatedAt: string;
 }
 
-export interface DailyActivity {
-  id: string;
-  customerId: number;
-  type: string;
-  location: string;
-  time: string;
-  officer: string;
-  status: 'completed' | 'in_progress';
-}
-
-export interface SatisfactionDataPoint {
-  id: string;
-  customerId: number;
-  month: string;
-  score: number;
-  siteName?: string;
-  siteId?: string;
-}
-
-export interface SatisfactionBySite {
-  siteName: string;
-  siteId?: string;
-  score: number;
-  month: string;
-}
-
-export interface BeSafeDataPoint {
-  id: string;
-  customerId: number;
-  month: string;
-  insecureAreas: number;
-  compliance: number;
-  systems: number;
-}
-
 export interface Incident {
   id: string;
   customerName: string;
@@ -152,7 +117,6 @@ export interface OfficerDashboardData {
     totalValueSaved: number
     expensesYTD: number
     completionRate: number
-    holidayBooked: number
     hoursWorked: number
     sitesVisited: number
   }

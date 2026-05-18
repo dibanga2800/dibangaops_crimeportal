@@ -23,7 +23,7 @@ export const Footer: React.FC<Partial<FooterProps>> = ({
 
 					<div className="relative space-y-4 sm:space-y-5 text-center sm:text-left">
 						<h2 className="text-2xl sm:text-3xl lg:text-4xl font-semibold leading-tight">
-							DibangaOps Crime Portal –{' '}
+							DibangOps Crime Portal –{' '}
 							<span className="text-emerald-300"> AI Incident Intelligence Platform</span>
 						</h2>
 

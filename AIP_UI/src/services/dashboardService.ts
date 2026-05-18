@@ -1,9 +1,10 @@
-import { StoreData, RegionalData, Period, UserRole, OfficerDashboardData, RecentIncident, CustomerStoreData, Region, SatisfactionDataPoint, BeSafeDataPoint, DailyActivity, Site, IncidentDataPoint } from '@/types/dashboard';
+import { StoreData, RegionalData, Period, UserRole, OfficerDashboardData, RecentIncident, CustomerStoreData, Region, Site, IncidentDataPoint } from '@/types/dashboard';
 import axios from 'axios';
 import { BASE_API_URL, api, type ApiResponse } from '@/config/api';
 import { extractApiResponseData } from '@/utils/apiResponseHelper';
 import { extractCustomerId } from '@/utils/customerId';
 import { sessionStore } from '@/state/sessionStore';
+import { applyCsrfHeader } from '@/utils/csrf';
 
 const API_BASE_URL = BASE_API_URL;
 
@@ -84,46 +85,11 @@ class APIError extends Error {
 
 class DashboardService {
   async getOfficerDashboard(): Promise<OfficerDashboardData | null> {
-    // Build a role-aware dashboard from real scoped data (daily activity reports),
-    // without relying on a dedicated /dashboard/officer backend endpoint.
+    // Build a minimal officer dashboard without a dedicated /dashboard/officer endpoint.
     const user = getActiveUser()
     const now = new Date()
 
     try {
-      // Use real Daily Activity Reports for activity & tasks (already scoped by customer/site)
-      const dailyActivities: DailyActivity[] = await customerDashboardService
-        .getDailyActivities()
-        .catch(() => [])
-
-      // Map DailyActivity → Activity (for "Recent Activity")
-      const recentActivities: Activity[] = dailyActivities.slice(0, 8).map((item, index) => ({
-        id: item.id || `activity-${index}`,
-        type: 'report',
-        title: item.type || 'Daily activity report',
-        location: item.location || 'Unspecified location',
-        time: item.time || '',
-        value: undefined,
-        status: item.status === 'completed' ? 'resolved' : 'in-progress'
-      }))
-
-      // Map DailyActivity → Task (for "Upcoming Tasks")
-      const upcomingTasks: Task[] = dailyActivities
-        .filter((item) => item.status === 'in_progress')
-        .slice(0, 6)
-        .map((item, index) => ({
-          id: item.id || `task-${index}`,
-          type: item.type || 'Activity',
-          title: item.location
-            ? `${item.type || 'Activity'} at ${item.location}`
-            : item.type || 'Activity',
-          dueDate: now.toLocaleDateString('en-GB', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric'
-          }),
-          priority: 'medium'
-        }))
-
       const base: OfficerDashboardData = {
         name: user.username || (user as any).fullName || user.email || 'Officer',
         badgeNumber: (user as any).id ?? '',
@@ -140,7 +106,6 @@ class DashboardService {
           totalValueSaved: 0,
           expensesYTD: 0,
           completionRate: 0,
-          holidayBooked: 0,
           hoursWorked: 0,
           sitesVisited: 0
         },
@@ -152,8 +117,8 @@ class DashboardService {
             valueSaved: 0
           }
         },
-        recentActivities,
-        upcomingTasks
+        recentActivities: [],
+        upcomingTasks: []
       }
 
       return base
@@ -174,7 +139,6 @@ class DashboardService {
           totalValueSaved: 0,
           expensesYTD: 0,
           completionRate: 0,
-          holidayBooked: 0,
           hoursWorked: 0,
           sitesVisited: 0
         },
@@ -547,7 +511,11 @@ const calculateIncidentChartData = (incidents: Array<{ date: string; officerRole
 const getSites = async (signal?: AbortSignal): Promise<Site[]> => {
   const response = await fetch(`${BASE_API_URL}/dashboard/sites`, { 
     signal,
-    headers: getHeaders()
+    credentials: 'include',
+    headers: applyCsrfHeader({
+      'Content-Type': 'application/json',
+      ...getHeaders(),
+    }),
   });
   if (!response.ok) {
     throw new Error('Failed to fetch sites');
@@ -558,7 +526,11 @@ const getSites = async (signal?: AbortSignal): Promise<Site[]> => {
 const getStores = async (signal?: AbortSignal): Promise<StoreData[]> => {
   const response = await fetch(`${BASE_API_URL}/dashboard/stores`, { 
     signal,
-    headers: getHeaders()
+    credentials: 'include',
+    headers: applyCsrfHeader({
+      'Content-Type': 'application/json',
+      ...getHeaders(),
+    }),
   });
   if (!response.ok) {
     throw new Error('Failed to fetch stores');
@@ -569,7 +541,11 @@ const getStores = async (signal?: AbortSignal): Promise<StoreData[]> => {
 const getRegions = async (signal?: AbortSignal): Promise<Region[]> => {
   const response = await fetch(`${BASE_API_URL}/dashboard/regions`, { 
     signal,
-    headers: getHeaders()
+    credentials: 'include',
+    headers: applyCsrfHeader({
+      'Content-Type': 'application/json',
+      ...getHeaders(),
+    }),
   });
   if (!response.ok) {
     throw new Error('Failed to fetch regions');
@@ -581,17 +557,12 @@ class CustomerDashboardService {
   private baseUrl = BASE_API_URL;
 
   private getHeaders(overrideCustomerId?: number | null) {
-    const token = sessionStore.getToken();
     const user = getActiveUser();
-    const headers: Record<string, string> = {
+    const headers: Record<string, string> = applyCsrfHeader({
       'Content-Type': 'application/json',
-      'Accept': 'application/json'
-    };
-    
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-    
+      'Accept': 'application/json',
+    });
+
     const customerId = overrideCustomerId != null
       ? overrideCustomerId
       : (() => {
@@ -617,7 +588,8 @@ class CustomerDashboardService {
       
       const response = await fetch(fullUrl, {
         signal,
-        headers: this.getHeaders(overrideCustomerId)
+        credentials: 'include',
+        headers: this.getHeaders(overrideCustomerId),
       });
 
       if (!response.ok) {
@@ -835,330 +807,6 @@ class CustomerDashboardService {
       recentIncidents,
       incidentData
     };
-  }
-
-  async getSatisfactionData(siteIds?: string[], signal?: AbortSignal, overrideCustomerId?: number | null): Promise<SatisfactionDataPoint[]> {
-    const user = getActiveUser();
-    const customerId = overrideCustomerId ?? user.customerId ?? (user as any).CustomerId ?? (user as any).companyId;
-    const url = customerId
-      ? `/customer-satisfaction?page=1&pageSize=1000&customerId=${customerId}`
-      : '/customer-satisfaction?page=1&pageSize=1000';
-    try {
-      const response = await this.fetchWithSignal<any>(url, signal, overrideCustomerId ?? customerId ?? undefined);
-      const items = extractApiResponseData(response);
-      
-      // Filter by site if siteIds are provided
-      let filteredItems = items;
-      if (siteIds && siteIds.length > 0 && items.length > 0) {
-        const sites = await this.getSites(signal, overrideCustomerId ?? customerId ?? undefined);
-        const siteNames = sites
-          .filter(site => siteIds.includes(site.id))
-          .map(site => site.locationName.trim().toLowerCase());
-        
-        if (siteNames.length > 0) {
-          filteredItems = items.filter((item: any) => {
-            const itemSiteName = (item.SiteName || item.siteName || '').trim().toLowerCase();
-            return itemSiteName && siteNames.includes(itemSiteName);
-          });
-        } else {
-          // If no matching sites found, return empty to avoid showing unrelated data
-          return [];
-        }
-      }
-      
-      if (filteredItems.length === 0) {
-        return [];
-      }
-      
-      // Transform CustomerSatisfactionSurvey to SatisfactionDataPoint format
-      // Group by both month AND site to allow showing sites on X-axis
-      const siteMonthData = new Map<string, { 
-        ratings: number[]; 
-        nps: number[]; 
-        recommendations: number[];
-        month: string;
-        siteName: string;
-      }>();
-      
-      filteredItems.forEach((item: any) => {
-        const surveyDate = item.Date || item.date || item.SurveyDate || item.surveyDate;
-        if (!surveyDate) return;
-        
-        const date = new Date(surveyDate);
-        const monthKey = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-        const siteName = item.SiteName || item.siteName || '';
-        
-        if (!siteName) return; // Skip items without site name
-        
-        // Create unique key for site + month combination
-        const key = `${siteName}|${monthKey}`;
-        
-        if (!siteMonthData.has(key)) {
-          siteMonthData.set(key, { 
-            ratings: [], 
-            nps: [], 
-            recommendations: [],
-            month: monthKey,
-            siteName: siteName
-          });
-        }
-        
-        const siteMonth = siteMonthData.get(key)!;
-        
-        // Calculate overall rating from Ratings object (average of all rating fields)
-        const ratingsObj = item.Ratings || item.ratings || {};
-        if (ratingsObj && typeof ratingsObj === 'object') {
-          const ratingValues = Object.values(ratingsObj).filter((v: any) => 
-            typeof v === 'number' && v > 0
-          ) as number[];
-          if (ratingValues.length > 0) {
-            const avgRating = ratingValues.reduce((sum, r) => sum + r, 0) / ratingValues.length;
-            siteMonth.ratings.push(avgRating);
-          }
-        }
-        
-        // NPS score - if not directly available, we can calculate from ratings or use 0
-        if (siteMonth.ratings.length > 0) {
-          const latestRating = siteMonth.ratings[siteMonth.ratings.length - 1];
-          const npsLike = latestRating >= 4 ? 50 : latestRating >= 3 ? 0 : -50;
-          siteMonth.nps.push(npsLike);
-        }
-        
-        // Recommendation - infer from high ratings
-        if (siteMonth.ratings.length > 0) {
-          const latestRating = siteMonth.ratings[siteMonth.ratings.length - 1];
-          siteMonth.recommendations.push(latestRating >= 4 ? 100 : latestRating >= 3 ? 50 : 0);
-        }
-      });
-      
-      // Convert to SatisfactionDataPoint array - one entry per site per month
-      return Array.from(siteMonthData.values())
-        .map((data) => ({
-          id: `${data.siteName}-${data.month}`,
-          customerId: customerId || 0,
-          month: data.month,
-          score: data.ratings.length > 0 
-            ? data.ratings.reduce((sum, r) => sum + r, 0) / data.ratings.length 
-            : 0,
-          rating: data.ratings.length > 0 
-            ? data.ratings.reduce((sum, r) => sum + r, 0) / data.ratings.length 
-            : 0,
-          nps: data.nps.length > 0 
-            ? data.nps.reduce((sum, n) => sum + n, 0) / data.nps.length 
-            : 0,
-          recommendation: data.recommendations.length > 0
-            ? data.recommendations.reduce((sum, r) => sum + r, 0) / data.recommendations.length
-            : 0,
-          siteName: data.siteName
-        }))
-        .sort((a, b) => {
-          // Sort by date (most recent first), then by site name
-          const dateA = new Date(a.month);
-          const dateB = new Date(b.month);
-          if (dateB.getTime() !== dateA.getTime()) {
-            return dateB.getTime() - dateA.getTime();
-          }
-          return a.siteName?.localeCompare(b.siteName || '') || 0;
-        });
-    } catch (error) {
-      // AbortError is expected during component cleanup - don't log it
-      if (error instanceof Error && error.name === 'AbortError') {
-        return [];
-      }
-      // Only log actual errors
-      console.warn('⚠️ [DashboardService] Could not fetch satisfaction data:', error);
-      return [];
-    }
-  }
-
-  async getBeSafeData(signal?: AbortSignal, siteIds?: string[], overrideCustomerId?: number | null): Promise<BeSafeDataPoint[]> {
-    const user = getActiveUser();
-    const customerId = overrideCustomerId ?? user.customerId ?? (user as any).CustomerId ?? (user as any).companyId;
-    let url = customerId
-      ? `/daily-activity-reports?page=1&pageSize=1000&customerId=${customerId}`
-      : '/daily-activity-reports?page=1&pageSize=1000';
-    if (siteIds && siteIds.length > 0 && siteIds[0] !== 'all' && siteIds.length === 1) {
-      url += `&siteId=${siteIds[0]}`;
-    }
-    try {
-      const response = await this.fetchWithSignal<any>(url, signal, overrideCustomerId ?? customerId ?? undefined);
-      const items = extractApiResponseData(response);
-      
-      // Group by month and calculate compliance metrics
-      const monthlyData = new Map<string, {
-        insecureAreas: number[];
-        compliance: number[];
-        systems: number[];
-      }>();
-      
-      // Filter by siteIds if multiple sites selected (frontend filtering)
-      let filteredItems = items;
-      if (siteIds && siteIds.length > 0 && siteIds[0] !== 'all' && siteIds.length > 1) {
-        filteredItems = items.filter((item: any) => {
-          const itemSiteId = item.SiteId || item.siteId || '';
-          return siteIds.includes(itemSiteId);
-        });
-      }
-      
-      filteredItems.forEach((item: any) => {
-        const reportDate = item.ReportDate || item.reportDate || item.date;
-        if (!reportDate) return;
-        
-        const date = new Date(reportDate);
-        const monthKey = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-        
-        if (!monthlyData.has(monthKey)) {
-          monthlyData.set(monthKey, { insecureAreas: [], compliance: [], systems: [] });
-        }
-        
-        const monthData = monthlyData.get(monthKey)!;
-        
-        // Calculate compliance percentage from Compliance DTO (backend maps columns to DTO)
-        const complianceObj = item.Compliance || item.compliance || {};
-        const complianceFields: any[] = [];
-        
-        // Extract all YesNoFieldDto fields from Compliance object
-        Object.entries(complianceObj).forEach(([key, field]: [string, any]) => {
-          if (key === 'constructor' || key === '__proto__') return;
-          
-          if (field && typeof field === 'object' && !Array.isArray(field)) {
-            if ('Value' in field || 'value' in field) {
-              complianceFields.push(field);
-            }
-          }
-        });
-        
-        if (complianceFields.length > 0) {
-          const compliantCount = complianceFields.filter((field: any) => {
-            const value = String(field.Value || field.value || '').toLowerCase().trim();
-            return value === 'yes';
-          }).length;
-          const compliancePercentage = (compliantCount / complianceFields.length) * 100;
-          monthData.compliance.push(compliancePercentage);
-        }
-        
-        // Calculate insecure areas percentage from InsecureAreas DTO
-        const insecureAreasObj = item.InsecureAreas || item.insecureAreas || {};
-        const insecureFields: any[] = [];
-        
-        Object.entries(insecureAreasObj).forEach(([key, field]: [string, any]) => {
-          if (field && typeof field === 'object') {
-            if ('Value' in field || 'value' in field) {
-              insecureFields.push(field);
-            }
-          }
-        });
-        
-        if (insecureFields.length > 0) {
-          const secureCount = insecureFields.filter((field: any) => {
-            const value = (field.Value || field.value || '').toLowerCase();
-            return value === 'yes'; // 'yes' means secure
-          }).length;
-          // Insecure areas = percentage of areas that are NOT secure
-          const insecurePercentage = ((insecureFields.length - secureCount) / insecureFields.length) * 100;
-          monthData.insecureAreas.push(insecurePercentage);
-        }
-        
-        // Calculate systems working percentage from SystemsNotWorking DTO
-        // SystemsNotWorking: 'yes' means system is NOT working, 'no' means system IS working
-        const systemsObj = item.SystemsNotWorking || item.systemsNotWorking || item.Systems || item.systems || {};
-        const systemsFields: any[] = [];
-        
-        Object.entries(systemsObj).forEach(([key, field]: [string, any]) => {
-          if (field && typeof field === 'object') {
-            if ('Value' in field || 'value' in field) {
-              systemsFields.push(field);
-            }
-          }
-        });
-        
-        if (systemsFields.length > 0) {
-          const workingCount = systemsFields.filter((field: any) => {
-            const value = (field.Value || field.value || '').toLowerCase();
-            // Systems NOT working = "yes" means system is not working
-            // Systems working = "no" means system is working
-            return value === 'no';
-          }).length;
-          // Systems working = percentage of systems that are NOT not working
-          const systemsWorkingPercentage = (workingCount / systemsFields.length) * 100;
-          monthData.systems.push(systemsWorkingPercentage);
-        }
-      });
-      
-      if (items.length === 0 || monthlyData.size === 0) {
-        return [];
-      }
-
-      // Convert to BeSafeDataPoint array
-      const result = Array.from(monthlyData.entries())
-        .map(([month, data]) => {
-          const insecureAreas = data.insecureAreas.length > 0
-            ? Math.round(data.insecureAreas.reduce((sum, v) => sum + v, 0) / data.insecureAreas.length)
-            : null;
-          const compliance = data.compliance.length > 0
-            ? Math.round(data.compliance.reduce((sum, v) => sum + v, 0) / data.compliance.length)
-            : null;
-          const systems = data.systems.length > 0
-            ? Math.round(data.systems.reduce((sum, v) => sum + v, 0) / data.systems.length)
-            : null;
-          
-          return {
-            id: month,
-            customerId: customerId || 0,
-            month,
-            insecureAreas: insecureAreas ?? 0,
-            compliance: compliance ?? 0,
-            systems: systems ?? 0
-          };
-        })
-        .sort((a, b) => {
-          // Sort by date (most recent first)
-          const dateA = new Date(a.month);
-          const dateB = new Date(b.month);
-          return dateB.getTime() - dateA.getTime();
-        });
-      
-      if (import.meta.env.DEV && result.length > 0) {
-        console.log('📊 [BeSafe] Processed data points:', result);
-        console.log('📊 [BeSafe] Sample data point:', result[0]);
-      }
-      
-      return result;
-    } catch (error) {
-      // AbortError is expected during component cleanup - don't log it
-      if (error instanceof Error && error.name === 'AbortError') {
-        return [];
-      }
-      // Only log actual errors
-      console.warn('⚠️ [DashboardService] Could not fetch Be Safe Be Secure data:', error);
-      return [];
-    }
-  }
-
-  async getDailyActivities(signal?: AbortSignal, overrideCustomerId?: number | null): Promise<DailyActivity[]> {
-    const user = getActiveUser();
-    const customerId = overrideCustomerId ?? user.customerId ?? (user as any).CustomerId ?? (user as any).companyId;
-    const url = customerId
-      ? `/daily-activity-reports?page=1&pageSize=1000&customerId=${customerId}`
-      : '/daily-activity-reports?page=1&pageSize=1000';
-    const response = await this.fetchWithSignal<{ Success: boolean; Data: { items?: any[] } | any[]; Message?: string }>(url, signal, overrideCustomerId ?? customerId ?? undefined);
-    
-    // Transform backend response to frontend format
-    const responseData = Array.isArray(response) 
-      ? response 
-      : (response?.Data || []);
-    const items = Array.isArray(responseData) ? responseData : (responseData?.items || []);
-    
-    // Transform DailyActivityReport to DailyActivity format
-    return items.map((item: any) => ({
-      id: item.id?.toString() || '',
-      customerId: item.customerId || customerId || 0,
-      type: item.reportType || 'Activity',
-      location: item.siteName || item.locationName || '',
-      time: item.reportDate ? new Date(item.reportDate).toLocaleTimeString() : '',
-      officer: item.officerName || item.createdBy || '',
-      status: item.status === 'Approved' ? 'completed' : 'in_progress'
-    }));
   }
 
   async getAggregatedSitesData(siteIds: string[], signal?: AbortSignal, overrideCustomerId?: number | null): Promise<CustomerStoreData> {

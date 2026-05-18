@@ -61,7 +61,7 @@ import { Input } from "@/components/ui/input"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from "@/components/ui/sheet"
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion"
-import { BUTTON_STYLES, COMMON_CLASSES } from "@/constants/header";
+import { BUTTON_STYLES, COMMON_CLASSES, MOBILE_HEADER } from "@/constants/header";
 import { NotificationBell } from "./header/NotificationBell";
 import { Logo } from "./header/Logo";
 import { SearchInput } from "./header/SearchInput";
@@ -291,17 +291,17 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
   return (
     <header className="sticky top-0 z-50 w-full bg-header-bg dark:bg-gray-900 border-b border-header-border dark:border-gray-800 shadow-sm text-header-text dark:text-white">
       {/* Mobile Header */}
-      <div className="w-full h-[80px] bg-header-bg dark:bg-gray-900 flex lg:hidden justify-between items-center px-5 py-4">
+      <div className={`w-full bg-header-bg dark:bg-gray-900 flex lg:hidden justify-between items-center ${MOBILE_HEADER.bar}`}>
         {/* Left: Hamburger Menu */}
         <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
           <SheetTrigger asChild>
             <Button 
               variant="ghost" 
               size="icon" 
-              className="p-0 text-header-text dark:text-white hover:bg-white/10"
+              className={`${MOBILE_HEADER.iconButton} text-header-text dark:text-white hover:bg-white/10`}
               aria-label="Menu"
             >
-              <Menu className="h-10 w-10" />
+              <Menu className={MOBILE_HEADER.icon} />
             </Button>
           </SheetTrigger>
           
@@ -347,35 +347,38 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
         </Sheet>
 
         {/* Center: Logo and Search Toggle */}
-        <div className="flex items-center gap-4">
+        <div className="flex min-w-0 flex-1 items-center justify-center gap-1.5 px-1">
           {!isSearchExpanded && (
             <img 
               src="/HOEnbg.png" 
               alt="Heart of England Co-operative"
-              className="h-12 w-auto" 
+              className={MOBILE_HEADER.logo}
             />
           )}
           <Button
             variant="ghost"
             size="icon"
             onClick={toggleSearch}
-            className="text-header-text dark:text-white hover:bg-white/10"
+            className={`${MOBILE_HEADER.iconButton} text-header-text dark:text-white hover:bg-white/10`}
             aria-label="Search"
           >
-            <Search className="h-6 w-6" />
+            <Search className={MOBILE_HEADER.icon} />
           </Button>
         </div>
 
         {/* Right: Theme, notifications and user profile */}
-        <div className="flex items-center gap-3 text-header-text dark:text-white">
-          <ThemeToggle />
+        <div className={`flex items-center ${MOBILE_HEADER.actions} text-header-text dark:text-white`}>
+          <ThemeToggle size="compact" />
           <NotificationBell alertCount={alertCount} isLoading={alertCountLoading} alertCustomerId={selectedCustomerId} />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <div className="flex items-center gap-2 cursor-pointer">
-                <UserAvatar size="sm" showBorder={true} />
-                <ChevronDown className="h-4 w-4 text-white/70" />
-              </div>
+              <button
+								type="button"
+								className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+								aria-label="Account menu"
+							>
+                <UserAvatar size="sm" showBorder={true} className="h-8 w-8" />
+              </button>
             </DropdownMenuTrigger>
             <UserProfileDropdown />
           </DropdownMenu>

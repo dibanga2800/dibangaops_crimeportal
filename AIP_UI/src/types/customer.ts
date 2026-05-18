@@ -124,17 +124,6 @@ export interface CustomerViewConfig {
   updatedAt: string
 }
 
-export interface CustomerReportingAccess {
-  customerId: number
-  customerName: string
-  customerType: CustomerType
-  assignedOfficers: string[]
-  availablePages: CustomerPage[]
-  lastActivity: string
-  totalIncidents: number
-  totalReports: number
-}
-
 export interface CustomerWithRelations extends Customer {
   regions: Region[]
   sites: Site[]
@@ -182,9 +171,3 @@ export interface SitesResponse {
   data: Site[]
   message?: string
 }
-
-export interface CustomerReportingResponse {
-  success: boolean
-  data: CustomerReportingAccess[]
-  message?: string
-} 

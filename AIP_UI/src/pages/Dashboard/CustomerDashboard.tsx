@@ -2,11 +2,9 @@ import * as React from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
-  Activity,
   AlertCircle,
   ArrowUpRight,
   ArrowDownRight,
-  CheckCircle,
   Building2,
 } from 'lucide-react'
 import {
@@ -16,14 +14,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, Cell } from 'recharts'
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { cn } from '@/lib/utils'
 import { IncidentTable } from '@/components/dashboard/IncidentTable'
 import { DashboardGreeting } from '@/components/dashboard/DashboardGreeting'
 import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { customerDashboardService } from '@/services/dashboardService'
-import { CustomerRole, Region, CustomerStoreData, DailyActivity, SatisfactionDataPoint, BeSafeDataPoint, Site } from '@/types/dashboard'
+import { CustomerRole, Region, CustomerStoreData, Site } from '@/types/dashboard'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { useAuth } from '@/hooks/useAuth'
 import { useCustomerSelection } from '@/contexts/CustomerSelectionContext'
@@ -50,17 +48,10 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
   const [regions, setRegions] = useState<Region[]>([]);
   const [selectedRegion, setSelectedRegion] = useState<string>('');
   const [siteData, setSiteData] = useState<CustomerStoreData | null>(null);
-  const [satisfactionData, setSatisfactionData] = useState<SatisfactionDataPoint[]>([]);
-  const [beSafeData, setBeSafeData] = useState<BeSafeDataPoint[]>([]);
-  const [dailyActivities, setDailyActivities] = useState<DailyActivity[]>([]);
   const [activePeriod, setActivePeriod] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('monthly');
   const [showAllMonths, setShowAllMonths] = useState(true);
-  const [showAllMonthsBeSafe, setShowAllMonthsBeSafe] = useState(true);
   const [sites, setSites] = useState<Site[]>([]);
   const [selectedSite, setSelectedSite] = useState<string>('');
-  const [selectedSatisfactionMonth, setSelectedSatisfactionMonth] = useState<string>('');
-  const [satisfactionViewMode, setSatisfactionViewMode] = useState<'bySite' | 'byMonth'>('bySite');
-
   const [customerName, setCustomerName] = useState<string>('Customer')
 
   // Effective customer for API calls: manager uses context selection (fallback to first assigned so regions load before context updates)
@@ -195,20 +186,12 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
         setError(null)
         setSiteData(null)
 
-        const [data, satisfaction, beSafe, activities] = await Promise.all([
-          siteIds.length === 1
-            ? customerDashboardService.getSiteData(siteIds[0], abortController.signal, effectiveCustomerId)
-            : customerDashboardService.getAggregatedSitesData(siteIds, abortController.signal, effectiveCustomerId),
-          customerDashboardService.getSatisfactionData(siteIds, abortController.signal, effectiveCustomerId),
-          customerDashboardService.getBeSafeData(abortController.signal, getSiteIdsToAggregate(), effectiveCustomerId),
-          customerDashboardService.getDailyActivities(abortController.signal, effectiveCustomerId),
-        ])
+        const data = siteIds.length === 1
+          ? await customerDashboardService.getSiteData(siteIds[0], abortController.signal, effectiveCustomerId)
+          : await customerDashboardService.getAggregatedSitesData(siteIds, abortController.signal, effectiveCustomerId)
         
         if (!isActive) return;
         setSiteData(data);
-        setSatisfactionData(satisfaction || []);
-        setBeSafeData(beSafe || []);
-        setDailyActivities(activities || []);
       } catch (err) {
         if (isActive) {
           console.error('Error loading dashboard data:', err);
@@ -226,161 +209,6 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
       abortController.abort();
     };
   }, [selectedRegion, selectedSite, sites, effectiveCustomerId])
-
-  // Get available months from satisfaction data
-  const availableMonths = useMemo(() => {
-    const months = new Set(satisfactionData.map(d => d.month).filter(Boolean));
-    return Array.from(months)
-      .sort((a, b) => {
-        const dateA = new Date(a);
-        const dateB = new Date(b);
-        return dateB.getTime() - dateA.getTime();
-      });
-  }, [satisfactionData]);
-
-  // Set default selected month to most recent
-  useEffect(() => {
-    if (availableMonths.length > 0 && !selectedSatisfactionMonth) {
-      setSelectedSatisfactionMonth(availableMonths[0]);
-    }
-  }, [availableMonths, selectedSatisfactionMonth]);
-
-  // Transform satisfaction data based on view mode
-  const satisfactionDataBySite = useMemo(() => {
-    if (satisfactionData.length === 0) return [];
-    
-    if (satisfactionViewMode === 'bySite') {
-      // Show sites for selected month
-      const monthToShow = selectedSatisfactionMonth || availableMonths[0] || '';
-      if (!monthToShow) return [];
-      
-      const siteMap = new Map<string, { score: number; month: string; siteName: string }>();
-      
-      satisfactionData.forEach((point) => {
-        if (point.month === monthToShow && point.siteName) {
-          const existing = siteMap.get(point.siteName);
-          if (!existing || new Date(point.month) >= new Date(existing.month)) {
-            siteMap.set(point.siteName, {
-              score: point.score,
-              month: point.month,
-              siteName: point.siteName
-            });
-          }
-        }
-      });
-      
-      const result = Array.from(siteMap.values())
-        .map(item => ({
-          siteName: item.siteName,
-          score: item.score,
-          month: item.month
-        }))
-        .sort((a, b) => a.siteName.localeCompare(b.siteName));
-      
-      // Ensure at least 5 data points - if we have fewer sites, show multiple months
-      if (result.length < 5 && availableMonths.length > 1) {
-        // Include data from additional months to reach at least 5
-        const additionalMonths = availableMonths.slice(1, Math.min(6, availableMonths.length));
-        additionalMonths.forEach(month => {
-          satisfactionData.forEach((point) => {
-            if (point.month === month && point.siteName && !siteMap.has(point.siteName)) {
-              siteMap.set(point.siteName, {
-                score: point.score,
-                month: point.month,
-                siteName: point.siteName
-              });
-            }
-          });
-        });
-        return Array.from(siteMap.values())
-          .map(item => ({
-            siteName: item.siteName,
-            score: item.score,
-            month: item.month
-          }))
-          .sort((a, b) => a.siteName.localeCompare(b.siteName));
-      }
-      
-      return result;
-    } else {
-      // Show months on X-axis - aggregate all sites per month
-      const monthMap = new Map<string, { scores: number[]; month: string }>();
-      
-      satisfactionData.forEach((point) => {
-        if (!monthMap.has(point.month)) {
-          monthMap.set(point.month, { scores: [], month: point.month });
-        }
-        if (point.score > 0) {
-          monthMap.get(point.month)!.scores.push(point.score);
-        }
-      });
-      
-      const result = Array.from(monthMap.entries())
-        .map(([month, data]) => ({
-          month,
-          score: data.scores.length > 0 
-            ? data.scores.reduce((sum, s) => sum + s, 0) / data.scores.length 
-            : 0,
-          siteName: `${data.scores.length} site${data.scores.length !== 1 ? 's' : ''}`
-        }))
-        .sort((a, b) => {
-          const dateA = new Date(a.month);
-          const dateB = new Date(b.month);
-          return dateB.getTime() - dateA.getTime();
-        })
-        .slice(0, Math.max(5, availableMonths.length)); // Show at least 5 months
-      
-      return result;
-    }
-  }, [satisfactionData, satisfactionViewMode, selectedSatisfactionMonth, availableMonths]);
-
-  // Calculate Y-axis domain for satisfaction chart
-  const satisfactionYDomain = useMemo(() => {
-    if (satisfactionDataBySite.length === 0) return [0, 10];
-    const scores = satisfactionDataBySite.map(d => d.score || 0).filter(s => s > 0);
-    if (scores.length === 0) return [0, 10];
-    const min = Math.min(...scores);
-    const max = Math.max(...scores);
-    const padding = (max - min) * 0.2 || 0.5;
-    return [Math.max(0, min - padding), Math.min(10, max + padding)];
-  }, [satisfactionDataBySite]);
-
-  const beSafeDataToShow = useMemo(() => {
-    if (showAllMonthsBeSafe || beSafeData.length <= 12) return beSafeData;
-    return beSafeData.slice(-12);
-  }, [showAllMonthsBeSafe, beSafeData]);
-
-  // Calculate dynamic Y-axis domain for Be Safe chart based on actual data
-  const beSafeYDomain = useMemo(() => {
-    if (beSafeDataToShow.length === 0) return [0, 100];
-    
-    const allValues = beSafeDataToShow.flatMap(d => [
-      d.insecureAreas,
-      d.compliance,
-      d.systems
-    ]).filter(v => v !== undefined && v !== null && !isNaN(v) && v >= 0);
-    
-    if (allValues.length === 0) return [0, 100];
-    
-    const minValue = Math.min(...allValues);
-    const maxValue = Math.max(...allValues);
-    
-    // Ensure we show from 0 if any value is below 50, otherwise show a reasonable range
-    const min = minValue < 50 ? 0 : Math.max(0, Math.floor(minValue / 10) * 10 - 10);
-    const max = Math.min(100, Math.ceil(maxValue / 10) * 10 + 10);
-    
-    if (import.meta.env.DEV) {
-      console.log('📊 [BeSafe Chart] Y-axis domain:', { min, max, minValue, maxValue, allValues: allValues.slice(0, 10) });
-      console.log('📊 [BeSafe Chart] Data points:', beSafeDataToShow.map(d => ({
-        month: d.month,
-        insecureAreas: d.insecureAreas,
-        compliance: d.compliance,
-        systems: d.systems
-      })));
-    }
-    
-    return [min, max];
-  }, [beSafeDataToShow]);
 
   if (loading) {
     return (
@@ -567,10 +395,9 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
             })}
           </section>
 
-          {/* Main Content Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left Column - Charts */}
-            <section className="lg:col-span-2 space-y-6" aria-label="Charts and Reports">
+          {/* Main Content */}
+          <div className="space-y-6">
+            <section className="space-y-6" aria-label="Charts and Reports">
               {/* Incident Graph */}
               <Card>
                 <CardHeader className="p-4 sm:p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -671,109 +498,6 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
                 </CardContent>
               </Card>
 
-              {/* Be Safe Be Secure Graph */}
-              <Card>
-                <CardHeader className="p-4 sm:p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                  <div>
-                    <CardTitle className="text-lg sm:text-xl font-semibold">
-                      Be Safe Be Secure Compliance
-                    </CardTitle>
-                    <p className="text-sm text-gray-500 mt-1">Monthly compliance metrics</p>
-                  </div>
-                  {beSafeData.length > 12 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowAllMonthsBeSafe(v => !v)}
-                      className="h-9"
-                    >
-                      {showAllMonthsBeSafe ? 'Show Last 12 Months' : 'Show All Months'}
-                    </Button>
-                  )}
-                </CardHeader>
-                <CardContent className="p-4">
-                  {beSafeDataToShow.length === 0 ? (
-                    <div className="text-center py-12">
-                      <CheckCircle className="h-12 w-12 text-gray-300 mx-auto mb-3" aria-hidden="true" />
-                      <p className="text-gray-500 text-sm">No compliance data available</p>
-                    </div>
-                  ) : (
-                    <div className="h-[300px] sm:h-[350px] w-full overflow-hidden">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                          data={beSafeDataToShow}
-                          margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                          barCategoryGap={20}
-                        >
-                        <defs>
-                          <linearGradient id="insecureAreasGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#F59E0B" stopOpacity={0.8} />
-                            <stop offset="100%" stopColor="#D97706" stopOpacity={0.8} />
-                          </linearGradient>
-                          <linearGradient id="complianceGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#10B981" stopOpacity={0.8} />
-                            <stop offset="100%" stopColor="#059669" stopOpacity={0.8} />
-                          </linearGradient>
-                          <linearGradient id="systemsGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#3B82F6" stopOpacity={0.8} />
-                            <stop offset="100%" stopColor="#2563EB" stopOpacity={0.8} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200" />
-                        <XAxis 
-                          dataKey="month" 
-                          tick={{ fontSize: 12 }}
-                          tickLine={false}
-                          axisLine={false}
-                          padding={{ left: 10, right: 10 }}
-                        />
-                        <YAxis 
-                          domain={beSafeYDomain}
-                          tick={{ fontSize: 12 }}
-                          tickLine={false}
-                          axisLine={false}
-                          tickFormatter={(value) => `${value}%`}
-                        />
-                        <Tooltip
-                          cursor={{ fill: 'rgba(0, 0, 0, 0.05)', radius: 4 }}
-                          contentStyle={{
-                            backgroundColor: 'white',
-                            border: 'none',
-                            borderRadius: '8px',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                          }}
-                          formatter={(value: number) => [`${value}%`, '']}
-                        />
-                        <Legend 
-                          wrapperStyle={{ paddingTop: '20px' }}
-                          iconType="circle"
-                          formatter={(value) => <span className="text-sm">{value}</span>}
-                        />
-                        <Bar 
-                          dataKey="insecureAreas" 
-                          fill="url(#insecureAreasGradient)"
-                          name="Insecure Areas"
-                          radius={[4, 4, 0, 0]}
-                        />
-                        <Bar 
-                          dataKey="compliance" 
-                          fill="url(#complianceGradient)"
-                          name="Compliance"
-                          radius={[4, 4, 0, 0]}
-                        />
-                        <Bar 
-                          dataKey="systems" 
-                          fill="url(#systemsGradient)"
-                          name="Systems"
-                          radius={[4, 4, 0, 0]}
-                        />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
               {/* Recent Incidents Table */}
               <Card>
                 <CardHeader className="p-4 sm:p-5">
@@ -790,222 +514,6 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
                 </CardContent>
               </Card>
             </section>
-
-            {/* Right Column - Activities and Satisfaction */}
-            <section className="space-y-6" aria-label="Activities and Satisfaction">
-              {/* Daily Activity Reports */}
-              <Card className="shadow-lg border-0">
-                <CardHeader className="p-5 sm:p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
-                  <CardTitle className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2">
-                    <Activity className="h-6 w-6 text-blue-600" aria-hidden="true" />
-                    Daily Activity Reports
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-4 sm:p-5">
-                  {dailyActivities.length === 0 ? (
-                    <div className="text-center py-12">
-                      <Activity className="h-12 w-12 text-gray-300 mx-auto mb-3" aria-hidden="true" />
-                      <p className="text-gray-500 text-sm">No activities recorded</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {dailyActivities.map((activity) => (
-                        <div 
-                          key={activity.id} 
-                          className="group flex items-start gap-4 p-4 bg-white rounded-xl border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all duration-200"
-                        >
-                          <div className={cn(
-                            "flex-shrink-0 mt-1 p-3 rounded-xl shadow-sm",
-                            activity.status === 'completed' 
-                              ? 'bg-gradient-to-br from-emerald-100 to-emerald-200' 
-                              : 'bg-gradient-to-br from-blue-100 to-indigo-100'
-                          )}>
-                            {activity.status === 'completed' ? (
-                              <CheckCircle className="h-5 w-5 text-emerald-600" aria-hidden="true" />
-                            ) : (
-                              <Activity className="h-5 w-5 text-blue-600" aria-hidden="true" />
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-3 mb-2">
-                              <h4 className="text-base font-semibold text-gray-900 leading-tight">
-                                {activity.type}
-                              </h4>
-                              <time className="flex-shrink-0 text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-md">
-                                {activity.time}
-                              </time>
-                            </div>
-                            <div className="space-y-1">
-                              <p className="text-sm text-gray-700 flex items-center gap-1.5">
-                                <Building2 className="h-3.5 w-3.5 text-gray-400" aria-hidden="true" />
-                                {activity.location}
-                              </p>
-                              <p className="text-xs text-gray-500">
-                                {activity.officer}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Satisfaction Survey */}
-              <Card className="shadow-lg border-0">
-                <CardHeader className="p-4 sm:p-5 lg:p-6 bg-gradient-to-r from-amber-50 to-orange-50 border-b">
-                  <div className="flex flex-col gap-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <CardTitle className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900 flex items-center gap-2 mb-1">
-                          <CheckCircle className="h-5 w-5 sm:h-6 sm:w-6 text-amber-600 flex-shrink-0" aria-hidden="true" />
-                          <span className="truncate">Satisfaction Survey</span>
-                        </CardTitle>
-                        <p className="text-xs sm:text-sm text-gray-600 mt-1 line-clamp-2">
-                          {satisfactionViewMode === 'bySite' 
-                            ? selectedSatisfactionMonth 
-                              ? `Satisfaction ratings for ${selectedSatisfactionMonth}`
-                              : 'Customer satisfaction ratings by site'
-                            : 'Satisfaction ratings over time'}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex flex-col xs:flex-row gap-2 w-full">
-                      <Select 
-                        value={satisfactionViewMode} 
-                        onValueChange={(value: 'bySite' | 'byMonth') => setSatisfactionViewMode(value)}
-                      >
-                        <SelectTrigger className="w-full xs:w-[140px] h-9 text-xs flex-shrink-0">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="bySite">By Site</SelectItem>
-                          <SelectItem value="byMonth">By Month</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {satisfactionViewMode === 'bySite' && availableMonths.length > 0 && (
-                        <Select 
-                          value={selectedSatisfactionMonth} 
-                          onValueChange={setSelectedSatisfactionMonth}
-                        >
-                          <SelectTrigger className="w-full xs:flex-1 min-w-0 h-9 text-xs">
-                            <SelectValue placeholder="Select Month" />
-                          </SelectTrigger>
-                          <SelectContent className="max-w-[90vw]">
-                            {availableMonths.map((month) => (
-                              <SelectItem key={month} value={month} className="truncate">
-                                {month}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-5 sm:p-6">
-                  {satisfactionDataBySite.length === 0 ? (
-                    <div className="text-center py-12">
-                      <CheckCircle className="h-12 w-12 text-gray-300 mx-auto mb-3" aria-hidden="true" />
-                      <p className="text-gray-500 text-sm">No satisfaction data available</p>
-                    </div>
-                  ) : (
-                    <div className="h-[320px] sm:h-[380px] w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart 
-                          data={satisfactionDataBySite} 
-                          margin={{ top: 20, right: 20, left: 10, bottom: 60 }}
-                          barCategoryGap="20%"
-                        >
-                          <defs>
-                            <linearGradient id="satisfactionBarGradient" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor="#F59E0B" stopOpacity={0.9} />
-                              <stop offset="100%" stopColor="#D97706" stopOpacity={0.9} />
-                            </linearGradient>
-                          </defs>
-                          <CartesianGrid 
-                            strokeDasharray="3 3" 
-                            stroke="#E5E7EB" 
-                            vertical={false}
-                          />
-                          <XAxis 
-                            dataKey={satisfactionViewMode === 'bySite' ? 'siteName' : 'month'}
-                            tick={{ 
-                              fontSize: 11, 
-                              fill: '#6B7280',
-                              fontWeight: 500
-                            }}
-                            tickLine={false}
-                            axisLine={{ stroke: '#E5E7EB', strokeWidth: 1 }}
-                            angle={-45}
-                            textAnchor="end"
-                            height={80}
-                          />
-                          <YAxis
-                            domain={satisfactionYDomain}
-                            tick={{ 
-                              fontSize: 11, 
-                              fill: '#6B7280',
-                              fontWeight: 500
-                            }}
-                            tickLine={false}
-                            axisLine={{ stroke: '#E5E7EB', strokeWidth: 1 }}
-                            tickFormatter={(value) => `${value.toFixed(1)}`}
-                            label={{ 
-                              value: 'Score', 
-                              angle: -90, 
-                              position: 'insideLeft',
-                              style: { textAnchor: 'middle', fill: '#6B7280', fontSize: 12 }
-                            }}
-                          />
-                          <Tooltip
-                            cursor={{ fill: 'rgba(245, 158, 11, 0.1)' }}
-                            contentStyle={{
-                              backgroundColor: 'white',
-                              border: '1px solid #E5E7EB',
-                              borderRadius: '8px',
-                              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-                              padding: '12px',
-                            }}
-                            labelStyle={{
-                              color: '#111827',
-                              fontWeight: 600,
-                              marginBottom: '4px',
-                              fontSize: '13px'
-                            }}
-                            labelFormatter={(label) => {
-                              if (satisfactionViewMode === 'bySite') {
-                                const dataPoint = satisfactionDataBySite.find(d => d.siteName === label);
-                                return dataPoint ? `${label} (${dataPoint.month})` : label;
-                              }
-                              return label;
-                            }}
-                            formatter={(value: number, name: string, props: any) => {
-                              const siteInfo = satisfactionViewMode === 'bySite' && props.payload?.siteName
-                                ? ` - ${props.payload.siteName}`
-                                : '';
-                              return [
-                                <span key="value" style={{ color: '#F59E0B', fontWeight: 600 }}>
-                                  {value.toFixed(2)}
-                                </span>,
-                                `Score${siteInfo}`
-                              ];
-                            }}
-                          />
-                          <Bar 
-                            dataKey="score" 
-                            fill="url(#satisfactionBarGradient)"
-                            radius={[8, 8, 0, 0]}
-                            name="Satisfaction Score"
-                          />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </section>
           </div>
         </div>
       </div>
@@ -1013,4 +521,5 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
   );
 }
 
-export default CustomerDashboard; 
+export default CustomerDashboard;
+

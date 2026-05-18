@@ -1,5 +1,5 @@
 import { BASE_API_URL } from '@/config/api'
-import { sessionStore } from '@/state/sessionStore'
+import { getAuthFetchInit } from '@/services/auth'
 
 export interface LookupTableItem {
   lookupId: number
@@ -23,9 +23,6 @@ const BASE_URL = `${BASE_API_URL}/LookupTable`
 const cache = new Map<string, { data: LookupTableItem[], timestamp: number }>()
 const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
 
-// Helper function to get auth token
-const getAuthToken = () => sessionStore.getToken()
-
 // Helper function to check if cache is valid
 const isCacheValid = (timestamp: number) => {
   return Date.now() - timestamp < CACHE_DURATION
@@ -35,15 +32,9 @@ export const lookupTableService = {
   // Get all lookup tables
   getAll: async (): Promise<LookupTableItem[]> => {
     try {
-      const token = getAuthToken()
-      
-      const response = await fetch(BASE_URL, {
+      const response = await fetch(BASE_URL, getAuthFetchInit({
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { 'Authorization': `Bearer ${token}` })
-        }
-      })
+      }))
       
       if (!response.ok) {
         const errorText = await response.text()
@@ -68,15 +59,10 @@ export const lookupTableService = {
     }
 
     try {
-      const token = getAuthToken()
-      
-      const response = await fetch(`${BASE_URL}/category/${encodeURIComponent(category)}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { 'Authorization': `Bearer ${token}` })
-        }
-      })
+      const response = await fetch(
+        `${BASE_URL}/category/${encodeURIComponent(category)}`,
+        getAuthFetchInit({ method: 'GET' }),
+      )
       
       if (!response.ok) {
         const errorText = await response.text()
@@ -139,15 +125,10 @@ export const lookupTableService = {
   // Get all categories
   getCategories: async (): Promise<string[]> => {
     try {
-      const token = getAuthToken()
-      
-      const response = await fetch(`${BASE_URL}/categories`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { 'Authorization': `Bearer ${token}` })
-        }
-      })
+      const response = await fetch(
+        `${BASE_URL}/categories`,
+        getAuthFetchInit({ method: 'GET' }),
+      )
       
       if (!response.ok) {
         const errorText = await response.text()

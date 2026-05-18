@@ -2,8 +2,8 @@ import { User, UserRole } from '@/types/user'
 
 type Listener = (user: User | null) => void
 
-const TOKEN_KEY = 'authToken'
-const REFRESH_TOKEN_KEY = 'refreshToken'
+const LEGACY_TOKEN_KEY = 'authToken'
+const LEGACY_REFRESH_TOKEN_KEY = 'refreshToken'
 const TOKEN_EXPIRES_AT_KEY = 'tokenExpiresAt'
 const USER_KEY = 'user'
 const PROFILE_PIC_KEY = 'profilePicture'
@@ -27,7 +27,6 @@ const normalizeRole = (role: string | undefined): UserRole => {
 }
 
 const normalizeUser = (user: User): User => {
-	// Support both frontend camelCase and backend PascalCase for profile picture and security prefs
 	const anyUser = user as any
 	const profilePicture =
 		anyUser.profilePicture !== undefined
@@ -51,37 +50,19 @@ const normalizeUser = (user: User): User => {
 let currentUser: User | null = null
 const listeners = new Set<Listener>()
 
+const purgeLegacyTokenStorage = (): void => {
+	try {
+		localStorage.removeItem(LEGACY_TOKEN_KEY)
+		localStorage.removeItem(LEGACY_REFRESH_TOKEN_KEY)
+	} catch (error) {
+		console.error('Error clearing legacy auth tokens:', error)
+	}
+}
+
+purgeLegacyTokenStorage()
+
 export const sessionStore = {
-	// Token management
-	getToken: (): string | null => {
-		try {
-			return localStorage.getItem(TOKEN_KEY)
-		} catch (error) {
-			console.error('Error getting token from session storage:', error)
-			return null
-		}
-	},
-
-	getRefreshToken: (): string | null => {
-		try {
-			return localStorage.getItem(REFRESH_TOKEN_KEY)
-		} catch (error) {
-			console.error('Error getting refresh token from session storage:', error)
-			return null
-		}
-	},
-
-	setRefreshToken: (refreshToken: string | null): void => {
-		try {
-			if (refreshToken) {
-				localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken)
-			} else {
-				localStorage.removeItem(REFRESH_TOKEN_KEY)
-			}
-		} catch (error) {
-			console.error('Error setting refresh token in session storage:', error)
-		}
-	},
+	hasSession: (): boolean => Boolean(currentUser ?? sessionStore.getUser()),
 
 	getTokenExpiresAt: (): string | null => {
 		try {
@@ -104,23 +85,6 @@ export const sessionStore = {
 		}
 	},
 
-	setToken: (token: string): void => {
-		try {
-			localStorage.setItem(TOKEN_KEY, token)
-		} catch (error) {
-			console.error('Error setting token in session storage:', error)
-		}
-	},
-
-	clearToken: (): void => {
-		try {
-			localStorage.removeItem(TOKEN_KEY)
-		} catch (error) {
-			console.error('Error clearing token from session storage:', error)
-		}
-	},
-
-	// User management
 	getUser: (): User | null => {
 		try {
 			if (currentUser) {
@@ -146,9 +110,6 @@ export const sessionStore = {
 		if (normalized) {
 			const profilePicFromLocalStorage = localStorage.getItem(PROFILE_PIC_KEY)
 
-			// If we already have a cached profile picture, keep it.
-			// Otherwise, if the backend/user payload includes a profile picture,
-			// persist it into the dedicated PROFILE_PIC_KEY so it survives reloads.
 			if (profilePicFromLocalStorage) {
 				normalized.profilePicture = profilePicFromLocalStorage
 			} else if (normalized.profilePicture) {
@@ -185,13 +146,11 @@ export const sessionStore = {
 	},
 
 	clearAll: (): void => {
-		sessionStore.clearToken()
 		sessionStore.clearUser()
-		sessionStore.setRefreshToken(null)
 		sessionStore.setTokenExpiresAt(null)
+		purgeLegacyTokenStorage()
 	},
 
-	// Profile picture management (stored separately to keep user JSON small)
 	getProfilePicture: (): string | null => {
 		try {
 			return localStorage.getItem(PROFILE_PIC_KEY)
@@ -217,10 +176,8 @@ export const sessionStore = {
 		}
 	},
 
-	// Subscription for user changes
 	subscribe: (listener: Listener) => {
 		listeners.add(listener)
 		return () => listeners.delete(listener)
 	}
 }
-

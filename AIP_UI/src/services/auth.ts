@@ -1,30 +1,32 @@
+import { api } from '@/config/api'
 import { sessionStore } from '@/state/sessionStore'
+import { applyCsrfHeader } from '@/utils/csrf'
 import { User } from '@/types/user'
 
-export const logout = (): void => {
+export const logout = async (): Promise<void> => {
 	try {
+		await api.post('/Auth/logout', {})
+	} catch (error) {
+		console.warn('Server logout failed; clearing local session anyway.', error)
+	} finally {
 		sessionStore.clearAll()
 		window.dispatchEvent(new Event('session-cleared'))
-	} catch (error) {
-		console.error('Logout error:', error)
 	}
 }
 
-export const getToken = (): string | null => {
-	return sessionStore.getToken()
-}
+export const getUser = (): User | null => sessionStore.getUser()
 
-export const getUser = (): User | null => {
-	return sessionStore.getUser()
-}
+export const isAuthenticated = (): boolean => sessionStore.hasSession()
 
-export const isAuthenticated = (): boolean => {
-	return Boolean(sessionStore.getToken() && sessionStore.getUser())
-}
+export const getAuthFetchInit = (init: RequestInit = {}): RequestInit => {
+	const headers = applyCsrfHeader({
+		'Content-Type': 'application/json',
+		...(init.headers as Record<string, string> | undefined),
+	})
 
-export const getAuthHeaders = (): HeadersInit => {
-	const token = sessionStore.getToken()
-	return token
-		? { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-		: { 'Content-Type': 'application/json' }
+	return {
+		...init,
+		credentials: 'include',
+		headers,
+	}
 }

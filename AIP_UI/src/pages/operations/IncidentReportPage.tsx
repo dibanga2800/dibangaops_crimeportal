@@ -1068,7 +1068,7 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
                 <PaginationItem>
                   <PaginationPrevious 
                     onClick={() => handlePageChange(currentPage - 1)}
-                    className={`${currentPage === 1 ? 'pointer-events-none opacity-50' : ''} h-8 w-8 sm:h-9 sm:w-auto text-xs sm:text-sm flex items-center justify-center`}
+                    className={`${currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'} h-8 w-8 sm:h-9 sm:w-auto text-xs sm:text-sm flex items-center justify-center`}
                     aria-disabled={currentPage === 1}
                   >
                     <span className="sr-only">Go to previous page</span>
@@ -1094,7 +1094,7 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
                       <PaginationLink
                         onClick={() => handlePageChange(pageToShow)}
                         isActive={currentPage === pageToShow}
-                        className="h-8 w-8 sm:h-9 sm:w-9 flex items-center justify-center rounded-md text-xs sm:text-sm"
+                        className="h-8 w-8 sm:h-9 sm:w-9 flex cursor-pointer items-center justify-center rounded-md text-xs sm:text-sm"
                         aria-label={`Go to page ${pageToShow}`}
                       >
                         {pageToShow}
@@ -1113,7 +1113,7 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
                 <PaginationItem>
                   <PaginationNext 
                     onClick={() => handlePageChange(currentPage + 1)}
-                    className={`${currentPage === totalPages ? 'pointer-events-none opacity-50' : ''} h-8 w-8 sm:h-9 sm:w-auto text-xs sm:text-sm flex items-center justify-center`}
+                    className={`${currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'} h-8 w-8 sm:h-9 sm:w-auto text-xs sm:text-sm flex items-center justify-center`}
                     aria-disabled={currentPage === totalPages}
                   >
                     <span className="sr-only">Go to next page</span>
