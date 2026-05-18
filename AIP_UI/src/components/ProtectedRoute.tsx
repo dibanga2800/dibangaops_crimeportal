@@ -2,6 +2,7 @@ import React, { useContext, useEffect, useRef } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { PageAccessContext } from '@/contexts/PageAccessContext';
+import { sessionStore } from '@/state/sessionStore';
 import { UserRole } from '@/types/user';
 
 interface ProtectedRouteProps {
@@ -25,7 +26,9 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 	accessPath,
 	enforcePageAccess = true,
 }) => {
-	const { user, isLoading: authLoading } = useAuth();
+	const { user: authUser, isLoading: authLoading } = useAuth();
+	// sessionStore updates synchronously on login/2FA; context user can lag one render behind navigate().
+	const user = authUser ?? sessionStore.getUser();
 	const pageAccess = useContext(PageAccessContext);
 	const location = useLocation();
 	const previousPathRef = useRef<string>('');

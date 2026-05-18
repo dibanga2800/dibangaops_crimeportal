@@ -1,6 +1,7 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
 import { sessionStore } from '@/state/sessionStore'
 import { applyCsrfHeader } from '@/utils/csrf'
+import { persistAuthMetadataFromApiEnvelope } from '@/utils/authSession'
 import { API_BASE_URL, isDevelopment } from './env'
 
 export const BASE_API_URL = API_BASE_URL
@@ -66,6 +67,23 @@ let refreshPromise: Promise<boolean> | null = null
 
 type AxiosRequestConfigWithRetry = InternalAxiosRequestConfig & {
   _retry?: boolean
+  _skipAuthRedirect?: boolean
+}
+
+const AUTH_RESPONSE_PATH_SUFFIXES = [
+  '/auth/login',
+  '/auth/2fa/complete',
+  '/auth/refresh',
+] as const
+
+const isAuthSessionResponse = (url?: string): boolean => {
+  if (!url) return false
+  try {
+    const path = new URL(url, BASE_API_URL).pathname.toLowerCase()
+    return AUTH_RESPONSE_PATH_SUFFIXES.some(suffix => path.endsWith(suffix))
+  } catch {
+    return false
+  }
 }
 
 const refreshAccessToken = async (): Promise<boolean> => {
@@ -127,6 +145,10 @@ export const tryRefreshAccessToken = async (): Promise<boolean> => refreshAccess
 
 api.interceptors.response.use(
   (response) => {
+    if (isAuthSessionResponse(response.config.url)) {
+      persistAuthMetadataFromApiEnvelope(response.data)
+    }
+
     if (isDevelopment) {
       console.log('✅ [API Interceptor] Response received', {
         url: response.config.url,
@@ -189,8 +211,9 @@ api.interceptors.response.use(
       }
 
       const shouldForceLogout =
-        (isAuthValidation && !isLoginPage && hasSession) ||
-        (config._retry && !isLoginEndpoint && !isRefreshEndpoint)
+        !config._skipAuthRedirect &&
+        ((isAuthValidation && !isLoginPage && hasSession) ||
+          (config._retry && !isLoginEndpoint && !isRefreshEndpoint))
 
       if (shouldForceLogout) {
         console.warn('⚠️ [API 401] Session invalid — clearing session and redirecting to /login')

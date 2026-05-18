@@ -145,7 +145,7 @@ export default function LoginPage() {
 				throw new Error(message)
 			}
 
-			const loggedInUser = completeSessionFromPayload(data as Record<string, unknown>)
+			const loggedInUser = await completeSessionFromPayload(data as Record<string, unknown>)
 
 			setCurrentRole(loggedInUser.role).catch(err => {
 				console.warn('⚠️ [LoginPage] Error setting role after 2FA:', err)

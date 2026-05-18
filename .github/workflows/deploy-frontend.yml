@@ -56,10 +56,15 @@ jobs:
           case "${URL}" in
             https://*) ;;
             *)
-              echo "PRODUCTION_API_BASE_URL must be a full https URL (no trailing path)."
+              echo "PRODUCTION_API_BASE_URL must start with https://"
               exit 1
               ;;
           esac
+          REST="${URL#https://}"
+          if [[ "${REST}" == */* ]]; then
+            echo "PRODUCTION_API_BASE_URL must be origin only (https://host[:port]); do not include a path or /api — the build appends /api."
+            exit 1
+          fi
           echo "found=true" >> "$GITHUB_OUTPUT"
           echo "backend_url=${URL}" >> "$GITHUB_OUTPUT"
           echo "Using PRODUCTION_API_BASE_URL from GitHub secret (skipping Azure login)."

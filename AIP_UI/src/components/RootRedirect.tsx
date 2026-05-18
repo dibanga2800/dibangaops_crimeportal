@@ -1,6 +1,7 @@
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { LoadingFallback } from '@/components/LoadingFallback'
+import { sessionStore } from '@/state/sessionStore'
 
 /**
  * Handles the bare `/` URL without mounting the authenticated app shell (Layout).
@@ -9,7 +10,8 @@ import { LoadingFallback } from '@/components/LoadingFallback'
  * - User present → `/dashboard` (same home content as before, under Layout).
  */
 export const RootRedirect = () => {
-	const { user, isLoading } = useAuth()
+	const { user: authUser, isLoading } = useAuth()
+	const user = authUser ?? sessionStore.getUser()
 
 	if (isLoading) {
 		return <LoadingFallback />

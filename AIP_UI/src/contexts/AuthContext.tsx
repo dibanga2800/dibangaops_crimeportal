@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { flushSync } from 'react-dom';
 import { User } from '@/types/user';
 import { api, tryRefreshAccessToken, AUTH_REQUEST_TIMEOUT_MS } from '@/config/api';
 import { sessionStore } from '@/state/sessionStore';
@@ -28,7 +29,7 @@ interface AuthContextType {
   isLoading: boolean;
   error: string | null;
   login: (username: string, password: string) => Promise<User>;
-  completeSessionFromPayload: (loginData: Record<string, unknown>) => User;
+  completeSessionFromPayload: (loginData: Record<string, unknown>) => Promise<User>;
   logout: () => void;
   clearError: () => void;
   updateProfilePicture: (dataUrl: string | null) => void;
@@ -278,23 +279,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } as any;
       }
 
-      const expiresAt = loginData?.ExpiresAt ?? (loginData as any)?.expiresAt;
-      const user = (loginData as any)?.User ?? (loginData as any)?.user;
-
-      if (!user) {
-        console.error('❌ [AuthContext] Missing user in response:', {
-          hasUser: !!user,
-          loginDataKeys: loginData ? Object.keys(loginData) : [],
-          loginData
-        });
-        throw new Error('Invalid response from server: missing user data');
-      }
-
-      sessionStore.setTokenExpiresAt(expiresAt ?? null);
-      sessionStore.setUser(user);
-      const normalizedUser = sessionStore.getUser()!;
-      setUser(normalizedUser);
-      setError(null);
+      const normalizedUser = applyLoginPayload(responseData as Record<string, unknown>);
+      flushSync(() => {
+        setUser(normalizedUser);
+        setError(null);
+      });
       
       if (import.meta.env.DEV) {
         console.log('✅ [AuthContext] Login successful:', {
@@ -339,11 +328,62 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const completeSessionFromPayload = (loginData: Record<string, unknown>): User => {
+  const verifyAuthenticatedSession = async (): Promise<boolean> => {
+    try {
+      const response = await api.get<BackendApiResponse<User>>('/Auth/me', {
+        timeout: AUTH_REQUEST_TIMEOUT_MS,
+        _skipAuthRedirect: true,
+      } as Parameters<typeof api.get>[1]);
+
+      const apiResponse = response.data as BackendApiResponse<User> & {
+        success?: boolean;
+        data?: User;
+      };
+      const isSuccess = apiResponse?.Success ?? apiResponse?.success ?? false;
+      const userData = apiResponse?.Data ?? apiResponse?.data;
+
+      if (isSuccess && userData) {
+        sessionStore.setUser(userData);
+        flushSync(() => {
+          setUser(sessionStore.getUser());
+        });
+        return true;
+      }
+    } catch {
+      // Fall through to refresh attempt.
+    }
+
+    const refreshed = await tryRefreshAccessToken();
+    if (refreshed) {
+      flushSync(() => {
+        setUser(sessionStore.getUser());
+      });
+    }
+    return refreshed;
+  };
+
+  const completeSessionFromPayload = async (
+    loginData: Record<string, unknown>,
+  ): Promise<User> => {
     const normalizedUser = applyLoginPayload(loginData);
-    setUser(normalizedUser);
-    setError(null);
-    return normalizedUser;
+
+    flushSync(() => {
+      setUser(normalizedUser);
+      setError(null);
+    });
+
+    const verified = await verifyAuthenticatedSession();
+    if (!verified) {
+      sessionStore.clearAll();
+      flushSync(() => {
+        setUser(null);
+      });
+      throw new Error(
+        'Session could not be established. Allow cookies for this site or contact support if the problem continues.',
+      );
+    }
+
+    return sessionStore.getUser() ?? normalizedUser;
   };
 
   const logout = () => {
