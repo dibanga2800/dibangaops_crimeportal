@@ -30,6 +30,16 @@ namespace AIPBackend.Models.DTOs
         public string[] TwoFactorMethods { get; set; } = Array.Empty<string>();
 
         /// <summary>
+        /// True when the verification code email was accepted by the mail provider.
+        /// </summary>
+        public bool TwoFactorEmailSent { get; set; }
+
+        /// <summary>
+        /// User-facing hint when the code email could not be delivered.
+        /// </summary>
+        public string? TwoFactorDeliveryMessage { get; set; }
+
+        /// <summary>
         /// CSRF token for cross-origin SPAs (cookie is host-only on the API domain).
         /// </summary>
         public string? CsrfToken { get; set; }

@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -44,9 +44,6 @@ import { OfficerPerformance } from '@/components/dashboard/OfficerPerformance'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar } from 'recharts'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { usePageAccess } from "@/contexts/PageAccessContext"
 import { useCustomerSelection } from '@/contexts/CustomerSelectionContext'
 import { DashboardGreeting } from '@/components/dashboard/DashboardGreeting'
@@ -68,155 +65,28 @@ import { toast } from '@/components/ui/use-toast'
 import {
 	dismissAllNotificationsFromServer,
 	getDismissedAlertInstanceIds,
-	getDismissedAlertUiKeys,
 	NOTIFICATIONS_DISMISSED_EVENT,
 } from '@/lib/notifications/dismissed-notifications'
 
-const officerStats = [
-  // Top Performers
-  {
-    id: '1',
-    name: 'John Smith',
-    incidents: 85,
-    valueSaved: 145000,
-    responseRate: 98,
-    status: 'excellent'
-  },
-  {
-    id: '2',
-    name: 'Sarah Wilson',
-    incidents: 78,
-    valueSaved: 132000,
-    responseRate: 97,
-    status: 'excellent'
-  },
-  {
-    id: '3',
-    name: 'Mike Johnson',
-    incidents: 72,
-    valueSaved: 128000,
-    responseRate: 95,
-    status: 'excellent'
-  },
-  {
-    id: '4',
-    name: 'Lisa Anderson',
-    incidents: 65,
-    valueSaved: 115000,
-    responseRate: 94,
-    status: 'good'
-  },
-  {
-    id: '5',
-    name: 'David Chen',
-    incidents: 62,
-    valueSaved: 108000,
-    responseRate: 92,
-    status: 'good'
-  },
-  // Non-Reporters and Needs Improvement
-  {
-    id: '6',
-    name: 'Emily Davis',
-    incidents: 25,
-    valueSaved: 42000,
-    responseRate: 75,
-    status: 'needs-improvement'
-  },
-  {
-    id: '7',
-    name: 'Chris Brown',
-    incidents: 18,
-    valueSaved: 28000,
-    responseRate: 45,
-    status: 'non-reporter'
-  },
-  {
-    id: '8',
-    name: 'Alex Turner',
-    incidents: 15,
-    valueSaved: 22000,
-    responseRate: 65,
-    status: 'non-reporter'
-  },
-  {
-    id: '9',
-    name: 'Maria Garcia',
-    incidents: 22,
-    valueSaved: 35000,
-    responseRate: 72,
-    status: 'needs-improvement'
-  },
-  {
-    id: '10',
-    name: 'Tom Wilson',
-    incidents: 12,
-    valueSaved: 18000,
-    responseRate: 40,
-    status: 'non-reporter'
-  }
-] as const;
+const gbpFormatter = new Intl.NumberFormat('en-GB', {
+	style: 'currency',
+	currency: 'GBP',
+	maximumFractionDigits: 0,
+})
 
-const TestComponents = () => {
-  return (
-    <div className="space-y-6 p-4 border border-gray-200 rounded-md my-4">
-      <h2 className="text-xl font-bold">Test Components</h2>
-      
-      <div>
-        <h3 className="font-medium mb-2">Accordion Test</h3>
-        <Accordion type="single">
-          <AccordionItem value="item-1">
-            <AccordionTrigger>Is this working?</AccordionTrigger>
-            <AccordionContent>
-              Yes. This is our custom accordion component.
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
-      </div>
-      
-      <div>
-        <h3 className="font-medium mb-2">Dropdown Test</h3>
-        <DropdownMenu>
-          <DropdownMenuTrigger className="border rounded-md px-4 py-2">
-            Click me
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            <DropdownMenuItem>
-              Item 1
-            </DropdownMenuItem>
-            <DropdownMenuItem>
-              Item 2
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-      
-      <div>
-        <h3 className="font-medium mb-2">ScrollArea Test</h3>
-        <ScrollArea className="h-32 w-full border rounded-md">
-          <div className="p-4">
-            <h4>Scrollable Content</h4>
-            <p>This is a test of the ScrollArea component.</p>
-            <p>Scroll down to see more content.</p>
-            <div className="h-64 bg-gray-100 mt-2 p-4">
-              Tall content to enable scrolling
-            </div>
-          </div>
-        </ScrollArea>
-      </div>
-    </div>
-  )
-}
+const gbpCompactFormatter = new Intl.NumberFormat('en-GB', {
+	style: 'currency',
+	currency: 'GBP',
+	notation: 'compact',
+	maximumFractionDigits: 1,
+})
 
-// Helper function to format currency values dynamically
+/** Formats GBP for dashboard stat cards (e.g. £42, £1.2K). */
 const formatCurrency = (value: number): string => {
-  if (value >= 1_000_000) {
-    return `£${(value / 1_000_000).toFixed(1)}M`
-  } else if (value >= 1_000) {
-    return `£${(value / 1_000).toFixed(1)}K`
-  } else {
-    return `£${value.toFixed(0)}`
-  }
+	if (value >= 1_000) {
+		return gbpCompactFormatter.format(value)
+	}
+	return gbpFormatter.format(value)
 }
 
 const getIncidentFinancials = (incident: any) => {
@@ -404,16 +274,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
 
   // Load incidents from API
   React.useEffect(() => {
-    console.log('🎯 Incident loading useEffect triggered');
+    console.log('ðŸŽ¯ Incident loading useEffect triggered');
     const abortController = new AbortController();
     let isActive = true;
 
     const loadIncidents = async () => {
-      console.log('🚀 Starting loadIncidents function');
+      console.log('ðŸš€ Starting loadIncidents function');
       try {
         setIncidentsLoading(true);
         
-        console.log('🔄 Loading incidents using incidentsApi service');
+        console.log('ðŸ”„ Loading incidents using incidentsApi service');
         
         // Use the proper incidents API service which handles authentication
         const incidentQueryParams: {
@@ -452,8 +322,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
         // Log the first raw incident to see actual backend field names
         if (incidents.length > 0) {
           const first = incidents[0] as Record<string, unknown>
-          console.log('📋 Raw backend incident (first):', first)
-          console.log('💰 Value fields check:', {
+          console.log('ðŸ“‹ Raw backend incident (first):', first)
+          console.log('ðŸ’° Value fields check:', {
             TotalValueRecovered: first.TotalValueRecovered,
             totalValueRecovered: first.totalValueRecovered,
             Value: first.Value,
@@ -461,7 +331,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
             Amount: first.Amount,
             amount: first.amount
           })
-          console.log('✅ Status fields check:', {
+          console.log('âœ… Status fields check:', {
             Status: first.Status,
             status: first.status,
             Priority: first.Priority,
@@ -554,11 +424,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
           setLoadedIncidents(scopedTransformedIncidents);
           setIncidentsPagination(typed.pagination ?? null)
           setIncidentsSummary(typed.summary ?? null)
-          console.log('✅ Loaded incidents:', scopedTransformedIncidents.length);
+          console.log('âœ… Loaded incidents:', scopedTransformedIncidents.length);
           
           if (scopedTransformedIncidents.length > 0) {
             // Log sample incident with value and status
-            console.log('📋 Sample incident:', {
+            console.log('ðŸ“‹ Sample incident:', {
               id: scopedTransformedIncidents[0].id,
               siteName: scopedTransformedIncidents[0].siteName,
               date: scopedTransformedIncidents[0].dateOfIncident,
@@ -570,37 +440,35 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
             // Calculate and log key metrics
             const totalValue = scopedTransformedIncidents.reduce((sum, inc) => sum + (inc.totalValueRecovered || inc.value || 0), 0);
             const resolved = scopedTransformedIncidents.filter(inc => inc.status === 'resolved').length;
-            console.log('💰 Total value recovered:', totalValue);
-            console.log('✅ Resolved incidents:', resolved, '/', scopedTransformedIncidents.length);
+            console.log('ðŸ’° Total value recovered:', totalValue);
+            console.log('âœ… Resolved incidents:', resolved, '/', scopedTransformedIncidents.length);
           }
         }
       } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') {
-          console.log('⏹️ Load incidents aborted');
+          console.log('â¹ï¸ Load incidents aborted');
           return; // Ignore abort errors
         }
         
-        console.error('❌ Failed to load incidents:', error);
-        console.error('❌ Error details:', {
+        console.error('âŒ Failed to load incidents:', error);
+        console.error('âŒ Error details:', {
           message: error instanceof Error ? error.message : String(error),
           stack: error instanceof Error ? error.stack : undefined
         });
         
         // Check if it's an auth error
         if (error instanceof Error && (error.message.includes('401') || (error as any).response?.status === 401)) {
-          console.error('🔐 Authentication error - The backend /api/incidents endpoint returned 401');
-          console.error('💡 Possible causes:');
+          console.error('ðŸ” Authentication error - The backend /api/incidents endpoint returned 401');
+          console.error('ðŸ’¡ Possible causes:');
           console.error('   1. Token is expired - try logging out and back in');
           console.error('   2. Backend requires different permissions for incidents endpoint');
           console.error('   3. Backend /api/incidents endpoint may not be configured yet');
         }
         
-        // Set empty array on error - dashboard will use analyticsData as fallback
         if (isActive) {
           setLoadedIncidents([]);
           setIncidentsPagination(null)
           setIncidentsSummary(null)
-          console.log('ℹ️ Dashboard will display analytics data as fallback');
         }
       } finally {
         if (isActive) {
@@ -609,7 +477,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
       }
     };
 
-    console.log('📞 Calling loadIncidents()');
+    console.log('ðŸ“ž Calling loadIncidents()');
     loadIncidents();
 
     return () => {
@@ -646,7 +514,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
             ? []
             : allStoreOptions.filter((site) => assignedSiteIdsSet.has(String(site.id)))
 
-        // Use all regions/sites from API – no static blocklist or customer filter; production data only
+        // Use all regions/sites from API â€“ no static blocklist or customer filter; production data only
         const regionOpts = (regions as any[]).map((region: any) => ({
           id: region.id,
           name: region.name,
@@ -654,7 +522,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
         }));
 
         if (import.meta.env.DEV) {
-          console.log('🏢 Dashboard regions loaded:', regionOpts.length, viewRole === 'manager' ? `(customer ${effectiveCustomerId})` : '');
+          console.log('ðŸ¢ Dashboard regions loaded:', regionOpts.length, viewRole === 'manager' ? `(customer ${effectiveCustomerId})` : '');
         }
 
         setSiteOptions(storeOptions);
@@ -712,7 +580,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
     loadEnhancedData()
   }, [effectiveCustomerId, effectiveSiteId, selectedRegion, fromDate, toDate])
 
-  // Get regions for dropdown – use ONLY real regions from API for the current customer
+  // Get regions for dropdown â€“ use ONLY real regions from API for the current customer
   const regions = React.useMemo(() => {
     return regionOptions;
   }, [regionOptions]);
@@ -876,7 +744,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
     sessionUser,
   ])
 
-  // Get recent incidents for table – use real backend data
+  // Get recent incidents for table â€“ use real backend data
   const recentIncidents = React.useMemo(() => {
     // Primary: use real loaded incidents from backend
     if (filteredIncidents.length > 0) {
@@ -906,59 +774,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
         })
     }
 
-    if (selectedRegion !== 'all' || isDateRangeActive) {
-      return []
-    }
-
-    // Fallback: synthesize from analytics hub data if no real incidents loaded yet
-    if (analyticsData) {
-      const endDate = new Date(analyticsData.metadata.dateRange.end)
-      const stores = analyticsData.hotProducts.storeHeatmap
-        .slice()
-        .sort((a, b) => b.totalIncidents - a.totalIncidents)
-      const incidents: {
-        id: string
-        customerName: string
-        store: string
-        siteName: string
-        officerName: string
-        date: string
-        amount: number
-        recoveredValue: number
-        lostValue: number
-        incidentType: string
-      }[] = []
-
-      stores.forEach((store, storeIndex) => {
-        store.products
-          .slice()
-          .sort((a, b) => b.frequency - a.frequency)
-          .slice(0, 3)
-          .forEach((product, productIndex) => {
-            const dayOffset = storeIndex * 3 + productIndex
-            const date = new Date(endDate)
-            date.setDate(endDate.getDate() - dayOffset)
-
-            incidents.push({
-              id: `ANA-${store.storeId}-${product.barcode}-${productIndex}`,
-              customerName: filteredIncidents[0]?.customerName ?? store.storeName ?? 'Customer',
-              store: store.storeName,
-              siteName: store.storeName,
-              officerName: productIndex % 2 === 0 ? 'Uniform Officer' : 'Store Detective',
-              date: date.toISOString(),
-              amount: Math.round(product.value * product.frequency),
-              recoveredValue: product.recoveredValue ?? 0,
-              lostValue: product.lostValue ?? 0,
-              incidentType: `Theft – ${product.productName}`
-            })
-          })
-      })
-
-      return incidents.slice(0, 10)
-    }
-
     return []
-  }, [filteredIncidents, analyticsData, selectedRegion, isDateRangeActive])
+  }, [filteredIncidents, selectedRegion, isDateRangeActive])
 
   const scopedRecentAlertsBase = React.useMemo(() => {
     if (!alertSummary) {
@@ -1021,19 +838,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
       })
     }
 
-    if (isScopedRole) {
-      return []
-    }
-
-    const dismissedUi = getDismissedAlertUiKeys()
-    const placeholders = [
-      { id: '1', type: 'warning' as const, title: 'High Priority Incident Reported', message: 'New high-priority incident requires immediate attention', time: '15 minutes ago', priority: 'high' as const, status: 'new' },
-      { id: '2', type: 'info' as const, title: 'Alert Rule Triggered', message: 'Bulk theft alert rule matched', time: '1 hour ago', priority: 'medium' as const, status: 'new' },
-      { id: '3', type: 'error' as const, title: 'Police Involvement Required', message: 'Incident requires police assistance — URN assigned', time: '2 hours ago', priority: 'high' as const, status: 'acknowledged' },
-      { id: '4', type: 'warning' as const, title: 'Repeat Offender Detected', message: 'Known repeat offender identified', time: '3 hours ago', priority: 'medium' as const, status: 'new' }
-    ]
-    return placeholders.filter((row) => !dismissedUi.has(row.id))
-  }, [scopedRecentAlerts, isScopedRole, bumpNotificationDismissals])
+    return []
+  }, [scopedRecentAlerts])
 
   const handleClearDashboardNotifications = React.useCallback(() => {
     const fromSummary = (alertSummary?.recentAlerts ?? [])
@@ -1102,14 +908,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
   React.useEffect(() => {
     const selectedRegionName = selectedRegion === 'all' ? 'All Regions' : regions.find(r => r.id === selectedRegion)?.name || selectedRegion;
     
-    console.log('🗺️ Selected region:', selectedRegionName, `(ID: ${selectedRegion})`);
-    console.log('📊 Total loaded incidents:', loadedIncidents.length);
-    console.log('📊 Filtered incidents count:', filteredIncidents.length);
-    console.log('📅 Active time period:', activePeriod);
+    console.log('ðŸ—ºï¸ Selected region:', selectedRegionName, `(ID: ${selectedRegion})`);
+    console.log('ðŸ“Š Total loaded incidents:', loadedIncidents.length);
+    console.log('ðŸ“Š Filtered incidents count:', filteredIncidents.length);
+    console.log('ðŸ“… Active time period:', activePeriod);
     
     if (loadedIncidents.length > 0 && filteredIncidents.length === 0 && selectedRegion !== 'all') {
-      console.warn('⚠️ No incidents found for selected region:', selectedRegionName);
-      console.log('📋 Available regions in loaded data:', 
+      console.warn('âš ï¸ No incidents found for selected region:', selectedRegionName);
+      console.log('ðŸ“‹ Available regions in loaded data:', 
         [...new Set(loadedIncidents.map(inc => `${inc.regionName} (ID: ${inc.regionId})`))].slice(0, 10).join(', ')
       );
     }
@@ -1117,13 +923,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
 
   // Generate chart data from filtered incidents based on active period and selected region
   const chartData = React.useMemo(() => {
-    console.log('🔍 [Chart Data] Generating chart data');
-    console.log('📊 [Chart Data] Filtered incidents count:', filteredIncidents.length);
-    console.log('📅 [Chart Data] Active period:', activePeriod);
+    console.log('ðŸ” [Chart Data] Generating chart data');
+    console.log('ðŸ“Š [Chart Data] Filtered incidents count:', filteredIncidents.length);
+    console.log('ðŸ“… [Chart Data] Active period:', activePeriod);
     
     if (filteredIncidents.length > 0) {
       const sample = filteredIncidents[0];
-      console.log('📋 [Chart Data] Sample incident:', {
+      console.log('ðŸ“‹ [Chart Data] Sample incident:', {
         date: sample.dateOfIncident,
         officerRole: sample.officerRole,
         officerType: sample.officerType,
@@ -1247,8 +1053,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
           const data: Array<{ year: string; recoveredValue: number; lostValue: number }> = []
           const currentYear = new Date().getFullYear()
           
-          console.log('📅 [Yearly Chart] Current year:', currentYear);
-          console.log('📅 [Yearly Chart] Total incidents to process:', filteredIncidents.length);
+          console.log('ðŸ“… [Yearly Chart] Current year:', currentYear);
+          console.log('ðŸ“… [Yearly Chart] Total incidents to process:', filteredIncidents.length);
           
           for (let i = 4; i >= 0; i--) {
             const year = currentYear - i
@@ -1259,7 +1065,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
               return incYear === year && !isNaN(incYear)
             })
             
-            console.log(`📅 [Yearly Chart] Year ${year}: ${yearIncidents.length} incidents`);
+            console.log(`ðŸ“… [Yearly Chart] Year ${year}: ${yearIncidents.length} incidents`);
 
             const recoveredValue = yearIncidents.reduce(
               (sum, inc) => sum + getIncidentFinancials(inc).totalRecoveredValue,
@@ -1270,7 +1076,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
               0
             )
 
-            console.log(`📅 [Yearly Chart] Year ${year}: recovered=${recoveredValue}, lost=${lostValue}`);
+            console.log(`ðŸ“… [Yearly Chart] Year ${year}: recovered=${recoveredValue}, lost=${lostValue}`);
             
             data.push({
               year: year.toString(),
@@ -1287,8 +1093,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
     }
     
     const result = generateTimeData();
-    console.log('📈 [Chart Data] Generated data points:', result.length);
-    console.log('📈 [Chart Data] Sample data:', result.slice(0, 3));
+    console.log('ðŸ“ˆ [Chart Data] Generated data points:', result.length);
+    console.log('ðŸ“ˆ [Chart Data] Sample data:', result.slice(0, 3));
     
     return result;
   }, [filteredIncidents, activePeriod, selectedRegion])

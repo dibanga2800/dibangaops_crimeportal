@@ -18,7 +18,7 @@ export interface Contact {
 
 export interface ViewConfig {
   id: string
-  customerId: string // Changed from number to string to match mock data
+  customerId: string
   customerType: CustomerType
   enabledPages: string[]
   createdAt: string
@@ -36,7 +36,7 @@ export interface CustomerPageAssignment {
 }
 
 export interface Customer {
-  id: string // Changed from number to string to match mock data
+  id: string
   companyName: string
   companyNumber: string
   vatNumber: string
@@ -45,7 +45,7 @@ export interface Customer {
   address: Address
   contact: Contact
   viewConfig: ViewConfig
-  pageAssignments?: CustomerPageAssignment[] // Changed from Record to array to match mock data
+  pageAssignments?: CustomerPageAssignment[]
   assignedOfficers?: string[]
   createdAt: string
   updatedAt: string

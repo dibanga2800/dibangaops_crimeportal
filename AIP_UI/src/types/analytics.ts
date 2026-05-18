@@ -82,6 +82,7 @@ export interface ProductFrequencyData {
 	lostValue: number
 	recoveryRate: number
 	storesAffected: number
+	reason?: string
 }
 
 export interface StoreProductItemData {
@@ -202,15 +203,22 @@ export interface RepeatOffenderData {
 // Resource Deployment Engine Types
 // ============================================================================
 
+export interface RiskFactor {
+	factor: string
+	score: number
+	description: string
+}
+
 export interface TimeDeploymentRecommendation {
 	day: string
 	hour: number
 	hourLabel: string
 	recommendedOfficers: number
-	officerType: 'uniform' | 'store detectives'
+	officerType: 'store detectives'
 	recommendedLPM?: boolean
 	priority: 'low' | 'medium' | 'high' | 'critical'
 	reason: string
+	reasonDetails?: string[]
 	expectedIncidents: number
 }
 
@@ -221,10 +229,13 @@ export interface StoreRiskRanking {
 	riskLevel: 'low' | 'medium' | 'high' | 'critical'
 	incidentCount: number
 	trend: 'increasing' | 'stable' | 'decreasing'
-	recommendedOfficerType: 'uniform' | 'store detectives'
+	recommendedOfficerType: 'store detectives'
 	recommendedLPM?: boolean
 	recommendedHours: string[]
 	priority: number
+	reason?: string
+	reasonDetails?: string[]
+	riskFactors?: RiskFactor[]
 }
 
 export interface DeploymentRecommendation {
@@ -264,6 +275,7 @@ export interface IncidentCluster {
 		start: string
 		end: string
 	}
+	reason?: string
 }
 
 export interface OffenderChain {

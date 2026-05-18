@@ -918,8 +918,11 @@ namespace AIPBackend.Services
                     return;
                 }
 
-                var hasOldRoles = existingEntries.Any(e => oldRoleValues.Contains(e.Value));
-                var hasAllNewRoles = newRoles.All(nr => existingEntries.Any(e => e.Value == nr.Value && e.IsActive));
+                var hasOldRoles = existingEntries.Any(e =>
+                    oldRoleValues.Any(o => string.Equals(e.Value, o, StringComparison.OrdinalIgnoreCase)));
+                var hasAllNewRoles = newRoles.All(nr =>
+                    existingEntries.Any(e =>
+                        string.Equals(e.Value, nr.Value, StringComparison.OrdinalIgnoreCase) && e.IsActive));
 
                 if (!hasOldRoles && hasAllNewRoles)
                 {
@@ -929,25 +932,38 @@ namespace AIPBackend.Services
 
                 _logger.LogInformation("Migrating User_Roles lookup entries to 3-tier model...");
 
-                // Deactivate old entries
-                foreach (var entry in existingEntries.Where(e => oldRoleValues.Contains(e.Value)))
+                // Deactivate legacy entries (case-insensitive match on Value)
+                foreach (var entry in existingEntries.Where(e =>
+                    oldRoleValues.Any(o => string.Equals(e.Value, o, StringComparison.OrdinalIgnoreCase))))
                 {
                     entry.IsActive = false;
                     entry.UpdatedAt = DateTime.UtcNow;
                     entry.UpdatedBy = auditUserId;
                 }
 
-                // Add or reactivate new entries
+                // Add or reactivate new entries; SQL unique index on Category+Value is case-insensitive
                 foreach (var role in newRoles)
                 {
-                    var existing = existingEntries.FirstOrDefault(e => e.Value == role.Value);
-                    if (existing != null)
+                    var matches = existingEntries
+                        .Where(e => string.Equals(e.Value, role.Value, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+
+                    if (matches.Count > 0)
                     {
-                        existing.IsActive = true;
-                        existing.Description = role.Description;
-                        existing.SortOrder = role.SortOrder;
-                        existing.UpdatedAt = DateTime.UtcNow;
-                        existing.UpdatedBy = auditUserId;
+                        var primary = matches[0];
+                        primary.Value = role.Value;
+                        primary.IsActive = true;
+                        primary.Description = role.Description;
+                        primary.SortOrder = role.SortOrder;
+                        primary.UpdatedAt = DateTime.UtcNow;
+                        primary.UpdatedBy = auditUserId;
+
+                        foreach (var duplicate in matches.Skip(1))
+                        {
+                            duplicate.IsActive = false;
+                            duplicate.UpdatedAt = DateTime.UtcNow;
+                            duplicate.UpdatedBy = auditUserId;
+                        }
                     }
                     else
                     {
@@ -970,6 +986,7 @@ namespace AIPBackend.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error migrating User_Roles lookup entries");
+                _context.ChangeTracker.Clear();
             }
         }
 

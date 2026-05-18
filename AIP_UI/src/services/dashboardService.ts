@@ -619,13 +619,13 @@ class CustomerDashboardService {
       if (error instanceof Error && error.name === 'AbortError') {
         throw error; // Re-throw AbortError without logging
       }
-      // Don't log network errors (backend might be down)
+
+      const requestUrl = `${this.baseUrl}${endpoint}`;
       const isNetworkError = error instanceof TypeError && error.message.includes('Failed to fetch');
       if (!isNetworkError) {
-        const fullUrl = `${this.baseUrl}${endpoint}`;
-        console.error(`❌ [DashboardService] Failed to fetch ${fullUrl}:`, error);
+        console.error(`❌ [DashboardService] Failed to fetch ${requestUrl}:`, error);
       }
-      throw new Error(`Failed to fetch ${fullUrl}: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`Failed to fetch ${requestUrl}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

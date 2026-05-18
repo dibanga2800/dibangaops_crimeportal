@@ -142,6 +142,9 @@ export const CrimeLinkingPanel = ({
 													{new Date(cluster.dateRange.start).toLocaleDateString()} -{' '}
 													{new Date(cluster.dateRange.end).toLocaleDateString()}
 												</CardDescription>
+												{cluster.reason && (
+													<p className="text-sm text-gray-600 mt-2">{cluster.reason}</p>
+												)}
 											</div>
 											<div className="flex items-center gap-2">
 												{cluster.suspectedOffender && (

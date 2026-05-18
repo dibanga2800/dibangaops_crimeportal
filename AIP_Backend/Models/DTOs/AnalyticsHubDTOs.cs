@@ -150,6 +150,7 @@ namespace AIPBackend.Models.DTOs
 		public decimal LostValue { get; set; }
 		public double RecoveryRate { get; set; }
 		public int StoresAffected { get; set; }
+		public string? Reason { get; set; }
 	}
 
 	public class StoreProductHeatmapDataDto
@@ -200,6 +201,7 @@ namespace AIPBackend.Models.DTOs
 		public decimal TotalValue { get; set; }
 		public string RiskLevel { get; set; } = "low";
 		public List<string> ModusOperandi { get; set; } = new();
+		public string? Reason { get; set; }
 	}
 
 	public class CrossStoreMovementDto
@@ -253,19 +255,27 @@ namespace AIPBackend.Models.DTOs
 		public string LastUpdated { get; set; } = string.Empty;
 	}
 
+	public class RiskFactorDto
+	{
+		public string Factor { get; set; } = string.Empty;
+		public double Score { get; set; }
+		public string Description { get; set; } = string.Empty;
+	}
+
 	public class TimeDeploymentRecommendationDto
 	{
 		public string Day { get; set; } = string.Empty;
 		public int Hour { get; set; }
 		public string HourLabel { get; set; } = string.Empty;
 		public int RecommendedOfficers { get; set; }
-		public string OfficerType { get; set; } = "uniform";
+		public string OfficerType { get; set; } = AnalyticsOfficerTypes.StoreDetectives;
 
 		[JsonPropertyName("recommendedLPM")]
 		public bool RecommendedLpm { get; set; }
 
 		public string Priority { get; set; } = "low";
 		public string Reason { get; set; } = string.Empty;
+		public List<string> ReasonDetails { get; set; } = new();
 		public int ExpectedIncidents { get; set; }
 	}
 
@@ -277,13 +287,21 @@ namespace AIPBackend.Models.DTOs
 		public string RiskLevel { get; set; } = "low";
 		public int IncidentCount { get; set; }
 		public string Trend { get; set; } = "stable";
-		public string RecommendedOfficerType { get; set; } = "uniform";
+		public string RecommendedOfficerType { get; set; } = AnalyticsOfficerTypes.StoreDetectives;
 
 		[JsonPropertyName("recommendedLPM")]
 		public bool RecommendedLpm { get; set; }
 
 		public List<string> RecommendedHours { get; set; } = new();
 		public int Priority { get; set; }
+		public string Reason { get; set; } = string.Empty;
+		public List<string> ReasonDetails { get; set; } = new();
+		public List<RiskFactorDto> RiskFactors { get; set; } = new();
+	}
+
+	public static class AnalyticsOfficerTypes
+	{
+		public const string StoreDetectives = "store detectives";
 	}
 
 	// ============================================================================
@@ -319,6 +337,7 @@ namespace AIPBackend.Models.DTOs
 		public SuspectedOffenderDto? SuspectedOffender { get; set; }
 		public decimal TotalValue { get; set; }
 		public DateRangeDto DateRange { get; set; } = new();
+		public string? Reason { get; set; }
 	}
 
 	public class SuspectedOffenderDto

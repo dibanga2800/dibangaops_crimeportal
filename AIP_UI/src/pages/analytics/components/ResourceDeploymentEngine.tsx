@@ -5,7 +5,7 @@
  * officer type suggestions (uniform / store detectives), LPM recommendations, and store risk rankings.
  */
 
-import { useMemo } from 'react'
+import { Fragment, useMemo, useState, useCallback } from 'react'
 import {
 	Card,
 	CardContent,
@@ -23,16 +23,19 @@ import {
 	TableRow,
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import type { DeploymentRecommendation } from '@/types/analytics'
+import type { DeploymentRecommendation, StoreRiskRanking } from '@/types/analytics'
+import { cn } from '@/lib/utils'
 import {
 	Shield,
 	Clock,
-	MapPin,
 	TrendingUp,
 	TrendingDown,
 	Minus,
 	AlertTriangle,
 	Users,
+	ChevronDown,
+	ChevronRight,
+	MapPin,
 } from 'lucide-react'
 
 interface ResourceDeploymentEngineProps {
@@ -55,7 +58,6 @@ const RISK_COLORS = {
 }
 
 const OFFICER_TYPE_COLORS = {
-	uniform: '#10b981',
 	'store detectives': '#8b5cf6',
 }
 
@@ -78,6 +80,147 @@ const getTrendIcon = (trend: string) => {
 		default:
 			return <Minus className="h-4 w-4 text-gray-500" />
 	}
+}
+
+const getTrendLabel = (trend: string) => {
+	switch (trend) {
+		case 'increasing':
+			return 'Increasing — incident volume rising vs prior 30 days'
+		case 'decreasing':
+			return 'Decreasing — incident volume falling vs prior 30 days'
+		default:
+			return 'Stable — similar volume to prior 30 days'
+	}
+}
+
+const getStoreRowKey = (store: StoreRiskRanking, index: number) =>
+	`${store.storeId}-${store.storeName}-${index}`
+
+interface StoreRiskDetailPanelProps {
+	store: StoreRiskRanking
+	rank: number
+}
+
+const StoreRiskDetailPanel = ({ store, rank }: StoreRiskDetailPanelProps) => {
+	const riskPercent = Math.round(store.riskScore * 100)
+
+	return (
+		<div
+			id={`store-risk-detail-${rank}`}
+			className="rounded-lg border border-border bg-muted/30 p-4 sm:p-5 space-y-4"
+			role="region"
+			aria-label={`Risk details for ${store.storeName}`}
+		>
+			<div className="flex flex-wrap items-start justify-between gap-3">
+				<div>
+					<h4 className="font-semibold text-foreground flex items-center gap-2">
+						<MapPin className="h-4 w-4 text-muted-foreground" />
+						{store.storeName}
+					</h4>
+					<p className="text-sm text-muted-foreground mt-1">
+						Priority rank #{rank} · {store.incidentCount} incident
+						{store.incidentCount !== 1 ? 's' : ''} in period
+					</p>
+				</div>
+				<Badge
+					variant="outline"
+					style={{
+						borderColor: getRiskColor(store.riskLevel),
+						color: getRiskColor(store.riskLevel),
+					}}
+				>
+					{store.riskLevel.toUpperCase()} · {riskPercent}/100
+				</Badge>
+			</div>
+
+			{store.reason && (
+				<div>
+					<p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">
+						Summary
+					</p>
+					<p className="text-sm text-foreground leading-relaxed">{store.reason}</p>
+				</div>
+			)}
+
+			{store.riskFactors && store.riskFactors.length > 0 && (
+				<div>
+					<p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
+						How the risk score was calculated
+					</p>
+					<div className="rounded-md border border-border overflow-hidden">
+						<Table>
+							<TableHeader>
+								<TableRow>
+									<TableHead className="w-[140px]">Factor</TableHead>
+									<TableHead className="w-[72px]">Weight</TableHead>
+									<TableHead>Evidence from data</TableHead>
+								</TableRow>
+							</TableHeader>
+							<TableBody>
+								{store.riskFactors.map((factor) => (
+									<TableRow key={factor.factor}>
+										<TableCell className="font-medium capitalize">
+											{factor.factor.replace(/_/g, ' ')}
+										</TableCell>
+										<TableCell>{(factor.score * 100).toFixed(0)}%</TableCell>
+										<TableCell className="text-sm text-muted-foreground">
+											{factor.description}
+										</TableCell>
+									</TableRow>
+								))}
+							</TableBody>
+						</Table>
+					</div>
+				</div>
+			)}
+
+			<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+				<div className="rounded-md border border-border bg-background p-3">
+					<p className="text-xs font-medium text-muted-foreground mb-1">Trend</p>
+					<div className="flex items-center gap-2 text-sm">
+						{getTrendIcon(store.trend)}
+						<span>{getTrendLabel(store.trend)}</span>
+					</div>
+				</div>
+				<div className="rounded-md border border-border bg-background p-3">
+					<p className="text-xs font-medium text-muted-foreground mb-1">Deployment</p>
+					<p className="text-sm">{store.recommendedOfficerType}</p>
+					<p className="text-xs text-muted-foreground mt-1">
+						{store.recommendedLPM
+							? 'LPM involvement recommended (shoplifting or threats and intimidation)'
+							: 'LPM not required — no shoplifting or threats and intimidation in this period'}
+					</p>
+				</div>
+				<div className="rounded-md border border-border bg-background p-3">
+					<p className="text-xs font-medium text-muted-foreground mb-1">Peak hours</p>
+					{store.recommendedHours.length > 0 ? (
+						<div className="flex flex-wrap gap-1">
+							{store.recommendedHours.map((hour) => (
+								<Badge key={hour} variant="secondary" className="text-xs">
+									{hour}
+								</Badge>
+							))}
+						</div>
+					) : (
+						<p className="text-sm text-muted-foreground">No peak hours recorded</p>
+					)}
+				</div>
+			</div>
+
+			{store.reasonDetails && store.reasonDetails.length > 0 && (
+				<div>
+					<p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
+						Additional detail
+					</p>
+					<ul className="text-sm text-muted-foreground list-disc pl-5 space-y-1">
+						{store.reasonDetails.map((detail, detailIndex) => (
+							<li key={detailIndex}>{detail}</li>
+						))}
+					</ul>
+				</div>
+			)}
+		</div>
+	)
 }
 
 export const ResourceDeploymentEngine = ({
@@ -107,6 +250,22 @@ export const ResourceDeploymentEngine = ({
 		return grouped
 	}, [data.bestTimes])
 
+	const [expandedStoreKey, setExpandedStoreKey] = useState<string | null>(null)
+
+	const handleStoreRowClick = useCallback((rowKey: string) => {
+		setExpandedStoreKey((current) => (current === rowKey ? null : rowKey))
+	}, [])
+
+	const handleStoreRowKeyDown = useCallback(
+		(event: React.KeyboardEvent, rowKey: string) => {
+			if (event.key === 'Enter' || event.key === ' ') {
+				event.preventDefault()
+				handleStoreRowClick(rowKey)
+			}
+		},
+		[handleStoreRowClick]
+	)
+
 	if (loading) {
 		return (
 			<Card>
@@ -126,7 +285,7 @@ export const ResourceDeploymentEngine = ({
 					Resource Deployment Engine
 				</CardTitle>
 				<CardDescription>
-					AI-powered recommendations for optimal officer deployment
+					Data-driven deployment recommendations from incident records in the selected period
 				</CardDescription>
 			</CardHeader>
 			<CardContent className="pt-6">
@@ -195,7 +354,14 @@ export const ResourceDeploymentEngine = ({
 														<span className="font-medium">{rec.recommendedOfficers}</span>{' '}
 														officers
 													</div>
-													<div className="text-sm text-gray-600">{rec.reason}</div>
+													<div className="text-sm text-gray-600 max-w-md">{rec.reason}</div>
+													{rec.reasonDetails && rec.reasonDetails.length > 0 && (
+														<ul className="text-xs text-gray-500 list-disc pl-4">
+															{rec.reasonDetails.map((detail, detailIndex) => (
+																<li key={detailIndex}>{detail}</li>
+															))}
+														</ul>
+													)}
 													</div>
 													<div className="text-right">
 														<div className="text-sm font-semibold text-red-600">
@@ -278,10 +444,15 @@ export const ResourceDeploymentEngine = ({
 					</TabsContent>
 
 					<TabsContent value="risk-ranking" className="space-y-6 mt-6">
-						<div className="border rounded-lg">
+						<p className="text-sm text-muted-foreground">
+							Click a store row to view how its risk score and deployment recommendations were
+							calculated from incident data.
+						</p>
+						<div className="border rounded-lg overflow-hidden">
 							<Table>
 								<TableHeader>
 									<TableRow>
+										<TableHead className="w-10" aria-label="Expand" />
 										<TableHead>Rank</TableHead>
 										<TableHead>Store</TableHead>
 										<TableHead>Risk Score</TableHead>
@@ -293,22 +464,46 @@ export const ResourceDeploymentEngine = ({
 									</TableRow>
 								</TableHeader>
 								<TableBody>
-									{data.storeRankings.map((store, index) => (
-										<TableRow key={store.storeId}>
-											<TableCell className="font-bold">#{index + 1}</TableCell>
-											<TableCell className="font-medium">{store.storeName}</TableCell>
+									{data.storeRankings.map((store, index) => {
+										const rowKey = getStoreRowKey(store, index)
+										const isExpanded = expandedStoreKey === rowKey
+										const rank = index + 1
+
+										return (
+											<Fragment key={rowKey}>
+												<TableRow
+													tabIndex={0}
+													role="button"
+													aria-expanded={isExpanded}
+													aria-controls={`store-risk-detail-${rank}`}
+													onClick={() => handleStoreRowClick(rowKey)}
+													onKeyDown={(event) => handleStoreRowKeyDown(event, rowKey)}
+													className={cn(
+														'cursor-pointer transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+														isExpanded && 'bg-muted/40'
+													)}
+												>
+													<TableCell className="text-muted-foreground">
+														{isExpanded ? (
+															<ChevronDown className="h-4 w-4" aria-hidden />
+														) : (
+															<ChevronRight className="h-4 w-4" aria-hidden />
+														)}
+													</TableCell>
+													<TableCell className="font-bold">#{rank}</TableCell>
+													<TableCell className="font-medium">{store.storeName}</TableCell>
 											<TableCell>
 												<div className="flex items-center gap-2">
 													<div className="w-24 bg-gray-200 rounded-full h-2">
 														<div
 															className="h-2 rounded-full"
 															style={{
-																width: `${store.riskScore}%`,
+																width: `${Math.min(store.riskScore * 100, 100)}%`,
 																backgroundColor: getRiskColor(store.riskLevel),
 															}}
 														/>
 													</div>
-													<span className="text-sm font-medium">{store.riskScore.toFixed(0)}</span>
+													<span className="text-sm font-medium">{(store.riskScore * 100).toFixed(0)}</span>
 												</div>
 											</TableCell>
 											<TableCell>
@@ -352,7 +547,7 @@ export const ResourceDeploymentEngine = ({
 												<div className="flex flex-wrap gap-1">
 													{store.recommendedHours.slice(0, 3).map((hour) => (
 														<Badge key={hour} variant="secondary" className="text-xs">
-															{hour}:00
+															{hour}
 														</Badge>
 													))}
 													{store.recommendedHours.length > 3 && (
@@ -362,8 +557,17 @@ export const ResourceDeploymentEngine = ({
 													)}
 												</div>
 											</TableCell>
-										</TableRow>
-									))}
+												</TableRow>
+												{isExpanded && (
+													<TableRow key={`${rowKey}-detail`} className="hover:bg-transparent">
+														<TableCell colSpan={9} className="p-3 sm:p-4 bg-muted/20">
+															<StoreRiskDetailPanel store={store} rank={rank} />
+														</TableCell>
+													</TableRow>
+												)}
+											</Fragment>
+										)
+									})}
 								</TableBody>
 							</Table>
 						</div>

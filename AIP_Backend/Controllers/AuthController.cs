@@ -2,6 +2,7 @@ using AIPBackend.Data;
 using AIPBackend.Models;
 using AIPBackend.Models.DTOs;
 using AIPBackend.Services;
+using AIPBackend.Services.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -110,11 +111,10 @@ namespace AIPBackend.Controllers
                 user.PendingTwoFactorCode = null;
                 user.PendingTwoFactorExpiryUtc = null;
 
-                var roles = (await _userManager.GetRolesAsync(user))
-                    .Select(r => r.Trim().ToLowerInvariant())
-                    .ToList();
+                var roles = await ResolveEffectiveRolesAsync(user);
+                var rolesForTwoFactor = await ResolveIdentityRolesForTwoFactorAsync(user);
 
-                if (RequiresMandatoryTwoFactor(roles) && !user.TwoFactorEnabled)
+                if (TwoFactorPolicy.IsMandatoryRole(rolesForTwoFactor) && !user.TwoFactorEnabled)
                 {
                     user.TwoFactorEnabled = true;
                 }
@@ -283,18 +283,17 @@ namespace AIPBackend.Controllers
                     clientIp);
 
                 // Get user roles - normalize to lowercase for consistency
-                var roles = (await _userManager.GetRolesAsync(user))
-                    .Select(r => r.Trim().ToLowerInvariant())
-                    .ToList();
+                var roles = await ResolveEffectiveRolesAsync(user);
+                var rolesForTwoFactor = await ResolveIdentityRolesForTwoFactorAsync(user);
 
                 // Update user login information
                 user.LastLoginAt = DateTime.UtcNow;
                 user.LoginAttempts = 0;
                 user.LockoutUntil = null;
 
-                var requiresTwoFactor = RequiresMandatoryTwoFactor(roles) || user.TwoFactorEnabled;
+                var requiresTwoFactor = TwoFactorPolicy.RequiresLoginTwoFactor(rolesForTwoFactor, user.TwoFactorEnabled);
 
-                // Administrators and managers must complete 2FA; optional for other roles when enabled
+                // Administrators and managers: mandatory 2FA; store/security-officer: only when opted in on profile
                 if (requiresTwoFactor)
                 {
                     var code = System.Security.Cryptography.RandomNumberGenerator.GetInt32(100000, 999999).ToString("D6");
@@ -302,36 +301,20 @@ namespace AIPBackend.Controllers
                     user.PendingTwoFactorExpiryUtc = DateTime.UtcNow.AddMinutes(10);
                     await _userManager.UpdateAsync(user);
 
-                    if (user.EmailNotificationsEnabled && !string.IsNullOrWhiteSpace(user.Email))
-                    {
-                        try
-                        {
-                            var subject = "Your Crime Portal login code";
-                            var body = $@"<html><body>
-<h2>Login Verification Code</h2>
-<p>Hello {user.FirstName} {user.LastName},</p>
-<p>Use the following code to complete your login:</p>
-<h1 style=""font-size: 32px; letter-spacing: 4px;"">{code}</h1>
-<p>This code expires in 10 minutes.</p>
-<p>If you did not try to sign in, you can ignore this email.</p>
-</body></html>";
-
-                            await _emailService.SendEmailAsync(user.Email!, subject, body, isHtml: true, fromName: "Crime Portal");
-                        }
-                        catch (Exception emailEx)
-                        {
-                            _logger.LogError(emailEx, "Error sending 2FA email for user {UserId}", user.Id);
-                        }
-                    }
+                    var (emailSent, deliveryMessage) = await SendTwoFactorCodeEmailAsync(user, code);
 
                     var userResponseForStep1 = await BuildUserResponseAsync(user, roles);
 
                     var twoFactorState = new LoginResponseDto
                     {
                         Success = true,
-                        Message = "Two-factor authentication required",
+                        Message = emailSent
+                            ? "Two-factor authentication required"
+                            : "Two-factor authentication required, but the verification email could not be sent. Contact your administrator.",
                         RequiresTwoFactor = true,
                         TwoFactorMethods = new[] { "email" },
+                        TwoFactorEmailSent = emailSent,
+                        TwoFactorDeliveryMessage = deliveryMessage,
                         User = userResponseForStep1
                     };
 
@@ -864,7 +847,19 @@ namespace AIPBackend.Controllers
                     user.ProfilePicture = request.ProfilePicture;
 
                 if (request.TwoFactorEnabled.HasValue)
+                {
+                    var rolesForTwoFactor = await ResolveIdentityRolesForTwoFactorAsync(user);
+                    if (!request.TwoFactorEnabled.Value && !TwoFactorPolicy.CanUserDisableTwoFactor(rolesForTwoFactor))
+                    {
+                        return BadRequest(new ApiResponseDto<UserResponseDto>
+                        {
+                            Success = false,
+                            Message = "Two-factor authentication is required for your role and cannot be disabled."
+                        });
+                    }
+
                     user.TwoFactorEnabled = request.TwoFactorEnabled.Value;
+                }
                 if (request.EmailNotificationsEnabled.HasValue)
                     user.EmailNotificationsEnabled = request.EmailNotificationsEnabled.Value;
                 if (request.LoginAlertsEnabled.HasValue)
@@ -1285,9 +1280,102 @@ namespace AIPBackend.Controllers
             _authCookieService.ApplyTokenVisibility(response);
         }
 
-        private static bool RequiresMandatoryTwoFactor(IEnumerable<string> roles) =>
-            roles.Any(role =>
-                string.Equals(role, "administrator", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(role, "manager", StringComparison.OrdinalIgnoreCase));
+        private async Task<List<string>> ResolveEffectiveRolesAsync(ApplicationUser user)
+        {
+            var identityRoles = (await _userManager.GetRolesAsync(user))
+                .Select(r => r.Trim().ToLowerInvariant())
+                .Where(r => !string.IsNullOrWhiteSpace(r));
+
+            var profileRoles = new[]
+                {
+                    user.Role,
+                    user.PageAccessRole
+                }
+                .Where(r => !string.IsNullOrWhiteSpace(r))
+                .Select(r => r!.Trim().ToLowerInvariant());
+
+            return identityRoles
+                .Concat(profileRoles)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        /// <summary>
+        /// Roles used for 2FA policy only — Identity assignment + ApplicationUser.Role, not PageAccessRole.
+        /// </summary>
+        private async Task<List<string>> ResolveIdentityRolesForTwoFactorAsync(ApplicationUser user)
+        {
+            var identityRoles = (await _userManager.GetRolesAsync(user))
+                .Select(r => r.Trim().ToLowerInvariant())
+                .Where(r => !string.IsNullOrWhiteSpace(r))
+                .ToList();
+
+            if (identityRoles.Count > 0)
+            {
+                return identityRoles;
+            }
+
+            if (!string.IsNullOrWhiteSpace(user.Role))
+            {
+                return new List<string> { user.Role.Trim().ToLowerInvariant() };
+            }
+
+            return new List<string>();
+        }
+
+        /// <summary>
+        /// Sends the login verification code. Security emails are not gated on notification preferences.
+        /// </summary>
+        private async Task<(bool Sent, string? DeliveryMessage)> SendTwoFactorCodeEmailAsync(
+            ApplicationUser user,
+            string code)
+        {
+            if (string.IsNullOrWhiteSpace(user.Email))
+            {
+                _logger.LogWarning(
+                    "2FA email skipped for user {UserId}: no email address on account (role={Role})",
+                    user.Id,
+                    user.Role);
+                return (false, "No email address is configured for this account.");
+            }
+
+            try
+            {
+                var subject = "Your Crime Portal login code";
+                var body = $@"<html><body>
+<h2>Login Verification Code</h2>
+<p>Hello {user.FirstName} {user.LastName},</p>
+<p>Use the following code to complete your login:</p>
+<h1 style=""font-size: 32px; letter-spacing: 4px;"">{code}</h1>
+<p>This code expires in 10 minutes.</p>
+<p>If you did not try to sign in, you can ignore this email.</p>
+</body></html>";
+
+                var sent = await _emailService.SendEmailAsync(
+                    user.Email.Trim(),
+                    subject,
+                    body,
+                    isHtml: true,
+                    fromName: "Crime Portal");
+
+                if (!sent)
+                {
+                    _logger.LogWarning(
+                        "2FA email provider returned failure for user {UserId} ({Email})",
+                        user.Id,
+                        user.Email);
+                    return (false, "The mail server rejected the verification email. Check SMTP configuration.");
+                }
+
+                _logger.LogInformation("2FA email sent to user {UserId}", user.Id);
+                return (true, null);
+            }
+            catch (Exception emailEx)
+            {
+                _logger.LogError(emailEx, "Error sending 2FA email for user {UserId}", user.Id);
+                return (false, "An error occurred while sending the verification email.");
+            }
+        }
+
     }
 }

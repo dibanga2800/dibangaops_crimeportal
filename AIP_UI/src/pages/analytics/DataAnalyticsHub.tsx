@@ -52,7 +52,7 @@ import {
 	AlertCircle,
 	Shield,
 } from 'lucide-react'
-import { format, subDays } from 'date-fns'
+import { format, subMonths } from 'date-fns'
 import type { DateRange } from 'react-day-picker'
 import { cn } from '@/lib/utils'
 import { customerDashboardService } from '@/services/dashboardService'
@@ -367,6 +367,9 @@ const mergeAnalyticsHubData = (datasets: AnalyticsHubData[]): AnalyticsHubData =
 					String(prev.reason ?? '') === String(rec.reason ?? '')
 						? prev.reason
 						: `${String(prev.reason ?? '')}; ${String(rec.reason ?? '')}`,
+				reasonDetails: Array.from(
+					new Set([...(prev.reasonDetails || []), ...(rec.reasonDetails || [])])
+				),
 			})
 		})
 	})
@@ -409,6 +412,11 @@ const mergeAnalyticsHubData = (datasets: AnalyticsHubData[]): AnalyticsHubData =
 				recommendedHours: Array.from(
 					new Set([...(prev.recommendedHours || []), ...(ranking.recommendedHours || [])])
 				),
+				reason: ranking.reason || prev.reason,
+				reasonDetails: Array.from(
+					new Set([...(prev.reasonDetails || []), ...(ranking.reasonDetails || [])])
+				),
+				riskFactors: (ranking.riskFactors?.length ? ranking.riskFactors : prev.riskFactors) || [],
 			})
 		})
 	})
@@ -511,7 +519,7 @@ const DataAnalyticsHub = () => {
 	const [error, setError] = useState<string | null>(null)
 	const [data, setData] = useState<AnalyticsHubData | null>(null)
 	const [dateRange, setDateRange] = useState<DateRange | undefined>({
-		from: subDays(new Date(), 90),
+		from: subMonths(new Date(), 12),
 		to: new Date(),
 	})
 	const [regions, setRegions] = useState<Region[]>([])
@@ -701,6 +709,13 @@ const DataAnalyticsHub = () => {
 
 	const handleRefresh = () => {
 		loadData()
+	}
+
+	const handleQuickDateRange = (months: number) => {
+		setDateRange({
+			from: subMonths(new Date(), months),
+			to: new Date(),
+		})
 	}
 
 	const handleExport = () => {
@@ -1091,6 +1106,43 @@ const DataAnalyticsHub = () => {
 													{insight}
 												</div>
 											))}
+										</div>
+									)}
+
+									{data.crimeTrends.totalIncidents === 0 && (
+										<div className="mt-4 rounded-xl border border-amber-300/70 bg-amber-50/90 dark:border-amber-800/60 dark:bg-amber-950/40 p-3 sm:p-4">
+											<div className="flex flex-col sm:flex-row sm:items-center gap-3">
+												<div className="flex items-start gap-2 flex-1 min-w-0">
+													<AlertCircle className="h-4 w-4 text-amber-700 dark:text-amber-300 flex-shrink-0 mt-0.5" />
+													<div className="text-xs sm:text-sm text-amber-900 dark:text-amber-100">
+														<p className="font-semibold">No incidents in this date range</p>
+														<p className="mt-1 text-amber-800/90 dark:text-amber-200/90">
+															The hub defaults to the last 30 days. If your incident data is older,
+															widen the range to include those records.
+														</p>
+													</div>
+												</div>
+												<div className="flex flex-wrap gap-2">
+													<Button
+														type="button"
+														variant="outline"
+														size="sm"
+														className="text-xs"
+														onClick={() => handleQuickDateRange(6)}
+													>
+														Last 6 months
+													</Button>
+													<Button
+														type="button"
+														variant="outline"
+														size="sm"
+														className="text-xs"
+														onClick={() => handleQuickDateRange(12)}
+													>
+														Last 12 months
+													</Button>
+												</div>
+											</div>
 										</div>
 									)}
 								</div>

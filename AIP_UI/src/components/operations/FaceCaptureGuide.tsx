@@ -129,29 +129,13 @@ export const FaceCaptureGuide: React.FC<FaceCaptureGuideProps> = ({
 		}
 
 		const pollInFlightRef = { current: false }
-		const getUseMock = () => typeof localStorage !== 'undefined' && localStorage.getItem('FACE_CAPTURE_MOCK') === 'true'
 		const poll = async () => {
 			const now = Date.now()
 			if (now - lastPollRef.current < POLL_INTERVAL_MS || pollInFlightRef.current) return
 			lastPollRef.current = now
 			pollInFlightRef.current = true
 
-			const useMock = getUseMock()
 			const dataUrl = captureFrame()
-
-			// When mock is on, show green immediately (no API call); auto-capture after FACE_STABLE_FRAMES polls
-			if (useMock) {
-				faceDetectedRef.current = true
-				setFaceDetected(true)
-				stableCountRef.current += 1
-				if (stableCountRef.current >= FACE_STABLE_FRAMES) {
-					stableCountRef.current = 0
-					doCaptureAndSearch()
-				}
-				pollInFlightRef.current = false
-				drawOverlay()
-				return
-			}
 
 			if (!dataUrl) {
 				pollInFlightRef.current = false
@@ -202,12 +186,6 @@ export const FaceCaptureGuide: React.FC<FaceCaptureGuideProps> = ({
 			drawLoop()
 			requestAnimationFrame(loop)
 		})
-
-		// When mock is on, show green immediately (no wait for first poll)
-		if (getUseMock()) {
-			faceDetectedRef.current = true
-			setFaceDetected(true)
-		}
 
 		// Delay poll start so camera produces real frames (avoid black frames)
 		const intervalIdRef = { current: null as ReturnType<typeof setInterval> | null }

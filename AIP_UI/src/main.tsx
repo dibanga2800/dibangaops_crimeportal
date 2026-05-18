@@ -20,8 +20,6 @@ if (import.meta.env.PROD || import.meta.env.VITE_ENABLE_ANALYTICS === 'true') {
 	})
 }
 
-// Render the app
-// Note: Using static mock data from src/data/ - no MSW service worker needed
 ReactDOM.createRoot(document.getElementById('root')!).render(
 	<React.StrictMode>
 		<Provider store={store}>

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Moq;
+using System.Diagnostics.CodeAnalysis;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -162,7 +163,7 @@ public class CsrfValidationMiddlewareTests
 		public bool ContainsKey(string key) => cookies.ContainsKey(key);
 		public IEnumerator<KeyValuePair<string, string>> GetEnumerator() => cookies.GetEnumerator();
 		System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
-		bool IRequestCookieCollection.TryGetValue(string key, out string? value)
+		bool IRequestCookieCollection.TryGetValue(string key, [NotNullWhen(true)] out string? value)
 		{
 			if (cookies.TryGetValue(key, out var cookieValue))
 			{

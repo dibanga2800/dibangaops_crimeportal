@@ -69,18 +69,6 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 	const [selectedHour, setSelectedHour] = useState<number | null>(null)
 	const [selectedStore, setSelectedStore] = useState<string | null>(null)
 
-	// Log when data updates
-	useMemo(() => {
-		console.log('📊 CrimeTrendExplorer data updated')
-		console.log('   - Days of week entries:', data.dayOfWeek?.length || 0)
-		console.log('   - Store drilldown entries:', Object.keys(data.storeDrilldown || {}).length)
-		console.log('   - Total incidents:', data.totalIncidents)
-		if (Object.keys(data.storeDrilldown || {}).length > 0) {
-			const storeNames = Object.keys(data.storeDrilldown).slice(0, 5)
-			console.log('   - Sample stores:', storeNames)
-		}
-	}, [data])
-
 	const dayOfWeekData = useMemo(() => {
 		return data.dayOfWeek.map((item) => ({
 			...item,
@@ -116,11 +104,9 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 
 	const handleDayClick = (day: string) => {
 		if (selectedDay === day) {
-			console.log('🔄 Deselecting day:', day)
 			setSelectedDay(null)
 			setSelectedStore(null)
 		} else {
-			console.log('📅 Day selected:', day)
 			setSelectedDay(day)
 			setSelectedStore(null)
 		}
@@ -128,11 +114,9 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 
 	const handleHourClick = (hour: number) => {
 		if (selectedHour === hour) {
-			console.log('🔄 Deselecting hour:', hour)
 			setSelectedHour(null)
 			setSelectedStore(null)
 		} else {
-			console.log('🕐 Hour selected:', hour)
 			setSelectedHour(hour)
 			setSelectedStore(null)
 		}
@@ -143,52 +127,26 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 	}
 
 	const filteredStores = useMemo(() => {
-		console.log('🔍 Filtering stores for day:', selectedDay)
-		console.log('📊 Total stores in drilldown:', Object.keys(data.storeDrilldown).length)
-		
 		if (!selectedDay) {
-			console.log('❌ No day selected, returning empty array')
 			return []
 		}
-		
-		// Filter stores to only show those where the selected day matches their peak day
-		// This ensures each day shows different, relevant stores
-		const filtered = Object.values(data.storeDrilldown).filter((store) => {
-			const matches = store.peakDay === selectedDay
-			if (matches) {
-				console.log(`   ✅ ${store.storeName} - Peak day matches (${store.peakDay})`)
-			}
-			return matches
-		})
-		
-		console.log('✅ Filtered stores count:', filtered.length)
-		console.log('🏪 Filtered stores:', filtered.map(s => `${s.storeName} (Peak: ${s.peakDay})`).slice(0, 5))
-		
-		// Sort by incident count (descending) to show busiest stores first
+
+		const filtered = Object.values(data.storeDrilldown).filter(
+			(store) => store.peakDay === selectedDay
+		)
+
 		return filtered.sort((a, b) => b.incidents - a.incidents)
 	}, [selectedDay, data.storeDrilldown])
 
 	const filteredStoresByHour = useMemo(() => {
-		console.log('🕐 Filtering stores for hour:', selectedHour)
-		
 		if (selectedHour === null) {
-			console.log('❌ No hour selected, returning empty array')
 			return []
 		}
-		
-		// Filter stores to only show those where the selected hour matches their peak hour
-		const filtered = Object.values(data.storeDrilldown).filter((store) => {
-			const matches = store.peakHour === selectedHour
-			if (matches) {
-				console.log(`   ✅ ${store.storeName} - Peak hour matches (${store.peakHour}:00)`)
-			}
-			return matches
-		})
-		
-		console.log('✅ Filtered stores count:', filtered.length)
-		console.log('🏪 Filtered stores:', filtered.map(s => `${s.storeName} (Peak: ${s.peakHour}:00)`).slice(0, 5))
-		
-		// Sort by incident count (descending) to show busiest stores first
+
+		const filtered = Object.values(data.storeDrilldown).filter(
+			(store) => store.peakHour === selectedHour
+		)
+
 		return filtered.sort((a, b) => b.incidents - a.incidents)
 	}, [selectedHour, data.storeDrilldown])
 

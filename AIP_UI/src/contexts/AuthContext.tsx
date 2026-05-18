@@ -249,14 +249,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const requiresTwoFactor = (loginData as any)?.RequiresTwoFactor ?? (loginData as any)?.requiresTwoFactor ?? false;
 
       if (requiresTwoFactor) {
+        const twoFactorUser = (loginData as any)?.User ?? (loginData as any)?.user;
+        const accountEmail =
+          twoFactorUser?.Email ??
+          twoFactorUser?.email ??
+          username;
+        const twoFactorEmailSent =
+          (loginData as any)?.TwoFactorEmailSent ??
+          (loginData as any)?.twoFactorEmailSent ??
+          true;
+        const twoFactorDeliveryMessage =
+          (loginData as any)?.TwoFactorDeliveryMessage ??
+          (loginData as any)?.twoFactorDeliveryMessage;
+
         if (import.meta.env.DEV) {
           console.log('🔐 [AuthContext] 2FA required for user:', {
-            email: username,
+            email: accountEmail,
+            emailSent: twoFactorEmailSent,
             methods: loginData?.TwoFactorMethods ?? loginData?.twoFactorMethods,
           });
         }
-        // Caller (LoginPage) will handle the second step using email + code
-        return { requiresTwoFactor: true, email: username } as any;
+
+        return {
+          requiresTwoFactor: true,
+          email: accountEmail,
+          twoFactorEmailSent,
+          twoFactorDeliveryMessage,
+        } as any;
       }
 
       const expiresAt = loginData?.ExpiresAt ?? (loginData as any)?.expiresAt;

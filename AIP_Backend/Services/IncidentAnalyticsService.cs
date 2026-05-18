@@ -4,6 +4,7 @@ using System.Globalization;
 using AIPBackend.Models;
 using AIPBackend.Models.DTOs;
 using AIPBackend.Repositories;
+using AIPBackend.Services.Analytics;
 using Microsoft.Extensions.Logging;
 
 namespace AIPBackend.Services
@@ -30,7 +31,7 @@ namespace AIPBackend.Services
 		{
 			// Treat 'from' and 'to' as whole-calendar-day bounds.
 			// 'from' is inclusive from midnight; 'to' is inclusive through the end of that day.
-			var fromDate = (from ?? DateTime.UtcNow.AddDays(-90)).Date;
+			var fromDate = (from ?? DateTime.UtcNow.AddDays(-30)).Date;
 			var toDateInclusive = (to ?? DateTime.UtcNow).Date;
 			var effectiveFrom = fromDate;
 			var effectiveTo = toDateInclusive.AddDays(1).AddTicks(-1);
@@ -61,7 +62,7 @@ namespace AIPBackend.Services
 						RegionName = g.Key.RegionName,
 						IncidentCount = siteIncidents.Count,
 						TotalValue = siteValue,
-						RiskScore = CalculateLocationRiskScore(siteIncidents)
+						RiskScore = CalculateLocationRiskScore(siteIncidents, effectiveTo)
 					};
 				})
 				.OrderByDescending(h => h.RiskScore)
@@ -89,14 +90,26 @@ namespace AIPBackend.Services
 			};
 		}
 
-		private static double CalculateLocationRiskScore(List<Incident> incidents)
-		{
-			var countWeight = Math.Min(incidents.Count / 20.0, 0.4);
-			var valueWeight = Math.Min((double)(incidents.Sum(GetIncidentLostValue) / 5000m), 0.3);
-			var policeWeight = incidents.Any(i => i.PoliceInvolvement) ? 0.2 : 0;
-			var recencyWeight = incidents.Any(i => i.DateOfIncident >= DateTime.UtcNow.AddDays(-7)) ? 0.1 : 0;
+		private static double CalculateLocationRiskScore(List<Incident> incidents, DateTime periodEnd) =>
+			AnalyticsRules.BuildLocationRiskBreakdown(incidents, periodEnd, GetIncidentLostValue).Score;
 
-			return Math.Round(Math.Min(countWeight + valueWeight + policeWeight + recencyWeight, 1.0), 2);
+		private static string GetProductGroupKey(StolenItem item)
+		{
+			var barcode = item.Barcode?.Trim();
+			if (!string.IsNullOrWhiteSpace(barcode) &&
+			    !string.Equals(barcode, "unknown", StringComparison.OrdinalIgnoreCase) &&
+			    barcode.Length >= 4)
+			{
+				return $"barcode:{barcode.ToLowerInvariant()}";
+			}
+
+			var name = (item.ProductName ?? item.Description)?.Trim();
+			if (!string.IsNullOrWhiteSpace(name))
+			{
+				return $"name:{name.ToLowerInvariant()}";
+			}
+
+			return "unknown";
 		}
 
 		private static List<TrendDataPointDto> BuildTrend(List<Incident> incidents, DateTime from, DateTime to)
@@ -223,7 +236,7 @@ namespace AIPBackend.Services
 			DateTime? to = null)
 		{
 			// Treat 'from' and 'to' as calendar dates; include the full 'to' day.
-			var fromDate = (from ?? DateTime.UtcNow.AddDays(-90)).Date;
+			var fromDate = (from ?? DateTime.UtcNow.AddDays(-30)).Date;
 			var toDateInclusive = (to ?? DateTime.UtcNow).Date;
 			var effectiveFrom = fromDate;
 			var effectiveTo = toDateInclusive.AddDays(1).AddTicks(-1);
@@ -263,7 +276,7 @@ namespace AIPBackend.Services
 				});
 			var hotProducts = BuildSection(
 				"hotProducts",
-				() => BuildHotProducts(filtered, fromStr, toStr),
+				() => BuildHotProducts(filtered, fromStr, toStr, effectiveTo),
 				() => new HotProductsDataDto
 				{
 					Period = new DateRangeDto { Start = fromStr, End = toStr }
@@ -282,11 +295,11 @@ namespace AIPBackend.Services
 				() => new RepeatOffenderDataDto());
 			var hotLocations = BuildSection(
 				"hotLocations",
-				() => BuildHotLocationsForDeployment(filtered),
+				() => BuildHotLocationsForDeployment(filtered, effectiveTo),
 				() => new List<HotLocationDto>());
 			var deployment = BuildSection(
 				"deploymentRecommendations",
-				() => BuildDeploymentRecommendations(filtered, hotLocations),
+				() => BuildDeploymentRecommendations(filtered, hotLocations, effectiveTo),
 				() => new DeploymentRecommendationDto
 				{
 					OverallStrategy = "Analytics data could not be fully generated for the selected period."
@@ -301,7 +314,7 @@ namespace AIPBackend.Services
 
 			_logger.LogInformation(
 				"Analytics hub generated: {Count} incidents, {Offenders} repeat offenders, {Clusters} clusters",
-				total, repeatOffenders.TotalOffenders, crimeLinking.Clusters.Count);
+				total, repeatOffenders.TotalOffenders, crimeLinking.Clusters?.Count ?? 0);
 
 			return new AnalyticsHubDto
 			{
@@ -439,7 +452,11 @@ namespace AIPBackend.Services
 			};
 		}
 
-		private static HotProductsDataDto BuildHotProducts(List<Incident> incidents, string fromStr, string toStr)
+		private static HotProductsDataDto BuildHotProducts(
+			List<Incident> incidents,
+			string fromStr,
+			string toStr,
+			DateTime periodEnd)
 		{
 			var allItems = incidents
 				.SelectMany(i => (i.StolenItems ?? Array.Empty<StolenItem>())
@@ -451,28 +468,38 @@ namespace AIPBackend.Services
 			var totalValueLost = allItems.Sum(x => GetItemLostValue(x.Item));
 
 			var productGroups = allItems
-				.GroupBy(x =>
+				.Where(x => x.Item.Quantity > 0 || GetItemStolenValue(x.Item) > 0)
+				.GroupBy(x => GetProductGroupKey(x.Item))
+				.Select(g =>
 				{
-					var key = !string.IsNullOrWhiteSpace(x.Item.Barcode)
-						? x.Item.Barcode.Trim()
-						: (!string.IsNullOrWhiteSpace(x.Item.ProductName) ? x.Item.ProductName.Trim() : "Unknown");
-					return key;
-				})
-				.Select(g => new ProductFrequencyDataDto
-				{
-					Barcode = g.Key,
-					ProductName = g
-						.Select(x => x.Item.ProductName ?? x.Item.Description ?? g.Key)
-						.FirstOrDefault(s => !string.IsNullOrWhiteSpace(s)) ?? g.Key,
-					Frequency = g.Count(),
-					TotalValue = g.Sum(x => GetItemLostValue(x.Item)),
-					StolenValue = g.Sum(x => GetItemStolenValue(x.Item)),
-					RecoveredValue = g.Sum(x => GetItemRecoveredValue(x.Item)),
-					LostValue = g.Sum(x => GetItemLostValue(x.Item)),
-					RecoveryRate = CalculateRecoveryRate(
-						g.Sum(x => GetItemRecoveredValue(x.Item)),
-						g.Sum(x => GetItemStolenValue(x.Item))),
-					StoresAffected = g.Select(x => x.Incident.StoreName).Distinct().Count()
+					var displayBarcode = g
+						.Select(x => x.Item.Barcode?.Trim())
+						.FirstOrDefault(b => !string.IsNullOrWhiteSpace(b) && b.Length >= 4) ?? string.Empty;
+					var productName = g
+						.Select(x => x.Item.ProductName ?? x.Item.Description)
+						.FirstOrDefault(s => !string.IsNullOrWhiteSpace(s)) ?? "Unknown product";
+					var frequency = g.Count();
+					var stolenValue = g.Sum(x => GetItemStolenValue(x.Item));
+					var recoveredValue = g.Sum(x => GetItemRecoveredValue(x.Item));
+					var lostValue = g.Sum(x => GetItemLostValue(x.Item));
+					var storesAffected = g.Select(x => x.Incident.StoreName).Distinct().Count();
+					var recoveryRate = CalculateRecoveryRate(recoveredValue, stolenValue);
+
+					return new ProductFrequencyDataDto
+					{
+						Barcode = displayBarcode,
+						ProductName = productName,
+						Frequency = frequency,
+						TotalValue = lostValue,
+						StolenValue = stolenValue,
+						RecoveredValue = recoveredValue,
+						LostValue = lostValue,
+						RecoveryRate = recoveryRate,
+						StoresAffected = storesAffected,
+						Reason =
+							$"Stolen in {frequency} line item{(frequency == 1 ? "" : "s")} across {storesAffected} store{(storesAffected == 1 ? "" : "s")}: " +
+							$"£{lostValue:N0} lost, {recoveryRate:F1}% recovered (£{stolenValue:N0} stolen)."
+					};
 				})
 				.ToList();
 
@@ -504,20 +531,22 @@ namespace AIPBackend.Services
 					int.TryParse(g.First().Incident.SiteId, out var sId);
 					var storeIncidentCount = incidents.Count(i => i.StoreName == g.Key);
 
+					var storeIncidentsForRisk = incidents.Where(i => i.StoreName == g.Key).ToList();
+					var storeRisk = AnalyticsRules.BuildLocationRiskBreakdown(
+						storeIncidentsForRisk,
+						periodEnd,
+						GetIncidentLostValue);
+
 					var products = g
-						.GroupBy(x =>
-						{
-							var key = !string.IsNullOrWhiteSpace(x.Item.Barcode)
-								? x.Item.Barcode.Trim()
-								: (!string.IsNullOrWhiteSpace(x.Item.ProductName) ? x.Item.ProductName.Trim() : "Unknown");
-							return key;
-						})
+						.GroupBy(x => GetProductGroupKey(x.Item))
 						.Select(pg => new StoreProductItemDto
 						{
-							Barcode = pg.Key,
+							Barcode = pg
+								.Select(x => x.Item.Barcode?.Trim())
+								.FirstOrDefault(b => !string.IsNullOrWhiteSpace(b)) ?? string.Empty,
 							ProductName = pg
-								.Select(x => x.Item.ProductName ?? x.Item.Description ?? pg.Key)
-								.FirstOrDefault(s => !string.IsNullOrWhiteSpace(s)) ?? pg.Key,
+								.Select(x => x.Item.ProductName ?? x.Item.Description)
+								.FirstOrDefault(s => !string.IsNullOrWhiteSpace(s)) ?? "Unknown product",
 							Frequency = pg.Count(),
 							Value = pg.Sum(x => GetItemLostValue(x.Item)),
 							StolenValue = pg.Sum(x => GetItemStolenValue(x.Item)),
@@ -531,10 +560,7 @@ namespace AIPBackend.Services
 						.Take(5)
 						.ToList();
 
-					var riskLevel = storeIncidentCount >= 10 ? "critical"
-						: storeIncidentCount >= 5 ? "high"
-						: storeIncidentCount >= 2 ? "medium"
-						: "low";
+					var riskLevel = storeRisk.Level;
 
 					return new StoreProductHeatmapDataDto
 					{
@@ -613,6 +639,7 @@ namespace AIPBackend.Services
 				.ToList();
 
 			var mostActive = offenderGroups
+				.Where(g => g.Count() >= 2)
 				.Select(g =>
 				{
 					var offenderIncidents = g.OrderBy(i => i.DateOfIncident).ToList();
@@ -636,20 +663,26 @@ namespace AIPBackend.Services
 					var incCount = offenderIncidents.Count;
 					var riskLevel = incCount >= 5 || totalVal >= 1000m ? "critical"
 						: incCount >= 3 || totalVal >= 500m ? "high"
-						: incCount >= 2 ? "medium"
-						: "low";
+						: "medium";
+
+					var firstDate = offenderIncidents.First().DateOfIncident.ToString("yyyy-MM-dd");
+					var lastDate = offenderIncidents.Last().DateOfIncident.ToString("yyyy-MM-dd");
 
 					return new OffenderProfileDto
 					{
 						OffenderId = g.Key,
 						Name = offenderIncidents.First().OffenderName!,
 						IncidentCount = incCount,
-						FirstIncident = offenderIncidents.First().DateOfIncident.ToString("yyyy-MM-dd"),
-						LastIncident = offenderIncidents.Last().DateOfIncident.ToString("yyyy-MM-dd"),
+						FirstIncident = firstDate,
+						LastIncident = lastDate,
 						StoresTargeted = storesTargeted,
 						TotalValue = totalVal,
 						RiskLevel = riskLevel,
-						ModusOperandi = moList
+						ModusOperandi = moList,
+						Reason =
+							$"Repeat offender: {incCount} incidents from {firstDate} to {lastDate}, " +
+							$"£{totalVal:N0} lost across {storesTargeted.Count} store{(storesTargeted.Count == 1 ? "" : "s")} " +
+							$"(risk: {riskLevel})."
 					};
 				})
 				.OrderByDescending(o => o.IncidentCount)
@@ -754,7 +787,7 @@ namespace AIPBackend.Services
 			return new OffenderNetworkDataDto { Nodes = nodes, Links = links };
 		}
 
-		private static List<HotLocationDto> BuildHotLocationsForDeployment(List<Incident> incidents)
+		private static List<HotLocationDto> BuildHotLocationsForDeployment(List<Incident> incidents, DateTime periodEnd)
 		{
 			return incidents
 				.Where(i => !string.IsNullOrWhiteSpace(i.StoreName))
@@ -769,55 +802,56 @@ namespace AIPBackend.Services
 						RegionName = g.Key.RegionName,
 						IncidentCount = siteIncidents.Count,
 						TotalValue = siteValue,
-						RiskScore = CalculateLocationRiskScore(siteIncidents)
+						RiskScore = CalculateLocationRiskScore(siteIncidents, periodEnd)
 					};
 				})
 				.OrderByDescending(h => h.RiskScore)
+				.ThenByDescending(h => h.IncidentCount)
+				.ThenByDescending(h => h.TotalValue)
 				.Take(10)
 				.ToList();
 		}
 
 		private static DeploymentRecommendationDto BuildDeploymentRecommendations(
 			List<Incident> incidents,
-			List<HotLocationDto> hotLocations)
+			List<HotLocationDto> hotLocations,
+			DateTime periodEnd)
 		{
-			var dayOrder = new[]
-			{
-				DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday,
-				DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday
-			};
+			var periodStart30 = periodEnd.AddDays(-30);
+			var periodStart60 = periodEnd.AddDays(-60);
+			var totalIncidents = incidents.Count;
 
-			var timeSlotCounts = incidents
-				.Select(i => new { Day = i.DateOfIncident.DayOfWeek, Hour = ParseHour(i.TimeOfIncident) })
+			var timeSlotGroups = incidents
+				.Select(i => new { Incident = i, Day = i.DateOfIncident.DayOfWeek, Hour = ParseHour(i.TimeOfIncident) })
 				.Where(x => x.Hour.HasValue)
 				.GroupBy(x => new { x.Day, Hour = x.Hour!.Value })
-				.Select(g => new { g.Key.Day, g.Key.Hour, Count = g.Count() })
 				.ToList();
 
-			var maxCount = timeSlotCounts.Any() ? timeSlotCounts.Max(x => x.Count) : 1;
+			var maxCount = timeSlotGroups.Any() ? timeSlotGroups.Max(g => g.Count()) : 1;
 
-			var bestTimes = timeSlotCounts
-				.OrderByDescending(x => x.Count)
+			var bestTimes = timeSlotGroups
+				.OrderByDescending(g => g.Count())
 				.Take(20)
-				.Select(x =>
+				.Select(g =>
 				{
-					var ratio = (double)x.Count / maxCount;
-					var priority = ratio >= 0.7 ? "critical"
-						: ratio >= 0.4 ? "high"
-						: ratio >= 0.2 ? "medium"
-						: "low";
+					var slotIncidents = g.Select(x => x.Incident).ToList();
+					var count = slotIncidents.Count;
+					var ratio = (double)count / maxCount;
+					var hourLabel = FormatHourLabel(g.Key.Hour);
+					var day = g.Key.Day.ToString();
 
 					return new TimeDeploymentRecommendationDto
 					{
-						Day = x.Day.ToString(),
-						Hour = x.Hour,
-						HourLabel = FormatHourLabel(x.Hour),
-						RecommendedOfficers = Math.Max(1, (int)Math.Ceiling(x.Count / 3.0)),
-						OfficerType = x.Count >= 5 || x.Hour >= 17 ? "store detectives" : "uniform",
-						RecommendedLpm = x.Count >= 3,
-						Priority = priority,
-						Reason = $"{x.Count} incident{(x.Count != 1 ? "s" : "")} recorded at this time",
-						ExpectedIncidents = x.Count
+						Day = day,
+						Hour = g.Key.Hour,
+						HourLabel = hourLabel,
+						RecommendedOfficers = Math.Max(1, (int)Math.Ceiling(count / 3.0)),
+						OfficerType = AnalyticsRules.StoreDetectivesOfficerType,
+						RecommendedLpm = AnalyticsRules.RequiresLpm(slotIncidents),
+						Priority = AnalyticsRules.ToDeploymentPriority(ratio),
+						Reason = AnalyticsRules.BuildTimeSlotReason(count, totalIncidents, day, hourLabel, slotIncidents),
+						ReasonDetails = AnalyticsRules.BuildTimeSlotReasonDetails(slotIncidents, totalIncidents),
+						ExpectedIncidents = count
 					};
 				})
 				.ToList();
@@ -825,65 +859,74 @@ namespace AIPBackend.Services
 			var storeRankings = hotLocations
 				.Select((h, idx) =>
 				{
-					var recentCount = incidents.Count(i =>
-						i.StoreName == h.SiteName && i.DateOfIncident >= DateTime.UtcNow.AddDays(-30));
-					var prevCount = incidents.Count(i =>
-						i.StoreName == h.SiteName &&
-						i.DateOfIncident >= DateTime.UtcNow.AddDays(-60) &&
-						i.DateOfIncident < DateTime.UtcNow.AddDays(-30));
+					var storeIncidents = incidents.Where(i => i.StoreName == h.SiteName).ToList();
+					var recentCount = storeIncidents.Count(i =>
+						i.DateOfIncident >= periodStart30 && i.DateOfIncident <= periodEnd);
+					var prevCount = storeIncidents.Count(i =>
+						i.DateOfIncident >= periodStart60 && i.DateOfIncident < periodStart30);
 
-					var trend = recentCount > prevCount * 1.1 ? "increasing"
-						: recentCount < prevCount * 0.9 ? "decreasing"
-						: "stable";
+					var trend = AnalyticsRules.ComputeTrend(recentCount, prevCount);
+					var breakdown = AnalyticsRules.BuildLocationRiskBreakdown(
+						storeIncidents,
+						periodEnd,
+						GetIncidentLostValue);
 
-					int.TryParse(incidents.FirstOrDefault(i => i.StoreName == h.SiteName)?.SiteId, out var sId);
+					int.TryParse(storeIncidents.FirstOrDefault()?.SiteId, out var sId);
 
-					var peakHours = incidents
-						.Where(i => i.StoreName == h.SiteName)
+					var peakHours = storeIncidents
 						.Select(i => ParseHour(i.TimeOfIncident))
-						.Where(h2 => h2.HasValue)
-						.GroupBy(h2 => h2!.Value)
-						.OrderByDescending(g => g.Count())
+						.Where(hour => hour.HasValue)
+						.GroupBy(hour => hour!.Value)
+						.OrderByDescending(hourGroup => hourGroup.Count())
 						.Take(3)
-						.Select(g => $"{FormatHourLabel(g.Key)}")
+						.Select(hourGroup => FormatHourLabel(hourGroup.Key))
 						.ToList();
 
-					var riskLevel = h.RiskScore >= 0.7 ? "critical"
-						: h.RiskScore >= 0.4 ? "high"
-						: h.RiskScore >= 0.2 ? "medium"
-						: "low";
+					var recommendedLpm = AnalyticsRules.RequiresLpm(storeIncidents);
+					var rank = idx + 1;
 
 					return new StoreRiskRankingDto
 					{
 						StoreId = sId,
 						StoreName = h.SiteName,
-						RiskScore = h.RiskScore,
-						RiskLevel = riskLevel,
+						RiskScore = breakdown.Score,
+						RiskLevel = breakdown.Level,
 						IncidentCount = h.IncidentCount,
 						Trend = trend,
-						RecommendedOfficerType = h.IncidentCount >= 10 ? "store detectives" : "uniform",
-						RecommendedLpm = h.RiskScore >= 0.4,
+						RecommendedOfficerType = AnalyticsRules.StoreDetectivesOfficerType,
+						RecommendedLpm = recommendedLpm,
 						RecommendedHours = peakHours,
-						Priority = idx + 1
+						Priority = rank,
+						Reason = AnalyticsRules.BuildStoreRiskReason(
+							breakdown, rank, trend, recentCount, prevCount, peakHours, recommendedLpm),
+						ReasonDetails = AnalyticsRules.BuildStoreRiskReasonDetails(breakdown),
+						RiskFactors = breakdown.Factors
 					};
 				})
 				.ToList();
 
-			var topDay = timeSlotCounts.Any()
-				? timeSlotCounts.GroupBy(x => x.Day).OrderByDescending(g => g.Sum(x => x.Count)).First().Key.ToString()
+			var topDay = timeSlotGroups.Any()
+				? timeSlotGroups
+					.GroupBy(g => g.Key.Day)
+					.OrderByDescending(dayGroup => dayGroup.Sum(g => g.Count()))
+					.First()
+					.Key
+					.ToString()
 				: "unknown";
 
-			var topHour = timeSlotCounts.Any()
-				? FormatHourLabel(timeSlotCounts.OrderByDescending(x => x.Count).First().Hour)
+			var topHour = timeSlotGroups.Any()
+				? FormatHourLabel(
+					timeSlotGroups.OrderByDescending(g => g.Count()).First().Key.Hour)
 				: "unknown";
 
-			var overallStrategy = incidents.Count == 0
+			var overallStrategy = totalIncidents == 0
 				? "No incident data available for the selected period."
-				: $"Based on {incidents.Count} incidents across {hotLocations.Count} locations. " +
-				  $"Peak activity on {topDay}s at {topHour}. " +
+				: $"Based on {totalIncidents} incidents from the API across {hotLocations.Count} location(s). " +
+				  $"Peak activity on {topDay} at {topHour}. " +
+				  $"All deployments use {AnalyticsRules.StoreDetectivesOfficerType}. " +
 				  (storeRankings.Any(s => s.RiskLevel is "high" or "critical")
-					  ? $"Prioritise deployment at {string.Join(", ", storeRankings.Where(s => s.RiskLevel is "high" or "critical").Take(3).Select(s => s.StoreName))}."
-					  : "Maintain standard deployment across all sites.");
+					  ? $"Prioritise: {string.Join(", ", storeRankings.Where(s => s.RiskLevel is "high" or "critical").Take(3).Select(s => s.StoreName))}."
+					  : "Risk levels are moderate across ranked stores.");
 
 			return new DeploymentRecommendationDto
 			{
@@ -911,29 +954,35 @@ namespace AIPBackend.Services
 				var commonFeatures = BuildCommonFeatures(clusterIncidents);
 				var totalVal = SumIncidentValue(clusterIncidents);
 
+				var offenderConfidence = ComputeOffenderClusterConfidence(clusterIncidents);
+
 				clusters.Add(new IncidentClusterDto
 				{
 					ClusterId = $"cluster-offender-{g.Key}",
-					Incidents = clusterIncidents.Select(i => ToLinkedIncident(i, commonFeatures, 0.95)).ToList(),
+					Incidents = clusterIncidents
+						.Select(i => ToLinkedIncident(i, commonFeatures, offenderConfidence))
+						.ToList(),
 					CommonFeatures = commonFeatures,
 					SuspectedOffender = new SuspectedOffenderDto
 					{
 						Id = g.Key,
 						Name = clusterIncidents.First().OffenderName ?? "Unknown",
-						Confidence = 0.95
+						Confidence = offenderConfidence
 					},
 					TotalValue = totalVal,
 					DateRange = new DateRangeDto
 					{
 						Start = clusterIncidents.First().DateOfIncident.ToString("yyyy-MM-dd"),
 						End = clusterIncidents.Last().DateOfIncident.ToString("yyyy-MM-dd")
-					}
+					},
+					Reason =
+						$"Linked by matching offender identity ({clusterIncidents.Count} incidents, confidence {offenderConfidence:P0})."
 				});
 			}
 
 			// Pattern-based clusters (same type + store, no identified offender)
 			var patternClusters = incidents
-				.Where(i => string.IsNullOrWhiteSpace(i.OffenderId))
+				.Where(i => string.IsNullOrWhiteSpace(i.OffenderName))
 				.GroupBy(i => new
 				{
 					Type = string.IsNullOrWhiteSpace(i.IncidentType) ? "Unspecified" : i.IncidentType,
@@ -951,10 +1000,14 @@ namespace AIPBackend.Services
 					$"Same location: {g.Key.Store}"
 				};
 
+				var patternConfidence = Math.Min(0.5 + clusterIncidents.Count * 0.05, 0.85);
+
 				clusters.Add(new IncidentClusterDto
 				{
 					ClusterId = $"cluster-pattern-{g.Key.Type.Replace(" ", "-")}-{g.Key.Store.Replace(" ", "-")}",
-					Incidents = clusterIncidents.Select(i => ToLinkedIncident(i, commonFeatures, 0.65)).ToList(),
+					Incidents = clusterIncidents
+						.Select(i => ToLinkedIncident(i, commonFeatures, patternConfidence))
+						.ToList(),
 					CommonFeatures = commonFeatures,
 					SuspectedOffender = null,
 					TotalValue = SumIncidentValue(clusterIncidents),
@@ -962,7 +1015,9 @@ namespace AIPBackend.Services
 					{
 						Start = clusterIncidents.First().DateOfIncident.ToString("yyyy-MM-dd"),
 						End = clusterIncidents.Last().DateOfIncident.ToString("yyyy-MM-dd")
-					}
+					},
+					Reason =
+						$"Pattern cluster: {clusterIncidents.Count} '{g.Key.Type}' incidents at {g.Key.Store} with no named offender (confidence {patternConfidence:P0})."
 				});
 			}
 
@@ -1188,6 +1243,28 @@ namespace AIPBackend.Services
 		{
 			if (stolenValue <= 0) return 0;
 			return Math.Round((double)(recoveredValue / stolenValue) * 100, 1);
+		}
+
+		private static double ComputeOffenderClusterConfidence(List<Incident> incidents)
+		{
+			var baseScore = 0.7;
+			if (incidents.Count >= 3)
+			{
+				baseScore += 0.1;
+			}
+
+			if (incidents.Any(i => i.OffenderDOB.HasValue))
+			{
+				baseScore += 0.05;
+			}
+
+			var sameStore = incidents.Select(i => i.StoreName).Distinct().Count() == 1;
+			if (sameStore)
+			{
+				baseScore += 0.05;
+			}
+
+			return Math.Round(Math.Min(baseScore, 0.98), 2);
 		}
 
 		private static List<string> BuildCommonFeatures(List<Incident> incidents)

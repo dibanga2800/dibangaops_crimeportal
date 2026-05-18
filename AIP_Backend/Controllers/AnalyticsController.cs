@@ -1,8 +1,10 @@
 #nullable enable
 
+using AIPBackend.Exceptions;
 using AIPBackend.Models.DTOs;
 using AIPBackend.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AIPBackend.Controllers
@@ -55,10 +57,21 @@ namespace AIPBackend.Controllers
 				var result = await _analyticsService.GetAnalyticsHubAsync(customerId, siteId, regionId, from, to);
 				return Ok(result);
 			}
+			catch (ForbiddenAccessException ex)
+			{
+				_logger.LogWarning(ex, "Forbidden analytics hub request for customer {CustomerId}", customerId);
+				return Forbid();
+			}
 			catch (Exception ex)
 			{
 				_logger.LogError(ex, "Error generating analytics hub for customer {CustomerId}", customerId);
-				return StatusCode(500, new { message = "Failed to generate analytics data." });
+				return StatusCode(500, new
+				{
+					message = "Failed to generate analytics data.",
+					detail = HttpContext.RequestServices.GetService<IWebHostEnvironment>()?.IsDevelopment() == true
+						? ex.GetBaseException().Message
+						: null,
+				});
 			}
 		}
 

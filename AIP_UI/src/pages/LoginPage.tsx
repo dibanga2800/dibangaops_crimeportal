@@ -30,6 +30,7 @@ export default function LoginPage() {
 	const [shakeError, setShakeError] = useState(false)
 	const [twoFactorEmail, setTwoFactorEmail] = useState<string | null>(null)
 	const [twoFactorCode, setTwoFactorCode] = useState('')
+	const [twoFactorNotice, setTwoFactorNotice] = useState<string | null>(null)
 	const [isVerifying2FA, setIsVerifying2FA] = useState(false)
 	const [isCooldown, setIsCooldown] = useState(false)
 	const formRef = useRef<HTMLFormElement>(null)
@@ -83,6 +84,18 @@ export default function LoginPage() {
 			if (result && result.requiresTwoFactor) {
 				setTwoFactorEmail(result.email)
 				setTwoFactorCode('')
+				if (result.twoFactorEmailSent === false) {
+					setTwoFactorNotice(
+						result.twoFactorDeliveryMessage ??
+							'We could not send the verification email. Contact your administrator or try again later.',
+					)
+				} else {
+					setTwoFactorNotice(
+						result.email
+							? `A verification code was sent to ${result.email}.`
+							: null,
+					)
+				}
 				return
 			}
 
@@ -384,6 +397,18 @@ export default function LoginPage() {
 												/>
 											</div>
 										</div>
+									)}
+
+									{twoFactorEmail && twoFactorNotice && (
+										<p
+											className={`text-sm leading-snug rounded-xl border px-4 py-3 ${
+												twoFactorNotice.includes('could not')
+													? 'border-amber-200/70 bg-amber-50/80 text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-100'
+													: 'border-brand-200/70 bg-brand-50/60 text-brand-900 dark:border-brand-900/70 dark:bg-brand-950/30 dark:text-brand-100'
+											}`}
+										>
+											{twoFactorNotice}
+										</p>
 									)}
 
 									{/* Password or 2FA code */}

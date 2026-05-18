@@ -517,18 +517,21 @@ if (runPageAccessInitializationOnStartup)
 				logger.LogInformation("=== STARTING PAGE ACCESS INITIALIZATION ===");
 
 				// Migrate User_Roles lookup table to 3-tier model (runs on every startup, idempotent)
-				var dataSeedingService = services.GetRequiredService<IDataSeedingService>();
-				await dataSeedingService.MigrateUserRolesAsync();
-				
+				using (var migrateScope = app.Services.CreateScope())
+				{
+					var dataSeedingService = migrateScope.ServiceProvider.GetRequiredService<IDataSeedingService>();
+					await dataSeedingService.MigrateUserRolesAsync();
+				}
+
 				var pageAccessService = services.GetRequiredService<IPageAccessService>();
 				var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
-				
+
 				// Try to get an admin user, or use null (FK allows nulls now)
 				var adminUser = await userManager.FindByEmailAsync("admin@advantageone.com");
 				var userId = adminUser?.Id ?? null;
-				
+
 				logger.LogInformation("Admin user found: {Found}, UserId: {UserId}", adminUser != null, userId ?? "null");
-				
+
 				// Initialize pages - this is idempotent and safe to call multiple times
 				logger.LogInformation("Calling InitializeDefaultPageAccessAsync...");
 				var result = await pageAccessService.InitializeDefaultPageAccessAsync(userId ?? "System");

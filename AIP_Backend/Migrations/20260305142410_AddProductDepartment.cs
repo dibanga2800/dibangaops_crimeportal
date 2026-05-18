@@ -10,20 +10,20 @@ namespace AIPBackend.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "Department",
-                table: "Products",
-                type: "nvarchar(100)",
-                maxLength: 100,
-                nullable: true);
+            // Idempotent: local/restored databases may already have Department from manual schema drift.
+            migrationBuilder.Sql("""
+                IF COL_LENGTH('dbo.Products', 'Department') IS NULL
+                    ALTER TABLE dbo.Products ADD [Department] nvarchar(100) NULL;
+                """);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropColumn(
-                name: "Department",
-                table: "Products");
+            migrationBuilder.Sql("""
+                IF COL_LENGTH('dbo.Products', 'Department') IS NOT NULL
+                    ALTER TABLE dbo.Products DROP COLUMN [Department];
+                """);
         }
     }
 }

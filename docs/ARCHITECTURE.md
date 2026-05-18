@@ -45,7 +45,7 @@
 | **Auth** | LoginPage, ProtectedRoute | AuthContext, sessionStore, auth.ts |
 | **Incidents** | IncidentForm, IncidentReportPage | incidentsApi, incidentService |
 | **Dashboards** | Admin, Officer, Customer | analyticsService, dashboardService |
-| **Analytics** | DataAnalyticsHub | analyticsService (mock/real) |
+| **Analytics** | DataAnalyticsHub | analyticsService |
 | **Alerts** | LPMAlertRuleForm, StoreAlertRuleForm | Direct fetch to API |
 | **Evidence** | BarcodeTestGenerator | productService |
 | **Administration** | UserSetup, EmployeeRegistration, Settings | userService, usersSlice |

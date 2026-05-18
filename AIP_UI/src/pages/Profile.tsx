@@ -27,8 +27,14 @@ interface SecuritySettings {
   loginAlerts: boolean
 }
 
+const isMandatoryTwoFactorRole = (role?: string) => {
+	const normalized = role?.trim().toLowerCase() ?? ''
+	return normalized === 'administrator' || normalized === 'manager'
+}
+
 const Profile = () => {
   const { user, updateProfilePicture } = useAuth()
+	const twoFactorRequiredByRole = isMandatoryTwoFactorRole(user?.role)
 
   const [profile, setProfile] = useState({
     firstName: user?.firstName ?? '',
@@ -95,6 +101,14 @@ const Profile = () => {
     const newValue = value ?? !securitySettings[setting]
 
     if (setting === 'twoFactorAuth') {
+      if (twoFactorRequiredByRole && !newValue) {
+        toast({
+          title: 'Two-factor authentication required',
+          description: 'Your role requires two-factor authentication on every login.',
+          variant: 'destructive',
+        })
+        return
+      }
       setPending2FAState(newValue)
       setIs2FADialogOpen(true)
       return
@@ -546,16 +560,17 @@ const Profile = () => {
                       Two-factor Authentication
                     </Label>
                     <p className="text-sm text-muted-foreground">
-                      {securitySettings.twoFactorAuth
-                        ? 'Active — your account requires a second verification step'
-                        : 'Add an extra layer of security to your account'
-                      }
+                      {twoFactorRequiredByRole
+                        ? 'Required for your role — a verification code is sent on every login'
+                        : securitySettings.twoFactorAuth
+                          ? 'Enabled — you will receive a verification code when signing in'
+                          : 'Optional — turn on to require a verification code when signing in'}
                     </p>
                   </div>
                   <Switch
-                    checked={securitySettings.twoFactorAuth}
+                    checked={twoFactorRequiredByRole || securitySettings.twoFactorAuth}
                     onCheckedChange={(checked) => handleSecurityToggle('twoFactorAuth', checked)}
-                    disabled={isUpdatingSecurity}
+                    disabled={isUpdatingSecurity || twoFactorRequiredByRole}
                   />
                 </div>
 

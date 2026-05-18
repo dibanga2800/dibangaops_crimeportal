@@ -73,6 +73,17 @@ const formatCurrencyExact = (value: number) =>
 		maximumFractionDigits: 2,
 	})
 
+const getProductKey = (
+	product: { barcode: string; productName: string },
+	index: number,
+	suffix = ''
+) => {
+	const base =
+		product.barcode?.trim() ||
+		`${product.productName?.trim() || 'unknown'}-${index}`
+	return suffix ? `${base}-${suffix}` : base
+}
+
 export const HotProductsDashboard = ({
 	data,
 	loading = false,
@@ -290,8 +301,8 @@ export const HotProductsDashboard = ({
 							<TableBody>
 								{data.topProducts
 									.sort((a, b) => b.lostValue - a.lostValue)
-									.map((product) => (
-										<TableRow key={product.barcode}>
+									.map((product, index) => (
+										<TableRow key={getProductKey(product, index, 'table')}>
 											<TableCell className="font-medium">
 												{product.productName}
 											</TableCell>
@@ -329,8 +340,8 @@ export const HotProductsDashboard = ({
 							<CardDescription>Products generating the most saved value.</CardDescription>
 						</CardHeader>
 						<CardContent className="space-y-3">
-							{data.topRecoveredProducts.slice(0, 5).map((product) => (
-								<div key={`${product.barcode}-recovered`} className="flex items-center justify-between rounded-lg border p-3">
+							{data.topRecoveredProducts.slice(0, 5).map((product, index) => (
+								<div key={getProductKey(product, index, 'recovered')} className="flex items-center justify-between rounded-lg border p-3">
 									<div>
 										<div className="font-medium">{product.productName}</div>
 										<div className="text-xs text-muted-foreground">{product.frequency} incidents</div>
@@ -351,8 +362,8 @@ export const HotProductsDashboard = ({
 							<CardDescription>Products with the highest unrecovered value exposure.</CardDescription>
 						</CardHeader>
 						<CardContent className="space-y-3">
-							{data.worstRecoveryProducts.slice(0, 5).map((product) => (
-								<div key={`${product.barcode}-worst`} className="flex items-center justify-between rounded-lg border p-3">
+							{data.worstRecoveryProducts.slice(0, 5).map((product, index) => (
+								<div key={getProductKey(product, index, 'worst')} className="flex items-center justify-between rounded-lg border p-3">
 									<div>
 										<div className="font-medium">{product.productName}</div>
 										<div className="text-xs text-muted-foreground">{product.frequency} incidents</div>
@@ -472,9 +483,9 @@ export const HotProductsDashboard = ({
 														{store.products
 															.sort((a, b) => b.frequency - a.frequency)
 															.slice(0, 5)
-															.map((product) => (
+															.map((product, productIndex) => (
 																<div
-																	key={product.barcode}
+																	key={getProductKey(product, productIndex, `store-${store.storeId}`)}
 																	className="flex items-center justify-between p-2 bg-gray-50 rounded text-xs"
 																>
 																	<div className="flex-1 min-w-0">
@@ -625,9 +636,9 @@ export const HotProductsDashboard = ({
 													<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
 														{store.products
 															.sort((a, b) => b.frequency - a.frequency)
-															.map((product) => (
+															.map((product, productIndex) => (
 																<div
-																	key={product.barcode}
+																	key={getProductKey(product, productIndex, `grid-${store.storeId}`)}
 																	className="p-3 border rounded-lg hover:bg-gray-50 transition-colors"
 																>
 																	<div className="font-medium text-sm mb-1">
@@ -785,9 +796,9 @@ export const HotProductsDashboard = ({
 																	<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
 																		{store.products
 																			.sort((a, b) => b.frequency - a.frequency)
-																			.map((product) => (
+																			.map((product, productIndex) => (
 																				<div
-																					key={product.barcode}
+																					key={getProductKey(product, productIndex, `detail-${store.storeId}`)}
 																					className="p-3 bg-white border rounded-lg"
 																				>
 																					<div className="font-medium text-sm mb-1">

@@ -52,8 +52,8 @@ class AnalyticsService {
 		// The backend accepts a single siteId / regionId filter for now.
 		// When multiple IDs are supplied we pass the first one; full multi-select
 		// can be wired later once the repository supports it.
-		if (params?.storeIds?.length) query.siteId = params.storeIds[0]
-		if (params?.regionIds?.length) query.regionId = params.regionIds[0]
+		if (params?.storeIds?.length) query.siteId = String(params.storeIds[0])
+		if (params?.regionIds?.length) query.regionId = String(params.regionIds[0])
 
 		const { data } = await api.get<AnalyticsHubData>(ANALYTICS_ENDPOINTS.HUB, {
 			params: query,

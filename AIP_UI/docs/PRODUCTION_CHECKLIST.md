@@ -9,7 +9,6 @@ This checklist ensures your application is ready for production deployment.
 - [ ] Copy `.env.example` to `.env.production`
 - [ ] Set `VITE_APP_ENV=production`
 - [ ] Configure production API URL in `VITE_API_BASE_URL`
-- [ ] Disable MSW: `VITE_ENABLE_MSW=false`
 - [ ] Configure analytics if needed: `VITE_ENABLE_ANALYTICS=true`
 - [ ] Add error tracking DSN if using Sentry: `VITE_SENTRY_DSN=...`
 - [ ] Remove any development/test credentials

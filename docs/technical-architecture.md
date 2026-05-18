@@ -138,10 +138,10 @@ DTO casing: the UI explicitly handles backend **PascalCase** `ApiResponseDto` sh
 - **Global error boundary:** [`AIP_UI/src/components/error-boundary/AppErrorBoundary.tsx`](../AIP_UI/src/components/error-boundary/AppErrorBoundary.tsx).
 - **Performance signals:** [`AIP_UI/src/main.tsx`](../AIP_UI/src/main.tsx) optionally initializes **Web Vitals** and logs via [`AIP_UI/src/utils/logger.ts`](../AIP_UI/src/utils/logger.ts) when analytics flags are enabled.
 
-### 4.7 Local development and mocking (**current** vs **target**)
+### 4.7 Local development and API integration
 
-- **Current (as implemented):** [`AIP_UI/src/main.tsx`](../AIP_UI/src/main.tsx) documents **static mock data** under `src/data/` and explicitly notes **no MSW** service worker on the entry path. The UI also includes an optional **`json-server`** script in [`AIP_UI/package.json`](../AIP_UI/package.json) (`npm run mock-api` → `json-server --watch db.json --port 3001`) for a simple local REST stub — useful for UI-only work when pointed at that port via environment configuration.
-- **Target / product direction:** Contract-first development is supported by **shared endpoint constants** and **typed responses** against the real .NET API; introducing **MSW** later would be an incremental addition and is **not** claimed as present in the current entrypoint.
+- **Current (as implemented):** The SPA loads all domain data from the **.NET API** via Axios ([`AIP_UI/src/config/api.ts`](../AIP_UI/src/config/api.ts)). Local development uses the Vite proxy (`VITE_API_BASE_URL=/api`) or a direct backend URL. There is **no** Mock Service Worker, `json-server`, or in-browser mock data layer.
+- **Contract alignment:** Shared endpoint constants and typed DTOs keep the frontend aligned with backend responses; features such as the Data Analytics Hub call real endpoints (e.g. `GET /api/Analytics/hub`).
 
 ---
 
@@ -288,7 +288,6 @@ sequenceDiagram
 
 ## 12. Roadmap and honest gaps
 
-- **MSW:** Not wired in [`main.tsx`](../AIP_UI/src/main.tsx); local mocking today is **static data** and/or **`json-server`**. Adding MSW would improve **contract testing** without changing the production API boundary.
 - **Third-party error tracking:** DSN/token env vars exist in `env.ts`; confirm whether Sentry or similar is fully integrated in production builds before claiming it in external submissions.
 - **Endorsement tip:** When describing **your** contribution, tie narrative to **specific features and files** you owned (controllers, services, incident flows, analytics UI, auth hardening, etc.) — see appendix.
 
