@@ -99,6 +99,26 @@ curl.exe -i -X OPTIONS `
 - Add alerting for 5xx spikes and endpoint availability drops
 - Keep a known-good image tag for fast rollback/redeploy
 
+## GitHub Actions: `azure/login` — No subscriptions found
+
+OIDC login can succeed while `az` still reports **No subscriptions found**. That means the federated app registration is not entitled to any subscription in the tenant (or the subscription is disabled).
+
+**Fix in Azure Portal**
+
+1. **Subscriptions** — confirm the subscription is **Active** (not Disabled / Past due).
+2. **Microsoft Entra ID** → **App registrations** → app matching `AZURE_CLIENT_ID`.
+3. **Subscriptions** → your subscription → **Access control (IAM)** → **Add role assignment**:
+   - Role: **Reader** (minimum for `az containerapp show` and Terraform state read)
+   - Assign access to: the app registration (service principal) used by GitHub Actions
+4. Verify GitHub secret `AZURE_SUBSCRIPTION_ID` is the **same** subscription GUID (no extra spaces).
+5. **Certificates & secrets** → **Federated credentials** — subject must match the workflow branch, e.g.  
+   `repo:dibanga2800/dibangaops_crimeportal:ref:refs/heads/main`
+
+**Unblock frontend deploy without Azure login**
+
+Add repository secret `PRODUCTION_API_BASE_URL` = production API origin only, e.g. `https://api.yourdomain.com` (no `/api` suffix).  
+**Deploy Frontend** will use it and skip `azure/login` until subscription access is restored.
+
 ## Notes for This Project
 
 - Frontend deployment workflow path:

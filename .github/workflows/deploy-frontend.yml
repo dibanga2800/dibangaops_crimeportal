@@ -1,5 +1,9 @@
 # Frontend-only: build AIP_UI and deploy to Azure Static Web Apps.
-# Does not build container images or run Terraform apply (resolves API URL from Azure / TF state).
+# Does not build container images or run Terraform apply.
+#
+# API URL resolution (first match wins):
+#   1. GitHub secret PRODUCTION_API_BASE_URL (no Azure login; use when OIDC/subscription is unavailable)
+#   2. Terraform output api_front_door_url, else Container App ingress FQDN (requires Azure OIDC)
 
 name: Deploy Frontend
 
@@ -20,7 +24,6 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # Run JS-based actions on Node 24 before GitHub’s June 2026 default (Node 20 runner removal Sept 2026).
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   TERRAFORM_VERSION: '1.13.4'
   NODE_VERSION: '20'
@@ -33,18 +36,42 @@ jobs:
       RESOURCE_GROUP: crimeportal-rg
       BACKEND_APP_NAME: crimeportal-backend
     outputs:
-      backend_url: ${{ steps.api-url.outputs.backend_url }}
+      backend_url: ${{ steps.final.outputs.backend_url }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Check production API URL secret
+        id: from-secret
+        env:
+          PRODUCTION_API_BASE_URL: ${{ secrets.PRODUCTION_API_BASE_URL }}
+        run: |
+          set -euo pipefail
+          URL="$(echo "${PRODUCTION_API_BASE_URL}" | tr -d '\r\n' | sed 's:/*$::')"
+          if [ -z "${URL}" ]; then
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          case "${URL}" in
+            https://*) ;;
+            *)
+              echo "PRODUCTION_API_BASE_URL must be a full https URL (no trailing path)."
+              exit 1
+              ;;
+          esac
+          echo "found=true" >> "$GITHUB_OUTPUT"
+          echo "backend_url=${URL}" >> "$GITHUB_OUTPUT"
+          echo "Using PRODUCTION_API_BASE_URL from GitHub secret (skipping Azure login)."
+
       - name: Setup Terraform
+        if: steps.from-secret.outputs.found != 'true'
         uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
 
       - name: Azure Login (OIDC)
+        if: steps.from-secret.outputs.found != 'true'
         uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -52,6 +79,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Terraform Init
+        if: steps.from-secret.outputs.found != 'true'
         working-directory: Infrastructure
         run: |
           terraform init \
@@ -60,8 +88,9 @@ jobs:
             -backend-config="container_name=${{ secrets.TF_STATE_CONTAINER }}" \
             -backend-config="key=${{ secrets.TF_STATE_KEY }}"
 
-      - name: Capture backend URL
-        id: api-url
+      - name: Resolve API URL from Azure
+        if: steps.from-secret.outputs.found != 'true'
+        id: from-azure
         working-directory: Infrastructure
         run: |
           set -euo pipefail
@@ -84,6 +113,16 @@ jobs:
             exit 1
           fi
           echo "backend_url=https://${FQDN}" >> "$GITHUB_OUTPUT"
+
+      - name: Finalize API URL
+        id: final
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.from-secret.outputs.found }}" = "true" ]; then
+            echo "backend_url=${{ steps.from-secret.outputs.backend_url }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "backend_url=${{ steps.from-azure.outputs.backend_url }}" >> "$GITHUB_OUTPUT"
+          fi
 
   deploy-frontend:
     name: Build and Deploy Frontend

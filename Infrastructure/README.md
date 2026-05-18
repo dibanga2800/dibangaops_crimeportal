@@ -87,7 +87,8 @@ For GitHub Actions:
 - `TERRAFORM_PLAN_TFVARS` — **optional**; if set, used by pull-request `terraform plan` so planned changes match what is deployed (paste the same body you use for real plans, often identical to prod tfvars). If unset, CI uses `terraform.dev.tfvars.example` only (validate still runs; plan may be noisy or misleading).
 - `AZURE_CLIENT_ID`
 - `AZURE_TENANT_ID`
-- `AZURE_SUBSCRIPTION_ID`
+- `AZURE_SUBSCRIPTION_ID` (must match an **active** subscription the app can access)
+- `PRODUCTION_API_BASE_URL` (optional) — full `https://` API base **without** `/api` suffix; when set, **Deploy Frontend** skips Azure OIDC and uses this URL for `VITE_API_BASE_URL`
 - `TF_STATE_RESOURCE_GROUP`
 - `TF_STATE_STORAGE_ACCOUNT`
 - `TF_STATE_CONTAINER`
