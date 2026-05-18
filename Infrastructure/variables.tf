@@ -392,6 +392,86 @@ variable "sql_allow_azure_services_firewall_rule" {
   default     = true
 }
 
+variable "sql_public_network_access_enabled" {
+  description = "Allow public internet access to Azure SQL (disable when using private endpoint only)"
+  type        = bool
+  default     = true
+}
+
+variable "enable_sql_private_endpoint" {
+  description = "Provision VNet, private endpoint, and disable SQL public access. Requires Container Apps VNet integration (may recreate the environment)."
+  type        = bool
+  default     = false
+}
+
+variable "vnet_address_space" {
+  description = "Address space for the optional SQL private networking VNet"
+  type        = string
+  default     = "10.40.0.0/16"
+}
+
+variable "private_endpoint_subnet_prefix" {
+  description = "Subnet for SQL private endpoint"
+  type        = string
+  default     = "10.40.1.0/24"
+}
+
+variable "container_apps_subnet_prefix" {
+  description = "Delegated subnet for Container Apps environment (SQL private networking)"
+  type        = string
+  default     = "10.40.0.0/23"
+}
+
+variable "enable_api_front_door" {
+  description = "Place Azure Front Door + WAF in front of the public API Container App"
+  type        = bool
+  default     = false
+}
+
+variable "api_custom_domain" {
+  description = "Custom API hostname for Front Door (e.g. api.dibangops.com). Point DNS CNAME to the Front Door endpoint."
+  type        = string
+  default     = null
+  nullable    = true
+}
+
+variable "front_door_sku_name" {
+  description = "Azure Front Door profile SKU"
+  type        = string
+  default     = "Standard_AzureFrontDoor"
+}
+
+variable "front_door_waf_sku_name" {
+  description = "Azure Front Door WAF policy SKU"
+  type        = string
+  default     = "Standard_AzureFrontDoor"
+}
+
+variable "front_door_waf_mode" {
+  description = "WAF mode: Detection or Prevention"
+  type        = string
+  default     = "Prevention"
+}
+
+variable "auth_cookie_domain" {
+  description = "Shared cookie domain for HttpOnly JWT cookies (e.g. .dibangops.com when SPA and API share the registrable domain)"
+  type        = string
+  default     = null
+  nullable    = true
+}
+
+variable "auth_cookie_same_site" {
+  description = "SameSite attribute for auth cookies (Lax recommended for api. + www. subdomains)"
+  type        = string
+  default     = "Lax"
+}
+
+variable "auth_cookie_secure" {
+  description = "Secure flag for auth cookies (must be true in production)"
+  type        = bool
+  default     = true
+}
+
 variable "sql_allowed_ip_ranges" {
   description = "Additional SQL firewall rules for explicit ingress allow-list entries"
   type = list(object({

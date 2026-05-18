@@ -107,6 +107,35 @@ Default alert thresholds:
 - 80% actual spend
 - 100% forecasted spend
 
+## Security hardening (optional Terraform flags)
+
+### HttpOnly JWT cookies (application)
+
+The API sets `aip_access`, `aip_refresh`, and `aip_csrf` cookies. Configure the backend Container App via:
+
+- `auth_cookie_domain` — e.g. `.dibangops.com` when the SPA and API share a registrable domain (`www` + `api` subdomains)
+- `auth_cookie_same_site` — use `Lax` when `auth_cookie_domain` is set; cross-origin setups (SWA → Container Apps FQDN) use `None` automatically until a shared domain is configured
+
+### Azure Front Door + WAF
+
+```hcl
+enable_api_front_door = true
+api_custom_domain     = "api.example.com"
+```
+
+Point DNS for `api.example.com` to the Front Door endpoint (`terraform output api_front_door_endpoint_host`). CI builds the frontend with `terraform output backend_url` (Front Door URL when enabled).
+
+**Pentest note — direct API bypass:** The backend Container App FQDN (`terraform output backend_container_app_url`) remains reachable when `external_enabled` is true. WAF rules on Front Door do not apply to direct Container App requests. For pentest scope, either document this as an accepted finding, add Container App ingress IP restrictions, or use private ingress with Front Door as the only public entry.
+
+### SQL private endpoint
+
+```hcl
+enable_sql_private_endpoint = true
+sql_allowed_ip_ranges     = []
+```
+
+This disables public SQL access, provisions a VNet + private endpoint, and integrates the Container Apps environment with the VNet. **Plan during a maintenance window** — it may recreate the Container Apps environment.
+
 ## Notes
 
 - `terraform.tfvars`, `terraform.prod.tfvars`, and `terraform.dev.tfvars` are **gitignored**; keep real values in local files or CI secrets (`TERRAFORM_PROD_TFVARS`). Commit only the `*.tfvars.example` templates.

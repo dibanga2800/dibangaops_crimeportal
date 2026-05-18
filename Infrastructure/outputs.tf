@@ -3,7 +3,23 @@ output "frontend_url" {
 }
 
 output "backend_url" {
-  value = "https://${azurerm_container_app.backend.latest_revision_fqdn}"
+  value = local.effective_api_public_url
+}
+
+output "backend_container_app_url" {
+  value = local.backend_container_fqdn
+}
+
+output "api_front_door_endpoint_host" {
+  value = try(azurerm_cdn_frontdoor_endpoint.api[0].host_name, null)
+}
+
+output "api_front_door_url" {
+  value = var.enable_api_front_door ? (
+    var.api_custom_domain != null && var.api_custom_domain != "" ?
+    "https://${var.api_custom_domain}" :
+    "https://${azurerm_cdn_frontdoor_endpoint.api[0].host_name}"
+  ) : null
 }
 
 output "ai_url" {

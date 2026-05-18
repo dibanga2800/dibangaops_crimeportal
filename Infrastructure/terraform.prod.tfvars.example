@@ -10,14 +10,20 @@ key_vault_soft_delete_retention_days   = 90
 key_vault_purge_protection_enabled     = true
 backend_allow_insecure_connections     = false
 ai_allow_insecure_connections          = false
-sql_allow_azure_services_firewall_rule = true
-sql_allowed_ip_ranges = [
-	{
-		name     = "admin-egress"
-		start_ip = "203.0.113.10" # RFC 5737 TEST-NET-3 placeholder — use your current public IP / range
-		end_ip   = "203.0.113.10"
-	}
-]
+# Recommended for pentest/production: disable public SQL when private endpoint is enabled.
+sql_allow_azure_services_firewall_rule = false
+sql_public_network_access_enabled      = false
+sql_allowed_ip_ranges = []
+
+# VNet + private endpoint (disables SQL public access; may recreate Container Apps environment).
+enable_sql_private_endpoint = true
+
+# Azure Front Door + WAF in front of the API (recommended for production).
+# IMPORTANT: Container App ingress remains publicly reachable unless you add IP restrictions.
+# Pentesters can bypass WAF via backend_container_app_url — restrict ingress or accept as documented risk.
+enable_api_front_door = true
+api_custom_domain     = "api.example.com"
+auth_cookie_domain    = ".example.com"
 storage_blob_delete_retention_days      = 30
 storage_container_delete_retention_days = 7
 storage_blob_versioning_enabled         = true

@@ -39,6 +39,9 @@ locals {
   ai_container_fqdn              = "https://${var.ai_name}.internal.${azurerm_container_app_environment.env.default_domain}"
   effective_frontend_url         = var.frontend_url != null && var.frontend_url != "" ? trimspace(var.frontend_url) : "https://${azurerm_static_web_app.frontend.default_host_name}"
   effective_insightface_base_url = var.insightface_base_url != null && var.insightface_base_url != "" ? var.insightface_base_url : local.ai_container_fqdn
+  effective_api_public_url = var.enable_api_front_door && var.api_custom_domain != null && var.api_custom_domain != "" ? "https://${var.api_custom_domain}" : local.backend_container_fqdn
+  auth_cookie_domain            = var.auth_cookie_domain != null && var.auth_cookie_domain != "" ? var.auth_cookie_domain : null
+  auth_cookie_same_site_effective = local.auth_cookie_domain != null ? var.auth_cookie_same_site : "None"
 }
 
 resource "azurerm_resource_group" "rg" {
@@ -109,6 +112,7 @@ resource "azurerm_mssql_server" "sql_server" {
   administrator_login          = var.sql_admin_username
   administrator_login_password = local.sql_admin_password
   minimum_tls_version          = "1.2"
+  public_network_access_enabled = var.enable_sql_private_endpoint ? false : var.sql_public_network_access_enabled
 }
 
 resource "azurerm_mssql_firewall_rule" "allow_azure_services" {
@@ -247,6 +251,7 @@ resource "azurerm_container_app_environment" "env" {
   location                   = azurerm_resource_group.rg.location
   resource_group_name        = azurerm_resource_group.rg.name
   log_analytics_workspace_id = azurerm_log_analytics_workspace.logs.id
+  infrastructure_subnet_id   = var.enable_sql_private_endpoint ? azurerm_subnet.container_apps[0].id : null
 
   depends_on = [null_resource.register_microsoft_app]
 }
@@ -364,6 +369,29 @@ resource "azurerm_container_app" "backend" {
       env {
         name  = "Jwt__RefreshTokenExpirationDays"
         value = tostring(var.jwt_refresh_token_expiration_days)
+      }
+
+      dynamic "env" {
+        for_each = local.auth_cookie_domain != null ? [1] : []
+        content {
+          name  = "Auth__Cookies__Domain"
+          value = local.auth_cookie_domain
+        }
+      }
+
+      env {
+        name  = "Auth__Cookies__SameSite"
+        value = local.auth_cookie_same_site_effective
+      }
+
+      env {
+        name  = "Auth__Cookies__Secure"
+        value = tostring(var.auth_cookie_secure)
+      }
+
+      env {
+        name  = "Auth__Cookies__ExposeTokensInResponse"
+        value = "false"
       }
 
       dynamic "env" {
