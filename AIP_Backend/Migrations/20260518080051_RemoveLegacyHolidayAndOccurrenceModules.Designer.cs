@@ -4,6 +4,7 @@ using AIPBackend.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AIPBackend.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260518080051_RemoveLegacyHolidayAndOccurrenceModules")]
+    partial class RemoveLegacyHolidayAndOccurrenceModules
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -542,6 +545,72 @@ namespace AIPBackend.Migrations
                         .HasFilter("[UserName] IS NOT NULL");
 
                     b.ToTable("AspNetUsers", (string)null);
+                });
+
+            modelBuilder.Entity("AIPBackend.Models.BankHoliday", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("Archived")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("AuthorisedByEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime?>("DateAuthorised")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("DateOfRequest")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("HolidayDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("OfficerId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Archived");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.HasIndex("HolidayDate");
+
+                    b.HasIndex("OfficerId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("UpdatedBy");
+
+                    b.ToTable("BankHolidays");
                 });
 
             modelBuilder.Entity("AIPBackend.Models.Customer", b =>
@@ -2664,6 +2733,23 @@ namespace AIPBackend.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("AIPBackend.Models.BankHoliday", b =>
+                {
+                    b.HasOne("AIPBackend.Models.ApplicationUser", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("AIPBackend.Models.ApplicationUser", "UpdatedByUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("UpdatedByUser");
                 });
 
             modelBuilder.Entity("AIPBackend.Models.CustomerPageAccess", b =>

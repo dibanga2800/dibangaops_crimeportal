@@ -118,7 +118,9 @@ namespace AIPBackend.Services
 						UpdatedBy = p.UpdatedBy ?? string.Empty
 					});
 
-				var pages = await pagesQuery.ToListAsync(cts.Token);
+				var pages = (await pagesQuery.ToListAsync(cts.Token))
+					.Where(p => !RemovedModulePages.IsRemoved(p.PageId, p.Path))
+					.ToList();
 
 				string[] requiredPageIds =
 				{
@@ -249,6 +251,15 @@ namespace AIPBackend.Services
                         // SQL Server default collation is case-insensitive, so == should work
                         var normalizedIdentifier = pageIdentifier.Trim().ToLower();
 
+						if (RemovedModulePages.IsRemoved(normalizedIdentifier, null))
+						{
+							_logger.LogDebug(
+								"Skipping removed module page '{PageIdentifier}' for role {RoleName}",
+								pageIdentifier,
+								roleName);
+							continue;
+						}
+
                         var page = await _context.PageAccesses
                             .Where(p => p.IsActive && (!string.IsNullOrEmpty(p.PageId)))
                             .Select(p => new { Page = p, NormalizedPageId = p.PageId.ToLower(), NormalizedTitle = p.Title.ToLower() })
@@ -257,6 +268,11 @@ namespace AIPBackend.Services
                         
                         if (page != null)
                         {
+							if (RemovedModulePages.IsRemoved(page.Page.PageId, page.Page.Path))
+							{
+								continue;
+							}
+
                             // Page found and is active (we already filtered for IsActive)
                             rolePageAccesses.Add(new RolePageAccess
                             {
@@ -741,7 +757,6 @@ namespace AIPBackend.Services
             var defaultPages = new List<PageAccessDto>
             {
                 new PageAccessDto { Id = 1, PageId = "dashboard", Title = "Dashboard", Path = "/dashboard", Category = "Main", Description = "Main dashboard", IsActive = true, SortOrder = 1, CreatedAt = DateTime.UtcNow, CreatedBy = "System", UpdatedAt = null, UpdatedBy = "" },
-                new PageAccessDto { Id = 2, PageId = "action-calendar", Title = "Action Calendar", Path = "/action-calendar", Category = "Action Calendar", Description = "Task calendar and management", IsActive = true, SortOrder = 2, CreatedAt = DateTime.UtcNow, CreatedBy = "System", UpdatedAt = null, UpdatedBy = "" },
                 new PageAccessDto { Id = 3, PageId = "profile", Title = "Profile", Path = "/profile", Category = "Settings", Description = "User profile", IsActive = true, SortOrder = 3, CreatedAt = DateTime.UtcNow, CreatedBy = "System", UpdatedAt = null, UpdatedBy = "" },
                 new PageAccessDto { Id = 4, PageId = "settings", Title = "Settings", Path = "/settings", Category = "Settings", Description = "Application settings", IsActive = true, SortOrder = 4, CreatedAt = DateTime.UtcNow, CreatedBy = "System", UpdatedAt = null, UpdatedBy = "" },
                 new PageAccessDto { Id = 5, PageId = "user-setup", Title = "User Setup", Path = "/administration/user-setup", Category = "Administration", Description = "User management and setup", IsActive = true, SortOrder = 5, CreatedAt = DateTime.UtcNow, CreatedBy = "System", UpdatedAt = null, UpdatedBy = "" },
@@ -759,9 +774,7 @@ namespace AIPBackend.Services
             var defaultPageAccessByRole = new Dictionary<string, string[]>
             {
                 ["administrator"] = defaultPages.Select(p => p.PageId).ToArray(),
-                ["manager"] = defaultPages.Where(p => 
-                    p.Category != "Customer" || 
-                    p.PageId == "customer-views-config").Select(p => p.PageId).ToArray(),
+                ["manager"] = defaultPages.Where(p => p.Category != "Customer").Select(p => p.PageId).ToArray(),
                 ["store"] = defaultPages.Where(p => 
                     p.Category == "Main" || 
                     p.Category == "Operations" ||
@@ -809,7 +822,6 @@ namespace AIPBackend.Services
                 {
                     // Main/Dashboard
                     new PageAccess { PageId = "dashboard", Title = "Dashboard", Path = "/dashboard", Category = "Dashboard", Description = "Main dashboard", SortOrder = 1 },
-                    new PageAccess { PageId = "action-calendar", Title = "Action Calendar", Path = "/action-calendar", Category = "Action Calendar", Description = "Task calendar and management", SortOrder = 2 },
                     new PageAccess { PageId = "profile", Title = "Profile", Path = "/profile", Category = "Settings", Description = "User profile", SortOrder = 3 },
                     new PageAccess { PageId = "settings", Title = "Settings", Path = "/settings", Category = "Settings", Description = "Application settings", SortOrder = 4 },
 
@@ -997,10 +1009,7 @@ namespace AIPBackend.Services
 					}
 
 					// Manager gets access to most pages
-					var managerPages = allPages.Where(p =>
-						p.Category != "Customer" ||
-						p.PageId == "customer-reporting-page" ||
-						p.PageId == "customer-views-config").ToList();
+					var managerPages = allPages.Where(p => p.Category != "Customer").ToList();
 
 				foreach (var page in managerPages)
 				{
@@ -1091,6 +1100,8 @@ namespace AIPBackend.Services
 					await EnsureOfficerRoleAccessAsync(validUserId);
 				}
 
+				await PurgeRemovedModulePagesAsync(validUserId);
+
                 _logger.LogInformation("Default page access settings initialized successfully");
                 return true;
             }
@@ -1100,6 +1111,44 @@ namespace AIPBackend.Services
                 throw;
             }
         }
+
+		private async Task PurgeRemovedModulePagesAsync(string? updatedBy)
+		{
+			var stalePages = await _context.PageAccesses
+				.AsNoTracking()
+				.Select(p => new { p.Id, p.PageId, p.Path })
+				.ToListAsync();
+
+			var stalePageIds = stalePages
+				.Where(p => RemovedModulePages.IsRemoved(p.PageId, p.Path))
+				.Select(p => p.Id)
+				.Distinct()
+				.ToList();
+
+			if (stalePageIds.Count == 0)
+			{
+				return;
+			}
+
+			var roleAccessDeleted = await _context.RolePageAccesses
+				.Where(rpa => stalePageIds.Contains(rpa.PageAccessId))
+				.ExecuteDeleteAsync();
+
+			var customerAccessDeleted = await _context.CustomerPageAccesses
+				.Where(cpa => stalePageIds.Contains(cpa.PageAccessId))
+				.ExecuteDeleteAsync();
+
+			var pagesDeleted = await _context.PageAccesses
+				.Where(p => stalePageIds.Contains(p.Id))
+				.ExecuteDeleteAsync();
+
+			_logger.LogInformation(
+				"Purged stale page access rows: {PagesDeleted} page(s), {RoleAccessDeleted} role assignment(s), {CustomerAccessDeleted} company assignment(s) (updatedBy: {UpdatedBy})",
+				pagesDeleted,
+				roleAccessDeleted,
+				customerAccessDeleted,
+				updatedBy ?? "system");
+		}
 
         /// <summary>
         /// Normalizes all RolePageAccess RoleName values to lowercase to ensure consistency.
@@ -1281,10 +1330,7 @@ namespace AIPBackend.Services
                     existingKeys.Add(AccessKey("administrator", page.Id));
                 }
 
-                var managerEligible =
-                    page.Category != "Customer" ||
-                    string.Equals(page.PageId, "customer-reporting-page", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(page.PageId, "customer-views-config", StringComparison.OrdinalIgnoreCase);
+                var managerEligible = page.Category != "Customer";
 
                 if (managerEligible && !existingKeys.Contains(AccessKey("manager", page.Id)))
                 {

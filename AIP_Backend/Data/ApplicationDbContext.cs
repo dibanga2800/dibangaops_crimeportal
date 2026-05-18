@@ -36,9 +36,6 @@ namespace AIPBackend.Data
         public DbSet<DailyActivityReportIncident> DailyActivityReportIncidents { get; set; }
         public DbSet<DailyActivityReportSecurityCheck> DailyActivityReportSecurityChecks { get; set; }
         public DbSet<DailyActivityReportVisitorEntry> DailyActivityReportVisitorEntries { get; set; }
-        public DbSet<DailyOccurrenceBook> DailyOccurrenceBooks { get; set; }
-        public DbSet<HolidayRequest> HolidayRequests { get; set; }
-        public DbSet<BankHoliday> BankHolidays { get; set; }
         public DbSet<AlertRule> AlertRules { get; set; }
         public DbSet<AlertInstance> AlertInstances { get; set; }
         public DbSet<EvidenceItem> EvidenceItems { get; set; }
@@ -412,109 +409,6 @@ namespace AIPBackend.Data
 
             modelBuilder.Entity<DailyActivityReportVisitorEntry>()
                 .HasIndex(ve => ve.DailyActivityReportId);
-
-            // Configure DailyOccurrenceBook relationships
-            modelBuilder.Entity<DailyOccurrenceBook>()
-                .HasOne(dob => dob.Customer)
-                .WithMany()
-                .HasForeignKey(dob => dob.CustomerId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            modelBuilder.Entity<DailyOccurrenceBook>()
-                .HasOne(dob => dob.ReportedByUser)
-                .WithMany()
-                .HasForeignKey(dob => dob.ReportedById)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            modelBuilder.Entity<DailyOccurrenceBook>()
-                .HasOne<ApplicationUser>()
-                .WithMany()
-                .HasForeignKey(dob => dob.CreatedBy)
-                .IsRequired(false)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            modelBuilder.Entity<DailyOccurrenceBook>()
-                .HasOne<ApplicationUser>()
-                .WithMany()
-                .HasForeignKey(dob => dob.UpdatedBy)
-                .IsRequired(false)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            // Configure indexes for better performance
-            modelBuilder.Entity<DailyOccurrenceBook>()
-                .HasIndex(dob => dob.CustomerId);
-
-            modelBuilder.Entity<DailyOccurrenceBook>()
-                .HasIndex(dob => new { dob.CustomerId, dob.SiteId });
-
-            modelBuilder.Entity<DailyOccurrenceBook>()
-                .HasIndex(dob => dob.OccurrenceDate);
-
-            modelBuilder.Entity<DailyOccurrenceBook>()
-				.HasIndex(dob => dob.OccurrenceCode);
-
-            modelBuilder.Entity<DailyOccurrenceBook>()
-				.HasIndex(dob => dob.StoreNumber);
-
-            // Configure HolidayRequest relationships
-
-            modelBuilder.Entity<HolidayRequest>()
-                .HasOne(hr => hr.AuthorisedByUser)
-                .WithMany()
-                .HasForeignKey(hr => hr.AuthorisedBy)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            modelBuilder.Entity<HolidayRequest>()
-                .HasOne<ApplicationUser>()
-                .WithMany()
-                .HasForeignKey(hr => hr.CreatedBy)
-                .IsRequired(false)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            modelBuilder.Entity<HolidayRequest>()
-                .HasOne<ApplicationUser>()
-                .WithMany()
-                .HasForeignKey(hr => hr.UpdatedBy)
-                .IsRequired(false)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            // Configure indexes for better performance
-            modelBuilder.Entity<HolidayRequest>()
-                .HasIndex(hr => hr.Status);
-
-            modelBuilder.Entity<HolidayRequest>()
-                .HasIndex(hr => hr.StartDate);
-
-            modelBuilder.Entity<HolidayRequest>()
-                .HasIndex(hr => hr.Archived);
-
-            // Configure BankHoliday relationships (Officer navigation removed - using OfficerId directly)
-
-
-            modelBuilder.Entity<BankHoliday>()
-                .HasOne(bh => bh.CreatedByUser)
-                .WithMany()
-                .HasForeignKey(bh => bh.CreatedBy)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            modelBuilder.Entity<BankHoliday>()
-                .HasOne(bh => bh.UpdatedByUser)
-                .WithMany()
-                .HasForeignKey(bh => bh.UpdatedBy)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            // Configure BankHoliday indexes
-            modelBuilder.Entity<BankHoliday>()
-                .HasIndex(bh => bh.OfficerId);
-
-            modelBuilder.Entity<BankHoliday>()
-                .HasIndex(bh => bh.HolidayDate);
-
-            modelBuilder.Entity<BankHoliday>()
-                .HasIndex(bh => bh.Status);
-
-            modelBuilder.Entity<BankHoliday>()
-                .HasIndex(bh => bh.Archived);
 
             // Configure Employee relationships
             modelBuilder.Entity<Employee>()

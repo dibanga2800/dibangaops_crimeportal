@@ -212,7 +212,7 @@ Grounded in [`ApplicationDbContext`](../AIP_Backend/Data/ApplicationDbContext.cs
 
 ### 6.4 Data protection and configuration
 
-- **Secrets** (JWT key, connection strings, storage keys) belong in **environment / secure configuration** — see examples like [`AIP_Backend/appsettings.Local.example.json`](../AIP_Backend/appsettings.Local.example.json); do not commit real secrets.
+- **Secrets** (JWT key, connection strings, storage keys) belong in **environment / secure configuration** — local dev uses gitignored [`AIP_Backend/appsettings.Local.json`](../AIP_Backend/appsettings.Local.json); do not commit real secrets.
 - **PII and operational data** live primarily in **SQL Server**; **binary media** may be stored in **blob storage** or local `wwwroot/uploads` depending on configuration.
 
 ### 6.5 JWT metadata note

@@ -9,6 +9,23 @@ namespace AIPBackend.Services
 		UserRequestContext GetCurrentContext();
 		void EnsureCanAccessCustomer(int customerId);
 		void EnsureCanAccessRecord(int customerId, string? createdByUserId);
+		/// <summary>Throws when a non-administrator has no customer scope configured.</summary>
+		void EnsureHasTenantScope();
+		/// <summary>Resolves effective customer filter for list/detail queries.</summary>
+		TenantCustomerFilter ResolveCustomerFilter(int? requestedCustomerId);
+		/// <summary>Resolves effective site filter; may be null when not site-scoped.</summary>
+		string? ResolveSiteFilter(string? requestedSiteId);
+	}
+
+	/// <summary>Customer filter applied to EF queries for tenant-scoped users.</summary>
+	public sealed record TenantCustomerFilter
+	{
+		/// <summary>When true, no customer restriction (administrator).</summary>
+		public bool Unrestricted { get; init; }
+		/// <summary>Single customer when scoped to one tenant.</summary>
+		public int? SingleCustomerId { get; init; }
+		/// <summary>Allowed customers when user has multiple assignments.</summary>
+		public IReadOnlyCollection<int> CustomerIds { get; init; } = Array.Empty<int>();
 	}
 
 	public sealed record UserRequestContext
@@ -29,7 +46,8 @@ namespace AIPBackend.Services
 		public bool IsManager => string.Equals(Role, "manager", StringComparison.OrdinalIgnoreCase);
 		public bool IsOfficer => string.Equals(Role, "security-officer", StringComparison.OrdinalIgnoreCase);
 		public bool IsStore => string.Equals(Role, "store", StringComparison.OrdinalIgnoreCase);
-		public bool IsCustomer => CustomerId.HasValue;
+		/// <summary>Store / customer-portal users (not managers or officers with a customer link).</summary>
+		public bool IsCustomer => IsStore;
 		public bool HasAssignedCustomers => AssignedCustomerIds.Count > 0;
 		public bool HasAssignedSites => AssignedSiteIds.Count > 0;
 	}
@@ -205,6 +223,86 @@ namespace AIPBackend.Services
 					throw new ForbiddenAccessException("You can only view or modify records you created.");
 				}
 			}
+		}
+
+		public void EnsureHasTenantScope()
+		{
+			var context = GetCurrentContext();
+			if (context.IsAdministrator)
+			{
+				return;
+			}
+
+			if (context.AccessibleCustomerIds.Count > 0)
+			{
+				return;
+			}
+
+			throw new ForbiddenAccessException("Your account is not assigned to any customer. Contact an administrator.");
+		}
+
+		public TenantCustomerFilter ResolveCustomerFilter(int? requestedCustomerId)
+		{
+			var context = GetCurrentContext();
+			if (context.IsAdministrator)
+			{
+				return new TenantCustomerFilter
+				{
+					Unrestricted = true,
+					SingleCustomerId = requestedCustomerId
+				};
+			}
+
+			EnsureHasTenantScope();
+
+			if (context.IsCustomer && context.CustomerId.HasValue)
+			{
+				return new TenantCustomerFilter { SingleCustomerId = context.CustomerId.Value };
+			}
+
+			if (context.AccessibleCustomerIds.Count == 1)
+			{
+				var only = context.AccessibleCustomerIds.First();
+				if (requestedCustomerId.HasValue && requestedCustomerId.Value != only)
+				{
+					throw new ForbiddenAccessException("You do not have permission to access this customer.");
+				}
+
+				return new TenantCustomerFilter { SingleCustomerId = only };
+			}
+
+			if (requestedCustomerId.HasValue)
+			{
+				if (!context.AccessibleCustomerIds.Contains(requestedCustomerId.Value))
+				{
+					throw new ForbiddenAccessException("You do not have permission to access this customer.");
+				}
+
+				return new TenantCustomerFilter { SingleCustomerId = requestedCustomerId.Value };
+			}
+
+			return new TenantCustomerFilter { CustomerIds = context.AccessibleCustomerIds };
+		}
+
+		public string? ResolveSiteFilter(string? requestedSiteId)
+		{
+			var context = GetCurrentContext();
+			if (context.IsAdministrator || context.AccessibleSiteIds.Count == 0)
+			{
+				return requestedSiteId;
+			}
+
+			if (!string.IsNullOrWhiteSpace(requestedSiteId))
+			{
+				if (!context.AccessibleSiteIds.Contains(requestedSiteId))
+				{
+					throw new ForbiddenAccessException("You do not have permission to access this site.");
+				}
+
+				return requestedSiteId;
+			}
+
+			return context.AccessibleSiteIds.First();
 		}
 
 		private static IReadOnlyCollection<int> ParseAssignedCustomerIds(string? claimValue)

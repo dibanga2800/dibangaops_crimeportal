@@ -10,25 +10,23 @@ namespace AIPBackend.Services
     public class RegionService : IRegionService
     {
         private readonly ApplicationDbContext _context;
+        private readonly IUserContextService _userContext;
 
-        public RegionService(ApplicationDbContext context)
+        public RegionService(ApplicationDbContext context, IUserContextService userContext)
         {
             _context = context;
+            _userContext = userContext;
         }
 
         public async Task<List<RegionDto>> GetRegionsAsync(int page = 1, int pageSize = 10, string? search = null, int? customerId = null)
         {
-            var query = _context.Regions.AsQueryable();
+            var customerFilter = _userContext.ResolveCustomerFilter(customerId);
+            var query = _context.Regions.AsQueryable().ApplyTenantScope(customerFilter);
 
             // Apply filters
             if (!string.IsNullOrEmpty(search))
             {
                 query = query.Where(r => r.RegionName.Contains(search) || r.RegionDescription!.Contains(search));
-            }
-
-            if (customerId.HasValue)
-            {
-                query = query.Where(r => r.fkCustomerID == customerId.Value);
             }
 
             // Only return non-deleted regions
@@ -63,6 +61,8 @@ namespace AIPBackend.Services
             if (region == null)
                 return null;
 
+            _userContext.EnsureCanAccessCustomer(region.fkCustomerID);
+
             return new RegionDto
             {
                 RegionID = region.RegionID,
@@ -79,8 +79,10 @@ namespace AIPBackend.Services
 
         public async Task<List<RegionDto>> GetRegionsByCustomerAsync(int customerId)
         {
+            var customerFilter = _userContext.ResolveCustomerFilter(customerId);
             var regions = await _context.Regions
-                .Where(r => r.fkCustomerID == customerId && !r.RecordIsDeletedYN)
+                .Where(r => !r.RecordIsDeletedYN)
+                .ApplyTenantScope(customerFilter)
                 .Select(r => new RegionDto
                 {
                     RegionID = r.RegionID,
@@ -100,6 +102,7 @@ namespace AIPBackend.Services
 
         public async Task<RegionDto> CreateRegionAsync(RegionCreateRequestDto createRegionDto, string createdBy)
         {
+            _userContext.EnsureCanAccessCustomer(createRegionDto.fkCustomerID);
             var region = new Region
             {
                 fkCustomerID = createRegionDto.fkCustomerID,
@@ -137,6 +140,7 @@ namespace AIPBackend.Services
             if (region == null)
                 return null;
 
+            _userContext.EnsureCanAccessCustomer(region.fkCustomerID);
             region.RegionName = updateRegionDto.RegionName;
             region.RegionDescription = updateRegionDto.RegionDescription;
             region.DateModified = DateTime.UtcNow;
@@ -166,7 +170,7 @@ namespace AIPBackend.Services
             if (region == null)
                 return false;
 
-            // Soft delete
+            _userContext.EnsureCanAccessCustomer(region.fkCustomerID);
             region.RecordIsDeletedYN = true;
             region.DateModified = DateTime.UtcNow;
             region.ModifiedBy = "system"; // TODO: Get from current user

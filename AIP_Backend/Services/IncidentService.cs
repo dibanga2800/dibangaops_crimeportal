@@ -69,7 +69,6 @@ namespace AIPBackend.Services
 
 		public async Task<IncidentsResponseDto> GetIncidentsAsync(GetIncidentsQueryDto query)
 		{
-			var context = _userContext.GetCurrentContext();
 			query.Page = query.Page < 1 ? 1 : query.Page;
 			query.PageSize = Math.Clamp(query.PageSize, MinPageSize, MaxPageSize);
 
@@ -92,60 +91,27 @@ namespace AIPBackend.Services
 				}
 			}
 
-			// Derive effective customer and site filters from query and user context
-			int? customerId = null;
+			int? requestedCustomerId = null;
 			if (!string.IsNullOrWhiteSpace(query.CustomerId) && int.TryParse(query.CustomerId, out var parsedCustomerId))
 			{
-				customerId = parsedCustomerId;
+				requestedCustomerId = parsedCustomerId;
 			}
 
-			string? siteIdFilter = query.SiteId;
+			var customerFilter = _userContext.ResolveCustomerFilter(requestedCustomerId);
+			int? customerId = customerFilter.SingleCustomerId;
+			IReadOnlyCollection<int>? customerIds = customerFilter.Unrestricted
+				? null
+				: customerFilter.CustomerIds.Count > 0 ? customerFilter.CustomerIds : null;
 
-			if (!context.IsAdministrator)
+			if (customerId.HasValue)
 			{
-				// Customer-linked users are always scoped to their own customer
-				if (context.IsCustomer && context.CustomerId.HasValue)
-				{
-					customerId = context.CustomerId.Value;
-					query.CustomerId = context.CustomerId.Value.ToString();
-				}
+				query.CustomerId = customerId.Value.ToString();
+			}
 
-				// Intersect requested customerId with accessible customers if any
-				if (context.AccessibleCustomerIds.Count > 0)
-				{
-					if (customerId.HasValue && !context.AccessibleCustomerIds.Contains(customerId.Value))
-					{
-						// Requested customer outside scope → force to first accessible or null
-						customerId = context.AccessibleCustomerIds.First();
-						query.CustomerId = customerId.Value.ToString();
-					}
-					else if (!customerId.HasValue)
-					{
-						// No explicit filter → default to first accessible customer
-						customerId = context.AccessibleCustomerIds.First();
-						query.CustomerId = customerId.Value.ToString();
-					}
-				}
-
-				// Site-level scoping: if user has explicit accessible sites, restrict to them
-				if (context.AccessibleSiteIds.Count > 0)
-				{
-					if (!string.IsNullOrWhiteSpace(siteIdFilter))
-					{
-						if (!context.AccessibleSiteIds.Contains(siteIdFilter))
-						{
-							// Requested site not in scope → force to first accessible
-							siteIdFilter = context.AccessibleSiteIds.First();
-							query.SiteId = siteIdFilter;
-						}
-					}
-					else
-					{
-						siteIdFilter = context.AccessibleSiteIds.First();
-						query.SiteId = siteIdFilter;
-					}
-				}
-
+			var siteIdFilter = _userContext.ResolveSiteFilter(query.SiteId);
+			if (siteIdFilter != null)
+			{
+				query.SiteId = siteIdFilter;
 			}
 
 			var regionIdFilter = string.IsNullOrWhiteSpace(query.RegionId) ? null : query.RegionId;
@@ -155,6 +121,7 @@ namespace AIPBackend.Services
 				pageSize: query.PageSize,
 				search: query.Search,
 				customerId: customerId,
+				customerIds: customerIds,
 				siteId: siteIdFilter,
 				regionId: regionIdFilter,
 				incidentType: query.IncidentType,
@@ -166,6 +133,7 @@ namespace AIPBackend.Services
 			var summary = await _repository.GetSummaryAsync(
 				search: query.Search,
 				customerId: customerId,
+				customerIds: customerIds,
 				siteId: siteIdFilter,
 				regionId: regionIdFilter,
 				incidentType: query.IncidentType,
@@ -397,43 +365,14 @@ namespace AIPBackend.Services
 
 		public async Task<List<IncidentDto>> GetAllForStatsAsync(int? customerId = null, string? siteId = null, string? regionId = null)
 		{
-			var context = _userContext.GetCurrentContext();
-			if (!context.IsAdministrator)
-			{
-				// Customer-linked users are always scoped to their own customer
-				if (context.IsCustomer && context.CustomerId.HasValue)
-				{
-					customerId = context.CustomerId.Value;
-				}
+			var customerFilter = _userContext.ResolveCustomerFilter(customerId);
+			customerId = customerFilter.SingleCustomerId;
+			IReadOnlyCollection<int>? customerIds = customerFilter.Unrestricted
+				? null
+				: customerFilter.CustomerIds.Count > 0 ? customerFilter.CustomerIds : null;
+			siteId = _userContext.ResolveSiteFilter(siteId);
 
-				// Intersect requested customerId with accessible customers if any
-				if (context.AccessibleCustomerIds.Count > 0)
-				{
-					if (customerId.HasValue && !context.AccessibleCustomerIds.Contains(customerId.Value))
-					{
-						customerId = context.AccessibleCustomerIds.First();
-					}
-					else if (!customerId.HasValue)
-					{
-						customerId = context.AccessibleCustomerIds.First();
-					}
-				}
-
-				// Site-level scoping if explicit accessible sites are defined
-				if (context.AccessibleSiteIds.Count > 0)
-				{
-					if (!string.IsNullOrWhiteSpace(siteId) && !context.AccessibleSiteIds.Contains(siteId))
-					{
-						siteId = context.AccessibleSiteIds.First();
-					}
-					else if (string.IsNullOrWhiteSpace(siteId))
-					{
-						siteId = context.AccessibleSiteIds.First();
-					}
-				}
-			}
-
-			var incidents = await _repository.GetAllForStatsAsync(customerId, siteId, regionId);
+			var incidents = await _repository.GetAllForStatsAsync(customerId, customerIds, siteId, regionId);
 
 			return incidents.Select(MapToDto).ToList();
 		}
@@ -441,6 +380,10 @@ namespace AIPBackend.Services
 		public async Task<RepeatOffenderSearchResponseDto> SearchRepeatOffendersAsync(RepeatOffenderSearchQueryDto query)
 		{
 			var context = _userContext.GetCurrentContext();
+			if (!context.IsAdministrator)
+			{
+				_userContext.EnsureHasTenantScope();
+			}
 
 			if (string.IsNullOrWhiteSpace(query.Name) &&
 				string.IsNullOrWhiteSpace(query.Marks) &&

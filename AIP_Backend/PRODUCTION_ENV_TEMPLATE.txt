@@ -32,6 +32,13 @@ AZURE_STORAGE_CONNECTION_STRING=YOUR_AZURE_STORAGE_CONNECTION_STRING
 PRODUCTION_DOMAIN=https://api.yourdomain.com
 FRONTEND_URL=https://www.dibangops.com,https://dibangops.com
 
+# Host header allow-list (comma-separated in App Service: use semicolon if required by platform)
+ALLOWEDHOSTS=api.yourdomain.com;www.dibangops.com;dibangops.com
+
+# Auth cookies (production)
+AUTH__COOKIES__SECURE=true
+AUTH__COOKIES__EXPOSETOKENSINRESPONSE=false
+
 # Security hardening toggles
 SECURITY__ENABLESWAGGERINPRODUCTION=false
 SECURITY__ENABLESWAGGERUIINPRODUCTION=false

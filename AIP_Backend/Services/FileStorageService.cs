@@ -47,14 +47,7 @@ namespace AIPBackend.Services
 				_logger.LogInformation("Created root local uploads directory: {Path}", _localUploadsRootPath);
 			}
 
-			_networkFolderOverrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-			{
-				["officer-support"] = !string.IsNullOrWhiteSpace(legacyNetworkPath)
-					? legacyNetworkPath
-					: Path.Combine(_networkShareRootPath, "Officer Support"),
-				["manager-support"] = _configuration["FileStorage:ManagerSupportNetworkPath"]
-					?? Path.Combine(_networkShareRootPath, "Manager Support")
-			};
+			_networkFolderOverrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
 			_maxFileSizeBytes = _configuration.GetValue<long?>("FileStorage:MaxFileSizeBytes") ?? 10 * 1024 * 1024;
 			_blockedExtensions = (_configuration.GetSection("FileStorage:BlockedExtensions").Get<string[]>() ??

@@ -12,7 +12,8 @@ namespace AIPBackend.Tests;
 
 public class SecurityWebApplicationFactory : WebApplicationFactory<Program>
 {
-	private static readonly InMemoryDatabaseRoot DatabaseRoot = new();
+	private readonly string _databaseName = $"integration-tests-{Guid.NewGuid():N}";
+	private readonly InMemoryDatabaseRoot _databaseRoot = new();
 
 	protected override void ConfigureWebHost(IWebHostBuilder builder)
 	{
@@ -32,7 +33,7 @@ public class SecurityWebApplicationFactory : WebApplicationFactory<Program>
 		{
 			services.RemoveAll<DbContextOptions<ApplicationDbContext>>();
 			services.AddDbContext<ApplicationDbContext>(options =>
-				options.UseInMemoryDatabase("integration-tests", DatabaseRoot));
+				options.UseInMemoryDatabase(_databaseName, _databaseRoot));
 
 			services.AddAuthentication(options =>
 			{

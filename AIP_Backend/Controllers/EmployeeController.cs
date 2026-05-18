@@ -1,6 +1,7 @@
 using AIPBackend.Data;
 using AIPBackend.Models;
 using AIPBackend.Models.DTOs;
+using AIPBackend.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
@@ -17,13 +18,16 @@ namespace AIPBackend.Controllers
     {
         private static readonly Regex GeneratedEmployeeNumberPattern = new(@"^EMP(\d+)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
         private readonly ApplicationDbContext _context;
+        private readonly IUserContextService _userContextService;
         private readonly ILogger<EmployeeController> _logger;
 
         public EmployeeController(
             ApplicationDbContext context,
+            IUserContextService userContextService,
             ILogger<EmployeeController> logger)
         {
             _context = context;
+            _userContextService = userContextService;
             _logger = logger;
         }
 
@@ -44,6 +48,23 @@ namespace AIPBackend.Controllers
                 var query = _context.Employees
                     .Where(e => !e.RecordIsDeletedYN)
                     .AsQueryable();
+
+                if (!_userContextService.GetCurrentContext().IsAdministrator)
+                {
+                    _userContextService.EnsureHasTenantScope();
+                    var accessibleCustomerIds = _userContextService.GetCurrentContext().AccessibleCustomerIds;
+                    query = query.Where(e =>
+                        e.UserId != null &&
+                        (
+                            _context.Users.Any(u =>
+                                u.Id == e.UserId &&
+                                !u.RecordIsDeletedYN &&
+                                u.CustomerId.HasValue &&
+                                accessibleCustomerIds.Contains(u.CustomerId.Value)) ||
+                            _context.UserCustomerAssignments.Any(uca =>
+                                uca.UserId == e.UserId &&
+                                accessibleCustomerIds.Contains(uca.CustomerId))));
+                }
 
                 // Apply filters
                 if (!string.IsNullOrWhiteSpace(search))

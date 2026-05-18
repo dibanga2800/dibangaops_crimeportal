@@ -11,6 +11,7 @@ namespace AIPBackend.Repositories
 			string? ruleType, 
 			bool? isActive, 
 			int? customerId,
+			IReadOnlyCollection<int>? accessibleCustomerIds,
 			int page, 
 			int pageSize);
 

@@ -25,6 +25,7 @@ namespace AIPBackend.Controllers
         private readonly ApplicationDbContext _context;
         private readonly IEmailService _emailService;
         private readonly ILoginProtectionService _loginProtectionService;
+        private readonly IAuthCookieService _authCookieService;
 
         public AuthController(
             UserManager<ApplicationUser> userManager,
@@ -34,7 +35,8 @@ namespace AIPBackend.Controllers
             IConfiguration configuration,
             ApplicationDbContext context,
             IEmailService emailService,
-            ILoginProtectionService loginProtectionService)
+            ILoginProtectionService loginProtectionService,
+            IAuthCookieService authCookieService)
         {
             _userManager = userManager;
             _signInManager = signInManager;
@@ -44,6 +46,7 @@ namespace AIPBackend.Controllers
             _context = context;
             _emailService = emailService;
             _loginProtectionService = loginProtectionService;
+            _authCookieService = authCookieService;
         }
 
         /// <summary>
@@ -83,16 +86,6 @@ namespace AIPBackend.Controllers
                     });
                 }
 
-                if (!user.TwoFactorEnabled)
-                {
-                    _logger.LogWarning("2FA completion failed: 2FA not enabled for user {UserId}", user.Id);
-                    return BadRequest(new ApiResponseDto<LoginResponseDto>
-                    {
-                        Success = false,
-                        Message = "Two-factor authentication is not enabled for this account."
-                    });
-                }
-
                 if (string.IsNullOrEmpty(user.PendingTwoFactorCode) || !user.PendingTwoFactorExpiryUtc.HasValue)
                 {
                     _logger.LogWarning("2FA completion failed: no pending code for user {UserId}", user.Id);
@@ -121,6 +114,13 @@ namespace AIPBackend.Controllers
                     .Select(r => r.Trim().ToLowerInvariant())
                     .ToList();
 
+                if (RequiresMandatoryTwoFactor(roles) && !user.TwoFactorEnabled)
+                {
+                    user.TwoFactorEnabled = true;
+                }
+
+                await _userManager.UpdateAsync(user);
+
                 var accessToken = _jwtService.GenerateAccessToken(user, roles);
                 var refreshToken = _jwtService.GenerateRefreshToken();
                 await _jwtService.StoreRefreshTokenAsync(user, refreshToken);
@@ -138,6 +138,8 @@ namespace AIPBackend.Controllers
                     RequiresTwoFactor = false,
                     TwoFactorMethods = Array.Empty<string>()
                 };
+
+                FinalizeAuthenticatedLoginResponse(response);
 
                 return Ok(new ApiResponseDto<LoginResponseDto>
                 {
@@ -252,8 +254,7 @@ namespace AIPBackend.Controllers
                 }
 
                 // Verify password
-                _logger.LogInformation("Verifying password for user {Email} with password length: {PasswordLength}", 
-                    request.Email, request.Password?.Length ?? 0);
+                _logger.LogInformation("Verifying password for user {Email}", request.Email);
 
                 var passwordResult = await _signInManager.CheckPasswordSignInAsync(user, request.Password ?? "", lockoutOnFailure: false);
                 if (!passwordResult.Succeeded)
@@ -291,8 +292,10 @@ namespace AIPBackend.Controllers
                 user.LoginAttempts = 0;
                 user.LockoutUntil = null;
 
-                // If 2FA is enabled, start email-based 2FA flow instead of issuing tokens
-                if (user.TwoFactorEnabled)
+                var requiresTwoFactor = RequiresMandatoryTwoFactor(roles) || user.TwoFactorEnabled;
+
+                // Administrators and managers must complete 2FA; optional for other roles when enabled
+                if (requiresTwoFactor)
                 {
                     var code = System.Security.Cryptography.RandomNumberGenerator.GetInt32(100000, 999999).ToString("D6");
                     user.PendingTwoFactorCode = code;
@@ -417,6 +420,8 @@ namespace AIPBackend.Controllers
                     TwoFactorMethods = Array.Empty<string>()
                 };
 
+                FinalizeAuthenticatedLoginResponse(response);
+
                 _logger.LogInformation("Login successful for user {UserId}", user.Id);
 
                 // Fire-and-forget login alert email (do not block login if it fails)
@@ -501,8 +506,20 @@ namespace AIPBackend.Controllers
                     });
                 }
 
+                var refreshTokenValue = _authCookieService.GetRefreshTokenFromRequest(Request)
+                    ?? request.RefreshToken;
+
+                if (string.IsNullOrWhiteSpace(refreshTokenValue))
+                {
+                    return Unauthorized(new ApiResponseDto<RefreshTokenResponseDto>
+                    {
+                        Success = false,
+                        Message = "Refresh token is required"
+                    });
+                }
+
                 // Validate refresh token (basic format)
-                if (!_jwtService.ValidateRefreshToken(request.RefreshToken))
+                if (!_jwtService.ValidateRefreshToken(refreshTokenValue))
                 {
                     _logger.LogWarning("Invalid refresh token provided");
 
@@ -520,7 +537,7 @@ namespace AIPBackend.Controllers
                 }
 
                 // Resolve user by persisted refresh token mapping.
-                var user = await _jwtService.GetUserByRefreshTokenAsync(request.RefreshToken);
+                var user = await _jwtService.GetUserByRefreshTokenAsync(refreshTokenValue);
                 if (user == null)
                 {
                     _logger.LogWarning("Could not determine active user for refresh token");
@@ -538,7 +555,7 @@ namespace AIPBackend.Controllers
                 }
 
                 // Validate refresh token for resolved user
-                if (!await _jwtService.IsRefreshTokenValidAsync(request.RefreshToken, user.Id))
+                if (!await _jwtService.IsRefreshTokenValidAsync(refreshTokenValue, user.Id))
                 {
                     _logger.LogWarning("Invalid refresh token for user {UserId}", user.Id);
 
@@ -595,7 +612,9 @@ namespace AIPBackend.Controllers
                 }
 
                 // Get user roles
-                var roles = await _userManager.GetRolesAsync(user);
+                var roles = (await _userManager.GetRolesAsync(user))
+                    .Select(r => r.Trim().ToLowerInvariant())
+                    .ToList();
 
                 // Generate new tokens
                 var newAccessToken = _jwtService.GenerateAccessToken(user, roles);
@@ -607,14 +626,21 @@ namespace AIPBackend.Controllers
                     normalizedIdentifier,
                     clientIp);
 
+                var userResponse = await BuildUserResponseAsync(user, roles);
+                var expiresAt = DateTime.UtcNow.AddMinutes(Convert.ToInt32(_configuration["Jwt:AccessTokenExpirationMinutes"]));
+
                 var response = new RefreshTokenResponseDto
                 {
                     Success = true,
                     Message = "Token refreshed successfully",
                     AccessToken = newAccessToken,
                     RefreshToken = newRefreshToken,
-                    ExpiresAt = DateTime.UtcNow.AddMinutes(Convert.ToInt32(_configuration["Jwt:AccessTokenExpirationMinutes"]))
+                    ExpiresAt = expiresAt,
+                    User = userResponse
                 };
+
+                _authCookieService.SetAuthCookies(Response, newAccessToken, newRefreshToken, expiresAt);
+                _authCookieService.ApplyTokenVisibility(response);
 
                 _logger.LogInformation("Token refreshed successfully for user {UserId}", user.Id);
 
@@ -671,6 +697,8 @@ namespace AIPBackend.Controllers
                         await _jwtService.RevokeRefreshTokenAsync(user);
                     }
                 }
+
+                _authCookieService.ClearAuthCookies(Response);
 
                 var response = new LogoutResponseDto
                 {
@@ -1239,5 +1267,27 @@ namespace AIPBackend.Controllers
                 UpdatedBy = user.UpdatedBy ?? ""
             };
         }
+
+        private void FinalizeAuthenticatedLoginResponse(LoginResponseDto response)
+        {
+            if (response.RequiresTwoFactor ||
+                string.IsNullOrWhiteSpace(response.AccessToken) ||
+                string.IsNullOrWhiteSpace(response.RefreshToken))
+            {
+                return;
+            }
+
+            _authCookieService.SetAuthCookies(
+                Response,
+                response.AccessToken,
+                response.RefreshToken,
+                response.ExpiresAt);
+            _authCookieService.ApplyTokenVisibility(response);
+        }
+
+        private static bool RequiresMandatoryTwoFactor(IEnumerable<string> roles) =>
+            roles.Any(role =>
+                string.Equals(role, "administrator", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(role, "manager", StringComparison.OrdinalIgnoreCase));
     }
 }

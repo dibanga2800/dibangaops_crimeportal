@@ -1,5 +1,6 @@
 #nullable enable
 
+using AIPBackend.Exceptions;
 using AIPBackend.Models;
 using AIPBackend.Models.DTOs;
 using AIPBackend.Repositories;
@@ -14,6 +15,7 @@ namespace AIPBackend.Services
 		private readonly IIncidentRepository _incidentRepository;
 		private readonly IEmailService _emailService;
 		private readonly IAlertEscalationService _escalationService;
+		private readonly IUserContextService _userContext;
 		private readonly ILogger<AlertRuleService> _logger;
 
 		public AlertRuleService(
@@ -21,12 +23,14 @@ namespace AIPBackend.Services
 			IIncidentRepository incidentRepository,
 			IEmailService emailService,
 			IAlertEscalationService escalationService,
+			IUserContextService userContext,
 			ILogger<AlertRuleService> logger)
 		{
 			_repository = repository;
 			_incidentRepository = incidentRepository;
 			_emailService = emailService;
 			_escalationService = escalationService;
+			_userContext = userContext;
 			_logger = logger;
 		}
 
@@ -38,11 +42,29 @@ namespace AIPBackend.Services
 			int page,
 			int pageSize)
 		{
+			var tenantFilter = _userContext.ResolveCustomerFilter(customerId);
+			int? scopedCustomerId = null;
+			IReadOnlyCollection<int>? accessibleCustomerIds = null;
+
+			if (tenantFilter.Unrestricted)
+			{
+				scopedCustomerId = tenantFilter.SingleCustomerId ?? customerId;
+			}
+			else if (tenantFilter.SingleCustomerId.HasValue)
+			{
+				scopedCustomerId = tenantFilter.SingleCustomerId;
+			}
+			else
+			{
+				accessibleCustomerIds = tenantFilter.CustomerIds;
+			}
+
 			var (rules, total) = await _repository.GetPagedAsync(
 				search, 
 				ruleType, 
 				isActive, 
-				customerId,
+				scopedCustomerId,
+				accessibleCustomerIds,
 				page, 
 				pageSize);
 
@@ -64,11 +86,14 @@ namespace AIPBackend.Services
 			var rule = await _repository.GetByIdAsync(id)
 				?? throw new KeyNotFoundException($"Alert rule with ID {id} not found.");
 
+			EnsureCanAccessAlertRule(rule);
 			return MapToDto(rule);
 		}
 
 		public async Task<AlertRuleDto> CreateAsync(CreateAlertRuleDto dto, string currentUserId)
 		{
+			EnsureCanAssignCustomerForAlertRule(dto.CustomerId);
+
 			var rule = new AlertRule
 			{
 				Name = dto.Name,
@@ -98,6 +123,12 @@ namespace AIPBackend.Services
 		{
 			var existing = await _repository.GetByIdAsync(id)
 				?? throw new KeyNotFoundException($"Alert rule with ID {id} not found.");
+
+			EnsureCanAccessAlertRule(existing);
+			if (dto.CustomerId.HasValue)
+			{
+				EnsureCanAssignCustomerForAlertRule(dto.CustomerId);
+			}
 
 			// Update fields if provided
 			if (!string.IsNullOrWhiteSpace(dto.Name))
@@ -166,6 +197,10 @@ namespace AIPBackend.Services
 
 		public async Task DeleteAsync(int id)
 		{
+			var existing = await _repository.GetByIdAsync(id)
+				?? throw new KeyNotFoundException($"Alert rule with ID {id} not found.");
+			EnsureCanAccessAlertRule(existing);
+
 			await _repository.DeleteAsync(id);
 			_logger.LogInformation("Alert rule deleted: ID {RuleId}", id);
 		}
@@ -175,6 +210,7 @@ namespace AIPBackend.Services
 			var rule = await _repository.GetByIdAsync(id)
 				?? throw new KeyNotFoundException($"Alert rule with ID {id} not found.");
 
+			EnsureCanAccessAlertRule(rule);
 			rule.IsActive = isActive;
 			rule.UpdatedBy = currentUserId;
 
@@ -453,6 +489,34 @@ namespace AIPBackend.Services
 			throw;
 		}
 	}
+
+		private void EnsureCanAccessAlertRule(AlertRule rule)
+		{
+			if (rule.CustomerId.HasValue)
+			{
+				_userContext.EnsureCanAccessCustomer(rule.CustomerId.Value);
+				return;
+			}
+
+			if (!_userContext.GetCurrentContext().IsAdministrator)
+			{
+				throw new ForbiddenAccessException("Only administrators can access organisation-wide alert rules.");
+			}
+		}
+
+		private void EnsureCanAssignCustomerForAlertRule(int? customerId)
+		{
+			if (customerId.HasValue)
+			{
+				_userContext.EnsureCanAccessCustomer(customerId.Value);
+				return;
+			}
+
+			if (!_userContext.GetCurrentContext().IsAdministrator)
+			{
+				throw new ForbiddenAccessException("Only administrators can create organisation-wide alert rules.");
+			}
+		}
 
 		private AlertRuleDto MapToDto(AlertRule rule)
 		{

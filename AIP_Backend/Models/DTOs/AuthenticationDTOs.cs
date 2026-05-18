@@ -32,8 +32,8 @@ namespace AIPBackend.Models.DTOs
 
     public class RefreshTokenRequestDto
     {
-        [Required]
-        public string RefreshToken { get; set; } = string.Empty;
+        /// <summary>Optional when refresh token is sent via HttpOnly cookie.</summary>
+        public string? RefreshToken { get; set; }
     }
 
     public class RefreshTokenResponseDto
@@ -43,12 +43,13 @@ namespace AIPBackend.Models.DTOs
         public string AccessToken { get; set; } = string.Empty;
         public string RefreshToken { get; set; } = string.Empty;
         public DateTime ExpiresAt { get; set; }
+        public UserResponseDto? User { get; set; }
     }
 
     public class LogoutRequestDto
     {
-        [Required]
-        public string RefreshToken { get; set; } = string.Empty;
+        /// <summary>Optional when refresh token is sent via HttpOnly cookie.</summary>
+        public string? RefreshToken { get; set; }
     }
 
     public class LogoutResponseDto

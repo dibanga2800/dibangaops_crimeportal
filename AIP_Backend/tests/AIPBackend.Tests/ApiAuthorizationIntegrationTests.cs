@@ -52,6 +52,28 @@ public class ApiAuthorizationIntegrationTests : IClassFixture<SecurityWebApplica
 		Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 	}
 
+	[Fact]
+	public async Task AlertRules_ReturnsForbidden_WhenQueryingOtherTenantCustomerId()
+	{
+		await SeedAlertRuleAsync(customerId: 100);
+		var client = CreateAuthenticatedClient("manager-a", "manager", customerId: 100);
+
+		var response = await client.GetAsync("/api/alert-rules?customerId=200");
+
+		Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+	}
+
+	[Fact]
+	public async Task AlertRules_ReturnsOk_WhenQueryingOwnTenantCustomerId()
+	{
+		await SeedAlertRuleAsync(customerId: 100);
+		var client = CreateAuthenticatedClient("manager-a", "manager", customerId: 100);
+
+		var response = await client.GetAsync("/api/alert-rules?customerId=100");
+
+		Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+	}
+
 	private HttpClient CreateAuthenticatedClient(string userId, string role, int customerId)
 	{
 		var client = _factory.CreateClient();
@@ -95,5 +117,26 @@ public class ApiAuthorizationIntegrationTests : IClassFixture<SecurityWebApplica
 		await db.SaveChangesAsync();
 
 		return (incident.IncidentId, evidence.EvidenceItemId);
+	}
+
+	private async Task SeedAlertRuleAsync(int customerId)
+	{
+		using var scope = _factory.Services.CreateScope();
+		var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+		await db.Database.EnsureDeletedAsync();
+		await db.Database.EnsureCreatedAsync();
+
+		db.AlertRules.Add(new AlertRule
+		{
+			Name = "Tenant rule",
+			RuleType = "keyword",
+			TriggerCondition = "any",
+			IsActive = true,
+			CustomerId = customerId,
+			CreatedAt = DateTime.UtcNow,
+			CreatedBy = "seed-user"
+		});
+		await db.SaveChangesAsync();
 	}
 }

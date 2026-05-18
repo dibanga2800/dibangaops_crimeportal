@@ -35,7 +35,7 @@ namespace AIPBackend.Services
 			var effectiveFrom = fromDate;
 			var effectiveTo = toDateInclusive.AddDays(1).AddTicks(-1);
 
-			var incidents = await _repository.GetAllForStatsAsync(customerId, siteId, regionId);
+			var incidents = await _repository.GetAllForStatsAsync(customerId, customerIds: null, siteId, regionId);
 			var filtered = incidents
 				.Where(i => i.DateOfIncident >= effectiveFrom && i.DateOfIncident <= effectiveTo)
 				.ToList();
@@ -228,7 +228,13 @@ namespace AIPBackend.Services
 			var effectiveFrom = fromDate;
 			var effectiveTo = toDateInclusive.AddDays(1).AddTicks(-1);
 
-			var filtered = await _repository.GetAllForStatsAsync(customerId, siteId, regionId, effectiveFrom, effectiveTo);
+			var filtered = await _repository.GetAllForStatsAsync(
+				customerId,
+				customerIds: null,
+				siteId,
+				regionId,
+				startDate: effectiveFrom,
+				endDate: effectiveTo);
 
 			var total = filtered.Count;
 			var fromStr = fromDate.ToString("yyyy-MM-dd");

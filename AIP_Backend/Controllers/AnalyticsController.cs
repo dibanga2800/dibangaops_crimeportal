@@ -34,40 +34,7 @@ namespace AIPBackend.Controllers
 			[FromQuery] DateTime? from,
 			[FromQuery] DateTime? to)
 		{
-			var context = _userContext.GetCurrentContext();
-
-			// Apply the same customer/site scoping rules used by IncidentService
-			if (!context.IsAdministrator)
-			{
-				if (context.IsCustomer && context.CustomerId.HasValue)
-				{
-					customerId = context.CustomerId.Value;
-				}
-
-				if (context.AccessibleCustomerIds.Count > 0)
-				{
-					if (customerId.HasValue && !context.AccessibleCustomerIds.Contains(customerId.Value))
-					{
-						customerId = context.AccessibleCustomerIds.First();
-					}
-					else if (!customerId.HasValue)
-					{
-						customerId = context.AccessibleCustomerIds.First();
-					}
-				}
-
-				if (context.AccessibleSiteIds.Count > 0)
-				{
-					if (!string.IsNullOrWhiteSpace(siteId) && !context.AccessibleSiteIds.Contains(siteId))
-					{
-						siteId = context.AccessibleSiteIds.First();
-					}
-					else if (string.IsNullOrWhiteSpace(siteId))
-					{
-						siteId = context.AccessibleSiteIds.First();
-					}
-				}
-			}
+			(customerId, siteId) = ResolveScopedFilters(customerId, siteId);
 
 			var result = await _analyticsService.GetAnalyticsSummaryAsync(customerId, siteId, regionId, from, to);
 			return Ok(result);
@@ -83,39 +50,7 @@ namespace AIPBackend.Controllers
 		{
 			try
 			{
-				var context = _userContext.GetCurrentContext();
-
-				if (!context.IsAdministrator)
-				{
-					if (context.IsCustomer && context.CustomerId.HasValue)
-					{
-						customerId = context.CustomerId.Value;
-					}
-
-					if (context.AccessibleCustomerIds.Count > 0)
-					{
-						if (customerId.HasValue && !context.AccessibleCustomerIds.Contains(customerId.Value))
-						{
-							customerId = context.AccessibleCustomerIds.First();
-						}
-						else if (!customerId.HasValue)
-						{
-							customerId = context.AccessibleCustomerIds.First();
-						}
-					}
-
-					if (context.AccessibleSiteIds.Count > 0)
-					{
-						if (!string.IsNullOrWhiteSpace(siteId) && !context.AccessibleSiteIds.Contains(siteId))
-						{
-							siteId = context.AccessibleSiteIds.First();
-						}
-						else if (string.IsNullOrWhiteSpace(siteId))
-						{
-							siteId = context.AccessibleSiteIds.First();
-						}
-					}
-				}
+				(customerId, siteId) = ResolveScopedFilters(customerId, siteId);
 
 				var result = await _analyticsService.GetAnalyticsHubAsync(customerId, siteId, regionId, from, to);
 				return Ok(result);
@@ -125,6 +60,15 @@ namespace AIPBackend.Controllers
 				_logger.LogError(ex, "Error generating analytics hub for customer {CustomerId}", customerId);
 				return StatusCode(500, new { message = "Failed to generate analytics data." });
 			}
+		}
+
+		private (int? CustomerId, string? SiteId) ResolveScopedFilters(int? customerId, string? siteId)
+		{
+			var filter = _userContext.ResolveCustomerFilter(customerId);
+			var resolvedCustomerId = filter.SingleCustomerId
+				?? (filter.CustomerIds.Count > 0 ? filter.CustomerIds.First() : customerId);
+			var resolvedSiteId = _userContext.ResolveSiteFilter(siteId);
+			return (resolvedCustomerId, resolvedSiteId);
 		}
 	}
 }

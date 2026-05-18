@@ -1,4 +1,3 @@
-
 using AIPBackend.Data;
 using AIPBackend.Models;
 using AIPBackend.Services;
@@ -33,10 +32,19 @@ var runPageAccessInitializationOnStartup = builder.Configuration.GetValue<bool?>
 var maxMultipartBodyLengthBytes =
 	builder.Configuration.GetValue<long?>("Security:MaxMultipartBodyLengthBytes") ?? 10 * 1024 * 1024;
 
-if (builder.Environment.IsDevelopment())
+AddDevelopmentLocalAppSettings(builder);
+
+static void AddDevelopmentLocalAppSettings(WebApplicationBuilder webBuilder)
 {
-	// Allow ignored local overrides without affecting cloud-hosted configuration.
-	builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
+	if (!webBuilder.Environment.IsDevelopment())
+	{
+		return;
+	}
+
+	const string localFileName = "appsettings.Local.json";
+
+	// Gitignored local secrets; overrides appsettings.json and appsettings.Development.json.
+	webBuilder.Configuration.AddJsonFile(localFileName, optional: true, reloadOnChange: true);
 }
 
 static bool IsMissingOrPlaceholderStorageConnectionString(string? value)
@@ -206,6 +214,20 @@ builder.Services.AddAuthentication(options =>
 {
     options.SaveToken = true;
     options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
+	options.Events = new JwtBearerEvents
+	{
+		OnMessageReceived = context =>
+		{
+			if (!string.IsNullOrEmpty(context.Token))
+			{
+				return Task.CompletedTask;
+			}
+
+			var cookieService = context.HttpContext.RequestServices.GetRequiredService<IAuthCookieService>();
+			context.Token = cookieService.GetAccessTokenFromRequest(context.Request);
+			return Task.CompletedTask;
+		}
+	};
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuer = true,
@@ -262,8 +284,6 @@ if (enableRateLimiting)
 builder.Services.AddScoped<IRegionRepository, RegionRepository>();
 builder.Services.AddScoped<ISiteRepository, SiteRepository>();
 builder.Services.AddScoped<IIncidentRepository, IncidentRepository>();
-builder.Services.AddScoped<IHolidayRequestRepository, HolidayRequestRepository>();
-builder.Services.AddScoped<IBankHolidayRepository, BankHolidayRepository>();
 builder.Services.AddScoped<IAlertRuleRepository, AlertRuleRepository>();
 
 // Register Services
@@ -272,15 +292,14 @@ builder.Services.AddScoped<IRegionService, RegionService>();
 builder.Services.AddScoped<ISiteService, SiteService>();
 builder.Services.AddScoped<ILookupTableRepository, LookupTableRepository>();
 builder.Services.AddScoped<ILookupTableService, LookupTableService>();
+builder.Services.Configure<AIPBackend.Options.AuthCookieOptions>(
+	builder.Configuration.GetSection(AIPBackend.Options.AuthCookieOptions.SectionName));
+builder.Services.AddSingleton<IAuthCookieService, AuthCookieService>();
 builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<IDataSeedingService, DataSeedingService>();
 builder.Services.AddScoped<IPageAccessService, PageAccessService>();
 builder.Services.AddScoped<ICustomerPageAccessService, CustomerPageAccessService>();
-builder.Services.AddScoped<IDailyOccurrenceBookService, DailyOccurrenceBookService>();
-builder.Services.AddScoped<IHolidayRequestService, HolidayRequestService>();
-builder.Services.AddScoped<IBankHolidayService, BankHolidayService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
-builder.Services.AddScoped<IHolidayEmailService, HolidayEmailService>();
 builder.Services.AddScoped<ICustomerAssignmentService, CustomerAssignmentService>();
 builder.Services.AddScoped<IUserSoftDeleteService, UserSoftDeleteService>();
 builder.Services.AddHttpContextAccessor();
@@ -597,6 +616,18 @@ if (enableRateLimiting)
 	app.UseRateLimiter();
 }
 
+app.Use(async (context, next) =>
+{
+	context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+	context.Response.Headers["X-Frame-Options"] = "DENY";
+	context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+	context.Response.Headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
+	await next();
+});
+
+app.UseMiddleware<AIPBackend.Middleware.ForbiddenAccessExceptionMiddleware>();
+app.UseMiddleware<AIPBackend.Middleware.CsrfValidationMiddleware>();
+
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -634,6 +665,8 @@ if (enableUploadsStaticFiles)
 			});
 		});
 }
+
+app.MapGet("/health", () => Results.Ok(new { status = "healthy" })).AllowAnonymous();
 
 app.MapControllers();
 

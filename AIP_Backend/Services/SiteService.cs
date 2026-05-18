@@ -10,15 +10,19 @@ namespace AIPBackend.Services
     public class SiteService : ISiteService
     {
         private readonly ApplicationDbContext _context;
+        private readonly IUserContextService _userContext;
 
-        public SiteService(ApplicationDbContext context)
+        public SiteService(ApplicationDbContext context, IUserContextService userContext)
         {
             _context = context;
+            _userContext = userContext;
         }
 
         public async Task<List<SiteDto>> GetSitesAsync(int page = 1, int pageSize = 10, string? search = null, int? customerId = null, int? regionId = null)
         {
-            var query = _context.Sites.AsQueryable();
+            var context = _userContext.GetCurrentContext();
+            var customerFilter = _userContext.ResolveCustomerFilter(customerId);
+            var query = _context.Sites.AsQueryable().ApplyTenantScope(customerFilter, context);
 
             // Apply filters
             if (!string.IsNullOrEmpty(search))
@@ -27,11 +31,6 @@ namespace AIPBackend.Services
                                         s.BuildingName!.Contains(search) || 
                                         s.Town!.Contains(search) || 
                                         s.County!.Contains(search));
-            }
-
-            if (customerId.HasValue)
-            {
-                query = query.Where(s => s.fkCustomerID == customerId.Value);
             }
 
             if (regionId.HasValue)
@@ -87,6 +86,14 @@ namespace AIPBackend.Services
             if (site == null)
                 return null;
 
+            _userContext.EnsureCanAccessCustomer(site.fkCustomerID);
+            var userContext = _userContext.GetCurrentContext();
+            if (userContext.AccessibleSiteIds.Count > 0 &&
+                !userContext.AccessibleSiteIds.Contains(site.SiteID.ToString()))
+            {
+                throw new AIPBackend.Exceptions.ForbiddenAccessException("You do not have permission to access this site.");
+            }
+
             return new SiteDto
             {
                 SiteID = site.SiteID,
@@ -119,8 +126,11 @@ namespace AIPBackend.Services
 
         public async Task<List<SiteDto>> GetSitesByCustomerAsync(int customerId)
         {
+            var context = _userContext.GetCurrentContext();
+            var customerFilter = _userContext.ResolveCustomerFilter(customerId);
             var sites = await _context.Sites
-                .Where(s => s.fkCustomerID == customerId && !s.RecordIsDeletedYN)
+                .Where(s => !s.RecordIsDeletedYN)
+                .ApplyTenantScope(customerFilter, context)
                 .Select(s => new SiteDto
                 {
                     SiteID = s.SiteID,
@@ -156,8 +166,20 @@ namespace AIPBackend.Services
 
         public async Task<List<SiteDto>> GetSitesByRegionAsync(int regionId)
         {
+            var region = await _context.Regions
+                .AsNoTracking()
+                .FirstOrDefaultAsync(r => r.RegionID == regionId && !r.RecordIsDeletedYN);
+            if (region == null)
+            {
+                return new List<SiteDto>();
+            }
+
+            _userContext.EnsureCanAccessCustomer(region.fkCustomerID);
+            var context = _userContext.GetCurrentContext();
+            var customerFilter = _userContext.ResolveCustomerFilter(region.fkCustomerID);
             var sites = await _context.Sites
                 .Where(s => s.fkRegionID == regionId && !s.RecordIsDeletedYN)
+                .ApplyTenantScope(customerFilter, context)
                 .Select(s => new SiteDto
                 {
                     SiteID = s.SiteID,
@@ -193,6 +215,7 @@ namespace AIPBackend.Services
 
         public async Task<SiteDto> CreateSiteAsync(SiteCreateRequestDto createSiteDto, string createdBy)
         {
+            _userContext.EnsureCanAccessCustomer(createSiteDto.fkCustomerID);
             var site = new Site
             {
                 fkCustomerID = createSiteDto.fkCustomerID,
@@ -262,6 +285,7 @@ namespace AIPBackend.Services
             if (site == null)
                 return null;
 
+            _userContext.EnsureCanAccessCustomer(site.fkCustomerID);
             site.CoreSiteYN = updateSiteDto.CoreSiteYN;
             site.LocationName = updateSiteDto.LocationName ?? site.LocationName;
             site.SINNumber = updateSiteDto.SINNumber;
@@ -322,6 +346,7 @@ namespace AIPBackend.Services
             if (site == null)
                 return false;
 
+            _userContext.EnsureCanAccessCustomer(site.fkCustomerID);
             // Soft delete
             site.RecordIsDeletedYN = true;
             site.DateModified = DateTime.UtcNow;

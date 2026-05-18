@@ -10,15 +10,18 @@ namespace AIPBackend.Services
     public class CustomerService : ICustomerService
     {
         private readonly ApplicationDbContext _context;
+        private readonly IUserContextService _userContext;
 
-        public CustomerService(ApplicationDbContext context)
+        public CustomerService(ApplicationDbContext context, IUserContextService userContext)
         {
             _context = context;
+            _userContext = userContext;
         }
 
         public async Task<CustomerListResponseDto> GetCustomersAsync(int page = 1, int pageSize = 10, string? search = null, string? status = null, string? region = null)
         {
-            var query = _context.Customers.AsQueryable();
+            var customerFilter = _userContext.ResolveCustomerFilter(null);
+            var query = _context.Customers.AsQueryable().ApplyTenantScope(customerFilter);
 
             // Apply filters
             if (!string.IsNullOrEmpty(search))
@@ -91,6 +94,8 @@ namespace AIPBackend.Services
 
             if (customer == null)
                 return null;
+
+            _userContext.EnsureCanAccessCustomer(customer.CustomerId);
 
             return new CustomerDetailResponseDto
             {
@@ -328,14 +333,6 @@ namespace AIPBackend.Services
             if (legacyDailyActivityReports.Count > 0)
             {
                 _context.DailyActivityReports.RemoveRange(legacyDailyActivityReports);
-            }
-
-            var legacyOccurrenceBooks = await _context.DailyOccurrenceBooks
-                .Where(book => book.CustomerId == id)
-                .ToListAsync();
-            if (legacyOccurrenceBooks.Count > 0)
-            {
-                _context.DailyOccurrenceBooks.RemoveRange(legacyOccurrenceBooks);
             }
 
             var legacyRiskScores = await _context.StoreRiskScores

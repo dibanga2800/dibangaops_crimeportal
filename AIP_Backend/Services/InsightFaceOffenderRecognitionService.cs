@@ -25,17 +25,20 @@ namespace AIPBackend.Services
 		private readonly IInsightFaceClient _client;
 		private readonly InsightFaceOptions _options;
 		private readonly ILogger<InsightFaceOffenderRecognitionService> _logger;
+		private readonly IUserContextService _userContext;
 
 		public InsightFaceOffenderRecognitionService(
 			ApplicationDbContext db,
 			IInsightFaceClient client,
 			IOptions<InsightFaceOptions> options,
-			ILogger<InsightFaceOffenderRecognitionService> logger)
+			ILogger<InsightFaceOffenderRecognitionService> logger,
+			IUserContextService userContext)
 		{
 			_db = db;
 			_client = client;
 			_options = options.Value;
 			_logger = logger;
+			_userContext = userContext;
 		}
 
 		public async Task<OffenderMatchResultDto> DetectFaceOnlyAsync(
@@ -137,6 +140,15 @@ namespace AIPBackend.Services
 					.Include(i => i.StolenItems)
 					.FirstOrDefaultAsync(i => i.IncidentId == embedding.IncidentId.Value, cancellationToken);
 				if (incident == null) continue;
+
+				try
+				{
+					_userContext.EnsureCanAccessRecord(incident.CustomerId, incident.CreatedBy);
+				}
+				catch (AIPBackend.Exceptions.ForbiddenAccessException)
+				{
+					continue;
+				}
 
 				var relatedIncidents = await _db.Incidents
 					.AsNoTracking()

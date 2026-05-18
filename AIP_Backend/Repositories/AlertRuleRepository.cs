@@ -31,6 +31,7 @@ namespace AIPBackend.Repositories
 			string? ruleType,
 			bool? isActive,
 			int? customerId,
+			IReadOnlyCollection<int>? accessibleCustomerIds,
 			int page,
 			int pageSize)
 		{
@@ -54,7 +55,13 @@ namespace AIPBackend.Repositories
 				query = query.Where(r => r.IsActive == isActive.Value);
 			}
 
-			if (customerId.HasValue)
+			if (accessibleCustomerIds is { Count: > 0 })
+			{
+				query = query.Where(r =>
+					r.CustomerId != null &&
+					accessibleCustomerIds.Contains(r.CustomerId.Value));
+			}
+			else if (customerId.HasValue)
 			{
 				query = query.Where(r => r.CustomerId == customerId.Value);
 			}

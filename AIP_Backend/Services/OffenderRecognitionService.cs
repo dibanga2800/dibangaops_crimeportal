@@ -20,6 +20,7 @@ namespace AIPBackend.Services
 		private readonly IAzureFaceClient _faceClient;
 		private readonly AzureFaceOptions _options;
 		private readonly ILogger<OffenderRecognitionService> _logger;
+		private readonly IUserContextService _userContext;
 
 		private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
 		{
@@ -30,12 +31,14 @@ namespace AIPBackend.Services
 			ApplicationDbContext db,
 			IAzureFaceClient faceClient,
 			IOptions<AzureFaceOptions> options,
-			ILogger<OffenderRecognitionService> logger)
+			ILogger<OffenderRecognitionService> logger,
+			IUserContextService userContext)
 		{
 			_db = db;
 			_faceClient = faceClient;
 			_options = options.Value;
 			_logger = logger;
+			_userContext = userContext;
 		}
 
 		public async Task<OffenderMatchResultDto> SearchByImageAsync(
@@ -113,6 +116,15 @@ namespace AIPBackend.Services
 					.Include(i => i.StolenItems)
 					.FirstOrDefaultAsync(i => i.IncidentId == incidentId.Value, cancellationToken);
 				if (incident == null) continue;
+
+				try
+				{
+					_userContext.EnsureCanAccessRecord(incident.CustomerId, incident.CreatedBy);
+				}
+				catch (AIPBackend.Exceptions.ForbiddenAccessException)
+				{
+					continue;
+				}
 
 				var relatedIncidents = await _db.Incidents
 					.AsNoTracking()

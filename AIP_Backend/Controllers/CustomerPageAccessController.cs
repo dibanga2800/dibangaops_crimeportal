@@ -1,3 +1,4 @@
+using AIPBackend.Exceptions;
 using AIPBackend.Models;
 using AIPBackend.Models.DTOs;
 using AIPBackend.Services;
@@ -17,17 +18,20 @@ namespace AIPBackend.Controllers
     public class CustomerPageAccessController : ControllerBase
     {
         private readonly ICustomerPageAccessService _customerPageAccessService;
+        private readonly IUserContextService _userContextService;
         private readonly ILogger<CustomerPageAccessController> _logger;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly ApplicationDbContext _context;
 
         public CustomerPageAccessController(
             ICustomerPageAccessService customerPageAccessService,
+            IUserContextService userContextService,
             ILogger<CustomerPageAccessController> logger,
             UserManager<ApplicationUser> userManager,
             ApplicationDbContext context)
         {
             _customerPageAccessService = customerPageAccessService;
+            _userContextService = userContextService;
             _logger = logger;
             _userManager = userManager;
             _context = context;
@@ -79,70 +83,17 @@ namespace AIPBackend.Controllers
                 
                 if (!isAdministrator)
                 {
-                    bool hasAccess = false;
-                    
-                    if (isOfficer)
+                    try
                     {
-                        // Officers can access any of their assigned customers
-                        var assignedCustomerIds = user.CustomerIds;
-                        var assignedCustomerIdsClaim = User.FindFirst("AssignedCustomerIds")?.Value;
-                        
-                        _logger.LogInformation("Officer access check: AssignedCustomerIds from DB={DbIds}, from JWT={JwtIds}, checking CustomerId={CustomerId}", 
-                            string.Join(",", assignedCustomerIds), assignedCustomerIdsClaim, customerId);
-                        
-                        hasAccess = assignedCustomerIds.Contains(customerId);
-                        
-                        if (!hasAccess && !string.IsNullOrEmpty(assignedCustomerIdsClaim))
-                        {
-                            // Try parsing from JWT claim
-                            try
-                            {
-                                var jwtCustomerIds = assignedCustomerIdsClaim.Split(',')
-                                    .Select(id => int.TryParse(id.Trim(), out var parsedId) ? parsedId : -1)
-                                    .Where(id => id > 0)
-                                    .ToList();
-                                hasAccess = jwtCustomerIds.Contains(customerId);
-                                _logger.LogInformation("JWT claim check: ParsedIds={ParsedIds}, HasAccess={HasAccess}", 
-                                    string.Join(",", jwtCustomerIds), hasAccess);
-                            }
-                            catch (Exception ex)
-                            {
-                                _logger.LogWarning(ex, "Failed to parse AssignedCustomerIds from JWT claim");
-                            }
-                        }
-                        
-                        if (!hasAccess)
-                        {
-                            // Fallback: Check UserCustomerAssignments table
-                            var assignments = await _context.UserCustomerAssignments
-                                .Where(uca => uca.UserId == user.Id)
-                                .Select(uca => uca.CustomerId)
-                                .ToListAsync();
-                            hasAccess = assignments.Contains(customerId);
-                            _logger.LogInformation("UserCustomerAssignments check: Assignments={Assignments}, HasAccess={HasAccess}", 
-                                string.Join(",", assignments), hasAccess);
-                        }
+                        _userContextService.EnsureCanAccessCustomer(customerId);
                     }
-                    else if (isCustomerRole)
+                    catch (ForbiddenAccessException)
                     {
-                        // Customer users can only access their own customer
-                        if (user.CustomerId.HasValue)
-                        {
-                            hasAccess = user.CustomerId.Value == customerId;
-                        }
-                        
-                        if (!hasAccess)
-                        {
-                            // Fallback: Check AssignedCustomerIds
-                            var customerIds = user.CustomerIds;
-                            hasAccess = customerIds.Count == 1 && customerIds.Contains(customerId);
-                        }
-                    }
-                    
-                    if (!hasAccess)
-                    {
-                        _logger.LogWarning("User {UserId} ({Role}) attempted to access customer {CustomerId} without permission", 
-                            userId, userRole, customerId);
+                        _logger.LogWarning(
+                            "User {UserId} ({Role}) attempted to access customer {CustomerId} without permission",
+                            userId,
+                            userRole,
+                            customerId);
                         return StatusCode(403, new ApiResponseDto<CustomerPageAccessResponseDto>
                         {
                             Success = false,

@@ -1,5 +1,6 @@
 #nullable enable
 
+using AIPBackend.Exceptions;
 using AIPBackend.Models.DTOs;
 using AIPBackend.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -56,6 +57,11 @@ namespace AIPBackend.Controllers
 					Message = "Alert rules retrieved successfully"
 				});
 			}
+			catch (ForbiddenAccessException ex)
+			{
+				_logger.LogWarning(ex, "Forbidden alert rules list request");
+				return Forbid();
+			}
 			catch (Exception ex)
 			{
 				_logger.LogError(ex, "Error retrieving alert rules");
@@ -91,6 +97,11 @@ namespace AIPBackend.Controllers
 					Message = $"Alert rule with ID {id} not found"
 				});
 			}
+			catch (ForbiddenAccessException ex)
+			{
+				_logger.LogWarning(ex, "Forbidden alert rule request {Id}", id);
+				return Forbid();
+			}
 			catch (Exception ex)
 			{
 				_logger.LogError(ex, "Error retrieving alert rule {Id}", id);
@@ -125,6 +136,11 @@ namespace AIPBackend.Controllers
 						Data = rule,
 						Message = "Alert rule created successfully"
 					});
+			}
+			catch (ForbiddenAccessException ex)
+			{
+				_logger.LogWarning(ex, "Forbidden alert rule create request");
+				return Forbid();
 			}
 			catch (Exception ex)
 			{
@@ -167,6 +183,11 @@ namespace AIPBackend.Controllers
 					Message = $"Alert rule with ID {id} not found"
 				});
 			}
+			catch (ForbiddenAccessException ex)
+			{
+				_logger.LogWarning(ex, "Forbidden alert rule update request {Id}", id);
+				return Forbid();
+			}
 			catch (Exception ex)
 			{
 				_logger.LogError(ex, "Error updating alert rule {Id}", id);
@@ -201,6 +222,11 @@ namespace AIPBackend.Controllers
 					Success = false,
 					Message = $"Alert rule with ID {id} not found"
 				});
+			}
+			catch (ForbiddenAccessException ex)
+			{
+				_logger.LogWarning(ex, "Forbidden alert rule delete request {Id}", id);
+				return Forbid();
 			}
 			catch (Exception ex)
 			{
@@ -243,6 +269,11 @@ namespace AIPBackend.Controllers
 					Message = $"Alert rule with ID {id} not found"
 				});
 			}
+			catch (ForbiddenAccessException ex)
+			{
+				_logger.LogWarning(ex, "Forbidden alert rule toggle request {Id}", id);
+				return Forbid();
+			}
 			catch (Exception ex)
 			{
 				_logger.LogError(ex, "Error toggling alert rule {Id}", id);
@@ -269,6 +300,11 @@ namespace AIPBackend.Controllers
 					Success = true,
 					Message = "Alert check completed successfully"
 				});
+			}
+			catch (ForbiddenAccessException ex)
+			{
+				_logger.LogWarning(ex, "Forbidden alert check for incident {IncidentId}", incidentId);
+				return Forbid();
 			}
 			catch (Exception ex)
 			{

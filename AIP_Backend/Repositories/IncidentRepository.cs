@@ -42,6 +42,7 @@ namespace AIPBackend.Repositories
 			int pageSize,
 			string? search = null,
 			int? customerId = null,
+			IReadOnlyCollection<int>? customerIds = null,
 			string? siteId = null,
 			string? regionId = null,
 			string? incidentType = null,
@@ -57,6 +58,7 @@ namespace AIPBackend.Repositories
 					.Where(i => !i.RecordIsDeletedYN),
 				search,
 				customerId,
+				customerIds,
 				siteId,
 				regionId,
 				incidentType,
@@ -80,6 +82,7 @@ namespace AIPBackend.Repositories
 		public async Task<IncidentListSummaryDto> GetSummaryAsync(
 			string? search = null,
 			int? customerId = null,
+			IReadOnlyCollection<int>? customerIds = null,
 			string? siteId = null,
 			string? regionId = null,
 			string? incidentType = null,
@@ -92,6 +95,7 @@ namespace AIPBackend.Repositories
 				_context.Incidents.Where(i => !i.RecordIsDeletedYN),
 				search,
 				customerId,
+				customerIds,
 				siteId,
 				regionId,
 				incidentType,
@@ -136,6 +140,7 @@ namespace AIPBackend.Repositories
 			IQueryable<Incident> query,
 			string? search,
 			int? customerId,
+			IReadOnlyCollection<int>? customerIds,
 			string? siteId,
 			string? regionId,
 			string? incidentType,
@@ -144,7 +149,11 @@ namespace AIPBackend.Repositories
 			DateTime? toDate,
 			string? createdByUserId)
 		{
-			if (customerId.HasValue)
+			if (customerIds is { Count: > 0 })
+			{
+				query = query.Where(i => customerIds.Contains(i.CustomerId));
+			}
+			else if (customerId.HasValue)
 			{
 				query = query.Where(i => i.CustomerId == customerId.Value);
 			}
@@ -295,6 +304,7 @@ namespace AIPBackend.Repositories
 
 		public async Task<List<Incident>> GetAllForStatsAsync(
 			int? customerId = null,
+			IReadOnlyCollection<int>? customerIds = null,
 			string? siteId = null,
 			string? regionId = null,
 			DateTime? startDate = null,
@@ -306,7 +316,11 @@ namespace AIPBackend.Repositories
 				.Where(i => !i.RecordIsDeletedYN)
 				.AsQueryable();
 
-			if (customerId.HasValue)
+			if (customerIds is { Count: > 0 })
+			{
+				query = query.Where(i => customerIds.Contains(i.CustomerId));
+			}
+			else if (customerId.HasValue)
 			{
 				query = query.Where(i => i.CustomerId == customerId.Value);
 			}

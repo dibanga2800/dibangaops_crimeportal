@@ -18,6 +18,7 @@ namespace AIPBackend.Repositories
 			int pageSize,
 			string? search = null,
 			int? customerId = null,
+			IReadOnlyCollection<int>? customerIds = null,
 			string? siteId = null,
 			string? regionId = null,
 			string? incidentType = null,
@@ -29,6 +30,7 @@ namespace AIPBackend.Repositories
 		Task<IncidentListSummaryDto> GetSummaryAsync(
 			string? search = null,
 			int? customerId = null,
+			IReadOnlyCollection<int>? customerIds = null,
 			string? siteId = null,
 			string? regionId = null,
 			string? incidentType = null,
@@ -42,6 +44,7 @@ namespace AIPBackend.Repositories
 		Task<bool> ExistsAsync(int incidentId);
 		Task<List<Incident>> GetAllForStatsAsync(
 			int? customerId = null,
+			IReadOnlyCollection<int>? customerIds = null,
 			string? siteId = null,
 			string? regionId = null,
 			DateTime? startDate = null,
