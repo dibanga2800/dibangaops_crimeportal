@@ -89,6 +89,8 @@ For GitHub Actions:
 - `AZURE_TENANT_ID`
 - `AZURE_SUBSCRIPTION_ID` (must match an **active** subscription the app can access)
 - `PRODUCTION_API_BASE_URL` (optional) — full `https://` API base **without** `/api` suffix; when set, **Deploy Frontend** skips Azure OIDC and uses this URL for `VITE_API_BASE_URL`
+
+**Production auth (pentest):** Keep `Auth__Cookies__ExposeTokensInResponse=false`. Use a shared registrable domain for the SPA and API (e.g. Front Door + `auth_cookie_domain`) so HttpOnly cookies are first-party. Do not expose JWTs in login JSON responses in production.
 - `TF_STATE_RESOURCE_GROUP`
 - `TF_STATE_STORAGE_ACCOUNT`
 - `TF_STATE_CONTAINER`

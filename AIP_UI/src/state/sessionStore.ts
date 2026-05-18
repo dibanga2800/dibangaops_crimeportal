@@ -4,6 +4,8 @@ type Listener = (user: User | null) => void
 
 const LEGACY_TOKEN_KEY = 'authToken'
 const LEGACY_REFRESH_TOKEN_KEY = 'refreshToken'
+const ACCESS_TOKEN_KEY = 'accessToken'
+const REFRESH_TOKEN_KEY = 'refreshToken'
 const TOKEN_EXPIRES_AT_KEY = 'tokenExpiresAt'
 const CSRF_TOKEN_KEY = 'csrfToken'
 const USER_KEY = 'user'
@@ -73,6 +75,50 @@ export const sessionStore = {
 			return null
 		}
 	},
+
+	getAccessToken: (): string | null => {
+		try {
+			return sessionStorage.getItem(ACCESS_TOKEN_KEY)
+		} catch (error) {
+			console.error('Error getting access token from session storage:', error)
+			return null
+		}
+	},
+
+	setAccessToken: (token: string | null): void => {
+		try {
+			if (token) {
+				sessionStorage.setItem(ACCESS_TOKEN_KEY, token)
+			} else {
+				sessionStorage.removeItem(ACCESS_TOKEN_KEY)
+			}
+		} catch (error) {
+			console.error('Error setting access token in session storage:', error)
+		}
+	},
+
+	getRefreshToken: (): string | null => {
+		try {
+			return sessionStorage.getItem(REFRESH_TOKEN_KEY)
+		} catch (error) {
+			console.error('Error getting refresh token from session storage:', error)
+			return null
+		}
+	},
+
+	setRefreshToken: (token: string | null): void => {
+		try {
+			if (token) {
+				sessionStorage.setItem(REFRESH_TOKEN_KEY, token)
+			} else {
+				sessionStorage.removeItem(REFRESH_TOKEN_KEY)
+			}
+		} catch (error) {
+			console.error('Error setting refresh token in session storage:', error)
+		}
+	},
+
+	usesBearerAuth: (): boolean => Boolean(sessionStore.getAccessToken()),
 
 	getCsrfToken: (): string | null => {
 		try {
@@ -171,6 +217,8 @@ export const sessionStore = {
 		sessionStore.clearUser()
 		sessionStore.setTokenExpiresAt(null)
 		sessionStore.setCsrfToken(null)
+		sessionStore.setAccessToken(null)
+		sessionStore.setRefreshToken(null)
 		purgeLegacyTokenStorage()
 	},
 

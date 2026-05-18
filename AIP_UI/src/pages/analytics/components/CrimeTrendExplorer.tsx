@@ -39,7 +39,7 @@ import {
 	TableHeader,
 	TableRow,
 } from '@/components/ui/table'
-import type { CrimeTrendData } from '@/types/analytics'
+import type { CrimeTrendData, DayOfWeekData, StoreDrilldownData, TimeOfDayData } from '@/types/analytics'
 import {
 	Calendar,
 	Clock,
@@ -52,6 +52,65 @@ import {
 interface CrimeTrendExplorerProps {
 	data: CrimeTrendData
 	loading?: boolean
+}
+
+type ChartTooltipProps = {
+	active?: boolean
+	payload?: Array<{ payload?: DayOfWeekData | TimeOfDayData }>
+}
+
+const getStoreDayCount = (store: StoreDrilldownData, day: string): number => {
+	if (store.incidentsByDay && Object.keys(store.incidentsByDay).length > 0) {
+		return Number(store.incidentsByDay[day] ?? 0)
+	}
+	return store.peakDay === day ? store.incidents : 0
+}
+
+const getStoreHourCount = (store: StoreDrilldownData, hour: number): number => {
+	const hourKey = String(hour)
+	if (store.incidentsByHour && Object.keys(store.incidentsByHour).length > 0) {
+		return Number(store.incidentsByHour[hourKey] ?? store.incidentsByHour[hour] ?? 0)
+	}
+	return store.peakHour === hour ? store.incidents : 0
+}
+
+const DayOfWeekTooltip = ({ active, payload }: ChartTooltipProps) => {
+	if (!active || !payload?.length) {
+		return null
+	}
+
+	const point = payload[0]?.payload as DayOfWeekData | undefined
+	if (!point) {
+		return null
+	}
+
+	return (
+		<div className="rounded-md border border-border bg-background px-3 py-2 text-sm shadow-md">
+			<p className="font-semibold">{point.day}</p>
+			<p>{point.incidents} incidents</p>
+			<p>{point.stores} stores affected</p>
+			<p className="text-muted-foreground">{point.percentage.toFixed(1)}% of period</p>
+		</div>
+	)
+}
+
+const TimeOfDayTooltip = ({ active, payload }: ChartTooltipProps) => {
+	if (!active || !payload?.length) {
+		return null
+	}
+
+	const point = payload[0]?.payload as TimeOfDayData | undefined
+	if (!point) {
+		return null
+	}
+
+	return (
+		<div className="rounded-md border border-border bg-background px-3 py-2 text-sm shadow-md">
+			<p className="font-semibold">{point.label}</p>
+			<p>{point.incidents} incidents</p>
+			<p className="text-muted-foreground">{point.percentage.toFixed(1)}% of period</p>
+		</div>
+	)
 }
 
 const CHART_COLORS = [
@@ -126,34 +185,82 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 		setSelectedStore(storeName)
 	}
 
-	const filteredStores = useMemo(() => {
+	type StoreSliceRow = {
+		store: StoreDrilldownData
+		sliceIncidents: number
+	}
+
+	const filteredStores = useMemo((): StoreSliceRow[] => {
 		if (!selectedDay) {
 			return []
 		}
 
-		const filtered = Object.values(data.storeDrilldown).filter(
-			(store) => store.peakDay === selectedDay
-		)
-
-		return filtered.sort((a, b) => b.incidents - a.incidents)
+		return Object.values(data.storeDrilldown)
+			.map((store) => ({
+				store,
+				sliceIncidents: getStoreDayCount(store, selectedDay),
+			}))
+			.filter((row) => row.sliceIncidents > 0)
+			.sort((a, b) => b.sliceIncidents - a.sliceIncidents)
 	}, [selectedDay, data.storeDrilldown])
 
-	const filteredStoresByHour = useMemo(() => {
+	const filteredStoresByHour = useMemo((): StoreSliceRow[] => {
 		if (selectedHour === null) {
 			return []
 		}
 
-		const filtered = Object.values(data.storeDrilldown).filter(
-			(store) => store.peakHour === selectedHour
-		)
-
-		return filtered.sort((a, b) => b.incidents - a.incidents)
+		return Object.values(data.storeDrilldown)
+			.map((store) => ({
+				store,
+				sliceIncidents: getStoreHourCount(store, selectedHour),
+			}))
+			.filter((row) => row.sliceIncidents > 0)
+			.sort((a, b) => b.sliceIncidents - a.sliceIncidents)
 	}, [selectedHour, data.storeDrilldown])
 
+	const selectedHourLabel = useMemo(() => {
+		if (selectedHour === null) {
+			return null
+		}
+		return data.timeOfDay.find((slot) => slot.hour === selectedHour)?.label ?? `${selectedHour}:00`
+	}, [selectedHour, data.timeOfDay])
+
 	const selectedStoreData = useMemo(() => {
-		if (!selectedStore) return null
-		return data.storeDrilldown[selectedStore] || null
-	}, [selectedStore, data.storeDrilldown])
+		if (!selectedStore) {
+			return null
+		}
+
+		const store = data.storeDrilldown[selectedStore]
+		if (!store) {
+			return null
+		}
+
+		if (selectedDay) {
+			const sliceIncidents = getStoreDayCount(store, selectedDay)
+			return {
+				...store,
+				incidents: sliceIncidents,
+				incidentTypes: store.incidentTypesByDay?.[selectedDay] ?? [],
+				filterContext: `on ${selectedDay}`,
+			}
+		}
+
+		if (selectedHour !== null) {
+			const sliceIncidents = getStoreHourCount(store, selectedHour)
+			const hourKey = String(selectedHour)
+			return {
+				...store,
+				incidents: sliceIncidents,
+				incidentTypes:
+					store.incidentTypesByHour?.[hourKey] ??
+					store.incidentTypesByHour?.[selectedHour] ??
+					[],
+				filterContext: `at ${selectedHourLabel ?? `${selectedHour}:00`}`,
+			}
+		}
+
+		return store
+	}, [selectedStore, selectedDay, selectedHour, selectedHourLabel, data.storeDrilldown])
 
 	if (loading) {
 		return (
@@ -258,22 +365,16 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 											tick={{ fill: '#6b7280' }}
 										/>
 										<YAxis className="text-xs" tick={{ fill: '#6b7280' }} />
-										<Tooltip
-											contentStyle={{
-												backgroundColor: '#fff',
-												border: '1px solid #e5e7eb',
-												borderRadius: '0.5rem',
-											}}
-										/>
-										<Legend />
+										<Tooltip content={<DayOfWeekTooltip />} />
 										<Bar
 											dataKey="incidents"
 											fill={CHART_COLORS[0]}
 											name="Incidents"
 											radius={[8, 8, 0, 0]}
-											onClick={(data: any, index: number) => {
-												if (data && data.day) {
-													handleDayClick(data.day)
+											onClick={(barData) => {
+												const payload = barData?.payload as DayOfWeekData | undefined
+												if (payload?.day) {
+													handleDayClick(payload.day)
 												}
 											}}
 											style={{ cursor: 'pointer' }}
@@ -287,7 +388,8 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 									<div className="flex items-center gap-2">
 										<MapPin className="h-4 w-4 text-gray-600" />
 										<h3 className="font-semibold">
-											Stores with incidents on {selectedDay}
+											Stores with incidents on {selectedDay} (
+											{data.dayOfWeek.find((d) => d.day === selectedDay)?.incidents ?? 0} total)
 										</h3>
 									</div>
 									<div className="border rounded-lg">
@@ -302,12 +404,12 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 												</TableRow>
 											</TableHeader>
 											<TableBody>
-												{filteredStores.map((store) => (
+												{filteredStores.map(({ store, sliceIncidents }) => (
 													<TableRow key={store.storeId}>
 														<TableCell className="font-medium">
 															{store.storeName}
 														</TableCell>
-														<TableCell>{store.incidents}</TableCell>
+														<TableCell>{sliceIncidents}</TableCell>
 														<TableCell>
 															<Badge variant="outline">{store.peakDay}</Badge>
 														</TableCell>
@@ -353,22 +455,16 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 											height={80}
 										/>
 										<YAxis className="text-xs" tick={{ fill: '#6b7280' }} />
-										<Tooltip
-											contentStyle={{
-												backgroundColor: '#fff',
-												border: '1px solid #e5e7eb',
-												borderRadius: '0.5rem',
-											}}
-										/>
-										<Legend />
+										<Tooltip content={<TimeOfDayTooltip />} />
 										<Bar
 											dataKey="incidents"
 											fill={CHART_COLORS[1]}
 											name="Incidents"
 											radius={[8, 8, 0, 0]}
-											onClick={(data: any, index: number) => {
-												if (data && data.hour !== undefined) {
-													handleHourClick(data.hour)
+											onClick={(barData) => {
+												const payload = barData?.payload as TimeOfDayData | undefined
+												if (payload?.hour !== undefined) {
+													handleHourClick(payload.hour)
 												}
 											}}
 											style={{ cursor: 'pointer' }}
@@ -382,7 +478,9 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 									<div className="flex items-center gap-2">
 										<MapPin className="h-4 w-4 text-gray-600" />
 										<h3 className="font-semibold">
-											Stores with peak activity at {selectedHour}:00
+											Stores with incidents at {selectedHourLabel ?? `${selectedHour}:00`} (
+											{data.timeOfDay.find((slot) => slot.hour === selectedHour)?.incidents ?? 0}{' '}
+											total)
 										</h3>
 									</div>
 									<div className="border rounded-lg">
@@ -397,12 +495,12 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 												</TableRow>
 											</TableHeader>
 											<TableBody>
-												{filteredStoresByHour.map((store) => (
+												{filteredStoresByHour.map(({ store, sliceIncidents }) => (
 													<TableRow key={store.storeId}>
 														<TableCell className="font-medium">
 															{store.storeName}
 														</TableCell>
-														<TableCell>{store.incidents}</TableCell>
+														<TableCell>{sliceIncidents}</TableCell>
 														<TableCell>
 															<Badge variant="outline">{store.peakDay}</Badge>
 														</TableCell>
@@ -429,7 +527,7 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 
 							{selectedHour !== null && filteredStoresByHour.length === 0 && (
 								<div className="text-center py-8 text-gray-500">
-									No stores have peak activity at {selectedHour}:00
+									No store incidents recorded at {selectedHourLabel ?? `${selectedHour}:00`}
 								</div>
 							)}
 
@@ -439,7 +537,7 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 									<h3 className="font-semibold">Top 3 Busiest Hours</h3>
 								</div>
 								<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-									{timeOfDayData
+									{[...timeOfDayData]
 										.sort((a, b) => b.incidents - a.incidents)
 										.slice(0, 3)
 										.map((item) => (
@@ -501,7 +599,7 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 								</div>
 								<div className="space-y-2">
 									<h3 className="font-semibold mb-4">Incident Type Breakdown</h3>
-									{incidentTypeData
+									{[...incidentTypeData]
 										.sort((a, b) => b.count - a.count)
 										.map((item, index) => (
 											<Card key={item.type}>
@@ -546,14 +644,20 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 									<CardHeader>
 										<CardTitle>{selectedStoreData.storeName}</CardTitle>
 										<CardDescription>
-											Detailed incident breakdown for this store
+											{'filterContext' in selectedStoreData && selectedStoreData.filterContext
+												? `Incidents ${selectedStoreData.filterContext} (${selectedStoreData.incidents} in selection)`
+												: 'Detailed incident breakdown for this store'}
 										</CardDescription>
 									</CardHeader>
 									<CardContent>
 										<div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
 											<Card>
 												<CardContent className="p-4">
-													<div className="text-sm text-gray-500">Total Incidents</div>
+													<div className="text-sm text-gray-500">
+														{'filterContext' in selectedStoreData && selectedStoreData.filterContext
+															? 'Incidents in selection'
+															: 'Total Incidents'}
+													</div>
 													<div className="text-2xl font-bold">
 														{selectedStoreData.incidents}
 													</div>

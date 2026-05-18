@@ -33,7 +33,12 @@ import {
 	TableHeader,
 	TableRow,
 } from '@/components/ui/table'
-import type { HotProductsData } from '@/types/analytics'
+import type {
+	HotProductsData,
+	ProductFrequencyData,
+	ProductStoreBreakdown,
+	StoreProductHeatmapData,
+} from '@/types/analytics'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -84,13 +89,208 @@ const getProductKey = (
 	return suffix ? `${base}-${suffix}` : base
 }
 
+const getStoreCardKey = (store: StoreProductHeatmapData) =>
+	`${store.storeId}-${store.storeName}`
+
+const getProductMatchKey = (barcode: string, productName: string): string => {
+	const trimmedBarcode = barcode?.trim()
+	if (
+		trimmedBarcode &&
+		trimmedBarcode.length >= 4 &&
+		trimmedBarcode.toLowerCase() !== 'unknown'
+	) {
+		return `barcode:${trimmedBarcode.toLowerCase()}`
+	}
+
+	const name = productName?.trim()
+	if (name) {
+		return `name:${name.toLowerCase()}`
+	}
+
+	return 'unknown'
+}
+
+const resolveProductStores = (
+	product: ProductFrequencyData,
+	storeHeatmap: StoreProductHeatmapData[],
+): ProductStoreBreakdown[] => {
+	if (product.stores && product.stores.length > 0) {
+		return product.stores
+	}
+
+	const productKey = getProductMatchKey(product.barcode, product.productName)
+	const fromHeatmap: ProductStoreBreakdown[] = []
+
+	storeHeatmap.forEach((store) => {
+		store.products.forEach((line) => {
+			if (getProductMatchKey(line.barcode, line.productName) !== productKey) {
+				return
+			}
+
+			const existing = fromHeatmap.find(
+				(s) => s.storeName.toLowerCase() === store.storeName.toLowerCase(),
+			)
+			if (existing) {
+				existing.frequency += line.frequency
+				existing.stolenValue += line.stolenValue
+				existing.recoveredValue += line.recoveredValue
+				existing.lostValue += line.lostValue
+				existing.recoveryRate =
+					existing.stolenValue > 0
+						? (existing.recoveredValue / existing.stolenValue) * 100
+						: 0
+				return
+			}
+
+			fromHeatmap.push({
+				storeId: store.storeId,
+				storeName: store.storeName,
+				frequency: line.frequency,
+				stolenValue: line.stolenValue,
+				recoveredValue: line.recoveredValue,
+				lostValue: line.lostValue,
+				recoveryRate: line.recoveryRate,
+			})
+		})
+	})
+
+	return fromHeatmap.sort(
+		(a, b) => b.lostValue - a.lostValue || b.frequency - a.frequency,
+	)
+}
+
+interface ProductStoreBreakdownPanelProps {
+	stores: ProductStoreBreakdown[]
+}
+
+const ProductStoreBreakdownPanel = ({ stores }: ProductStoreBreakdownPanelProps) => {
+	if (stores.length === 0) {
+		return (
+			<p className="text-xs text-muted-foreground py-2">
+				No store breakdown available for this product in the selected period.
+			</p>
+		)
+	}
+
+	return (
+		<div className="rounded-md border bg-muted/20 overflow-hidden">
+			<Table>
+				<TableHeader>
+					<TableRow>
+						<TableHead>Store</TableHead>
+						<TableHead>Line items</TableHead>
+						<TableHead className="text-right">Saved</TableHead>
+						<TableHead className="text-right">Lost</TableHead>
+						<TableHead className="text-right">Recovery</TableHead>
+					</TableRow>
+				</TableHeader>
+				<TableBody>
+					{stores.map((store) => (
+						<TableRow key={`${store.storeId}-${store.storeName}`}>
+							<TableCell className="font-medium">{store.storeName}</TableCell>
+							<TableCell>{store.frequency}</TableCell>
+							<TableCell className="text-right text-emerald-600 dark:text-emerald-300">
+								£{formatCurrencyExact(store.recoveredValue)}
+							</TableCell>
+							<TableCell className="text-right text-rose-600 dark:text-rose-300">
+								£{formatCurrencyExact(store.lostValue)}
+							</TableCell>
+							<TableCell className="text-right">{store.recoveryRate.toFixed(1)}%</TableCell>
+						</TableRow>
+					))}
+				</TableBody>
+			</Table>
+		</div>
+	)
+}
+
+const RISK_LEVEL_HELP =
+	'Store risk uses incident volume, £ lost, police involvement, and last-7-day activity (score 0–100%). Critical ≥70%, High ≥40%, Medium ≥20%.'
+
+interface StoreHeatmapDetailProps {
+	store: StoreProductHeatmapData
+}
+
+const StoreHeatmapDetail = ({ store }: StoreHeatmapDetailProps) => {
+	const sortedProducts = [...store.products].sort(
+		(a, b) => b.lostValue - a.lostValue || b.frequency - a.frequency,
+	)
+
+	return (
+		<div className="space-y-4">
+			<div className="rounded-md border border-border bg-muted/30 p-3 text-xs space-y-2">
+				<p className="font-semibold text-foreground">
+					{store.riskLevel.toUpperCase()} risk · {Math.round((store.riskScore ?? 0) * 100)}/100
+				</p>
+				{store.riskSummary ? (
+					<p className="text-muted-foreground leading-relaxed">{store.riskSummary}</p>
+				) : null}
+				{store.riskFactors && store.riskFactors.length > 0 && (
+					<ul className="list-disc pl-4 text-muted-foreground space-y-0.5">
+						{store.riskFactors.map((factor) => (
+							<li key={factor.factor}>{factor.description}</li>
+						))}
+					</ul>
+				)}
+			</div>
+			<div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+				<div className="rounded border p-2">
+					<div className="text-muted-foreground">All incidents</div>
+					<div className="font-semibold">{store.totalIncidents}</div>
+				</div>
+				<div className="rounded border p-2">
+					<div className="text-muted-foreground">With stolen items</div>
+					<div className="font-semibold">{store.incidentsWithStolenItems ?? 0}</div>
+				</div>
+				<div className="rounded border p-2">
+					<div className="text-muted-foreground">Product lines</div>
+					<div className="font-semibold">{store.productLineCount ?? 0}</div>
+				</div>
+				<div className="rounded border p-2">
+					<div className="text-muted-foreground">Product groups</div>
+					<div className="font-semibold">{store.productGroupCount ?? sortedProducts.length}</div>
+				</div>
+			</div>
+			<div>
+				<p className="text-xs font-semibold text-muted-foreground mb-2">
+					Stolen products ({sortedProducts.length})
+				</p>
+				{sortedProducts.length === 0 ? (
+					<p className="text-xs text-muted-foreground">No stolen product lines in this period.</p>
+				) : (
+					<div className="max-h-56 overflow-y-auto space-y-2 pr-1">
+						{sortedProducts.map((product, productIndex) => (
+							<div
+								key={getProductKey(product, productIndex, `detail-${getStoreCardKey(store)}`)}
+								className="flex items-center justify-between p-2 bg-gray-50 dark:bg-muted/40 rounded text-xs"
+							>
+								<div className="flex-1 min-w-0">
+									<div className="font-medium truncate">{product.productName}</div>
+									{product.barcode ? (
+										<div className="text-gray-500 truncate font-mono">{product.barcode}</div>
+									) : null}
+								</div>
+								<div className="text-right ml-2 shrink-0">
+									<div className="font-semibold">{product.frequency} lines</div>
+									<div className="text-gray-600">£{formatCurrencyExact(product.lostValue)} lost</div>
+								</div>
+							</div>
+						))}
+					</div>
+				)}
+			</div>
+		</div>
+	)
+}
+
 export const HotProductsDashboard = ({
 	data,
 	loading = false,
 }: HotProductsDashboardProps) => {
 	const [searchTerm, setSearchTerm] = useState('')
 	const [riskFilter, setRiskFilter] = useState<string>('all')
-	const [expandedStores, setExpandedStores] = useState<Set<number>>(new Set())
+	const [expandedStores, setExpandedStores] = useState<Set<string>>(new Set())
+	const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set())
 	const [viewMode, setViewMode] = useState<'grid' | 'table' | 'heatmap'>('heatmap')
 	const [currentPage, setCurrentPage] = useState(1)
 	const STORES_PER_PAGE = 12
@@ -102,9 +302,28 @@ export const HotProductsDashboard = ({
 		}))
 	}, [data.topProducts])
 
+	const sortedTopProducts = useMemo(
+		() => [...data.topProducts].sort((a, b) => b.lostValue - a.lostValue),
+		[data.topProducts],
+	)
+
+	const toggleProductExpansion = (productKey: string) => {
+		setExpandedProducts((prev) => {
+			const next = new Set(prev)
+			if (next.has(productKey)) {
+				next.delete(productKey)
+			} else {
+				next.add(productKey)
+			}
+			return next
+		})
+	}
+
 	const sortedStores = useMemo(() => {
 		return [...data.storeHeatmap].sort(
-			(a, b) => b.totalIncidents - a.totalIncidents
+			(a, b) =>
+				b.totalValueLost - a.totalValueLost ||
+				(b.incidentsWithStolenItems ?? 0) - (a.incidentsWithStolenItems ?? 0),
 		)
 	}, [data.storeHeatmap])
 
@@ -140,20 +359,19 @@ export const HotProductsDashboard = ({
 		setCurrentPage(1)
 	}, [searchTerm, riskFilter])
 
-	const toggleStoreExpansion = (storeId: number) => {
+	const toggleStoreExpansion = (storeKey: string) => {
 		const newExpanded = new Set(expandedStores)
-		if (newExpanded.has(storeId)) {
-			newExpanded.delete(storeId)
+		if (newExpanded.has(storeKey)) {
+			newExpanded.delete(storeKey)
 		} else {
-			newExpanded.add(storeId)
+			newExpanded.add(storeKey)
 		}
 		setExpandedStores(newExpanded)
 	}
 
-	// Calculate heatmap intensity (0-100)
-	const getHeatmapIntensity = (store: typeof sortedStores[0]) => {
-		const maxIncidents = Math.max(...sortedStores.map((s) => s.totalIncidents))
-		return maxIncidents > 0 ? (store.totalIncidents / maxIncidents) * 100 : 0
+	const getHeatmapIntensity = (store: StoreProductHeatmapData) => {
+		const maxLost = Math.max(...sortedStores.map((s) => s.totalValueLost), 0)
+		return maxLost > 0 ? (store.totalValueLost / maxLost) * 100 : 0
 	}
 
 	const getHeatmapColor = (intensity: number, riskLevel: string) => {
@@ -296,38 +514,79 @@ export const HotProductsDashboard = ({
 									<TableHead className="text-right">Saved</TableHead>
 									<TableHead className="text-right">Lost</TableHead>
 									<TableHead className="text-right">Recovery Rate</TableHead>
+									<TableHead className="text-right w-[100px]">Details</TableHead>
 								</TableRow>
 							</TableHeader>
 							<TableBody>
-								{data.topProducts
-									.sort((a, b) => b.lostValue - a.lostValue)
-									.map((product, index) => (
-										<TableRow key={getProductKey(product, index, 'table')}>
-											<TableCell className="font-medium">
-												{product.productName}
-											</TableCell>
-											<TableCell className="font-mono text-xs">
-												{product.barcode}
-											</TableCell>
-											<TableCell>
-												<Badge variant="outline">{product.frequency}</Badge>
-											</TableCell>
-											<TableCell>{product.storesAffected}</TableCell>
-											<TableCell className="text-right font-semibold text-emerald-600 dark:text-emerald-300">
-												£{product.recoveredValue.toLocaleString('en-GB', {
-													minimumFractionDigits: 2,
-													maximumFractionDigits: 2,
-												})}
-											</TableCell>
-											<TableCell className="text-right font-semibold text-rose-600 dark:text-rose-300">
-												£{product.lostValue.toLocaleString('en-GB', {
-													minimumFractionDigits: 2,
-													maximumFractionDigits: 2,
-												})}
-											</TableCell>
-											<TableCell className="text-right">{product.recoveryRate.toFixed(1)}%</TableCell>
-										</TableRow>
-									))}
+								{sortedTopProducts.map((product, index) => {
+									const productRowKey = getProductKey(product, index, 'table')
+									const isProductExpanded = expandedProducts.has(productRowKey)
+									const productStores = resolveProductStores(product, data.storeHeatmap)
+
+									return (
+										<Fragment key={productRowKey}>
+											<TableRow>
+												<TableCell className="font-medium">
+													{product.productName}
+												</TableCell>
+												<TableCell className="font-mono text-xs">
+													{product.barcode || '—'}
+												</TableCell>
+												<TableCell>
+													<Badge variant="outline">{product.frequency}</Badge>
+												</TableCell>
+												<TableCell>{productStores.length || product.storesAffected}</TableCell>
+												<TableCell className="text-right font-semibold text-emerald-600 dark:text-emerald-300">
+													£{product.recoveredValue.toLocaleString('en-GB', {
+														minimumFractionDigits: 2,
+														maximumFractionDigits: 2,
+													})}
+												</TableCell>
+												<TableCell className="text-right font-semibold text-rose-600 dark:text-rose-300">
+													£{product.lostValue.toLocaleString('en-GB', {
+														minimumFractionDigits: 2,
+														maximumFractionDigits: 2,
+													})}
+												</TableCell>
+												<TableCell className="text-right">
+													{product.recoveryRate.toFixed(1)}%
+												</TableCell>
+												<TableCell className="text-right">
+													<Button
+														type="button"
+														variant="ghost"
+														size="sm"
+														className="text-xs"
+														onClick={() => toggleProductExpansion(productRowKey)}
+														aria-expanded={isProductExpanded}
+													>
+														{isProductExpanded ? (
+															<>
+																<ChevronUp className="h-4 w-4 mr-1" />
+																Hide
+															</>
+														) : (
+															<>
+																<ChevronDown className="h-4 w-4 mr-1" />
+																Stores
+															</>
+														)}
+													</Button>
+												</TableCell>
+											</TableRow>
+											{isProductExpanded && (
+												<TableRow>
+													<TableCell colSpan={8} className="bg-muted/30 p-4">
+														<p className="text-xs font-semibold text-muted-foreground mb-2">
+															Stores where this product was stolen ({productStores.length})
+														</p>
+														<ProductStoreBreakdownPanel stores={productStores} />
+													</TableCell>
+												</TableRow>
+											)}
+										</Fragment>
+									)
+								})}
 							</TableBody>
 						</Table>
 					</div>
@@ -412,6 +671,7 @@ export const HotProductsDashboard = ({
 							</Select>
 						</div>
 					</div>
+					<p className="text-xs text-muted-foreground mb-4">{RISK_LEVEL_HELP}</p>
 
 					<Tabs value={viewMode} onValueChange={(v) => setViewMode(v as typeof viewMode)} className="w-full">
 						<TabsList className="grid w-full grid-cols-3">
@@ -424,16 +684,16 @@ export const HotProductsDashboard = ({
 							{/* Visual Heatmap Grid */}
 							<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
 								{paginatedStores.map((store) => {
+									const storeKey = getStoreCardKey(store)
 									const intensity = getHeatmapIntensity(store)
 									const heatmapColor = getHeatmapColor(intensity, store.riskLevel)
-									const totalValue = store.totalValueLost
-									const isExpanded = expandedStores.has(store.storeId)
+									const isExpanded = expandedStores.has(storeKey)
 
 									return (
 										<Card
-											key={store.storeId}
+											key={storeKey}
 											className="overflow-hidden transition-all hover:shadow-lg cursor-pointer"
-											onClick={() => toggleStoreExpansion(store.storeId)}
+											onClick={() => toggleStoreExpansion(storeKey)}
 										>
 											<div
 												className="relative p-4 text-white"
@@ -450,22 +710,26 @@ export const HotProductsDashboard = ({
 														<Badge
 															variant="secondary"
 															className="bg-white/20 text-white border-white/30"
+															title={store.riskSummary || RISK_LEVEL_HELP}
 														>
 															{store.riskLevel.toUpperCase()}
+															{(store.riskScore ?? 0) > 0
+																? ` ${Math.round((store.riskScore ?? 0) * 100)}%`
+																: ''}
 														</Badge>
 													</div>
 													<div className="grid grid-cols-2 gap-2 text-sm">
 														<div>
-															<div className="text-white/80 text-xs">Incidents</div>
-															<div className="font-bold">{store.totalIncidents}</div>
+															<div className="text-white/80 text-xs">Theft incidents</div>
+															<div className="font-bold">{store.incidentsWithStolenItems ?? 0}</div>
 														</div>
 														<div>
 															<div className="text-white/80 text-xs">Value Lost</div>
-															<div className="font-bold">£{formatCurrencyExact(totalValue)}</div>
+															<div className="font-bold">£{formatCurrencyExact(store.totalValueLost)}</div>
 														</div>
 														<div>
-															<div className="text-white/80 text-xs">Saved</div>
-															<div className="font-bold">£{formatCurrencyExact(store.totalValueRecovered)}</div>
+															<div className="text-white/80 text-xs">Product lines</div>
+															<div className="font-bold">{store.productLineCount ?? 0}</div>
 														</div>
 														<div>
 															<div className="text-white/80 text-xs">Recovery</div>
@@ -475,41 +739,18 @@ export const HotProductsDashboard = ({
 												</div>
 											</div>
 											{isExpanded && (
-												<CardContent className="p-4 border-t">
-													<div className="space-y-2">
-														<div className="text-xs font-semibold text-gray-600 mb-2">
-															Top Products:
-														</div>
-														{store.products
-															.sort((a, b) => b.frequency - a.frequency)
-															.slice(0, 5)
-															.map((product, productIndex) => (
-																<div
-																	key={getProductKey(product, productIndex, `store-${store.storeId}`)}
-																	className="flex items-center justify-between p-2 bg-gray-50 rounded text-xs"
-																>
-																	<div className="flex-1 min-w-0">
-																		<div className="font-medium truncate">
-																			{product.productName}
-																		</div>
-																		<div className="text-gray-500 truncate">
-																			{product.barcode}
-																		</div>
-																	</div>
-																	<div className="text-right ml-2">
-																		<div className="font-semibold">{product.frequency}×</div>
-																		<div className="text-gray-600">£{formatCurrencyExact(product.lostValue)} lost</div>
-																	</div>
-																</div>
-															))}
-													</div>
+												<CardContent
+													className="p-4 border-t"
+													onClick={(e) => e.stopPropagation()}
+												>
+													<StoreHeatmapDetail store={store} />
 													<Button
 														variant="ghost"
 														size="sm"
 														className="w-full mt-3"
 														onClick={(e) => {
 															e.stopPropagation()
-															toggleStoreExpansion(store.storeId)
+															toggleStoreExpansion(storeKey)
 														}}
 													>
 														<EyeOff className="h-4 w-4 mr-2" />
@@ -593,17 +834,17 @@ export const HotProductsDashboard = ({
 						<TabsContent value="grid" className="space-y-4">
 							<div className="space-y-4">
 								{paginatedStores.map((store) => {
-									const isExpanded = expandedStores.has(store.storeId)
+									const isExpanded = expandedStores.has(getStoreCardKey(store))
 									const totalValue = store.totalValueLost
 
 									return (
-										<Card key={store.storeId}>
+										<Card key={getStoreCardKey(store)}>
 											<CardHeader className="pb-3">
 												<div className="flex items-center justify-between">
 													<CardTitle className="text-base">{store.storeName}</CardTitle>
 													<div className="flex items-center gap-3">
 														<div className="text-right">
-															<div className="text-sm font-semibold">{store.totalIncidents} incidents</div>
+															<div className="text-sm font-semibold">{store.incidentsWithStolenItems ?? 0} theft incidents</div>
 															<div className="text-xs text-gray-500">
 																£{totalValue.toFixed(2)} lost, {store.recoveryRate.toFixed(1)}% recovered
 															</div>
@@ -620,7 +861,7 @@ export const HotProductsDashboard = ({
 														<Button
 															variant="ghost"
 															size="sm"
-															onClick={() => toggleStoreExpansion(store.storeId)}
+															onClick={() => toggleStoreExpansion(getStoreCardKey(store))}
 														>
 															{isExpanded ? (
 																<ChevronUp className="h-4 w-4" />
@@ -633,31 +874,7 @@ export const HotProductsDashboard = ({
 											</CardHeader>
 											{isExpanded && (
 												<CardContent>
-													<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-														{store.products
-															.sort((a, b) => b.frequency - a.frequency)
-															.map((product, productIndex) => (
-																<div
-																	key={getProductKey(product, productIndex, `grid-${store.storeId}`)}
-																	className="p-3 border rounded-lg hover:bg-gray-50 transition-colors"
-																>
-																	<div className="font-medium text-sm mb-1">
-																		{product.productName}
-																	</div>
-																	<div className="text-xs text-gray-500 mb-2 font-mono">
-																		{product.barcode}
-																	</div>
-																	<div className="flex items-center justify-between">
-																		<span className="text-xs text-gray-600">
-																			{product.frequency} ×
-																		</span>
-																		<span className="text-xs font-semibold">
-																			£{product.lostValue.toFixed(2)}
-																		</span>
-																	</div>
-																</div>
-															))}
-													</div>
+													<StoreHeatmapDetail store={store} />
 												</CardContent>
 											)}
 										</Card>
@@ -732,8 +949,8 @@ export const HotProductsDashboard = ({
 										<TableRow>
 											<TableHead>Store</TableHead>
 											<TableHead>Risk Level</TableHead>
-											<TableHead>Incidents</TableHead>
-											<TableHead>Products Affected</TableHead>
+											<TableHead>Theft incidents</TableHead>
+											<TableHead>Product groups</TableHead>
 											<TableHead className="text-right">Total Value Lost</TableHead>
 											<TableHead className="text-right">Recovery Rate</TableHead>
 											<TableHead className="text-right">Actions</TableHead>
@@ -742,10 +959,10 @@ export const HotProductsDashboard = ({
 									<TableBody>
 										{paginatedStores.map((store) => {
 											const totalValue = store.totalValueLost
-											const isExpanded = expandedStores.has(store.storeId)
+											const isExpanded = expandedStores.has(getStoreCardKey(store))
 
 											return (
-												<Fragment key={store.storeId}>
+												<Fragment key={getStoreCardKey(store)}>
 													<TableRow>
 														<TableCell className="font-medium">{store.storeName}</TableCell>
 														<TableCell>
@@ -759,8 +976,8 @@ export const HotProductsDashboard = ({
 																{store.riskLevel.toUpperCase()}
 															</Badge>
 														</TableCell>
-														<TableCell>{store.totalIncidents}</TableCell>
-														<TableCell>{store.products.length}</TableCell>
+														<TableCell>{store.incidentsWithStolenItems ?? 0}</TableCell>
+														<TableCell>{store.productGroupCount ?? store.products.length}</TableCell>
 														<TableCell className="text-right font-semibold">
 															£{totalValue.toLocaleString('en-GB', {
 																minimumFractionDigits: 2,
@@ -772,7 +989,7 @@ export const HotProductsDashboard = ({
 															<Button
 																variant="ghost"
 																size="sm"
-																onClick={() => toggleStoreExpansion(store.storeId)}
+																onClick={() => toggleStoreExpansion(getStoreCardKey(store))}
 															>
 																{isExpanded ? (
 																	<>
@@ -792,32 +1009,7 @@ export const HotProductsDashboard = ({
 														<TableRow>
 															<TableCell colSpan={7} className="bg-gray-50">
 																<div className="p-4">
-																	<div className="text-sm font-semibold mb-3">Products:</div>
-																	<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-																		{store.products
-																			.sort((a, b) => b.frequency - a.frequency)
-																			.map((product, productIndex) => (
-																				<div
-																					key={getProductKey(product, productIndex, `detail-${store.storeId}`)}
-																					className="p-3 bg-white border rounded-lg"
-																				>
-																					<div className="font-medium text-sm mb-1">
-																						{product.productName}
-																					</div>
-																					<div className="text-xs text-gray-500 mb-2 font-mono">
-																						{product.barcode}
-																					</div>
-																					<div className="flex items-center justify-between text-xs">
-																						<span className="text-gray-600">
-																							{product.frequency} ×
-																						</span>
-																						<span className="font-semibold">
-																							£{product.lostValue.toFixed(2)}
-																						</span>
-																					</div>
-																				</div>
-																			))}
-																	</div>
+																	<StoreHeatmapDetail store={store} />
 																</div>
 															</TableCell>
 														</TableRow>

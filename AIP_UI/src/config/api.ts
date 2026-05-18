@@ -1,6 +1,7 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
 import { sessionStore } from '@/state/sessionStore'
 import { applyCsrfHeader } from '@/utils/csrf'
+import { applyBearerHeader } from '@/utils/bearerAuth'
 import { persistAuthMetadataFromApiEnvelope } from '@/utils/authSession'
 import { API_BASE_URL, isDevelopment } from './env'
 
@@ -50,10 +51,14 @@ api.interceptors.request.use(
       })
     }
 
+    let headers = (config.headers ?? {}) as Record<string, string>
+    headers = applyBearerHeader(headers)
+
     if (!isPublicEndpoint(config.url)) {
-      config.headers = applyCsrfHeader(config.headers as Record<string, string>)
+      headers = applyCsrfHeader(headers)
     }
 
+    config.headers = headers
     return config
   },
   (error) => {
@@ -88,9 +93,10 @@ const isAuthSessionResponse = (url?: string): boolean => {
 
 const refreshAccessToken = async (): Promise<boolean> => {
   try {
+    const storedRefreshToken = sessionStore.getRefreshToken()
     const response = await api.post(
       '/Auth/refresh',
-      {},
+      storedRefreshToken ? { refreshToken: storedRefreshToken } : {},
       {
         timeout: AUTH_REQUEST_TIMEOUT_MS,
       }
@@ -112,21 +118,11 @@ const refreshAccessToken = async (): Promise<boolean> => {
       (refreshData?.ExpiresAt as string | undefined) ??
       (refreshData?.expiresAt as string | undefined)
     const user = (refreshData?.User ?? refreshData?.user) as Parameters<typeof sessionStore.setUser>[0] | undefined
-    const csrfToken =
-      (refreshData?.CsrfToken as string | undefined) ??
-      (refreshData?.csrfToken as string | undefined)
-
-    if (expiresAt) {
-      sessionStore.setTokenExpiresAt(expiresAt)
-    }
-
-    if (csrfToken) {
-      sessionStore.setCsrfToken(csrfToken)
-    }
-
     if (user) {
       sessionStore.setUser(user)
     }
+
+    persistAuthMetadataFromApiEnvelope({ Data: refreshData })
 
     if (isDevelopment) {
       console.log('✅ [Auth] Session refreshed successfully')

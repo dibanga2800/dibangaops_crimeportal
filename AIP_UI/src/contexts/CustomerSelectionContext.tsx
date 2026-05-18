@@ -49,7 +49,7 @@ export const CustomerSelectionProvider: React.FC<CustomerSelectionProviderProps>
 
 	useEffect(() => {
 		if (isAdmin) {
-			setSelectedCustomerIdState(null)
+			// Keep admin customer selection (auto-selected from dropdown); only reset site/region scope.
 			setSelectedSiteIdState(null)
 			setSelectedRegionIdState(null)
 		} else if (isManager && assignedCustomers.length > 0) {

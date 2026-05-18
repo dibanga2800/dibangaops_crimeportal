@@ -85,11 +85,11 @@ const getTrendIcon = (trend: string) => {
 const getTrendLabel = (trend: string) => {
 	switch (trend) {
 		case 'increasing':
-			return 'Increasing — incident volume rising vs prior 30 days'
+			return 'Rising vs prior 30 days'
 		case 'decreasing':
-			return 'Decreasing — incident volume falling vs prior 30 days'
+			return 'Falling vs prior 30 days'
 		default:
-			return 'Stable — similar volume to prior 30 days'
+			return 'Stable vs prior 30 days'
 	}
 }
 
@@ -186,9 +186,7 @@ const StoreRiskDetailPanel = ({ store, rank }: StoreRiskDetailPanelProps) => {
 					<p className="text-xs font-medium text-muted-foreground mb-1">Deployment</p>
 					<p className="text-sm">{store.recommendedOfficerType}</p>
 					<p className="text-xs text-muted-foreground mt-1">
-						{store.recommendedLPM
-							? 'LPM involvement recommended (shoplifting or threats and intimidation)'
-							: 'LPM not required — no shoplifting or threats and intimidation in this period'}
+						{store.recommendedLPM ? 'LPM recommended' : 'LPM not required'}
 					</p>
 				</div>
 				<div className="rounded-md border border-border bg-background p-3">
@@ -207,18 +205,6 @@ const StoreRiskDetailPanel = ({ store, rank }: StoreRiskDetailPanelProps) => {
 				</div>
 			</div>
 
-			{store.reasonDetails && store.reasonDetails.length > 0 && (
-				<div>
-					<p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
-						Additional detail
-					</p>
-					<ul className="text-sm text-muted-foreground list-disc pl-5 space-y-1">
-						{store.reasonDetails.map((detail, detailIndex) => (
-							<li key={detailIndex}>{detail}</li>
-						))}
-					</ul>
-				</div>
-			)}
 		</div>
 	)
 }
@@ -285,7 +271,7 @@ export const ResourceDeploymentEngine = ({
 					Resource Deployment Engine
 				</CardTitle>
 				<CardDescription>
-					Data-driven deployment recommendations from incident records in the selected period
+					Deployment times and store risk from incidents in the selected date range
 				</CardDescription>
 			</CardHeader>
 			<CardContent className="pt-6">
@@ -354,14 +340,12 @@ export const ResourceDeploymentEngine = ({
 														<span className="font-medium">{rec.recommendedOfficers}</span>{' '}
 														officers
 													</div>
-													<div className="text-sm text-gray-600 max-w-md">{rec.reason}</div>
-													{rec.reasonDetails && rec.reasonDetails.length > 0 && (
-														<ul className="text-xs text-gray-500 list-disc pl-4">
-															{rec.reasonDetails.map((detail, detailIndex) => (
-																<li key={detailIndex}>{detail}</li>
-															))}
-														</ul>
-													)}
+													<p
+														className="text-sm text-gray-600 max-w-md line-clamp-2"
+														title={rec.reason}
+													>
+														{rec.reason}
+													</p>
 													</div>
 													<div className="text-right">
 														<div className="text-sm font-semibold text-red-600">
@@ -445,8 +429,7 @@ export const ResourceDeploymentEngine = ({
 
 					<TabsContent value="risk-ranking" className="space-y-6 mt-6">
 						<p className="text-sm text-muted-foreground">
-							Click a store row to view how its risk score and deployment recommendations were
-							calculated from incident data.
+							Click a store for risk breakdown and deployment detail.
 						</p>
 						<div className="border rounded-lg overflow-hidden">
 							<Table>

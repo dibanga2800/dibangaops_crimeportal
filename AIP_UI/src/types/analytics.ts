@@ -39,6 +39,10 @@ export interface StoreDrilldownData {
 	storeName: string
 	incidents: number
 	incidentTypes: IncidentTypeData[]
+	incidentsByDay?: Record<string, number>
+	incidentsByHour?: Record<string, number>
+	incidentTypesByDay?: Record<string, IncidentTypeData[]>
+	incidentTypesByHour?: Record<string, IncidentTypeData[]>
 	totalStolenValue: number
 	totalRecoveredValue: number
 	totalLostValue: number
@@ -72,6 +76,16 @@ export interface CrimeTrendData {
 // Hot Products Dashboard Types
 // ============================================================================
 
+export interface ProductStoreBreakdown {
+	storeId: number
+	storeName: string
+	frequency: number
+	stolenValue: number
+	recoveredValue: number
+	lostValue: number
+	recoveryRate: number
+}
+
 export interface ProductFrequencyData {
 	barcode: string
 	productName: string
@@ -82,6 +96,7 @@ export interface ProductFrequencyData {
 	lostValue: number
 	recoveryRate: number
 	storesAffected: number
+	stores?: ProductStoreBreakdown[]
 	reason?: string
 }
 
@@ -96,16 +111,31 @@ export interface StoreProductItemData {
 	recoveryRate: number
 }
 
+export interface StoreProductRiskFactor {
+	factor: string
+	score: number
+	description: string
+}
+
 export interface StoreProductHeatmapData {
 	storeId: number
 	storeName: string
 	products: StoreProductItemData[]
+	/** All incidents at the store in the period */
 	totalIncidents: number
+	/** Incidents that include stolen product lines */
+	incidentsWithStolenItems: number
+	/** Stolen product line items (can exceed incident count) */
+	productLineCount: number
+	productGroupCount: number
 	totalValueStolen: number
 	totalValueRecovered: number
 	totalValueLost: number
 	recoveryRate: number
 	riskLevel: 'low' | 'medium' | 'high' | 'critical'
+	riskScore: number
+	riskSummary: string
+	riskFactors: StoreProductRiskFactor[]
 }
 
 export interface HotProductsData {
@@ -148,6 +178,25 @@ export interface StoreRecoveryComparison {
 // Repeat Offender Analysis Types
 // ============================================================================
 
+export interface LinkedIncidentStolenProduct {
+	productName: string
+	barcode: string
+	quantity: number
+	lostValue: number
+}
+
+export interface OffenderIncidentSummary {
+	incidentId: string
+	date: string
+	timeOfIncident: string
+	dateTimeLabel: string
+	storeName: string
+	incidentType: string
+	value: number
+	stolenProductsSummary: string
+	stolenProducts: LinkedIncidentStolenProduct[]
+}
+
 export interface OffenderProfile {
 	offenderId: string
 	name: string
@@ -157,18 +206,26 @@ export interface OffenderProfile {
 	storesTargeted: string[]
 	totalValue: number
 	riskLevel: 'low' | 'medium' | 'high' | 'critical'
-	modusOperandi: string[]
+	incidents?: OffenderIncidentSummary[]
+}
+
+export interface CrossStoreMovementEvent {
+	storeName: string
+	fromStore?: string
+	toStore?: string
+	previousStore?: string
+	date: string
+	dateTimeLabel?: string
+	incidentType: string
+	incidentId?: string
+	stolenProductsSummary?: string
+	value?: number
 }
 
 export interface CrossStoreMovement {
 	offenderId: string
 	offenderName: string
-	movements: {
-		fromStore: string
-		toStore: string
-		date: string
-		incidentType: string
-	}[]
+	movements: CrossStoreMovementEvent[]
 	totalStores: number
 }
 
@@ -252,6 +309,8 @@ export interface DeploymentRecommendation {
 export interface LinkedIncident {
 	incidentId: string
 	date: string
+	timeOfIncident?: string
+	dateTimeLabel?: string
 	storeName: string
 	incidentType: string
 	offenderId?: string
@@ -259,10 +318,13 @@ export interface LinkedIncident {
 	value: number
 	similarityScore: number
 	matchingFeatures: string[]
+	stolenProductsSummary?: string
+	stolenProducts?: LinkedIncidentStolenProduct[]
 }
 
 export interface IncidentCluster {
 	clusterId: string
+	title?: string
 	incidents: LinkedIncident[]
 	commonFeatures: string[]
 	suspectedOffender?: {
@@ -285,8 +347,12 @@ export interface OffenderChain {
 	incidents: LinkedIncident[]
 	timeline: {
 		date: string
+		timeOfIncident?: string
+		dateTimeLabel?: string
 		store: string
 		incidentType: string
+		stolenProductsSummary?: string
+		stolenProducts?: LinkedIncidentStolenProduct[]
 	}[]
 	totalValue: number
 	pattern: string

@@ -594,10 +594,7 @@ namespace AIPBackend.Controllers
                     }
                 }
 
-                // Get user roles
-                var roles = (await _userManager.GetRolesAsync(user))
-                    .Select(r => r.Trim().ToLowerInvariant())
-                    .ToList();
+                var roles = await ResolveEffectiveRolesAsync(user);
 
                 // Generate new tokens
                 var newAccessToken = _jwtService.GenerateAccessToken(user, roles);

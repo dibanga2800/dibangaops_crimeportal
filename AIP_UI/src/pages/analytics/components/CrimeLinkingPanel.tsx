@@ -25,6 +25,9 @@ import {
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { CrimeLinkingData } from '@/types/analytics'
+import { formatOffenderDisplayName } from '../offenderDisplay'
+import { formatConfidencePercent, getClusterTitle } from '../crimeLinkingDisplay'
+import { LinkedIncidentProducts } from './LinkedIncidentProducts'
 import {
 	Link as LinkIcon,
 	Network,
@@ -128,6 +131,11 @@ export const CrimeLinkingPanel = ({
 					</TabsList>
 
 					<TabsContent value="clusters" className="space-y-4">
+						{sortedClusters.length === 0 && (
+							<div className="rounded-lg border border-dashed p-8 text-center text-sm text-gray-500">
+								No incident clusters in the selected period.
+							</div>
+						)}
 						{sortedClusters.map((cluster) => {
 							const isExpanded = expandedClusters.has(cluster.clusterId)
 
@@ -136,7 +144,7 @@ export const CrimeLinkingPanel = ({
 									<CardHeader>
 										<div className="flex items-center justify-between">
 											<div className="flex-1">
-												<CardTitle className="text-base">{cluster.clusterId}</CardTitle>
+												<CardTitle className="text-base">{getClusterTitle(cluster)}</CardTitle>
 												<CardDescription>
 													{cluster.incidents.length} linked incidents •{' '}
 													{new Date(cluster.dateRange.start).toLocaleDateString()} -{' '}
@@ -149,8 +157,11 @@ export const CrimeLinkingPanel = ({
 											<div className="flex items-center gap-2">
 												{cluster.suspectedOffender && (
 													<Badge variant="outline">
-														{cluster.suspectedOffender.name} (
-														{(cluster.suspectedOffender.confidence * 100).toFixed(0)}% confidence)
+														{formatOffenderDisplayName(
+															cluster.suspectedOffender.name,
+															cluster.suspectedOffender.id,
+														)}{' '}
+														({formatConfidencePercent(cluster.suspectedOffender.confidence)} confidence)
 													</Badge>
 												)}
 												<Badge variant="secondary">
@@ -195,8 +206,9 @@ export const CrimeLinkingPanel = ({
 														<TableHeader>
 															<TableRow>
 																<TableHead>Incident ID</TableHead>
-																<TableHead>Date</TableHead>
+																<TableHead>Date & time</TableHead>
 																<TableHead>Store</TableHead>
+																<TableHead>Stolen products</TableHead>
 																<TableHead>Type</TableHead>
 																<TableHead>Value</TableHead>
 																<TableHead>Similarity</TableHead>
@@ -208,10 +220,16 @@ export const CrimeLinkingPanel = ({
 																	<TableCell className="font-mono text-xs">
 																		{incident.incidentId}
 																	</TableCell>
-																	<TableCell>
-																		{new Date(incident.date).toLocaleDateString()}
+																	<TableCell className="text-sm whitespace-nowrap">
+																		{incident.dateTimeLabel || incident.date || '—'}
 																	</TableCell>
-																	<TableCell>{incident.storeName}</TableCell>
+																	<TableCell>{incident.storeName || '—'}</TableCell>
+																	<TableCell>
+																		<LinkedIncidentProducts
+																			summary={incident.stolenProductsSummary}
+																			products={incident.stolenProducts}
+																		/>
+																	</TableCell>
 																	<TableCell>
 																		<Badge variant="secondary" className="text-xs">
 																			{incident.incidentType}
@@ -237,6 +255,11 @@ export const CrimeLinkingPanel = ({
 					</TabsContent>
 
 					<TabsContent value="chains" className="space-y-6 mt-6">
+						{sortedChains.length === 0 && (
+							<div className="rounded-lg border border-dashed p-8 text-center text-sm text-gray-500">
+								No offender chains (repeat offenders with 2+ incidents) in this period.
+							</div>
+						)}
 						{sortedChains.map((chain) => {
 							const isExpanded = expandedChains.has(chain.chainId)
 
@@ -245,7 +268,9 @@ export const CrimeLinkingPanel = ({
 									<CardHeader>
 										<div className="flex items-center justify-between">
 											<div className="flex-1">
-												<CardTitle className="text-base">{chain.offenderName}</CardTitle>
+												<CardTitle className="text-base">
+													{formatOffenderDisplayName(chain.offenderName, chain.offenderId)}
+												</CardTitle>
 												<CardDescription>
 													{chain.chainId} • {chain.incidents.length} incidents • Pattern:{' '}
 													{chain.pattern}
@@ -284,20 +309,26 @@ export const CrimeLinkingPanel = ({
 													{chain.timeline.map((event, index) => (
 														<div
 															key={index}
-															className="flex items-center gap-4 p-3 border rounded-lg hover:bg-gray-50 transition-colors"
+															className="flex items-start gap-4 p-3 border rounded-lg hover:bg-gray-50 transition-colors"
 														>
-															<div className="flex items-center gap-2 text-sm text-gray-500 min-w-[100px]">
+															<div className="flex items-center gap-2 text-sm text-gray-500 min-w-[140px] shrink-0">
 																<Calendar className="h-4 w-4" />
-																{new Date(event.date).toLocaleDateString()}
+																<span>{event.dateTimeLabel || event.date}</span>
 															</div>
-															<ArrowRight className="h-4 w-4 text-gray-400" />
-															<div className="flex items-center gap-2 flex-1">
-																<MapPin className="h-4 w-4 text-gray-400" />
-																<span className="font-medium">{event.store}</span>
+															<ArrowRight className="h-4 w-4 text-gray-400 shrink-0 mt-0.5" />
+															<div className="flex-1 min-w-0 space-y-1">
+																<div className="flex items-center gap-2 flex-wrap">
+																	<MapPin className="h-4 w-4 text-gray-400 shrink-0" />
+																	<span className="font-medium">{event.store || '—'}</span>
+																	<Badge variant="outline" className="text-xs">
+																		{event.incidentType}
+																	</Badge>
+																</div>
+																<LinkedIncidentProducts
+																	summary={event.stolenProductsSummary}
+																	products={event.stolenProducts}
+																/>
 															</div>
-															<Badge variant="outline" className="text-xs">
-																{event.incidentType}
-															</Badge>
 														</div>
 													))}
 												</div>
@@ -311,8 +342,9 @@ export const CrimeLinkingPanel = ({
 														<TableHeader>
 															<TableRow>
 																<TableHead>Incident ID</TableHead>
-																<TableHead>Date</TableHead>
+																<TableHead>Date & time</TableHead>
 																<TableHead>Store</TableHead>
+																<TableHead>Stolen products</TableHead>
 																<TableHead>Type</TableHead>
 																<TableHead className="text-right">Value</TableHead>
 															</TableRow>
@@ -323,10 +355,16 @@ export const CrimeLinkingPanel = ({
 																	<TableCell className="font-mono text-xs">
 																		{incident.incidentId}
 																	</TableCell>
-																	<TableCell>
-																		{new Date(incident.date).toLocaleDateString()}
+																	<TableCell className="text-sm whitespace-nowrap">
+																		{incident.dateTimeLabel || incident.date || '—'}
 																	</TableCell>
-																	<TableCell>{incident.storeName}</TableCell>
+																	<TableCell>{incident.storeName || '—'}</TableCell>
+																	<TableCell>
+																		<LinkedIncidentProducts
+																			summary={incident.stolenProductsSummary}
+																			products={incident.stolenProducts}
+																		/>
+																	</TableCell>
 																	<TableCell>
 																		<Badge variant="secondary" className="text-xs">
 																			{incident.incidentType}

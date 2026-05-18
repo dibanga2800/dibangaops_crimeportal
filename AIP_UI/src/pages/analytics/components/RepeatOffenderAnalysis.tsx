@@ -25,11 +25,13 @@ import {
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { RepeatOffenderData } from '@/types/analytics'
+import { formatOffenderDisplayName } from '../offenderDisplay'
+import { LinkedIncidentProducts } from './LinkedIncidentProducts'
+import { OffenderNetworkGraph } from './OffenderNetworkGraph'
 import {
 	Users,
 	MapPin,
 	Network,
-	ArrowRight,
 	AlertTriangle,
 	TrendingUp,
 } from 'lucide-react'
@@ -55,6 +57,11 @@ export const RepeatOffenderAnalysis = ({
 	loading = false,
 }: RepeatOffenderAnalysisProps) => {
 	const [selectedOffenderId, setSelectedOffenderId] = useState<string | null>(null)
+
+	const repeatOffenderCount = useMemo(
+		() => data.mostActive.filter((o) => o.incidentCount >= 2).length,
+		[data.mostActive],
+	)
 
 	const selectedOffender = useMemo(() => {
 		if (!selectedOffenderId) return null
@@ -106,21 +113,24 @@ export const RepeatOffenderAnalysis = ({
 							</Card>
 							<Card>
 								<CardContent className="p-4">
-									<div className="text-sm text-gray-500">High Risk</div>
-									<div className="text-2xl font-bold text-red-600">
-										{data.mostActive.filter((o) => o.riskLevel === 'high' || o.riskLevel === 'critical').length}
-									</div>
+									<div className="text-sm text-gray-500">Repeat (2+ incidents)</div>
+									<div className="text-2xl font-bold">{repeatOffenderCount}</div>
 								</CardContent>
 							</Card>
 							<Card>
 								<CardContent className="p-4">
 									<div className="text-sm text-gray-500">Multi-Store</div>
 									<div className="text-2xl font-bold">
-										{data.mostActive.filter((o) => o.storesTargeted.length > 2).length}
+										{data.crossStoreMovements.length}
 									</div>
 								</CardContent>
 							</Card>
 						</div>
+
+						<p className="text-xs text-muted-foreground">
+							All identified offenders in the selected period (N/A and placeholders excluded).
+							Single-incident offenders show as low risk.
+						</p>
 
 						<div className="border rounded-lg">
 							<Table>
@@ -136,13 +146,23 @@ export const RepeatOffenderAnalysis = ({
 									</TableRow>
 								</TableHeader>
 								<TableBody>
+									{data.mostActive.length === 0 && (
+										<TableRow>
+											<TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+												No identified offenders in the selected period.
+											</TableCell>
+										</TableRow>
+									)}
 									{data.mostActive.map((offender) => (
 									<TableRow key={offender.offenderId}>
 											<TableCell className="font-medium">
-												{offender.name}
+												{formatOffenderDisplayName(offender.name, offender.offenderId)}
 											</TableCell>
 											<TableCell>
-												<Badge variant="outline">{offender.incidentCount}</Badge>
+												<Badge variant="outline">
+													{offender.incidentCount}
+													{offender.incidentCount < 2 ? ' (single)' : ''}
+												</Badge>
 											</TableCell>
 											<TableCell>
 												<div className="flex flex-wrap gap-1">
@@ -193,7 +213,12 @@ export const RepeatOffenderAnalysis = ({
 						{selectedOffender && (
 							<Card className="mt-4">
 								<CardHeader>
-									<CardTitle>{selectedOffender.name}</CardTitle>
+									<CardTitle>
+										{formatOffenderDisplayName(
+											selectedOffender.name,
+											selectedOffender.offenderId,
+										)}
+									</CardTitle>
 									<CardDescription>Detailed offender profile</CardDescription>
 								</CardHeader>
 								<CardContent className="space-y-4">
@@ -235,16 +260,6 @@ export const RepeatOffenderAnalysis = ({
 											))}
 										</div>
 									</div>
-									<div>
-										<div className="text-sm text-gray-500 mb-2">Modus Operandi</div>
-										<div className="flex flex-wrap gap-2">
-											{selectedOffender.modusOperandi.map((mo) => (
-												<Badge key={mo} variant="outline">
-													{mo}
-												</Badge>
-											))}
-										</div>
-									</div>
 									<div className="grid grid-cols-2 gap-4">
 										<div>
 											<div className="text-sm text-gray-500">First Incident</div>
@@ -259,6 +274,48 @@ export const RepeatOffenderAnalysis = ({
 											</div>
 										</div>
 									</div>
+									{(selectedOffender.incidents?.length ?? 0) > 0 && (
+										<div>
+											<div className="text-sm text-gray-500 mb-2">Linked incidents</div>
+											<div className="border rounded-lg overflow-x-auto">
+												<Table>
+													<TableHeader>
+														<TableRow>
+															<TableHead>Date & time</TableHead>
+															<TableHead>Store</TableHead>
+															<TableHead>Stolen products</TableHead>
+															<TableHead>Type</TableHead>
+															<TableHead className="text-right">Value</TableHead>
+														</TableRow>
+													</TableHeader>
+													<TableBody>
+														{selectedOffender.incidents?.map((incident) => (
+															<TableRow key={incident.incidentId}>
+																<TableCell className="text-sm whitespace-nowrap">
+																	{incident.dateTimeLabel || incident.date}
+																</TableCell>
+																<TableCell>{incident.storeName || '—'}</TableCell>
+																<TableCell>
+																	<LinkedIncidentProducts
+																		summary={incident.stolenProductsSummary}
+																		products={incident.stolenProducts}
+																	/>
+																</TableCell>
+																<TableCell>
+																	<Badge variant="secondary" className="text-xs">
+																		{incident.incidentType}
+																	</Badge>
+																</TableCell>
+																<TableCell className="text-right">
+																	£{incident.value.toFixed(2)}
+																</TableCell>
+															</TableRow>
+														))}
+													</TableBody>
+												</Table>
+											</div>
+										</div>
+									)}
 									<Button
 										variant="outline"
 										onClick={() => setSelectedOffenderId(null)}
@@ -271,12 +328,19 @@ export const RepeatOffenderAnalysis = ({
 					</TabsContent>
 
 					<TabsContent value="movements" className="space-y-6 mt-6">
+						{data.crossStoreMovements.length === 0 && (
+							<div className="rounded-lg border border-dashed p-8 text-center text-sm text-gray-500">
+								No offenders with activity across multiple stores in this period.
+							</div>
+						)}
 						{data.crossStoreMovements.map((movement) => (
 							<Card key={movement.offenderId}>
 								<CardHeader>
 									<div className="flex items-center justify-between">
 										<div>
-											<CardTitle className="text-base">{movement.offenderName}</CardTitle>
+											<CardTitle className="text-base">
+												{formatOffenderDisplayName(movement.offenderName, movement.offenderId)}
+											</CardTitle>
 											<CardDescription>{movement.offenderId}</CardDescription>
 										</div>
 										<Badge variant="outline">
@@ -286,28 +350,53 @@ export const RepeatOffenderAnalysis = ({
 								</CardHeader>
 								<CardContent>
 									<div className="space-y-3">
-										{movement.movements.map((move, index) => (
+										{movement.movements.map((move, index) => {
+										const storeLabel =
+											move.storeName || move.toStore || move.fromStore || '—'
+										const showTransition =
+											Boolean(move.previousStore || (move.fromStore && move.toStore))
+
+										return (
 											<div
-												key={index}
-												className="flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50 transition-colors"
+												key={move.incidentId || `${movement.offenderId}-${index}`}
+												className="flex flex-col gap-2 p-3 border rounded-lg hover:bg-gray-50 transition-colors sm:flex-row sm:items-start sm:gap-4"
 											>
-												<div className="flex items-center gap-2 flex-1">
-													<MapPin className="h-4 w-4 text-gray-400" />
-													<span className="font-medium">{move.fromStore}</span>
+												<div className="text-sm text-gray-500 min-w-[140px] shrink-0">
+													{move.dateTimeLabel ||
+														(move.date
+															? new Date(move.date).toLocaleDateString()
+															: '—')}
 												</div>
-												<ArrowRight className="h-4 w-4 text-gray-400" />
-												<div className="flex items-center gap-2 flex-1">
-													<MapPin className="h-4 w-4 text-gray-400" />
-													<span className="font-medium">{move.toStore}</span>
+												<div className="flex-1 min-w-0 space-y-1">
+													<div className="flex flex-wrap items-center gap-2">
+														<MapPin className="h-4 w-4 text-gray-400 shrink-0" />
+														<span className="font-medium">{storeLabel}</span>
+														{showTransition && (
+															<Badge variant="outline" className="text-xs">
+																Store change
+																{move.previousStore
+																	? ` from ${move.previousStore}`
+																	: ''}
+															</Badge>
+														)}
+														<Badge variant="secondary" className="text-xs">
+															{move.incidentType}
+														</Badge>
+														{typeof move.value === 'number' && move.value > 0 && (
+															<span className="text-xs text-gray-500">
+																£{move.value.toFixed(2)} lost
+															</span>
+														)}
+													</div>
+													{move.stolenProductsSummary && (
+														<p className="text-xs text-gray-600">
+															{move.stolenProductsSummary}
+														</p>
+													)}
 												</div>
-												<div className="text-sm text-gray-500">
-													{new Date(move.date).toLocaleDateString()}
-												</div>
-												<Badge variant="secondary" className="text-xs">
-													{move.incidentType}
-												</Badge>
 											</div>
-										))}
+										)
+									})}
 									</div>
 								</CardContent>
 							</Card>
@@ -326,46 +415,31 @@ export const RepeatOffenderAnalysis = ({
 								</CardDescription>
 							</CardHeader>
 							<CardContent>
-								<div className="relative border rounded-lg bg-gray-50 min-h-[500px] flex items-center justify-center">
-									<div className="text-center space-y-2">
-										<Network className="h-12 w-12 mx-auto text-gray-400" />
-										<p className="text-gray-500">
-											Network map visualization
-										</p>
-										<p className="text-sm text-gray-400">
-											{data.networkMap.nodes.length} nodes, {data.networkMap.links.length} connections
-										</p>
-										<div className="mt-4 space-y-2">
-											<div className="flex items-center justify-center gap-4">
-												<div className="flex items-center gap-2">
-													<div className="w-3 h-3 rounded-full bg-blue-500" />
-													<span className="text-sm">Offenders</span>
-												</div>
-												<div className="flex items-center gap-2">
-													<div className="w-3 h-3 rounded-full bg-green-500" />
-													<span className="text-sm">Stores</span>
-												</div>
-											</div>
-											<p className="text-xs text-gray-400 mt-4">
-												Interactive network visualization will be implemented with a graph library
-											</p>
-										</div>
-									</div>
+							<OffenderNetworkGraph data={data.networkMap} />
+							<div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+								<Card>
+									<CardContent className="p-4">
+										<div className="text-sm text-gray-500">Total Nodes</div>
+										<div className="text-2xl font-bold">{data.networkMap.nodes.length}</div>
+									</CardContent>
+								</Card>
+								<Card>
+									<CardContent className="p-4">
+										<div className="text-sm text-gray-500">Total Connections</div>
+										<div className="text-2xl font-bold">{data.networkMap.links.length}</div>
+									</CardContent>
+								</Card>
+							</div>
+							<div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-sm text-gray-600">
+								<div className="flex items-center gap-2">
+									<div className="h-3 w-3 rounded-full bg-blue-500" />
+									<span>Offenders</span>
 								</div>
-								<div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-									<Card>
-										<CardContent className="p-4">
-											<div className="text-sm text-gray-500">Total Nodes</div>
-											<div className="text-2xl font-bold">{data.networkMap.nodes.length}</div>
-										</CardContent>
-									</Card>
-									<Card>
-										<CardContent className="p-4">
-											<div className="text-sm text-gray-500">Total Connections</div>
-											<div className="text-2xl font-bold">{data.networkMap.links.length}</div>
-										</CardContent>
-									</Card>
+								<div className="flex items-center gap-2">
+									<div className="h-3 w-3 rounded-full bg-green-500" />
+									<span>Stores</span>
 								</div>
+							</div>
 							</CardContent>
 						</Card>
 					</TabsContent>

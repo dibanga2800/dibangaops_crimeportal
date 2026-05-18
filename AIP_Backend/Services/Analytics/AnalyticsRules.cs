@@ -35,11 +35,73 @@ namespace AIPBackend.Services.Analytics
 		public static bool RequiresLpm(IEnumerable<Incident> incidents) =>
 			incidents.Any(RequiresLpm);
 
+		private static readonly HashSet<string> NonIdentifiedOffenderNames = new(StringComparer.OrdinalIgnoreCase)
+		{
+			"n/a",
+			"na",
+			"n.a.",
+			"n.a",
+			"not applicable",
+			"unknown",
+			"none",
+			"nil",
+			"-",
+			"—",
+			"tbc",
+			"tba",
+		};
+
+		/// <summary>
+		/// True when the offender name is a real identity — not a placeholder such as N/A (not applicable).
+		/// </summary>
+		public static bool HasIdentifiedOffenderName(string? offenderName)
+		{
+			if (string.IsNullOrWhiteSpace(offenderName))
+			{
+				return false;
+			}
+
+			return !NonIdentifiedOffenderNames.Contains(offenderName.Trim());
+		}
+
+		public static bool IncidentHasIdentifiedOffender(Incident incident) =>
+			!string.IsNullOrWhiteSpace(incident.OffenderId) || HasIdentifiedOffenderName(incident.OffenderName);
+
+		public static string GetOffenderDisplayName(Incident incident)
+		{
+			if (HasIdentifiedOffenderName(incident.OffenderName))
+			{
+				return incident.OffenderName!.Trim();
+			}
+
+			if (!string.IsNullOrWhiteSpace(incident.OffenderId))
+			{
+				return $"Offender {incident.OffenderId.Trim()}";
+			}
+
+			return string.Empty;
+		}
+
 		public static string ToRiskLevel(double riskScore) =>
 			riskScore >= 0.7 ? "critical"
 				: riskScore >= 0.4 ? "high"
 				: riskScore >= 0.2 ? "medium"
 				: "low";
+
+		/// <summary>Short label for UI: score bands are volume + value + police + recency (max 100%).</summary>
+		public static string BuildStoreRiskSummary(LocationRiskBreakdown breakdown)
+		{
+			if (breakdown.IncidentCount == 0)
+			{
+				return "No incidents in the selected period.";
+			}
+
+			var factorText = breakdown.Factors.Any()
+				? string.Join(" · ", breakdown.Factors.Take(3).Select(f => f.Description))
+				: "Insufficient factor data";
+
+			return $"{breakdown.Level.ToUpperInvariant()} ({breakdown.Score:P0}): {factorText}";
+		}
 
 		public static string ToDeploymentPriority(double ratio) =>
 			ratio >= 0.7 ? "critical"
@@ -148,18 +210,15 @@ namespace AIPBackend.Services.Analytics
 			var lpmCount = slotIncidents.Count(RequiresLpm);
 			var lostValue = slotIncidents.Sum(i => GetIncidentLostValueForRules(i));
 
-			var parts = new List<string>
-			{
-				$"{slotCount} incident{(slotCount == 1 ? "" : "s")} on {day} at {hourLabel} ({pct}% of {totalIncidents} in period)",
-				$"£{lostValue:N0} lost in this window",
-			};
+			var text =
+				$"{slotCount} on {day} {hourLabel} ({pct}% of period). £{lostValue:N0} lost.";
 
 			if (lpmCount > 0)
 			{
-				parts.Add($"LPM recommended: {lpmCount} incident{(lpmCount == 1 ? "" : "s")} match LPM categories (shoplifting or threats and intimidation)");
+				text += $" LPM: {lpmCount} shoplifting/threat case{(lpmCount == 1 ? "" : "s")}.";
 			}
 
-			return string.Join(". ", parts) + ".";
+			return text;
 		}
 
 		public static List<string> BuildTimeSlotReasonDetails(
@@ -167,10 +226,6 @@ namespace AIPBackend.Services.Analytics
 			int totalIncidents)
 		{
 			var details = new List<string>();
-			if (totalIncidents > 0)
-			{
-				details.Add($"Represents {Math.Round((double)slotIncidents.Count / totalIncidents * 100, 1)}% of all incidents in the filtered period");
-			}
 
 			var typeGroups = slotIncidents
 				.GroupBy(i => string.IsNullOrWhiteSpace(i.IncidentType) ? "Unspecified" : i.IncidentType.Trim())
@@ -184,7 +239,7 @@ namespace AIPBackend.Services.Analytics
 				details.Add($"Top types: {string.Join(", ", typeGroups)}");
 			}
 
-			details.Add($"Recommended {StoreDetectivesOfficerType} based on organisational deployment policy");
+			details.Add($"Deploy {StoreDetectivesOfficerType}");
 
 			return details;
 		}
@@ -200,21 +255,19 @@ namespace AIPBackend.Services.Analytics
 		{
 			var trendText = trend switch
 			{
-				"increasing" => $"up from {previousCount} to {recentCount} in the last 30 days vs prior 30",
-				"decreasing" => $"down from {previousCount} to {recentCount} in the last 30 days vs prior 30",
-				_ => $"{recentCount} incidents in the last 30 days (prior 30: {previousCount})",
+				"increasing" => $"↑ {recentCount} vs {previousCount} (30d)",
+				"decreasing" => $"↓ {recentCount} vs {previousCount} (30d)",
+				_ => $"{recentCount} in last 30d",
 			};
 
 			var peakText = peakHours.Any()
-				? $"Peak hours: {string.Join(", ", peakHours)}"
-				: "No consistent peak hour recorded";
+				? $"Peaks: {string.Join(", ", peakHours)}"
+				: "No peak hour";
 
-			var lpmText = recommendedLpm
-				? "LPM involvement recommended: at least one shoplifting or threats and intimidation incident in this period"
-				: "LPM not indicated: no shoplifting or threats and intimidation incidents in this period";
+			var lpmText = recommendedLpm ? "LPM: yes" : "LPM: no";
 
 			return
-				$"Rank #{rank}: risk score {breakdown.Score:F2} ({breakdown.Level}). " +
+				$"#{rank} · {breakdown.Level} risk ({breakdown.Score:P0}). " +
 				$"{breakdown.IncidentCount} incidents, £{breakdown.LostValue:N0} lost. {trendText}. {peakText}. {lpmText}.";
 		}
 

@@ -4,6 +4,7 @@ import { User } from '@/types/user';
 import { api, tryRefreshAccessToken, AUTH_REQUEST_TIMEOUT_MS } from '@/config/api';
 import { sessionStore } from '@/state/sessionStore';
 import { applyLoginPayload } from '@/utils/authSession';
+import { COOKIE_REQUIRED_MESSAGE, isUnauthorizedStatus } from '@/utils/authCookieHelp';
 import { ApiResponse } from '@/types/api';
 
 // Backend ApiResponseDto structure (capital case)
@@ -328,7 +329,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const verifyAuthenticatedSession = async (): Promise<boolean> => {
+  const verifyAuthenticatedSession = async (): Promise<{
+    ok: boolean;
+    likelyCookieBlocked: boolean;
+  }> => {
+    let probeStatus: number | undefined;
+
     try {
       const response = await api.get<BackendApiResponse<User>>('/Auth/me', {
         timeout: AUTH_REQUEST_TIMEOUT_MS,
@@ -347,10 +353,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         flushSync(() => {
           setUser(sessionStore.getUser());
         });
-        return true;
+        return { ok: true, likelyCookieBlocked: false };
       }
-    } catch {
-      // Fall through to refresh attempt.
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { status?: number } };
+      probeStatus = axiosErr?.response?.status;
     }
 
     const refreshed = await tryRefreshAccessToken();
@@ -358,8 +365,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       flushSync(() => {
         setUser(sessionStore.getUser());
       });
+      return { ok: true, likelyCookieBlocked: false };
     }
-    return refreshed;
+
+    // Login returned csrfToken but /Auth/me could not authenticate — cookies not stored/sent (incognito, blockers).
+    const likelyCookieBlocked =
+      isUnauthorizedStatus(probeStatus) &&
+      Boolean(sessionStore.getCsrfToken()) &&
+      !sessionStore.getAccessToken();
+
+    return { ok: false, likelyCookieBlocked };
   };
 
   const completeSessionFromPayload = async (
@@ -372,14 +387,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setError(null);
     });
 
-    const verified = await verifyAuthenticatedSession();
-    if (!verified) {
+    const verification = await verifyAuthenticatedSession();
+    if (!verification.ok) {
       sessionStore.clearAll();
       flushSync(() => {
         setUser(null);
       });
       throw new Error(
-        'Session could not be established. Allow cookies for this site or contact support if the problem continues.',
+        verification.likelyCookieBlocked
+          ? COOKIE_REQUIRED_MESSAGE
+          : 'Session could not be established. Please try again or contact support if the problem continues.',
       );
     }
 

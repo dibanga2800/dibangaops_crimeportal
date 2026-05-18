@@ -1,10 +1,31 @@
 import { User } from '@/types/user'
+import { allowsBearerAuthFallback } from '@/config/authPolicy'
 import { sessionStore } from '@/state/sessionStore'
 
 const readCsrfFromPayload = (payload: Record<string, unknown>): string | null => {
 	const token =
 		(payload.CsrfToken as string | undefined) ??
 		(payload.csrfToken as string | undefined)
+	if (typeof token === 'string' && token.length > 0) {
+		return token
+	}
+	return null
+}
+
+const readAccessTokenFromPayload = (payload: Record<string, unknown>): string | null => {
+	const token =
+		(payload.AccessToken as string | undefined) ??
+		(payload.accessToken as string | undefined)
+	if (typeof token === 'string' && token.length > 0) {
+		return token
+	}
+	return null
+}
+
+const readRefreshTokenFromPayload = (payload: Record<string, unknown>): string | null => {
+	const token =
+		(payload.RefreshToken as string | undefined) ??
+		(payload.refreshToken as string | undefined)
 	if (typeof token === 'string' && token.length > 0) {
 		return token
 	}
@@ -18,7 +39,31 @@ const readExpiresAtFromPayload = (payload: Record<string, unknown>): string | nu
 	return expiresAt ?? null
 }
 
-/** Persist CSRF + expiry from ApiResponseDto envelope or bare login payload. */
+const persistAuthFieldsFromPayload = (payload: Record<string, unknown>): void => {
+	const csrfToken = readCsrfFromPayload(payload)
+	if (csrfToken) {
+		sessionStore.setCsrfToken(csrfToken)
+	}
+
+	if (allowsBearerAuthFallback) {
+		const accessToken = readAccessTokenFromPayload(payload)
+		if (accessToken) {
+			sessionStore.setAccessToken(accessToken)
+		}
+
+		const refreshToken = readRefreshTokenFromPayload(payload)
+		if (refreshToken) {
+			sessionStore.setRefreshToken(refreshToken)
+		}
+	}
+
+	const expiresAt = readExpiresAtFromPayload(payload)
+	if (expiresAt) {
+		sessionStore.setTokenExpiresAt(expiresAt)
+	}
+}
+
+/** Persist CSRF, bearer tokens, and expiry from ApiResponseDto envelope or bare login payload. */
 export const persistAuthMetadataFromApiEnvelope = (apiBody: unknown): void => {
 	if (!apiBody || typeof apiBody !== 'object') {
 		return
@@ -29,15 +74,7 @@ export const persistAuthMetadataFromApiEnvelope = (apiBody: unknown): void => {
 	const payloads = inner ? [inner, envelope] : [envelope]
 
 	for (const payload of payloads) {
-		const csrfToken = readCsrfFromPayload(payload)
-		if (csrfToken) {
-			sessionStore.setCsrfToken(csrfToken)
-		}
-
-		const expiresAt = readExpiresAtFromPayload(payload)
-		if (expiresAt) {
-			sessionStore.setTokenExpiresAt(expiresAt)
-		}
+		persistAuthFieldsFromPayload(payload)
 	}
 }
 
@@ -47,18 +84,7 @@ export const applyLoginPayload = (loginData: Record<string, unknown>): User => {
 		throw new Error('Invalid response from server: missing user data')
 	}
 
-	const expiresAt = readExpiresAtFromPayload(loginData)
-	const csrfToken = readCsrfFromPayload(loginData)
-
-	if (expiresAt) {
-		sessionStore.setTokenExpiresAt(expiresAt)
-	}
-
-	// Only overwrite CSRF when the API returned one (cross-origin SPAs cannot read API-domain cookies).
-	if (csrfToken) {
-		sessionStore.setCsrfToken(csrfToken)
-	}
-
+	persistAuthFieldsFromPayload(loginData)
 	sessionStore.setUser(user)
 
 	const normalizedUser = sessionStore.getUser()

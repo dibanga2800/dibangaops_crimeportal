@@ -44,8 +44,8 @@ namespace AIPBackend.Services
 			var totalValue = filtered.Sum(GetIncidentLostValue);
 
 			var repeatOffenders = filtered
-				.Where(i => !string.IsNullOrWhiteSpace(i.OffenderName))
-				.GroupBy(i => i.OffenderName!.ToLowerInvariant().Trim())
+				.Where(AnalyticsRules.IncidentHasIdentifiedOffender)
+				.GroupBy(BuildOffenderKey)
 				.Where(g => g.Count() > 1)
 				.Count();
 
@@ -411,28 +411,42 @@ namespace AIPBackend.Services
 
 					int.TryParse(storeIncidents.First().SiteId, out var siteIdInt);
 
+					var incidentsByDay = storeIncidents
+						.GroupBy(i => i.DateOfIncident.DayOfWeek.ToString())
+						.ToDictionary(d => d.Key, d => d.Count());
+
+					var incidentsByHour = storeIncidents
+						.Select(i => new { Incident = i, Hour = ParseHour(i.TimeOfIncident) })
+						.Where(x => x.Hour.HasValue)
+						.GroupBy(x => x.Hour!.Value)
+						.ToDictionary(h => h.Key, h => h.Count());
+
 					return new StoreDrilldownDataDto
 					{
 						StoreId = siteIdInt,
 						StoreName = g.Key,
 						Incidents = storeTotal,
+						IncidentsByDay = incidentsByDay,
+						IncidentsByHour = incidentsByHour,
+						IncidentTypesByDay = storeIncidents
+							.GroupBy(i => i.DateOfIncident.DayOfWeek.ToString())
+							.ToDictionary(
+								d => d.Key,
+								d => BuildIncidentTypeBreakdown(d.ToList())),
+						IncidentTypesByHour = storeIncidents
+							.Select(i => new { Incident = i, Hour = ParseHour(i.TimeOfIncident) })
+							.Where(x => x.Hour.HasValue)
+							.GroupBy(x => x.Hour!.Value)
+							.ToDictionary(
+								h => h.Key,
+								h => BuildIncidentTypeBreakdown(h.Select(x => x.Incident).ToList())),
 						TotalStolenValue = storeIncidents.Sum(GetIncidentStolenValue),
 						TotalRecoveredValue = storeIncidents.Sum(GetIncidentRecoveredValue),
 						TotalLostValue = storeIncidents.Sum(GetIncidentLostValue),
 						RecoveryRate = CalculateRecoveryRate(
 							storeIncidents.Sum(GetIncidentRecoveredValue),
 							storeIncidents.Sum(GetIncidentStolenValue)),
-						IncidentTypes = storeIncidents
-							.GroupBy(i => string.IsNullOrWhiteSpace(i.IncidentType) ? "Unspecified" : i.IncidentType)
-							.Select(t => new IncidentTypeDataDto
-							{
-								Type = t.Key,
-								Count = t.Count(),
-								Percentage = storeTotal > 0 ? Math.Round((double)t.Count() / storeTotal * 100, 1) : 0,
-								TotalValue = t.Sum(GetIncidentLostValue)
-							})
-							.OrderByDescending(t => t.Count)
-							.ToList(),
+						IncidentTypes = BuildIncidentTypeBreakdown(storeIncidents),
 						PeakDay = peakDay,
 						PeakHour = peakHour
 					};
@@ -482,7 +496,31 @@ namespace AIPBackend.Services
 					var stolenValue = g.Sum(x => GetItemStolenValue(x.Item));
 					var recoveredValue = g.Sum(x => GetItemRecoveredValue(x.Item));
 					var lostValue = g.Sum(x => GetItemLostValue(x.Item));
-					var storesAffected = g.Select(x => x.Incident.StoreName).Distinct().Count();
+					var storeBreakdown = g
+						.Where(x => !string.IsNullOrWhiteSpace(x.Incident.StoreName))
+						.GroupBy(x => x.Incident.StoreName!, StringComparer.OrdinalIgnoreCase)
+						.Select(sg =>
+						{
+							int.TryParse(sg.First().Incident.SiteId, out var storeId);
+							var storeStolen = sg.Sum(x => GetItemStolenValue(x.Item));
+							var storeRecovered = sg.Sum(x => GetItemRecoveredValue(x.Item));
+							var storeLost = sg.Sum(x => GetItemLostValue(x.Item));
+							return new ProductStoreBreakdownDto
+							{
+								StoreId = storeId,
+								StoreName = sg.Key,
+								Frequency = sg.Count(),
+								StolenValue = storeStolen,
+								RecoveredValue = storeRecovered,
+								LostValue = storeLost,
+								RecoveryRate = CalculateRecoveryRate(storeRecovered, storeStolen),
+							};
+						})
+						.OrderByDescending(s => s.LostValue)
+						.ThenByDescending(s => s.Frequency)
+						.ToList();
+
+					var storesAffected = storeBreakdown.Count;
 					var recoveryRate = CalculateRecoveryRate(recoveredValue, stolenValue);
 
 					return new ProductFrequencyDataDto
@@ -496,6 +534,7 @@ namespace AIPBackend.Services
 						LostValue = lostValue,
 						RecoveryRate = recoveryRate,
 						StoresAffected = storesAffected,
+						Stores = storeBreakdown,
 						Reason =
 							$"Stolen in {frequency} line item{(frequency == 1 ? "" : "s")} across {storesAffected} store{(storesAffected == 1 ? "" : "s")}: " +
 							$"£{lostValue:N0} lost, {recoveryRate:F1}% recovered (£{stolenValue:N0} stolen)."
@@ -529,9 +568,19 @@ namespace AIPBackend.Services
 				.Select(g =>
 				{
 					int.TryParse(g.First().Incident.SiteId, out var sId);
-					var storeIncidentCount = incidents.Count(i => i.StoreName == g.Key);
+					var storeIncidentsForRisk = incidents
+						.Where(i => string.Equals(i.StoreName, g.Key, StringComparison.OrdinalIgnoreCase))
+						.ToList();
+					var storeIncidentCount = storeIncidentsForRisk.Count;
 
-					var storeIncidentsForRisk = incidents.Where(i => i.StoreName == g.Key).ToList();
+					var theftIncidentIds = g
+						.Select(x => x.Incident.IncidentId)
+						.Where(id => id > 0)
+						.ToHashSet();
+					var incidentsWithStolenItems = theftIncidentIds.Count > 0
+						? theftIncidentIds.Count
+						: g.Select(x => x.Incident).DistinctBy(i => i.IncidentId).Count();
+
 					var storeRisk = AnalyticsRules.BuildLocationRiskBreakdown(
 						storeIncidentsForRisk,
 						periodEnd,
@@ -556,11 +605,11 @@ namespace AIPBackend.Services
 								pg.Sum(x => GetItemRecoveredValue(x.Item)),
 								pg.Sum(x => GetItemStolenValue(x.Item)))
 						})
-						.OrderByDescending(p => p.Frequency)
-						.Take(5)
+						.OrderByDescending(p => p.LostValue)
+						.ThenByDescending(p => p.Frequency)
 						.ToList();
 
-					var riskLevel = storeRisk.Level;
+					var productLineCount = g.Count();
 
 					return new StoreProductHeatmapDataDto
 					{
@@ -568,16 +617,23 @@ namespace AIPBackend.Services
 						StoreName = g.Key,
 						Products = products,
 						TotalIncidents = storeIncidentCount,
+						IncidentsWithStolenItems = incidentsWithStolenItems,
+						ProductLineCount = productLineCount,
+						ProductGroupCount = products.Count,
 						TotalValueStolen = g.Sum(x => GetItemStolenValue(x.Item)),
 						TotalValueRecovered = g.Sum(x => GetItemRecoveredValue(x.Item)),
 						TotalValueLost = g.Sum(x => GetItemLostValue(x.Item)),
 						RecoveryRate = CalculateRecoveryRate(
 							g.Sum(x => GetItemRecoveredValue(x.Item)),
 							g.Sum(x => GetItemStolenValue(x.Item))),
-						RiskLevel = riskLevel
+						RiskLevel = storeRisk.Level,
+						RiskScore = storeRisk.Score,
+						RiskSummary = AnalyticsRules.BuildStoreRiskSummary(storeRisk),
+						RiskFactors = storeRisk.Factors,
 					};
 				})
-				.OrderByDescending(s => s.TotalIncidents)
+				.OrderByDescending(s => s.TotalValueLost)
+				.ThenByDescending(s => s.IncidentsWithStolenItems)
 				.ToList();
 
 			return new HotProductsDataDto
@@ -594,10 +650,59 @@ namespace AIPBackend.Services
 			};
 		}
 
+		private static OffenderProfileDto BuildOffenderProfile(IGrouping<string, Incident> g)
+		{
+			var offenderIncidents = g.OrderBy(i => i.DateOfIncident).ToList();
+			var totalVal = offenderIncidents.Sum(GetIncidentLostValue);
+			var storesTargeted = offenderIncidents
+				.Where(i => !string.IsNullOrWhiteSpace(i.StoreName))
+				.Select(i => i.StoreName!)
+				.Distinct()
+				.ToList();
+
+			var incCount = offenderIncidents.Count;
+			var riskLevel = incCount >= 5 || totalVal >= 1000m ? "critical"
+				: incCount >= 3 || totalVal >= 500m ? "high"
+				: incCount >= 2 ? "medium"
+				: "low";
+
+			var firstDate = offenderIncidents.First().DateOfIncident.ToString("yyyy-MM-dd");
+			var lastDate = offenderIncidents.Last().DateOfIncident.ToString("yyyy-MM-dd");
+
+			var displayName = offenderIncidents
+				.Select(AnalyticsRules.GetOffenderDisplayName)
+				.FirstOrDefault(n => !string.IsNullOrWhiteSpace(n))
+				?? "Unidentified";
+
+			var reason = incCount >= 2
+				? $"Repeat offender: {incCount} incidents from {firstDate} to {lastDate}, " +
+				  $"£{totalVal:N0} lost across {storesTargeted.Count} store{(storesTargeted.Count == 1 ? "" : "s")} (risk: {riskLevel})."
+				: $"Single incident on {lastDate}, £{totalVal:N0} lost" +
+				  (storesTargeted.Count > 0 ? $" at {storesTargeted[0]}." : ".");
+
+			return new OffenderProfileDto
+			{
+				OffenderId = g.Key,
+				Name = displayName,
+				IncidentCount = incCount,
+				FirstIncident = firstDate,
+				LastIncident = lastDate,
+				StoresTargeted = storesTargeted,
+				TotalValue = totalVal,
+				RiskLevel = riskLevel,
+				Incidents = offenderIncidents.Select(ToOffenderIncidentSummary).ToList(),
+				Reason = reason,
+			};
+		}
+
 		private static string BuildOffenderKey(Incident incident)
 		{
+			if (!string.IsNullOrWhiteSpace(incident.OffenderId))
+			{
+				return $"id:{incident.OffenderId.Trim().ToLowerInvariant()}";
+			}
+
 			var name = (incident.OffenderName ?? string.Empty).Trim().ToLowerInvariant();
-			
 			var genderSource = !string.IsNullOrWhiteSpace(incident.Gender)
 				? incident.Gender
 				: incident.OffenderSex;
@@ -606,16 +711,7 @@ namespace AIPBackend.Services
 				? incident.OffenderDOB.Value.ToString("yyyy-MM-dd")
 				: string.Empty;
 
-			if (string.IsNullOrWhiteSpace(name))
-			{
-				// If we have no name at all, fall back to a placeholder that still
-				// incorporates any available DOB/gender so we don't merge everything.
-				name = "unknown";
-			}
-
-			// Build a compact key using only the attributes that are actually present,
-			// so incidents with/without DOB or gender but the same name can still group.
-			var parts = new List<string> { name };
+			var parts = new List<string> { $"name:{name}" };
 			if (!string.IsNullOrEmpty(dobPart))
 			{
 				parts.Add(dobPart);
@@ -634,91 +730,82 @@ namespace AIPBackend.Services
 			// We no longer require 2+ incidents to appear in the analytics; single-incident offenders
 			// are included with a low risk level, so they can still be analysed and tracked.
 			var offenderGroups = incidents
-				.Where(i => !string.IsNullOrWhiteSpace(i.OffenderName))
+				.Where(AnalyticsRules.IncidentHasIdentifiedOffender)
 				.GroupBy(BuildOffenderKey)
 				.ToList();
 
 			var mostActive = offenderGroups
-				.Where(g => g.Count() >= 2)
-				.Select(g =>
-				{
-					var offenderIncidents = g.OrderBy(i => i.DateOfIncident).ToList();
-					var totalVal = offenderIncidents.Sum(GetIncidentLostValue);
-					var storesTargeted = offenderIncidents
-						.Where(i => !string.IsNullOrWhiteSpace(i.StoreName))
-						.Select(i => i.StoreName!)
-						.Distinct()
-						.ToList();
-
-					var moList = offenderIncidents
-						.Where(i => !string.IsNullOrWhiteSpace(i.ModusOperandi))
-						.SelectMany(i =>
-						{
-							try { return System.Text.Json.JsonSerializer.Deserialize<List<string>>(i.ModusOperandi!) ?? new List<string>(); }
-							catch { return new List<string>(); }
-						})
-						.Distinct()
-						.ToList();
-
-					var incCount = offenderIncidents.Count;
-					var riskLevel = incCount >= 5 || totalVal >= 1000m ? "critical"
-						: incCount >= 3 || totalVal >= 500m ? "high"
-						: "medium";
-
-					var firstDate = offenderIncidents.First().DateOfIncident.ToString("yyyy-MM-dd");
-					var lastDate = offenderIncidents.Last().DateOfIncident.ToString("yyyy-MM-dd");
-
-					return new OffenderProfileDto
-					{
-						OffenderId = g.Key,
-						Name = offenderIncidents.First().OffenderName!,
-						IncidentCount = incCount,
-						FirstIncident = firstDate,
-						LastIncident = lastDate,
-						StoresTargeted = storesTargeted,
-						TotalValue = totalVal,
-						RiskLevel = riskLevel,
-						ModusOperandi = moList,
-						Reason =
-							$"Repeat offender: {incCount} incidents from {firstDate} to {lastDate}, " +
-							$"£{totalVal:N0} lost across {storesTargeted.Count} store{(storesTargeted.Count == 1 ? "" : "s")} " +
-							$"(risk: {riskLevel})."
-					};
-				})
+				.Select(BuildOffenderProfile)
 				.OrderByDescending(o => o.IncidentCount)
-				.Take(20)
+				.ThenByDescending(o => o.TotalValue)
+				.Take(50)
 				.ToList();
 
 			var crossStoreMovements = offenderGroups
-				.Where(g => g.Select(i => i.StoreName).Distinct().Count() > 1)
 				.Select(g =>
 				{
 					var orderedIncidents = g.OrderBy(i => i.DateOfIncident).ToList();
-					var movements = new List<MovementEventDto>();
-					for (var idx = 1; idx < orderedIncidents.Count; idx++)
+					var distinctStores = orderedIncidents
+						.Where(i => !string.IsNullOrWhiteSpace(i.StoreName))
+						.Select(i => i.StoreName!.Trim())
+						.Distinct(StringComparer.OrdinalIgnoreCase)
+						.Count();
+					if (distinctStores < 2)
 					{
-						if (orderedIncidents[idx].StoreName != orderedIncidents[idx - 1].StoreName)
-						{
-							movements.Add(new MovementEventDto
-							{
-								FromStore = orderedIncidents[idx - 1].StoreName ?? string.Empty,
-								ToStore = orderedIncidents[idx].StoreName ?? string.Empty,
-								Date = orderedIncidents[idx].DateOfIncident.ToString("yyyy-MM-dd"),
-								IncidentType = orderedIncidents[idx].IncidentType
-							});
-						}
+						return null;
 					}
+
+					var movements = new List<MovementEventDto>();
+					for (var idx = 0; idx < orderedIncidents.Count; idx++)
+					{
+						var incident = orderedIncidents[idx];
+						var store = incident.StoreName?.Trim() ?? string.Empty;
+						var stolenProducts = BuildLinkedStolenProducts(incident);
+						var visit = new MovementEventDto
+						{
+							StoreName = store,
+							Date = incident.DateOfIncident.ToString("yyyy-MM-dd"),
+							DateTimeLabel = FormatIncidentDateTimeLabel(incident),
+							IncidentType = incident.IncidentType,
+							IncidentId = incident.IncidentId.ToString(),
+							StolenProductsSummary = BuildStolenProductsSummary(stolenProducts),
+							Value = GetIncidentLostValue(incident),
+						};
+
+						if (idx > 0)
+						{
+							var previousStore = orderedIncidents[idx - 1].StoreName?.Trim() ?? string.Empty;
+							if (!string.Equals(previousStore, store, StringComparison.OrdinalIgnoreCase))
+							{
+								visit.PreviousStore = previousStore;
+								visit.FromStore = previousStore;
+								visit.ToStore = store;
+							}
+						}
+
+						movements.Add(visit);
+					}
+
+					var movementDisplayName = orderedIncidents
+						.Select(AnalyticsRules.GetOffenderDisplayName)
+						.FirstOrDefault(n => !string.IsNullOrWhiteSpace(n))
+						?? "Unidentified";
+
 					return new CrossStoreMovementDto
 					{
 						OffenderId = g.Key,
-						OffenderName = orderedIncidents.First().OffenderName!,
+						OffenderName = movementDisplayName,
 						Movements = movements,
-						TotalStores = orderedIncidents.Select(i => i.StoreName).Distinct().Count()
+						TotalStores = distinctStores,
 					};
 				})
+				.Where(m => m != null)
+				.Cast<CrossStoreMovementDto>()
+				.OrderByDescending(m => m.TotalStores)
+				.ThenByDescending(m => m.Movements.Count)
 				.ToList();
 
-			var networkMap = BuildOffenderNetwork(mostActive.Take(10).ToList(), incidents);
+			var networkMap = BuildOffenderNetwork(mostActive, incidents);
 
 			return new RepeatOffenderDataDto
 			{
@@ -729,22 +816,47 @@ namespace AIPBackend.Services
 			};
 		}
 
+		private static string BuildStoreNodeId(string storeName)
+		{
+			var slug = System.Text.RegularExpressions.Regex.Replace(
+				storeName.Trim().ToLowerInvariant(),
+				@"[^a-z0-9]+",
+				"-").Trim('-');
+			return string.IsNullOrEmpty(slug) ? "store-unknown" : $"store-{slug}";
+		}
+
 		private static OffenderNetworkDataDto BuildOffenderNetwork(List<OffenderProfileDto> offenders, List<Incident> incidents)
 		{
 			var nodes = new List<OffenderNetworkNodeDto>();
 			var links = new List<OffenderNetworkLinkDto>();
 
-			var allStores = offenders.SelectMany(o => o.StoresTargeted).Distinct().ToList();
+			var repeatOffenders = offenders
+				.Where(o => o.IncidentCount >= 2)
+				.OrderByDescending(o => o.IncidentCount)
+				.ThenByDescending(o => o.TotalValue)
+				.Take(15)
+				.ToList();
+
+			if (repeatOffenders.Count == 0)
+			{
+				return new OffenderNetworkDataDto { Nodes = nodes, Links = links };
+			}
+
+			var allStores = repeatOffenders
+				.SelectMany(o => o.StoresTargeted)
+				.Where(s => !string.IsNullOrWhiteSpace(s))
+				.Distinct(StringComparer.OrdinalIgnoreCase)
+				.ToList();
 			var centerX = 300.0;
 			var centerY = 300.0;
 
-			for (var i = 0; i < offenders.Count; i++)
+			for (var i = 0; i < repeatOffenders.Count; i++)
 			{
-				var angle = offenders.Count > 1 ? (double)i / offenders.Count * 2 * Math.PI : 0;
+				var angle = repeatOffenders.Count > 1 ? (double)i / repeatOffenders.Count * 2 * Math.PI : 0;
 				nodes.Add(new OffenderNetworkNodeDto
 				{
-					Id = $"offender-{offenders[i].OffenderId}",
-					Name = offenders[i].Name,
+					Id = $"offender-{repeatOffenders[i].OffenderId}",
+					Name = repeatOffenders[i].Name,
 					Type = "offender",
 					X = centerX + 200 * Math.Cos(angle),
 					Y = centerY + 200 * Math.Sin(angle)
@@ -754,10 +866,9 @@ namespace AIPBackend.Services
 			for (var i = 0; i < allStores.Count; i++)
 			{
 				var angle = allStores.Count > 1 ? (double)i / allStores.Count * 2 * Math.PI : 0;
-				var storeId = $"store-{allStores[i].ToLowerInvariant().Replace(" ", "-")}";
 				nodes.Add(new OffenderNetworkNodeDto
 				{
-					Id = storeId,
+					Id = BuildStoreNodeId(allStores[i]),
 					Name = allStores[i],
 					Type = "store",
 					X = centerX + 110 * Math.Cos(angle),
@@ -765,22 +876,31 @@ namespace AIPBackend.Services
 				});
 			}
 
-			var storeNodeIds = nodes.Where(n => n.Type == "store").Select(n => n.Id).ToHashSet();
-			foreach (var offender in offenders)
+			var storeNodeIds = nodes.Where(n => n.Type == "store").Select(n => n.Id).ToHashSet(StringComparer.Ordinal);
+			foreach (var offender in repeatOffenders)
 			{
 				foreach (var store in offender.StoresTargeted)
 				{
-					var storeNodeId = $"store-{store.ToLowerInvariant().Replace(" ", "-")}";
-					if (storeNodeIds.Contains(storeNodeId))
+					var storeNodeId = BuildStoreNodeId(store);
+					if (!storeNodeIds.Contains(storeNodeId))
 					{
-						links.Add(new OffenderNetworkLinkDto
-						{
-							Source = $"offender-{offender.OffenderId}",
-							Target = storeNodeId,
-							Strength = Math.Min(offender.IncidentCount / 10.0, 1.0),
-							IncidentCount = offender.IncidentCount
-						});
+						continue;
 					}
+
+					var storeIncidentCount = offender.Incidents.Count(i =>
+						string.Equals(i.StoreName, store, StringComparison.OrdinalIgnoreCase));
+					if (storeIncidentCount == 0)
+					{
+						storeIncidentCount = 1;
+					}
+
+					links.Add(new OffenderNetworkLinkDto
+					{
+						Source = $"offender-{offender.OffenderId}",
+						Target = storeNodeId,
+						Strength = Math.Min(storeIncidentCount / 5.0, 1.0),
+						IncidentCount = storeIncidentCount
+					});
 				}
 			}
 
@@ -920,13 +1040,12 @@ namespace AIPBackend.Services
 				: "unknown";
 
 			var overallStrategy = totalIncidents == 0
-				? "No incident data available for the selected period."
-				: $"Based on {totalIncidents} incidents from the API across {hotLocations.Count} location(s). " +
-				  $"Peak activity on {topDay} at {topHour}. " +
-				  $"All deployments use {AnalyticsRules.StoreDetectivesOfficerType}. " +
+				? "No incidents in the selected period."
+				: $"{totalIncidents} incidents, {hotLocations.Count} site(s). Peak {topDay} {topHour}. " +
+				  $"{AnalyticsRules.StoreDetectivesOfficerType}." +
 				  (storeRankings.Any(s => s.RiskLevel is "high" or "critical")
-					  ? $"Prioritise: {string.Join(", ", storeRankings.Where(s => s.RiskLevel is "high" or "critical").Take(3).Select(s => s.StoreName))}."
-					  : "Risk levels are moderate across ranked stores.");
+					  ? $" Focus: {string.Join(", ", storeRankings.Where(s => s.RiskLevel is "high" or "critical").Take(3).Select(s => s.StoreName))}."
+					  : " Moderate risk across stores.");
 
 			return new DeploymentRecommendationDto
 			{
@@ -943,7 +1062,7 @@ namespace AIPBackend.Services
 
 			// Offender-based clusters (same offender identity across multiple incidents)
 			var offenderIdClusters = incidents
-				.Where(i => !string.IsNullOrWhiteSpace(i.OffenderName))
+				.Where(AnalyticsRules.IncidentHasIdentifiedOffender)
 				.GroupBy(BuildOffenderKey)
 				.Where(g => g.Count() >= 2)
 				.Take(10);
@@ -956,9 +1075,15 @@ namespace AIPBackend.Services
 
 				var offenderConfidence = ComputeOffenderClusterConfidence(clusterIncidents);
 
+				var offenderDisplayName = clusterIncidents
+					.Select(AnalyticsRules.GetOffenderDisplayName)
+					.FirstOrDefault(n => !string.IsNullOrWhiteSpace(n))
+					?? "Unidentified";
+
 				clusters.Add(new IncidentClusterDto
 				{
 					ClusterId = $"cluster-offender-{g.Key}",
+					Title = $"{offenderDisplayName} · {clusterIncidents.Count} linked incidents",
 					Incidents = clusterIncidents
 						.Select(i => ToLinkedIncident(i, commonFeatures, offenderConfidence))
 						.ToList(),
@@ -966,7 +1091,10 @@ namespace AIPBackend.Services
 					SuspectedOffender = new SuspectedOffenderDto
 					{
 						Id = g.Key,
-						Name = clusterIncidents.First().OffenderName ?? "Unknown",
+						Name = clusterIncidents
+							.Select(AnalyticsRules.GetOffenderDisplayName)
+							.FirstOrDefault(n => !string.IsNullOrWhiteSpace(n))
+							?? "Unidentified",
 						Confidence = offenderConfidence
 					},
 					TotalValue = totalVal,
@@ -982,7 +1110,7 @@ namespace AIPBackend.Services
 
 			// Pattern-based clusters (same type + store, no identified offender)
 			var patternClusters = incidents
-				.Where(i => string.IsNullOrWhiteSpace(i.OffenderName))
+				.Where(i => !AnalyticsRules.IncidentHasIdentifiedOffender(i))
 				.GroupBy(i => new
 				{
 					Type = string.IsNullOrWhiteSpace(i.IncidentType) ? "Unspecified" : i.IncidentType,
@@ -1005,6 +1133,7 @@ namespace AIPBackend.Services
 				clusters.Add(new IncidentClusterDto
 				{
 					ClusterId = $"cluster-pattern-{g.Key.Type.Replace(" ", "-")}-{g.Key.Store.Replace(" ", "-")}",
+					Title = $"{g.Key.Type} at {g.Key.Store} · {clusterIncidents.Count} incidents",
 					Incidents = clusterIncidents
 						.Select(i => ToLinkedIncident(i, commonFeatures, patternConfidence))
 						.ToList(),
@@ -1022,7 +1151,7 @@ namespace AIPBackend.Services
 			}
 
 			var offenderChains = incidents
-				.Where(i => !string.IsNullOrWhiteSpace(i.OffenderName))
+				.Where(AnalyticsRules.IncidentHasIdentifiedOffender)
 				.GroupBy(BuildOffenderKey)
 				.Where(g => g.Count() >= 2)
 				.Take(10)
@@ -1040,18 +1169,18 @@ namespace AIPBackend.Services
 
 					var matchingFeatures = new List<string> { "Same offender" };
 
+					var chainDisplayName = chainIncidents
+						.Select(AnalyticsRules.GetOffenderDisplayName)
+						.FirstOrDefault(n => !string.IsNullOrWhiteSpace(n))
+						?? "Unidentified";
+
 					return new OffenderChainDto
 					{
 						ChainId = $"chain-{g.Key}",
 						OffenderId = g.Key,
-						OffenderName = chainIncidents.First().OffenderName!,
+						OffenderName = chainDisplayName,
 						Incidents = chainIncidents.Select(i => ToLinkedIncident(i, matchingFeatures, 0.9)).ToList(),
-						Timeline = chainIncidents.Select(i => new ChainTimelineEventDto
-						{
-							Date = i.DateOfIncident.ToString("yyyy-MM-dd"),
-							Store = i.StoreName ?? string.Empty,
-							IncidentType = i.IncidentType
-						}).ToList(),
+						Timeline = chainIncidents.Select(ToChainTimelineEvent).ToList(),
 						TotalValue = SumIncidentValue(chainIncidents),
 						Pattern = pattern
 					};
@@ -1060,6 +1189,7 @@ namespace AIPBackend.Services
 
 			var linkedIncidentIds = clusters
 				.SelectMany(c => c.Incidents.Select(i => i.IncidentId))
+				.Concat(offenderChains.SelectMany(c => c.Incidents.Select(i => i.IncidentId)))
 				.Distinct()
 				.Count();
 
@@ -1192,6 +1322,22 @@ namespace AIPBackend.Services
 		private static decimal SumIncidentValue(List<Incident> incidents) =>
 			incidents.Sum(GetIncidentLostValue);
 
+		private static List<IncidentTypeDataDto> BuildIncidentTypeBreakdown(List<Incident> incidents)
+		{
+			var total = incidents.Count;
+			return incidents
+				.GroupBy(i => string.IsNullOrWhiteSpace(i.IncidentType) ? "Unspecified" : i.IncidentType)
+				.Select(t => new IncidentTypeDataDto
+				{
+					Type = t.Key,
+					Count = t.Count(),
+					Percentage = total > 0 ? Math.Round((double)t.Count() / total * 100, 1) : 0,
+					TotalValue = t.Sum(GetIncidentLostValue),
+				})
+				.OrderByDescending(t => t.Count)
+				.ToList();
+		}
+
 		private static decimal GetIncidentStolenValue(Incident incident) =>
 			(incident.TotalStolenValue ?? 0) > 0
 				? incident.TotalStolenValue ?? 0
@@ -1278,18 +1424,101 @@ namespace AIPBackend.Services
 			return features;
 		}
 
-		private static LinkedIncidentDto ToLinkedIncident(Incident incident, List<string> matchingFeatures, double similarityScore) =>
-			new()
+		private static List<LinkedIncidentStolenProductDto> BuildLinkedStolenProducts(Incident incident) =>
+			(incident.StolenItems ?? Array.Empty<StolenItem>())
+				.Where(item => item.Quantity > 0 || GetItemStolenValue(item) > 0)
+				.Select(item => new LinkedIncidentStolenProductDto
+				{
+					ProductName = item.ProductName ?? item.Description ?? "Unknown product",
+					Barcode = item.Barcode?.Trim() ?? string.Empty,
+					Quantity = item.Quantity,
+					LostValue = GetItemLostValue(item),
+				})
+				.OrderByDescending(item => item.LostValue)
+				.ThenByDescending(item => item.Quantity)
+				.ToList();
+
+		private static string BuildStolenProductsSummary(IReadOnlyList<LinkedIncidentStolenProductDto> products)
+		{
+			if (products.Count == 0)
+			{
+				return "No stolen product lines recorded";
+			}
+
+			return string.Join(
+				"; ",
+				products.Take(4).Select(product =>
+					string.IsNullOrWhiteSpace(product.Barcode)
+						? $"{product.ProductName} (×{product.Quantity}, £{product.LostValue:N0} lost)"
+						: $"{product.ProductName} [{product.Barcode}] (×{product.Quantity}, £{product.LostValue:N0} lost)"));
+		}
+
+		private static string FormatIncidentDateTimeLabel(Incident incident)
+		{
+			var date = incident.DateOfIncident.ToString("yyyy-MM-dd");
+			if (string.IsNullOrWhiteSpace(incident.TimeOfIncident))
+			{
+				return date;
+			}
+
+			var hour = ParseHour(incident.TimeOfIncident);
+			return hour.HasValue
+				? $"{date} {FormatHourLabel(hour.Value)}"
+				: $"{date} {incident.TimeOfIncident.Trim()}";
+		}
+
+		private static OffenderIncidentSummaryDto ToOffenderIncidentSummary(Incident incident)
+		{
+			var stolenProducts = BuildLinkedStolenProducts(incident);
+			return new OffenderIncidentSummaryDto
 			{
 				IncidentId = incident.IncidentId.ToString(),
 				Date = incident.DateOfIncident.ToString("yyyy-MM-dd"),
+				TimeOfIncident = incident.TimeOfIncident?.Trim() ?? string.Empty,
+				DateTimeLabel = FormatIncidentDateTimeLabel(incident),
+				StoreName = incident.StoreName ?? string.Empty,
+				IncidentType = incident.IncidentType,
+				Value = GetIncidentLostValue(incident),
+				StolenProducts = stolenProducts,
+				StolenProductsSummary = BuildStolenProductsSummary(stolenProducts),
+			};
+		}
+
+		private static ChainTimelineEventDto ToChainTimelineEvent(Incident incident)
+		{
+			var stolenProducts = BuildLinkedStolenProducts(incident);
+			return new ChainTimelineEventDto
+			{
+				Date = incident.DateOfIncident.ToString("yyyy-MM-dd"),
+				TimeOfIncident = incident.TimeOfIncident?.Trim() ?? string.Empty,
+				DateTimeLabel = FormatIncidentDateTimeLabel(incident),
+				Store = incident.StoreName ?? string.Empty,
+				IncidentType = incident.IncidentType,
+				StolenProducts = stolenProducts,
+				StolenProductsSummary = BuildStolenProductsSummary(stolenProducts),
+			};
+		}
+
+		private static LinkedIncidentDto ToLinkedIncident(Incident incident, List<string> matchingFeatures, double similarityScore)
+		{
+			var stolenProducts = BuildLinkedStolenProducts(incident);
+			var displayName = AnalyticsRules.GetOffenderDisplayName(incident);
+			return new LinkedIncidentDto
+			{
+				IncidentId = incident.IncidentId.ToString(),
+				Date = incident.DateOfIncident.ToString("yyyy-MM-dd"),
+				TimeOfIncident = incident.TimeOfIncident?.Trim() ?? string.Empty,
+				DateTimeLabel = FormatIncidentDateTimeLabel(incident),
 				StoreName = incident.StoreName ?? string.Empty,
 				IncidentType = incident.IncidentType,
 				OffenderId = incident.OffenderId,
-				OffenderName = incident.OffenderName,
+				OffenderName = string.IsNullOrWhiteSpace(displayName) ? null : displayName,
 				Value = GetIncidentLostValue(incident),
 				SimilarityScore = similarityScore,
-				MatchingFeatures = matchingFeatures
+				MatchingFeatures = matchingFeatures,
+				StolenProducts = stolenProducts,
+				StolenProductsSummary = BuildStolenProductsSummary(stolenProducts),
 			};
+		}
 	}
 }

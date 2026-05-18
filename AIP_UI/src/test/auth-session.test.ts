@@ -4,6 +4,7 @@ import {
 	applyLoginPayload,
 	persistAuthMetadataFromApiEnvelope,
 } from '@/utils/authSession'
+import { COOKIE_REQUIRED_MESSAGE, isUnauthorizedStatus } from '@/utils/authCookieHelp'
 
 describe('authSession', () => {
 	beforeEach(() => {
@@ -46,5 +47,36 @@ describe('authSession', () => {
 		})
 
 		expect(sessionStore.getCsrfToken()).toBe('new-csrf')
+	})
+
+	it('cookie help treats 401 and 403 as unauthorized probe statuses', () => {
+		expect(isUnauthorizedStatus(401)).toBe(true)
+		expect(isUnauthorizedStatus(403)).toBe(true)
+		expect(isUnauthorizedStatus(500)).toBe(false)
+	})
+
+	it('persistAuthMetadataFromApiEnvelope stores bearer tokens', () => {
+		persistAuthMetadataFromApiEnvelope({
+			data: {
+				accessToken: 'access-abc',
+				refreshToken: 'refresh-xyz',
+				csrfToken: 'csrf-123',
+			},
+		})
+
+		expect(sessionStore.getAccessToken()).toBe('access-abc')
+		expect(sessionStore.getRefreshToken()).toBe('refresh-xyz')
+		expect(sessionStore.getCsrfToken()).toBe('csrf-123')
+	})
+
+	it('applyLoginPayload stores access token for bearer auth fallback', () => {
+		applyLoginPayload({
+			user: { id: '1', role: 'store', username: 'store1' },
+			accessToken: 'jwt-token',
+			refreshToken: 'refresh-token',
+		})
+
+		expect(sessionStore.getAccessToken()).toBe('jwt-token')
+		expect(sessionStore.usesBearerAuth()).toBe(true)
 	})
 })

@@ -1,6 +1,7 @@
 import { api } from '@/config/api'
 import { sessionStore } from '@/state/sessionStore'
 import { applyCsrfHeader } from '@/utils/csrf'
+import { applyBearerHeader } from '@/utils/bearerAuth'
 import { User } from '@/types/user'
 
 export const logout = async (): Promise<void> => {
@@ -19,10 +20,12 @@ export const getUser = (): User | null => sessionStore.getUser()
 export const isAuthenticated = (): boolean => sessionStore.hasSession()
 
 export const getAuthFetchInit = (init: RequestInit = {}): RequestInit => {
-	const headers = applyCsrfHeader({
-		'Content-Type': 'application/json',
-		...(init.headers as Record<string, string> | undefined),
-	})
+	const headers = applyCsrfHeader(
+		applyBearerHeader({
+			'Content-Type': 'application/json',
+			...(init.headers as Record<string, string> | undefined),
+		}),
+	)
 
 	return {
 		...init,

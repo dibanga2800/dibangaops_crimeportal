@@ -489,6 +489,12 @@ export default function LoginPage() {
 									</div>
 								</form>
 
+								<p className="mt-6 text-center text-[11px] leading-relaxed text-muted-foreground login-animate-up-2">
+									Sign-in uses secure HttpOnly cookies. Allow cookies for this site; if your browser
+									blocks cross-site cookies, use the same corporate network or a standard (non-private)
+									window.
+								</p>
+
 								{/* Divider + footer */}
 								<div className="mt-10 space-y-4 login-animate-up-2">
 									<div className="relative">

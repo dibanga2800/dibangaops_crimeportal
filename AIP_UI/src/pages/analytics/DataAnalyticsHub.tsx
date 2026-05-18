@@ -52,9 +52,16 @@ import {
 	AlertCircle,
 	Shield,
 } from 'lucide-react'
-import { format, subMonths } from 'date-fns'
+import { format, subDays, subMonths, startOfDay } from 'date-fns'
 import type { DateRange } from 'react-day-picker'
 import { cn } from '@/lib/utils'
+import {
+	ANALYTICS_DEFAULT_LOOKBACK_DAYS,
+	formatAnalyticsDateParam,
+	getDefaultAnalyticsDateRange,
+	normalizeAnalyticsDateRange,
+	parseAnalyticsDateInput,
+} from './analyticsDateRange'
 import { customerDashboardService } from '@/services/dashboardService'
 import type { Region, Site } from '@/types/dashboard'
 import { useCustomerSelection } from '@/contexts/CustomerSelectionContext'
@@ -133,16 +140,44 @@ const mergeAnalyticsHubData = (datasets: AnalyticsHubData[]): AnalyticsHubData =
 		return Array.from(map.values())
 	}
 
+	const mergeCountRecord = (
+		left: Record<string, number> = {},
+		right: Record<string, number> = {},
+	): Record<string, number> => {
+		const merged: Record<string, number> = { ...left }
+		Object.entries(right).forEach(([key, value]) => {
+			merged[key] = (merged[key] ?? 0) + Number(value ?? 0)
+		})
+		return merged
+	}
+
+	const mergeTypesByKey = (
+		left: Record<string, any[]> = {},
+		right: Record<string, any[]> = {},
+	): Record<string, any[]> => {
+		const keys = new Set([...Object.keys(left), ...Object.keys(right)])
+		const merged: Record<string, any[]> = {}
+		keys.forEach((key) => {
+			merged[key] = mergeIncidentTypes([...(left[key] ?? []), ...(right[key] ?? [])])
+		})
+		return merged
+	}
+
 	const mergedStoreDrilldown: Record<string, any> = {}
 	datasets.forEach((dataset) => {
 		Object.values(dataset.crimeTrends.storeDrilldown || {}).forEach((store: any) => {
 			const storeName = String(store?.storeName ?? `Store ${store?.storeId ?? 'Unknown'}`)
 			const prev = mergedStoreDrilldown[storeName]
+
 			if (!prev) {
 				mergedStoreDrilldown[storeName] = {
 					...store,
 					storeName,
 					incidentTypes: mergeIncidentTypes(store.incidentTypes || []),
+					incidentsByDay: { ...(store.incidentsByDay || {}) },
+					incidentsByHour: { ...(store.incidentsByHour || {}) },
+					incidentTypesByDay: { ...(store.incidentTypesByDay || {}) },
+					incidentTypesByHour: { ...(store.incidentTypesByHour || {}) },
 				}
 				return
 			}
@@ -168,6 +203,10 @@ const mergeAnalyticsHubData = (datasets: AnalyticsHubData[]): AnalyticsHubData =
 					...(prev.incidentTypes || []),
 					...(store.incidentTypes || []),
 				]),
+				incidentsByDay: mergeCountRecord(prev.incidentsByDay, store.incidentsByDay),
+				incidentsByHour: mergeCountRecord(prev.incidentsByHour, store.incidentsByHour),
+				incidentTypesByDay: mergeTypesByKey(prev.incidentTypesByDay, store.incidentTypesByDay),
+				incidentTypesByHour: mergeTypesByKey(prev.incidentTypesByHour, store.incidentTypesByHour),
 			}
 		})
 	})
@@ -221,12 +260,49 @@ const mergeAnalyticsHubData = (datasets: AnalyticsHubData[]): AnalyticsHubData =
 		}
 	)
 
+	const mergeProductStores = (left: any[] = [], right: any[] = []) => {
+		const map = new Map<string, any>()
+		;[...left, ...right].forEach((store) => {
+			const storeName = String(store?.storeName ?? '').trim()
+			if (!storeName) return
+			const storeKey = `${Number(store?.storeId ?? 0)}|${storeName}`
+			const prev = map.get(storeKey)
+			if (!prev) {
+				map.set(storeKey, {
+					storeId: Number(store?.storeId ?? 0),
+					storeName,
+					frequency: Number(store?.frequency ?? 0),
+					stolenValue: Number(store?.stolenValue ?? 0),
+					recoveredValue: Number(store?.recoveredValue ?? 0),
+					lostValue: Number(store?.lostValue ?? 0),
+				})
+				return
+			}
+
+			const stolenValue = Number(prev.stolenValue ?? 0) + Number(store?.stolenValue ?? 0)
+			const recoveredValue = Number(prev.recoveredValue ?? 0) + Number(store?.recoveredValue ?? 0)
+			map.set(storeKey, {
+				...prev,
+				frequency: Number(prev.frequency ?? 0) + Number(store?.frequency ?? 0),
+				stolenValue,
+				recoveredValue,
+				lostValue: Number(prev.lostValue ?? 0) + Number(store?.lostValue ?? 0),
+				recoveryRate: stolenValue > 0 ? (recoveredValue / stolenValue) * 100 : 0,
+			})
+		})
+
+		return Array.from(map.values()).sort(
+			(a, b) => Number(b.lostValue ?? 0) - Number(a.lostValue ?? 0) || Number(b.frequency ?? 0) - Number(a.frequency ?? 0),
+		)
+	}
+
 	const mergeProducts = (products: any[]) => {
 		const map = new Map<string, any>()
 		products.forEach((product) => {
 			const key = `${String(product?.barcode ?? '')}|${String(product?.productName ?? '')}`
 			const prev = map.get(key)
 			if (!prev) {
+				const stores = mergeProductStores(product?.stores ?? [])
 				map.set(key, {
 					...product,
 					frequency: Number(product?.frequency ?? 0),
@@ -234,13 +310,15 @@ const mergeAnalyticsHubData = (datasets: AnalyticsHubData[]): AnalyticsHubData =
 					stolenValue: Number(product?.stolenValue ?? 0),
 					recoveredValue: Number(product?.recoveredValue ?? 0),
 					lostValue: Number(product?.lostValue ?? 0),
-					storesAffected: Number(product?.storesAffected ?? 0),
+					stores,
+					storesAffected: stores.length,
 				})
 				return
 			}
 
 			const stolenValue = Number(prev.stolenValue ?? 0) + Number(product?.stolenValue ?? 0)
 			const recoveredValue = Number(prev.recoveredValue ?? 0) + Number(product?.recoveredValue ?? 0)
+			const stores = mergeProductStores(prev.stores, product?.stores)
 			map.set(key, {
 				...prev,
 				frequency: Number(prev.frequency ?? 0) + Number(product?.frequency ?? 0),
@@ -248,7 +326,8 @@ const mergeAnalyticsHubData = (datasets: AnalyticsHubData[]): AnalyticsHubData =
 				stolenValue,
 				recoveredValue,
 				lostValue: Number(prev.lostValue ?? 0) + Number(product?.lostValue ?? 0),
-				storesAffected: Number(prev.storesAffected ?? 0) + Number(product?.storesAffected ?? 0),
+				stores,
+				storesAffected: stores.length,
 				recoveryRate: stolenValue > 0 ? (recoveredValue / stolenValue) * 100 : 0,
 			})
 		})
@@ -259,19 +338,47 @@ const mergeAnalyticsHubData = (datasets: AnalyticsHubData[]): AnalyticsHubData =
 	const mergedTopRecoveredProducts = [...mergedTopProducts]
 		.sort((a, b) => Number(b.recoveredValue ?? 0) - Number(a.recoveredValue ?? 0))
 		.slice(0, 10)
-	const mergedWorstRecoveryProducts = [...mergedTopProducts]
-		.sort((a, b) => Number(b.lostValue ?? 0) - Number(a.lostValue ?? 0))
-		.slice(0, 10)
+	const mergedWorstRecoveryProducts = mergeProducts(
+		datasets.flatMap((d) => d.hotProducts.worstRecoveryProducts || []),
+	)
+		.filter((p) => Number(p.stolenValue ?? 0) > 0)
+		.sort(
+			(a, b) =>
+				Number(a.recoveryRate ?? 0) - Number(b.recoveryRate ?? 0) ||
+				Number(b.lostValue ?? 0) - Number(a.lostValue ?? 0),
+		)
+		.slice(0, 20)
+
+	const mergeRiskFactors = (left: any[] = [], right: any[] = []): any[] => {
+		const map = new Map<string, any>()
+		;[...left, ...right].forEach((factor) => {
+			const key = String(factor?.factor ?? factor?.description ?? '')
+			if (!key) return
+			const prev = map.get(key)
+			if (!prev) {
+				map.set(key, { ...factor })
+				return
+			}
+			map.set(key, {
+				...prev,
+				score: Math.max(Number(prev.score ?? 0), Number(factor?.score ?? 0)),
+			})
+		})
+		return Array.from(map.values())
+	}
 
 	const mergedStoreHeatmapMap = new Map<string, any>()
 	datasets.forEach((dataset) => {
 		(dataset.hotProducts.storeHeatmap || []).forEach((store) => {
-			const key = toSiteIdString((store as any).storeId)
+			const storeName = String((store as any).storeName ?? '').trim()
+			const siteKey = toSiteIdString((store as any).storeId)
+			const key = siteKey && siteKey !== '0' ? siteKey : storeName
 			if (!key) return
 			const prev = mergedStoreHeatmapMap.get(key)
 			if (!prev) {
 				mergedStoreHeatmapMap.set(key, {
 					...store,
+					storeName,
 					products: mergeProducts((store as any).products || []),
 				})
 				return
@@ -281,22 +388,36 @@ const mergeAnalyticsHubData = (datasets: AnalyticsHubData[]): AnalyticsHubData =
 			const totalValueRecovered =
 				Number(prev.totalValueRecovered ?? 0) + Number((store as any).totalValueRecovered ?? 0)
 			const totalValueLost = Number(prev.totalValueLost ?? 0) + Number((store as any).totalValueLost ?? 0)
-			const riskLevel =
+			const mergedRiskScore = Math.max(Number(prev.riskScore ?? 0), Number((store as any).riskScore ?? 0))
+			const mergedRiskLevel =
 				priorityWeight[String((store as any).riskLevel ?? 'low')] >=
 				priorityWeight[String(prev.riskLevel ?? 'low')]
 					? (store as any).riskLevel
 					: prev.riskLevel
+			const mergedProducts = mergeProducts([...(prev.products || []), ...((store as any).products || [])])
 
 			mergedStoreHeatmapMap.set(key, {
 				...prev,
 				...(store as any),
+				storeName: storeName || prev.storeName,
 				totalIncidents: Number(prev.totalIncidents ?? 0) + Number((store as any).totalIncidents ?? 0),
+				incidentsWithStolenItems:
+					Number(prev.incidentsWithStolenItems ?? 0) +
+					Number((store as any).incidentsWithStolenItems ?? 0),
+				productLineCount: Number(prev.productLineCount ?? 0) + Number((store as any).productLineCount ?? 0),
+				productGroupCount: mergedProducts.length,
 				totalValueStolen,
 				totalValueRecovered,
 				totalValueLost,
-				riskLevel,
+				riskScore: mergedRiskScore,
+				riskLevel: mergedRiskLevel,
+				riskFactors: mergeRiskFactors(prev.riskFactors, (store as any).riskFactors),
+				riskSummary:
+					mergedRiskScore >= Number((store as any).riskScore ?? 0)
+						? (store as any).riskSummary ?? prev.riskSummary
+						: prev.riskSummary,
 				recoveryRate: totalValueStolen > 0 ? (totalValueRecovered / totalValueStolen) * 100 : 0,
-				products: mergeProducts([...(prev.products || []), ...((store as any).products || [])]),
+				products: mergedProducts,
 			})
 		})
 	})
@@ -439,8 +560,126 @@ const mergeAnalyticsHubData = (datasets: AnalyticsHubData[]): AnalyticsHubData =
 				incidentCount: Number(prev.incidentCount ?? 0) + Number(offender.incidentCount ?? 0),
 				totalValue: Number(prev.totalValue ?? 0) + Number(offender.totalValue ?? 0),
 				storesTargeted: Array.from(new Set([...(prev.storesTargeted || []), ...(offender.storesTargeted || [])])),
-				modusOperandi: Array.from(new Set([...(prev.modusOperandi || []), ...(offender.modusOperandi || [])])),
+				incidents: [...(prev.incidents || []), ...(offender.incidents || [])],
 			})
+		})
+	})
+
+	const mergedCrossStoreMap = new Map<string, any>()
+	datasets.forEach((dataset) => {
+		(dataset.repeatOffenders.crossStoreMovements || []).forEach((movement) => {
+			const key = String(movement.offenderId ?? '')
+			if (!key) return
+			const prev = mergedCrossStoreMap.get(key)
+			if (!prev) {
+				mergedCrossStoreMap.set(key, {
+					...movement,
+					movements: [...(movement.movements || [])],
+				})
+				return
+			}
+			const combinedMovements = [...(prev.movements || []), ...(movement.movements || [])].sort(
+				(a, b) =>
+					String(a.dateTimeLabel || a.date || '').localeCompare(
+						String(b.dateTimeLabel || b.date || ''),
+					),
+			)
+			const storeNames = new Set<string>()
+			combinedMovements.forEach((m) => {
+				const name = m.storeName || m.toStore || m.fromStore
+				if (name) storeNames.add(name)
+			})
+			mergedCrossStoreMap.set(key, {
+				...prev,
+				...movement,
+				movements: combinedMovements,
+				totalStores: Math.max(Number(prev.totalStores ?? 0), storeNames.size),
+			})
+		})
+	})
+
+	const mergedNetworkNodesMap = new Map<string, any>()
+	const mergedNetworkLinksMap = new Map<string, any>()
+	datasets.forEach((dataset) => {
+		(dataset.repeatOffenders.networkMap?.nodes || []).forEach((node) => {
+			if (!mergedNetworkNodesMap.has(node.id)) {
+				mergedNetworkNodesMap.set(node.id, { ...node })
+			}
+		})
+		;(dataset.repeatOffenders.networkMap?.links || []).forEach((link) => {
+			const key = `${link.source}::${link.target}`
+			const prev = mergedNetworkLinksMap.get(key)
+			if (!prev) {
+				mergedNetworkLinksMap.set(key, { ...link })
+				return
+			}
+			mergedNetworkLinksMap.set(key, {
+				...prev,
+				incidentCount: Number(prev.incidentCount ?? 0) + Number(link.incidentCount ?? 0),
+				strength: Math.min(
+					1,
+					Math.max(Number(prev.strength ?? 0), Number(link.strength ?? 0)),
+				),
+			})
+		})
+	})
+
+	const mergedClustersMap = new Map<string, any>()
+	const mergedChainsMap = new Map<string, any>()
+	const linkedIncidentIdSet = new Set<string>()
+	datasets.forEach((dataset) => {
+		(dataset.crimeLinking?.clusters || []).forEach((cluster) => {
+			const key = String(cluster.clusterId ?? '')
+			if (!key) return
+			const prev = mergedClustersMap.get(key)
+			if (!prev) {
+				mergedClustersMap.set(key, {
+					...cluster,
+					incidents: [...(cluster.incidents || [])],
+				})
+			} else {
+				const incidentMap = new Map<string, any>()
+				;[...(prev.incidents || []), ...(cluster.incidents || [])].forEach((incident) => {
+					incidentMap.set(String(incident.incidentId), incident)
+				})
+				mergedClustersMap.set(key, {
+					...prev,
+					...cluster,
+					incidents: Array.from(incidentMap.values()),
+					totalValue:
+						Number(prev.totalValue ?? 0) + Number(cluster.totalValue ?? 0),
+				})
+			}
+			;(cluster.incidents || []).forEach((i) => linkedIncidentIdSet.add(String(i.incidentId)))
+		})
+		;(dataset.crimeLinking?.offenderChains || []).forEach((chain) => {
+			const key = String(chain.chainId ?? chain.offenderId ?? '')
+			if (!key) return
+			const prev = mergedChainsMap.get(key)
+			if (!prev) {
+				mergedChainsMap.set(key, {
+					...chain,
+					incidents: [...(chain.incidents || [])],
+					timeline: [...(chain.timeline || [])],
+				})
+			} else {
+				const incidentMap = new Map<string, any>()
+				;[...(prev.incidents || []), ...(chain.incidents || [])].forEach((incident) => {
+					incidentMap.set(String(incident.incidentId), incident)
+				})
+				mergedChainsMap.set(key, {
+					...prev,
+					...chain,
+					incidents: Array.from(incidentMap.values()),
+					timeline: [...(prev.timeline || []), ...(chain.timeline || [])].sort((a, b) =>
+						String(a.dateTimeLabel || a.date || '').localeCompare(
+							String(b.dateTimeLabel || b.date || ''),
+						),
+					),
+					totalValue: Number(prev.totalValue ?? 0) + Number(chain.totalValue ?? 0),
+				})
+			}
+			;(chain.incidents || []).forEach((i) => linkedIncidentIdSet.add(String(i.incidentId)))
 		})
 	})
 
@@ -497,7 +736,24 @@ const mergeAnalyticsHubData = (datasets: AnalyticsHubData[]): AnalyticsHubData =
 			mostActive: Array.from(mergedMostActiveOffendersMap.values()).sort(
 				(a, b) => Number(b.incidentCount ?? 0) - Number(a.incidentCount ?? 0)
 			),
+			crossStoreMovements: Array.from(mergedCrossStoreMap.values()).sort(
+				(a, b) => Number(b.totalStores ?? 0) - Number(a.totalStores ?? 0)
+			),
+			networkMap: {
+				nodes: Array.from(mergedNetworkNodesMap.values()),
+				links: Array.from(mergedNetworkLinksMap.values()),
+			},
 			totalOffenders: mergedMostActiveOffendersMap.size,
+		},
+		crimeLinking: {
+			...merged.crimeLinking,
+			clusters: Array.from(mergedClustersMap.values()).sort(
+				(a, b) => (b.incidents?.length ?? 0) - (a.incidents?.length ?? 0)
+			),
+			offenderChains: Array.from(mergedChainsMap.values()).sort(
+				(a, b) => (b.incidents?.length ?? 0) - (a.incidents?.length ?? 0)
+			),
+			totalLinkedIncidents: linkedIncidentIdSet.size,
 		},
 		metadata: {
 			...merged.metadata,
@@ -518,10 +774,7 @@ const DataAnalyticsHub = () => {
 	const [loading, setLoading] = useState(true)
 	const [error, setError] = useState<string | null>(null)
 	const [data, setData] = useState<AnalyticsHubData | null>(null)
-	const [dateRange, setDateRange] = useState<DateRange | undefined>({
-		from: subMonths(new Date(), 12),
-		to: new Date(),
-	})
+	const [dateRange, setDateRange] = useState<DateRange | undefined>(getDefaultAnalyticsDateRange)
 	const [regions, setRegions] = useState<Region[]>([])
 	const [sites, setSites] = useState<Site[]>([])
 	const [selectedRegionId, setSelectedRegionId] = useState<string>('all')
@@ -542,8 +795,37 @@ const DataAnalyticsHub = () => {
 			const id = parseInt(urlCustomerId, 10)
 			return Number.isNaN(id) ? undefined : id
 		}
-		return selectedCustomerId ?? undefined
-	}, [urlCustomerId, selectedCustomerId])
+		if (selectedCustomerId != null) return selectedCustomerId
+		if (isAdmin && availableCustomers.length > 0) return availableCustomers[0].id
+		return undefined
+	}, [urlCustomerId, selectedCustomerId, isAdmin, availableCustomers])
+
+	// Auto-select first customer for admins when none is chosen yet.
+	useEffect(() => {
+		if (!isAdmin || loadingCustomers) return
+		if (urlCustomerId) return
+		if (availableCustomers.length === 0) return
+
+		const firstId = availableCustomers[0].id
+		setSelectedCustomerForAdmin(firstId)
+		if (selectedCustomerId !== firstId) {
+			setSelectedCustomerId(firstId)
+		}
+		const params = new URLSearchParams(searchParams)
+		if (params.get('customerId') !== String(firstId)) {
+			params.set('customerId', String(firstId))
+			setSearchParams(params, { replace: true })
+		}
+	}, [
+		isAdmin,
+		loadingCustomers,
+		urlCustomerId,
+		availableCustomers,
+		selectedCustomerId,
+		setSelectedCustomerId,
+		searchParams,
+		setSearchParams,
+	])
 
 	useEffect(() => {
 		if (!isAdmin) return
@@ -624,9 +906,10 @@ const DataAnalyticsHub = () => {
 		setError(null)
 
 		try {
+			const effectiveRange = normalizeAnalyticsDateRange(dateRange)
 			const baseParams = {
-				startDate: dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : undefined,
-				endDate: dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined,
+				startDate: formatAnalyticsDateParam(effectiveRange.from!),
+				endDate: formatAnalyticsDateParam(effectiveRange.to!),
 				customerId: effectiveCustomerId,
 				regionIds: selectedRegionId !== 'all' ? [Number(selectedRegionId)] : undefined,
 			}
@@ -704,17 +987,26 @@ const DataAnalyticsHub = () => {
 	}, [selectedRegionId, filteredSites, selectedStoreId])
 
 	const handleDateRangeChange = (range: DateRange | undefined) => {
-		setDateRange(range)
+		setDateRange(normalizeAnalyticsDateRange(range))
 	}
 
 	const handleRefresh = () => {
 		loadData()
 	}
 
-	const handleQuickDateRange = (months: number) => {
+	const handleQuickDateRangeDays = (days: number) => {
+		const to = startOfDay(new Date())
 		setDateRange({
-			from: subMonths(new Date(), months),
-			to: new Date(),
+			from: startOfDay(subDays(to, days)),
+			to,
+		})
+	}
+
+	const handleQuickDateRangeMonths = (months: number) => {
+		const to = startOfDay(new Date())
+		setDateRange({
+			from: startOfDay(subMonths(to, months)),
+			to,
 		})
 	}
 
@@ -889,11 +1181,13 @@ const DataAnalyticsHub = () => {
 											type="date"
 											value={dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : ''}
 											onChange={(e) => {
-												const value = e.target.value
-												setDateRange((prev) => ({
-													from: value ? new Date(value) : undefined,
-													to: prev?.to,
-												}))
+												const parsed = parseAnalyticsDateInput(e.target.value)
+												setDateRange((prev) =>
+													normalizeAnalyticsDateRange({
+														from: parsed ?? prev?.from,
+														to: prev?.to,
+													}),
+												)
 											}}
 											className="h-9 text-xs sm:text-sm"
 										/>
@@ -904,15 +1198,46 @@ const DataAnalyticsHub = () => {
 											type="date"
 											value={dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : ''}
 											onChange={(e) => {
-												const value = e.target.value
-												setDateRange((prev) => ({
-													from: prev?.from,
-													to: value ? new Date(value) : undefined,
-												}))
+												const parsed = parseAnalyticsDateInput(e.target.value)
+												setDateRange((prev) =>
+													normalizeAnalyticsDateRange({
+														from: prev?.from,
+														to: parsed ?? prev?.to,
+													}),
+												)
 											}}
 											className="h-9 text-xs sm:text-sm"
 										/>
 									</div>
+								</div>
+								<div className="flex flex-wrap gap-2">
+									<Button
+										type="button"
+										variant="secondary"
+										size="sm"
+										className="text-xs h-8"
+										onClick={() => handleQuickDateRangeDays(ANALYTICS_DEFAULT_LOOKBACK_DAYS)}
+									>
+										Last 30 days
+									</Button>
+									<Button
+										type="button"
+										variant="outline"
+										size="sm"
+										className="text-xs h-8"
+										onClick={() => handleQuickDateRangeMonths(6)}
+									>
+										6 months
+									</Button>
+									<Button
+										type="button"
+										variant="outline"
+										size="sm"
+										className="text-xs h-8"
+										onClick={() => handleQuickDateRangeMonths(12)}
+									>
+										12 months
+									</Button>
 								</div>
 
 								{/* Region and Store Filters */}
@@ -1128,7 +1453,16 @@ const DataAnalyticsHub = () => {
 														variant="outline"
 														size="sm"
 														className="text-xs"
-														onClick={() => handleQuickDateRange(6)}
+														onClick={() => handleQuickDateRangeDays(ANALYTICS_DEFAULT_LOOKBACK_DAYS)}
+													>
+														Last 30 days
+													</Button>
+													<Button
+														type="button"
+														variant="outline"
+														size="sm"
+														className="text-xs"
+														onClick={() => handleQuickDateRangeMonths(6)}
 													>
 														Last 6 months
 													</Button>
@@ -1137,7 +1471,7 @@ const DataAnalyticsHub = () => {
 														variant="outline"
 														size="sm"
 														className="text-xs"
-														onClick={() => handleQuickDateRange(12)}
+														onClick={() => handleQuickDateRangeMonths(12)}
 													>
 														Last 12 months
 													</Button>

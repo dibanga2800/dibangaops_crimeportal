@@ -1,4 +1,5 @@
 using AIPBackend.Models;
+using AIPBackend.Models.DTOs;
 using AIPBackend.Services.Analytics;
 
 namespace AIPBackend.Tests;
@@ -57,6 +58,50 @@ public class AnalyticsRulesTests
 		Assert.Equal("increasing", AnalyticsRules.ComputeTrend(12, 5));
 		Assert.Equal("decreasing", AnalyticsRules.ComputeTrend(4, 10));
 		Assert.Equal("stable", AnalyticsRules.ComputeTrend(10, 10));
+	}
+
+	[Theory]
+	[InlineData("N/A", false)]
+	[InlineData("n/a", false)]
+	[InlineData("not applicable", false)]
+	[InlineData("unknown", false)]
+	[InlineData("John Smith", true)]
+	public void HasIdentifiedOffenderName_excludes_placeholders(string name, bool expected) =>
+		Assert.Equal(expected, AnalyticsRules.HasIdentifiedOffenderName(name));
+
+	[Fact]
+	public void BuildStoreRiskSummary_returns_no_incidents_message_when_empty()
+	{
+		var summary = AnalyticsRules.BuildStoreRiskSummary(new LocationRiskBreakdown
+		{
+			IncidentCount = 0,
+			Level = "low",
+			Score = 0,
+		});
+
+		Assert.Equal("No incidents in the selected period.", summary);
+	}
+
+	[Fact]
+	public void BuildStoreRiskSummary_includes_level_score_and_top_factors()
+	{
+		var breakdown = new LocationRiskBreakdown
+		{
+			IncidentCount = 5,
+			Level = "high",
+			Score = 0.55,
+			Factors =
+			[
+				new() { Factor = "incident_volume", Description = "12 incidents", Score = 0.3 },
+				new() { Factor = "value_impact", Description = "£2,400 lost", Score = 0.25 },
+			],
+		};
+
+		var summary = AnalyticsRules.BuildStoreRiskSummary(breakdown);
+
+		Assert.StartsWith("HIGH (55%):", summary);
+		Assert.Contains("12 incidents", summary);
+		Assert.Contains("£2,400 lost", summary);
 	}
 
 	private static Incident CreateIncident(

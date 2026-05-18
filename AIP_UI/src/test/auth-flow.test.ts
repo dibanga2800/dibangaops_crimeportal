@@ -4,6 +4,7 @@ import { sessionStore } from '@/state/sessionStore'
 describe('sessionStore (cookie auth)', () => {
 	beforeEach(() => {
 		localStorage.clear()
+		sessionStorage.clear()
 		sessionStore.clearAll()
 	})
 
@@ -13,16 +14,20 @@ describe('sessionStore (cookie auth)', () => {
 		expect(localStorage.getItem('refreshToken')).toBeNull()
 	})
 
-	it('clearAll removes user and expiry metadata', () => {
+	it('clearAll removes user, tokens, and expiry metadata', () => {
 		sessionStore.setUser({ id: '1', role: 'administrator' } as any)
 		sessionStore.setTokenExpiresAt(new Date().toISOString())
 		sessionStore.setCsrfToken('csrf-test')
+		sessionStore.setAccessToken('access-test')
+		sessionStore.setRefreshToken('refresh-test')
 
 		sessionStore.clearAll()
 
 		expect(sessionStore.getUser()).toBeNull()
 		expect(sessionStore.getTokenExpiresAt()).toBeNull()
 		expect(sessionStore.getCsrfToken()).toBeNull()
+		expect(sessionStore.getAccessToken()).toBeNull()
+		expect(sessionStore.getRefreshToken()).toBeNull()
 	})
 
 	it('hasSession reflects cached user', () => {
@@ -47,13 +52,16 @@ describe('services/auth', () => {
 		expect(isAuthenticated()).toBe(true)
 	})
 
-	it('getAuthFetchInit includes credentials and CSRF from session storage', async () => {
+	it('getAuthFetchInit includes credentials, bearer token, and CSRF from session storage', async () => {
 		const { getAuthFetchInit } = await import('@/services/auth')
 		sessionStore.setCsrfToken('test-csrf-value')
+		sessionStore.setAccessToken('test-access-token')
 
 		const init = getAuthFetchInit({ method: 'POST' })
 		expect(init.credentials).toBe('include')
-		expect((init.headers as Record<string, string>)['X-CSRF-TOKEN']).toBe('test-csrf-value')
+		const headers = init.headers as Record<string, string>
+		expect(headers['X-CSRF-TOKEN']).toBe('test-csrf-value')
+		expect(headers.Authorization).toBe('Bearer test-access-token')
 	})
 })
 

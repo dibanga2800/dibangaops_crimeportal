@@ -114,6 +114,10 @@ namespace AIPBackend.Models.DTOs
 		public string StoreName { get; set; } = string.Empty;
 		public int Incidents { get; set; }
 		public List<IncidentTypeDataDto> IncidentTypes { get; set; } = new();
+		public Dictionary<string, int> IncidentsByDay { get; set; } = new();
+		public Dictionary<int, int> IncidentsByHour { get; set; } = new();
+		public Dictionary<string, List<IncidentTypeDataDto>> IncidentTypesByDay { get; set; } = new();
+		public Dictionary<int, List<IncidentTypeDataDto>> IncidentTypesByHour { get; set; } = new();
 		public decimal TotalStolenValue { get; set; }
 		public decimal TotalRecoveredValue { get; set; }
 		public decimal TotalLostValue { get; set; }
@@ -151,6 +155,18 @@ namespace AIPBackend.Models.DTOs
 		public double RecoveryRate { get; set; }
 		public int StoresAffected { get; set; }
 		public string? Reason { get; set; }
+		public List<ProductStoreBreakdownDto> Stores { get; set; } = new();
+	}
+
+	public class ProductStoreBreakdownDto
+	{
+		public int StoreId { get; set; }
+		public string StoreName { get; set; } = string.Empty;
+		public int Frequency { get; set; }
+		public decimal StolenValue { get; set; }
+		public decimal RecoveredValue { get; set; }
+		public decimal LostValue { get; set; }
+		public double RecoveryRate { get; set; }
 	}
 
 	public class StoreProductHeatmapDataDto
@@ -158,12 +174,21 @@ namespace AIPBackend.Models.DTOs
 		public int StoreId { get; set; }
 		public string StoreName { get; set; } = string.Empty;
 		public List<StoreProductItemDto> Products { get; set; } = new();
+		/// <summary>All incidents at the store in the filtered period.</summary>
 		public int TotalIncidents { get; set; }
+		/// <summary>Incidents that include at least one stolen product line.</summary>
+		public int IncidentsWithStolenItems { get; set; }
+		/// <summary>Count of stolen product line items (can exceed incident count).</summary>
+		public int ProductLineCount { get; set; }
+		public int ProductGroupCount { get; set; }
 		public decimal TotalValueStolen { get; set; }
 		public decimal TotalValueRecovered { get; set; }
 		public decimal TotalValueLost { get; set; }
 		public double RecoveryRate { get; set; }
 		public string RiskLevel { get; set; } = "low";
+		public double RiskScore { get; set; }
+		public string RiskSummary { get; set; } = string.Empty;
+		public List<RiskFactorDto> RiskFactors { get; set; } = new();
 	}
 
 	public class StoreProductItemDto
@@ -200,8 +225,21 @@ namespace AIPBackend.Models.DTOs
 		public List<string> StoresTargeted { get; set; } = new();
 		public decimal TotalValue { get; set; }
 		public string RiskLevel { get; set; } = "low";
-		public List<string> ModusOperandi { get; set; } = new();
 		public string? Reason { get; set; }
+		public List<OffenderIncidentSummaryDto> Incidents { get; set; } = new();
+	}
+
+	public class OffenderIncidentSummaryDto
+	{
+		public string IncidentId { get; set; } = string.Empty;
+		public string Date { get; set; } = string.Empty;
+		public string TimeOfIncident { get; set; } = string.Empty;
+		public string DateTimeLabel { get; set; } = string.Empty;
+		public string StoreName { get; set; } = string.Empty;
+		public string IncidentType { get; set; } = string.Empty;
+		public decimal Value { get; set; }
+		public string StolenProductsSummary { get; set; } = string.Empty;
+		public List<LinkedIncidentStolenProductDto> StolenProducts { get; set; } = new();
 	}
 
 	public class CrossStoreMovementDto
@@ -214,10 +252,17 @@ namespace AIPBackend.Models.DTOs
 
 	public class MovementEventDto
 	{
+		public string StoreName { get; set; } = string.Empty;
 		public string FromStore { get; set; } = string.Empty;
 		public string ToStore { get; set; } = string.Empty;
 		public string Date { get; set; } = string.Empty;
+		public string DateTimeLabel { get; set; } = string.Empty;
 		public string IncidentType { get; set; } = string.Empty;
+		public string IncidentId { get; set; } = string.Empty;
+		public string StolenProductsSummary { get; set; } = string.Empty;
+		public decimal Value { get; set; }
+		/// <summary>Store visited immediately before this incident (when different).</summary>
+		public string? PreviousStore { get; set; }
 	}
 
 	public class OffenderNetworkDataDto
@@ -316,10 +361,20 @@ namespace AIPBackend.Models.DTOs
 		public DateRangeDto Period { get; set; } = new();
 	}
 
+	public class LinkedIncidentStolenProductDto
+	{
+		public string ProductName { get; set; } = string.Empty;
+		public string Barcode { get; set; } = string.Empty;
+		public int Quantity { get; set; }
+		public decimal LostValue { get; set; }
+	}
+
 	public class LinkedIncidentDto
 	{
 		public string IncidentId { get; set; } = string.Empty;
 		public string Date { get; set; } = string.Empty;
+		public string TimeOfIncident { get; set; } = string.Empty;
+		public string DateTimeLabel { get; set; } = string.Empty;
 		public string StoreName { get; set; } = string.Empty;
 		public string IncidentType { get; set; } = string.Empty;
 		public string? OffenderId { get; set; }
@@ -327,11 +382,14 @@ namespace AIPBackend.Models.DTOs
 		public decimal Value { get; set; }
 		public double SimilarityScore { get; set; }
 		public List<string> MatchingFeatures { get; set; } = new();
+		public string StolenProductsSummary { get; set; } = string.Empty;
+		public List<LinkedIncidentStolenProductDto> StolenProducts { get; set; } = new();
 	}
 
 	public class IncidentClusterDto
 	{
 		public string ClusterId { get; set; } = string.Empty;
+		public string Title { get; set; } = string.Empty;
 		public List<LinkedIncidentDto> Incidents { get; set; } = new();
 		public List<string> CommonFeatures { get; set; } = new();
 		public SuspectedOffenderDto? SuspectedOffender { get; set; }
@@ -361,7 +419,11 @@ namespace AIPBackend.Models.DTOs
 	public class ChainTimelineEventDto
 	{
 		public string Date { get; set; } = string.Empty;
+		public string TimeOfIncident { get; set; } = string.Empty;
+		public string DateTimeLabel { get; set; } = string.Empty;
 		public string Store { get; set; } = string.Empty;
 		public string IncidentType { get; set; } = string.Empty;
+		public string StolenProductsSummary { get; set; } = string.Empty;
+		public List<LinkedIncidentStolenProductDto> StolenProducts { get; set; } = new();
 	}
 }
