@@ -83,6 +83,32 @@ public class AnalyticsRulesTests
 	}
 
 	[Fact]
+	public void BuildOffenderGroupingKey_groups_same_identified_name_across_different_ids()
+	{
+		var withId = new Incident
+		{
+			OffenderName = "Blonde Bob",
+			OffenderId = "OFF-NX-20260511095356",
+		};
+		var withoutId = new Incident
+		{
+			OffenderName = "Blonde Bob",
+		};
+
+		Assert.Equal(
+			AnalyticsRules.BuildOffenderGroupingKey(withId),
+			AnalyticsRules.BuildOffenderGroupingKey(withoutId));
+	}
+
+	[Fact]
+	public void BuildOffenderGroupingKey_uses_id_when_no_identified_name()
+	{
+		var incident = new Incident { OffenderId = "OFF-123", OffenderName = "N/A" };
+
+		Assert.Equal("id:off-123", AnalyticsRules.BuildOffenderGroupingKey(incident));
+	}
+
+	[Fact]
 	public void BuildStoreRiskSummary_includes_level_score_and_top_factors()
 	{
 		var breakdown = new LocationRiskBreakdown

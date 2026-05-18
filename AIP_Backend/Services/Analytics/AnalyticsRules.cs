@@ -82,6 +82,28 @@ namespace AIPBackend.Services.Analytics
 			return string.Empty;
 		}
 
+		/// <summary>
+		/// Groups incidents into repeat-offender profiles. Same identified name always shares one key,
+		/// even when system offender IDs differ between incidents.
+		/// </summary>
+		public static string BuildOffenderGroupingKey(Incident incident)
+		{
+			if (HasIdentifiedOffenderName(incident.OffenderName))
+			{
+				return $"name:{NormalizeOffenderNameKey(incident.OffenderName!)}";
+			}
+
+			if (!string.IsNullOrWhiteSpace(incident.OffenderId))
+			{
+				return $"id:{incident.OffenderId.Trim().ToLowerInvariant()}";
+			}
+
+			return string.Empty;
+		}
+
+		public static string NormalizeOffenderNameKey(string name) =>
+			System.Text.RegularExpressions.Regex.Replace(name.Trim().ToLowerInvariant(), @"\s+", " ");
+
 		public static string ToRiskLevel(double riskScore) =>
 			riskScore >= 0.7 ? "critical"
 				: riskScore >= 0.4 ? "high"

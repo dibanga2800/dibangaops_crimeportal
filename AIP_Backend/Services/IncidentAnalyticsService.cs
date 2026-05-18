@@ -45,7 +45,7 @@ namespace AIPBackend.Services
 
 			var repeatOffenders = filtered
 				.Where(AnalyticsRules.IncidentHasIdentifiedOffender)
-				.GroupBy(BuildOffenderKey)
+				.GroupBy(AnalyticsRules.BuildOffenderGroupingKey)
 				.Where(g => g.Count() > 1)
 				.Count();
 
@@ -695,35 +695,6 @@ namespace AIPBackend.Services
 			};
 		}
 
-		private static string BuildOffenderKey(Incident incident)
-		{
-			if (!string.IsNullOrWhiteSpace(incident.OffenderId))
-			{
-				return $"id:{incident.OffenderId.Trim().ToLowerInvariant()}";
-			}
-
-			var name = (incident.OffenderName ?? string.Empty).Trim().ToLowerInvariant();
-			var genderSource = !string.IsNullOrWhiteSpace(incident.Gender)
-				? incident.Gender
-				: incident.OffenderSex;
-			var genderPart = (genderSource ?? string.Empty).Trim().ToLowerInvariant();
-			var dobPart = incident.OffenderDOB.HasValue
-				? incident.OffenderDOB.Value.ToString("yyyy-MM-dd")
-				: string.Empty;
-
-			var parts = new List<string> { $"name:{name}" };
-			if (!string.IsNullOrEmpty(dobPart))
-			{
-				parts.Add(dobPart);
-			}
-			if (!string.IsNullOrEmpty(genderPart))
-			{
-				parts.Add(genderPart);
-			}
-
-			return string.Join("|", parts);
-		}
-
 		private static RepeatOffenderDataDto BuildRepeatOffenders(List<Incident> incidents)
 		{
 			// Group all offenders (by OffenderId when present, otherwise by normalised OffenderName)
@@ -731,7 +702,8 @@ namespace AIPBackend.Services
 			// are included with a low risk level, so they can still be analysed and tracked.
 			var offenderGroups = incidents
 				.Where(AnalyticsRules.IncidentHasIdentifiedOffender)
-				.GroupBy(BuildOffenderKey)
+				.GroupBy(AnalyticsRules.BuildOffenderGroupingKey)
+				.Where(g => !string.IsNullOrEmpty(g.Key))
 				.ToList();
 
 			var mostActive = offenderGroups
@@ -1063,7 +1035,7 @@ namespace AIPBackend.Services
 			// Offender-based clusters (same offender identity across multiple incidents)
 			var offenderIdClusters = incidents
 				.Where(AnalyticsRules.IncidentHasIdentifiedOffender)
-				.GroupBy(BuildOffenderKey)
+				.GroupBy(AnalyticsRules.BuildOffenderGroupingKey)
 				.Where(g => g.Count() >= 2)
 				.Take(10);
 
@@ -1152,7 +1124,7 @@ namespace AIPBackend.Services
 
 			var offenderChains = incidents
 				.Where(AnalyticsRules.IncidentHasIdentifiedOffender)
-				.GroupBy(BuildOffenderKey)
+				.GroupBy(AnalyticsRules.BuildOffenderGroupingKey)
 				.Where(g => g.Count() >= 2)
 				.Take(10)
 				.Select(g =>

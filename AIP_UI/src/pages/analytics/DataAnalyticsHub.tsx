@@ -62,6 +62,7 @@ import {
 	normalizeAnalyticsDateRange,
 	parseAnalyticsDateInput,
 } from './analyticsDateRange'
+import { getOffenderMergeKey } from './offenderDisplay'
 import { customerDashboardService } from '@/services/dashboardService'
 import type { Region, Site } from '@/types/dashboard'
 import { useCustomerSelection } from '@/contexts/CustomerSelectionContext'
@@ -548,7 +549,7 @@ const mergeAnalyticsHubData = (datasets: AnalyticsHubData[]): AnalyticsHubData =
 	const mergedMostActiveOffendersMap = new Map<string, any>()
 	datasets.forEach((dataset) => {
 		(dataset.repeatOffenders.mostActive || []).forEach((offender) => {
-			const key = String(offender.offenderId ?? offender.name ?? '')
+			const key = getOffenderMergeKey(offender)
 			if (!key) return
 			const prev = mergedMostActiveOffendersMap.get(key)
 			if (!prev) {
@@ -568,7 +569,10 @@ const mergeAnalyticsHubData = (datasets: AnalyticsHubData[]): AnalyticsHubData =
 	const mergedCrossStoreMap = new Map<string, any>()
 	datasets.forEach((dataset) => {
 		(dataset.repeatOffenders.crossStoreMovements || []).forEach((movement) => {
-			const key = String(movement.offenderId ?? '')
+			const key = getOffenderMergeKey({
+				offenderId: movement.offenderId,
+				name: movement.offenderName,
+			})
 			if (!key) return
 			const prev = mergedCrossStoreMap.get(key)
 			if (!prev) {
