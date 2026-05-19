@@ -19,12 +19,15 @@ sql_allowed_ip_ranges = []
 enable_sql_private_endpoint = true
 
 # Unified Front Door: www.example.com/api/* → API, /* → SPA (same-origin auth cookies).
-# Phase 1: enable_unified_front_door_custom_domain = false — validate *.azurefd.net works.
-# Phase 2: CNAME www → unified_front_door_endpoint_host, then enable_unified_front_door_custom_domain = true.
+#
+# PRODUCTION (crimeportal-rg already exists): keep BOTH flags true. CI fails apply if custom domain is disabled.
+# See docs/production-edge-runbook.md — do not set enable_unified_front_door_custom_domain = false after www DNS cutover.
+#
+# Bootstrap / greenfield only (phase 1): custom_domain = false until www CNAME + TXT validation are ready.
 enable_unified_front_door                 = true
-enable_unified_front_door_custom_domain     = false
-unified_front_door_hostname                 = "www.example.com"
-frontend_www_custom_domain  = "www.example.com"
+enable_unified_front_door_custom_domain   = true
+unified_front_door_hostname               = "www.example.com"
+frontend_www_custom_domain                = "www.example.com"
 frontend_custom_domain      = "example.com"
 frontend_url                = "https://www.example.com,https://example.com"
 

@@ -1,0 +1,58 @@
+name: Verify production edge
+description: Validates prod tfvars guardrails, cleans orphan Front Door routes, and smoke-tests www TLS + /api/health.
+inputs:
+  production_hostname:
+    description: Public www hostname (e.g. www.dibangops.com).
+    required: false
+    default: www.dibangops.com
+  tfvars_path:
+    description: Path to terraform.prod.tfvars for guardrail validation.
+    required: false
+    default: Infrastructure/terraform.prod.tfvars
+  skip_tfvars_validation:
+    description: Set true when tfvars file is not present (frontend-only job).
+    required: false
+    default: 'false'
+  skip_orphan_cleanup:
+    description: Set true to skip deleting legacy orphan API routes.
+    required: false
+    default: 'false'
+  skip_azure_binding_check:
+    description: Set true when Azure CLI is not logged in.
+    required: false
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - name: Validate production tfvars guardrails
+      if: inputs.skip_tfvars_validation != 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        chmod +x scripts/validate-terraform-prod-tfvars.sh
+        scripts/validate-terraform-prod-tfvars.sh "${{ inputs.tfvars_path }}"
+
+    - name: Remove orphan unified Front Door API route
+      if: inputs.skip_orphan_cleanup != 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        chmod +x scripts/cleanup-unified-front-door-orphans.sh
+        scripts/cleanup-unified-front-door-orphans.sh
+
+    - name: Verify Azure custom domain route binding
+      if: inputs.skip_azure_binding_check != 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        chmod +x scripts/verify-unified-front-door-azure.sh
+        HOST="${{ inputs.production_hostname }}"
+        CUSTOM_DOMAIN_NAME="$(echo "${HOST}" | tr '.' '-')"
+        scripts/verify-unified-front-door-azure.sh crimeportal-rg crimeportal-frontend-unified-fd crimeportal-frontend-unified-ep crimeportal-frontend-unified-spa-route "${CUSTOM_DOMAIN_NAME}" "${HOST}"
+
+    - name: Smoke-test www TLS and API health
+      shell: bash
+      run: |
+        set -euo pipefail
+        chmod +x scripts/verify-production-edge.sh
+        scripts/verify-production-edge.sh "${{ inputs.production_hostname }}"

@@ -128,7 +128,8 @@ resource "azurerm_cdn_frontdoor_route" "unified_spa" {
   https_redirect_enabled        = true
   patterns_to_match             = ["/*"]
   supported_protocols           = ["Http", "Https"]
-  link_to_default_domain        = true
+  # When www custom domain is enabled, do not bind the default *.azurefd.net host on this route (avoids wrong edge cert on www).
+  link_to_default_domain = var.enable_unified_front_door_custom_domain && length(azurerm_cdn_frontdoor_custom_domain.unified) > 0 ? false : true
   cdn_frontdoor_custom_domain_ids = var.enable_unified_front_door_custom_domain && length(azurerm_cdn_frontdoor_custom_domain.unified) > 0 ? [azurerm_cdn_frontdoor_custom_domain.unified[0].id] : []
 
   depends_on = [azurerm_cdn_frontdoor_rule.unified_api_override]

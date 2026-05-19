@@ -436,9 +436,14 @@ variable "unified_front_door_hostname" {
 }
 
 variable "enable_unified_front_door_custom_domain" {
-  description = "Attach TLS custom domain to unified Front Door routes. Enable only after www DNS CNAME targets unified_front_door_endpoint_host; a pending custom domain blocks edge deployment (404 on all hostnames)."
+  description = "Attach TLS custom domain to unified Front Door routes. Enable only after www DNS CNAME targets unified_front_door_endpoint_host; a pending custom domain blocks edge deployment (404 on all hostnames). Must stay true in production after cutover (see docs/production-edge-runbook.md)."
   type        = bool
   default     = false
+
+  validation {
+    condition     = !var.enable_unified_front_door_custom_domain || var.enable_unified_front_door
+    error_message = "enable_unified_front_door_custom_domain requires enable_unified_front_door = true."
+  }
 }
 
 variable "enable_api_front_door" {

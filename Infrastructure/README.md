@@ -122,14 +122,18 @@ The API sets `aip_access`, `aip_refresh`, and `aip_csrf` cookies. Configure the 
 
 ### Unified Front Door (same-origin SPA + API)
 
+**Production runbook:** [docs/production-edge-runbook.md](../docs/production-edge-runbook.md) — frozen DNS/TLS flags, CI guardrails, and incident table.
+
 ```hcl
-enable_unified_front_door             = true
-enable_unified_front_door_custom_domain = false # phase 1 only
-unified_front_door_hostname           = "www.example.com"
-frontend_www_custom_domain            = "www.example.com"
+enable_unified_front_door               = true
+enable_unified_front_door_custom_domain = true # required in production after cutover
+unified_front_door_hostname             = "www.example.com"
+frontend_www_custom_domain              = "www.example.com"
 ```
 
 **Important:** Do not set `enable_unified_front_door_custom_domain = true` until **www** DNS CNAME points at `unified_front_door_endpoint_host`. A custom domain stuck in **Pending** validation blocks edge deployment and returns 404 (“We weren't able to find your Azure Front Door Service”) on the `*.azurefd.net` hostname too.
+
+**CI:** Full stack and frontend deploys run `scripts/verify-production-edge.sh` (TLS CN + `/api/health`). When `crimeportal-rg` exists, `scripts/validate-terraform-prod-tfvars.sh` blocks Terraform apply if unified custom domain flags are turned off.
 
 **DNS cutover (do in order):**
 

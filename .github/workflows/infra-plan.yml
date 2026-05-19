@@ -6,7 +6,11 @@ on:
       - 'Infrastructure/**'
       - '.github/workflows/infra-plan.yml'
       - '.github/workflows/deploy-main.yml'
-      - '.github/actions/write-terraform-prod-tfvars/**'
+      - '.github/workflows/deploy-frontend.yml'
+      - '.github/actions/**'
+      - 'scripts/validate-terraform-prod-tfvars.sh'
+      - 'scripts/verify-production-edge.sh'
+      - 'docs/production-edge-runbook.md'
   workflow_dispatch:
 
 permissions:
