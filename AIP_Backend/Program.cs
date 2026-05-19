@@ -691,6 +691,7 @@ if (enableUploadsStaticFiles)
 }
 
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" })).AllowAnonymous();
+app.MapGet("/api/health", () => Results.Ok(new { status = "healthy" })).AllowAnonymous();
 
 app.MapControllers();
 

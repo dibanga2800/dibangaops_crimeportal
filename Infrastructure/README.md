@@ -123,23 +123,28 @@ The API sets `aip_access`, `aip_refresh`, and `aip_csrf` cookies. Configure the 
 ### Unified Front Door (same-origin SPA + API)
 
 ```hcl
-enable_unified_front_door  = true
-unified_front_door_hostname = "www.example.com"
-frontend_www_custom_domain  = "www.example.com"
+enable_unified_front_door             = true
+enable_unified_front_door_custom_domain = false # phase 1 only
+unified_front_door_hostname           = "www.example.com"
+frontend_www_custom_domain            = "www.example.com"
 ```
+
+**Important:** Do not set `enable_unified_front_door_custom_domain = true` until **www** DNS CNAME points at `unified_front_door_endpoint_host`. A custom domain stuck in **Pending** validation blocks edge deployment and returns 404 (“We weren't able to find your Azure Front Door Service”) on the `*.azurefd.net` hostname too.
 
 **DNS cutover (do in order):**
 
-1. `terraform apply` with unified Front Door enabled (www can still point at SWA).
+1. `terraform apply` with `enable_unified_front_door = true` and `enable_unified_front_door_custom_domain = false` (www can still point at SWA).
 2. Note `terraform output unified_front_door_endpoint_host`.
 3. Validate via Front Door default hostname (before custom DNS):
    - `curl -sS "https://<unified-fd-host>/api/health"` → `{"status":"healthy"}`
    - Open `https://<unified-fd-host>/` → SPA loads.
-4. In Azure Portal → Front Door → custom domain `www.example.com` → wait for **Managed certificate** = Deployed.
-5. Change **www** DNS CNAME from Static Web App to `unified_front_door_endpoint_host` (TTL 300s or lower for rollback).
-6. Redeploy frontend with `VITE_API_BASE_URL=/api` (Deploy Frontend workflow does this when unified FD is enabled).
-7. Confirm cookies appear under `www.example.com` in DevTools → Application → Cookies (not under `azurecontainerapps.io`).
-8. Smoke-test login on iOS Safari (non-private).
+4. Change **www** DNS CNAME from Static Web App to `unified_front_door_endpoint_host` (DNS only / grey cloud in Cloudflare).
+5. `terraform apply` with `enable_unified_front_door_custom_domain = true`.
+6. Add the **TXT** record Azure shows for domain validation (Portal → Front Door → custom domain → Validation). In Cloudflare: type `TXT`, name `_dnsauth.www`, content = the validation token, **DNS only**. Without this TXT, validation stays **Pending** and `https://www` returns 404 or certificate errors.
+7. In Azure Portal → custom domain → wait until **Domain validation** = Approved and **Managed certificate** = Deployed (often 5–30 minutes after TXT propagates).
+8. Redeploy frontend with `VITE_API_BASE_URL=/api` (Deploy Frontend workflow does this when unified FD is enabled).
+9. Confirm cookies appear under `www.example.com` in DevTools → Application → Cookies (not under `azurecontainerapps.io`).
+10. Smoke-test login on iOS Safari (non-private).
 
 **Rollback:** Point www CNAME back to SWA; redeploy frontend with previous `VITE_API_BASE_URL` if needed.
 

@@ -19,9 +19,11 @@ sql_allowed_ip_ranges = []
 enable_sql_private_endpoint = true
 
 # Unified Front Door: www.example.com/api/* → API, /* → SPA (same-origin auth cookies).
-# Point www DNS CNAME to terraform output unified_front_door_endpoint_host, then set VITE_API_BASE_URL=/api in CI.
-enable_unified_front_door   = true
-unified_front_door_hostname   = "www.example.com"
+# Phase 1: enable_unified_front_door_custom_domain = false — validate *.azurefd.net works.
+# Phase 2: CNAME www → unified_front_door_endpoint_host, then enable_unified_front_door_custom_domain = true.
+enable_unified_front_door                 = true
+enable_unified_front_door_custom_domain     = false
+unified_front_door_hostname                 = "www.example.com"
 frontend_www_custom_domain  = "www.example.com"
 frontend_custom_domain      = "example.com"
 frontend_url                = "https://www.example.com,https://example.com"

@@ -435,6 +435,12 @@ variable "unified_front_door_hostname" {
   nullable    = true
 }
 
+variable "enable_unified_front_door_custom_domain" {
+  description = "Attach TLS custom domain to unified Front Door routes. Enable only after www DNS CNAME targets unified_front_door_endpoint_host; a pending custom domain blocks edge deployment (404 on all hostnames)."
+  type        = bool
+  default     = false
+}
+
 variable "enable_api_front_door" {
   description = "Place Azure Front Door + WAF in front of the public API Container App"
   type        = bool

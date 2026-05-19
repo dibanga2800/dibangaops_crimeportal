@@ -396,7 +396,8 @@ jobs:
         working-directory: AIP_UI
         env:
           VITE_APP_ENV: production
-          VITE_API_BASE_URL: ${{ needs.terraform-release.outputs.backend_url }}/api
+          # Same-origin API via unified Front Door (www.dibangops.com/api). Do not embed Container Apps FQDN.
+          VITE_API_BASE_URL: /api
           VITE_IDLE_TIMEOUT_MINUTES: '60'
         run: npm run build:production
 

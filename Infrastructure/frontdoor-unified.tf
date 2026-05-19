@@ -48,7 +48,7 @@ resource "azurerm_cdn_frontdoor_origin_group" "unified_spa" {
     protocol            = "Https"
     interval_in_seconds = 60
     path                = "/"
-    request_type        = "HEAD"
+    request_type        = "GET"
   }
 }
 
@@ -80,19 +80,40 @@ resource "azurerm_cdn_frontdoor_origin" "unified_spa" {
   certificate_name_check_enabled = true
 }
 
-# API route must be registered before catch-all SPA route.
-resource "azurerm_cdn_frontdoor_route" "unified_api" {
-  count                         = var.enable_unified_front_door ? 1 : 0
-  name                          = "${var.backend_name}-unified-api-route"
-  cdn_frontdoor_endpoint_id     = azurerm_cdn_frontdoor_endpoint.unified[0].id
-  cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.unified_api[0].id
-  cdn_frontdoor_origin_ids      = [azurerm_cdn_frontdoor_origin.unified_api[0].id]
-  enabled                       = true
-  forwarding_protocol           = "HttpsOnly"
-  https_redirect_enabled        = true
-  patterns_to_match             = ["/api/*"]
-  supported_protocols           = ["Http", "Https"]
-  link_to_default_domain        = true
+# Single catch-all route + rule set: /api* → API origin group, everything else → SWA (more reliable than two routes on Standard SKU).
+resource "azurerm_cdn_frontdoor_rule_set" "unified_routing" {
+  count                    = var.enable_unified_front_door ? 1 : 0
+  name                     = "unifiedrouting"
+  cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.unified[0].id
+}
+
+resource "azurerm_cdn_frontdoor_rule" "unified_api_override" {
+  count                     = var.enable_unified_front_door ? 1 : 0
+  name                      = "apiorigingroup"
+  cdn_frontdoor_rule_set_id = azurerm_cdn_frontdoor_rule_set.unified_routing[0].id
+  order                     = 1
+  behavior_on_match         = "Stop"
+
+  actions {
+    route_configuration_override_action {
+      cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.unified_api[0].id
+      forwarding_protocol           = "HttpsOnly"
+      cache_behavior                = "Disabled"
+    }
+  }
+
+  conditions {
+    url_path_condition {
+      operator         = "BeginsWith"
+      match_values       = ["/api"]
+      negate_condition   = false
+    }
+  }
+
+  depends_on = [
+    azurerm_cdn_frontdoor_origin.unified_api,
+    azurerm_cdn_frontdoor_origin_group.unified_api,
+  ]
 }
 
 resource "azurerm_cdn_frontdoor_route" "unified_spa" {
@@ -101,18 +122,20 @@ resource "azurerm_cdn_frontdoor_route" "unified_spa" {
   cdn_frontdoor_endpoint_id     = azurerm_cdn_frontdoor_endpoint.unified[0].id
   cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.unified_spa[0].id
   cdn_frontdoor_origin_ids      = [azurerm_cdn_frontdoor_origin.unified_spa[0].id]
+  cdn_frontdoor_rule_set_ids    = [azurerm_cdn_frontdoor_rule_set.unified_routing[0].id]
   enabled                       = true
   forwarding_protocol           = "HttpsOnly"
   https_redirect_enabled        = true
   patterns_to_match             = ["/*"]
   supported_protocols           = ["Http", "Https"]
   link_to_default_domain        = true
+  cdn_frontdoor_custom_domain_ids = var.enable_unified_front_door_custom_domain && length(azurerm_cdn_frontdoor_custom_domain.unified) > 0 ? [azurerm_cdn_frontdoor_custom_domain.unified[0].id] : []
 
-  depends_on = [azurerm_cdn_frontdoor_route.unified_api]
+  depends_on = [azurerm_cdn_frontdoor_rule.unified_api_override]
 }
 
 resource "azurerm_cdn_frontdoor_custom_domain" "unified" {
-  count                    = var.enable_unified_front_door && local.unified_front_door_hostname_effective != null && local.unified_front_door_hostname_effective != "" ? 1 : 0
+  count                    = var.enable_unified_front_door && var.enable_unified_front_door_custom_domain && local.unified_front_door_hostname_effective != null && local.unified_front_door_hostname_effective != "" ? 1 : 0
   name                     = replace(replace(local.unified_front_door_hostname_effective, ".", "-"), "_", "-")
   cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.unified[0].id
   host_name                = local.unified_front_door_hostname_effective
