@@ -145,6 +145,8 @@ frontend_www_custom_domain  = "www.example.com"
 
 CI: set `public_app_url` / use relative `/api` — see `.github/workflows/deploy-frontend.yml`.
 
+**Note:** Unified Front Door on `Standard_AzureFrontDoor` does not attach WAF managed rule sets (Premium SKU only). Use Azure SWA + Container App hardening and optional `enable_api_front_door` with Premium if you need WAF managed rules.
+
 ### Azure Front Door + WAF (API-only, optional)
 
 ```hcl

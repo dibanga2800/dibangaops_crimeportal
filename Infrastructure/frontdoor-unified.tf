@@ -8,26 +8,7 @@ resource "azurerm_cdn_frontdoor_profile" "unified" {
   sku_name            = var.front_door_sku_name
 }
 
-resource "azurerm_cdn_frontdoor_firewall_policy" "unified" {
-  count               = var.enable_unified_front_door ? 1 : 0
-  name                = "${replace(var.frontend_name, "-", "")}unifiedwaf"
-  resource_group_name = azurerm_resource_group.rg.name
-  sku_name            = var.front_door_waf_sku_name
-  enabled             = true
-  mode                = var.front_door_waf_mode
-
-  managed_rule {
-    type    = "Microsoft_DefaultRuleSet"
-    version = "2.1"
-    action  = "Block"
-  }
-
-  managed_rule {
-    type    = "Microsoft_BotManagerRuleSet"
-    version = "1.0"
-    action  = "Block"
-  }
-}
+# WAF managed rule sets require Premium_AzureFrontDoor. Standard SKU uses profile + routes only (no WAF policy).
 
 resource "azurerm_cdn_frontdoor_endpoint" "unified" {
   count                    = var.enable_unified_front_door ? 1 : 0
@@ -142,21 +123,3 @@ resource "azurerm_cdn_frontdoor_custom_domain" "unified" {
   }
 }
 
-resource "azurerm_cdn_frontdoor_security_policy" "unified" {
-  count                    = var.enable_unified_front_door ? 1 : 0
-  name                     = "${var.frontend_name}-unified-sec"
-  cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.unified[0].id
-
-  security_policies {
-    firewall {
-      cdn_frontdoor_firewall_policy_id = azurerm_cdn_frontdoor_firewall_policy.unified[0].id
-
-      association {
-        domain {
-          cdn_frontdoor_domain_id = local.unified_front_door_hostname_effective != null && local.unified_front_door_hostname_effective != "" ? azurerm_cdn_frontdoor_custom_domain.unified[0].id : azurerm_cdn_frontdoor_endpoint.unified[0].id
-        }
-        patterns_to_match = ["/*"]
-      }
-    }
-  }
-}
