@@ -407,13 +407,68 @@ namespace AIPBackend.Models.DTOs
 		public DateTime? EndDate { get; set; }
 	}
 
+	public class CrimeInsightValueImpactDto
+	{
+		public string Recovered { get; set; } = string.Empty;
+		public string EstimatedLoss { get; set; } = string.Empty;
+		public string? LossLabel { get; set; }
+	}
+
 	public class CrimeInsightMetricDto
 	{
 		public string Title { get; set; } = string.Empty;
 		public string Value { get; set; } = string.Empty;
 		public string? Subtext { get; set; }
+		public CrimeInsightValueImpactDto? ValueImpact { get; set; }
 		public string? Trend { get; set; }
 		public bool TrendIsPositive { get; set; }
+	}
+
+	public class IncidentGraphAnalyticsQueryDto
+	{
+		[Required]
+		public int CustomerId { get; set; }
+		public string? FromDate { get; set; }
+		public string? ToDate { get; set; }
+		public string? RegionId { get; set; }
+		public string? OfficerType { get; set; }
+		public string? GraphType { get; set; }
+	}
+
+	public class IncidentGraphLocationDto
+	{
+		public string Location { get; set; } = string.Empty;
+		public string SiteId { get; set; } = string.Empty;
+		public string SiteName { get; set; } = string.Empty;
+		public string RegionId { get; set; } = string.Empty;
+		public string RegionName { get; set; } = string.Empty;
+		public string CustomerName { get; set; } = string.Empty;
+		public decimal Value { get; set; }
+		public decimal LostValue { get; set; }
+		public int Quantity { get; set; }
+		public int Count { get; set; }
+	}
+
+	public class IncidentGraphTypeCountDto
+	{
+		public string Type { get; set; } = string.Empty;
+		public int Count { get; set; }
+	}
+
+	public class IncidentGraphTotalsDto
+	{
+		public decimal TotalValue { get; set; }
+		public int TotalQuantity { get; set; }
+		public int TotalIncidents { get; set; }
+	}
+
+	public class IncidentGraphAnalyticsResponseDto
+	{
+		public bool Success { get; set; } = true;
+		public string Message { get; set; } = string.Empty;
+		public List<IncidentGraphLocationDto> Locations { get; set; } = new();
+		public IncidentGraphTotalsDto Totals { get; set; } = new();
+		public List<IncidentGraphTypeCountDto> Types { get; set; } = new();
 	}
 
 	public class CrimeInsightListItemDto

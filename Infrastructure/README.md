@@ -135,6 +135,8 @@ frontend_www_custom_domain              = "www.example.com"
 
 **CI:** Full stack and frontend deploys run `scripts/verify-production-edge.sh` (TLS CN + `/api/health`). When `crimeportal-rg` exists, `scripts/validate-terraform-prod-tfvars.sh` blocks Terraform apply if unified custom domain flags are turned off.
 
+**Analytics KPIs:** Crime Intelligence (`GET /api/incidents/insights`) and Incident Graph (`GET /api/incidents/graph-analytics`) aggregate the **full** filtered dataset server-side. Do not use paginated `GET /api/incidents` for dashboard totals (max 100 rows per page).
+
 **DNS cutover (do in order):**
 
 1. `terraform apply` with `enable_unified_front_door = true` and `enable_unified_front_door_custom_domain = false` (www can still point at SWA).

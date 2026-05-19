@@ -339,7 +339,7 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 
 		try {
 			const [graphResponse, typesResponse] = await Promise.all([
-				incidentGraphService.fetchGraphData(filters, user),
+				incidentGraphService.fetchGraphData(filters),
 				graphType === 'type'
 					? incidentGraphService.fetchTypesData({
 						customerId: filters.customerId,
@@ -347,7 +347,7 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 						endDate: filters.endDate,
 						regionId: filters.regionId,
 						officerType: filters.officerType,
-					}, user)
+					})
 					: Promise.resolve(null),
 			])
 
@@ -364,7 +364,7 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 
 			if (typesResponse?.success) {
 				setIncidentTypeData(typesResponse.data)
-				setFilteredTotal(typesResponse.data.reduce((s, i) => s + i.count, 0))
+				setFilteredTotal(graphResponse.data?.totals.totalIncidents ?? typesResponse.data.reduce((s, i) => s + i.count, 0))
 			}
 		} catch (err: any) {
 			const isNetworkError = err?.code === 'ERR_NETWORK' || err?.message === 'Network Error'

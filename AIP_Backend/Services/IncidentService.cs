@@ -446,7 +446,7 @@ namespace AIPBackend.Services
 				CustomerId = query.CustomerId,
 				SiteId = query.SiteId,
 				RegionId = query.RegionId,
-				StartDate = query.StartDate ?? DateTime.UtcNow.AddDays(-90),
+				StartDate = query.StartDate ?? new DateTime(DateTime.UtcNow.Year, 1, 1, 0, 0, 0, DateTimeKind.Utc),
 				EndDate = query.EndDate ?? DateTime.UtcNow
 			};
 
@@ -477,7 +477,9 @@ namespace AIPBackend.Services
 			}
 
 			var totalIncidents = incidents.Count;
-			var totalValue = incidents.Sum(CalculateIncidentValue);
+			var totalRecoveredValue = incidents.Sum(IncidentFinancials.GetRecoveredValue);
+			var totalLostValue = incidents.Sum(IncidentFinancials.GetLostValue);
+			var hasEstimatedLossValues = incidents.Any(i => !i.TotalLostValue.HasValue);
 			var distinctStores = incidents
 				.Where(i => !string.IsNullOrWhiteSpace(i.StoreName))
 				.Select(i => i.StoreName!)
@@ -490,7 +492,7 @@ namespace AIPBackend.Services
 				{
 					Name = g.Key,
 					Count = g.Count(),
-					Value = g.Sum(CalculateIncidentValue),
+					Value = g.Sum(IncidentFinancials.GetRecoveredValue),
 					Percentage = Math.Round((double)g.Count() / totalIncidents * 100, 1)
 				})
 				.OrderByDescending(g => g.Count)
@@ -503,7 +505,7 @@ namespace AIPBackend.Services
 				{
 					Name = g.Key,
 					Count = g.Count(),
-					Value = g.Sum(CalculateIncidentValue),
+					Value = g.Sum(IncidentFinancials.GetRecoveredValue),
 					Percentage = Math.Round((double)g.Count() / totalIncidents * 100, 1)
 				})
 				.OrderByDescending(g => g.Count)
@@ -516,7 +518,7 @@ namespace AIPBackend.Services
 				{
 					Name = g.Key,
 					Count = g.Count(),
-					Value = g.Sum(CalculateIncidentValue),
+					Value = g.Sum(IncidentFinancials.GetRecoveredValue),
 					Percentage = Math.Round((double)g.Count() / totalIncidents * 100, 1)
 				})
 				.OrderByDescending(g => g.Count)
@@ -543,14 +545,21 @@ namespace AIPBackend.Services
 						: 0
 				})
 				.OrderByDescending(g => g.Count)
-				.Take(5)
+				.Take(10)
 				.ToList();
 
 			var timeBuckets = CalculateTimeBuckets(incidents, totalIncidents);
 
 			var hotProduct = BuildHotProductInsight(topProducts, stolenItems);
 
-			var heroMetrics = BuildHeroMetrics(totalIncidents, totalValue, distinctStores, incidentTypeGroups, storeGroups);
+			var heroMetrics = BuildHeroMetrics(
+				totalIncidents,
+				totalRecoveredValue,
+				totalLostValue,
+				hasEstimatedLossValues,
+				distinctStores,
+				incidentTypeGroups,
+				storeGroups);
 
 			return new CrimeIntelligenceResponseDto
 			{
@@ -562,6 +571,125 @@ namespace AIPBackend.Services
 				TimeBuckets = timeBuckets,
 				HotProduct = hotProduct,
 				GeneratedAt = DateTime.UtcNow
+			};
+		}
+
+		public async Task<IncidentGraphAnalyticsResponseDto> GetIncidentGraphAnalyticsAsync(IncidentGraphAnalyticsQueryDto query)
+		{
+			if (query.CustomerId <= 0)
+			{
+				throw new ArgumentException("CustomerId is required", nameof(query.CustomerId));
+			}
+
+			_userContext.EnsureCanAccessCustomer(query.CustomerId);
+			var context = _userContext.GetCurrentContext();
+
+			DateTime? fromDate = null;
+			DateTime? toDate = null;
+			if (!string.IsNullOrWhiteSpace(query.FromDate) && DateTime.TryParse(query.FromDate, out var parsedFrom))
+			{
+				fromDate = parsedFrom;
+			}
+
+			if (!string.IsNullOrWhiteSpace(query.ToDate) && DateTime.TryParse(query.ToDate, out var parsedTo))
+			{
+				toDate = parsedTo;
+			}
+
+			var effectiveQuery = new CrimeIntelligenceQueryDto
+			{
+				CustomerId = query.CustomerId,
+				RegionId = query.RegionId,
+				StartDate = fromDate ?? new DateTime(DateTime.UtcNow.Year, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+				EndDate = toDate ?? DateTime.UtcNow
+			};
+
+			var incidents = await _repository.GetIncidentsWithDetailsAsync(effectiveQuery);
+			if (!context.IsAdministrator && context.AccessibleSiteIds.Count > 0)
+			{
+				incidents = incidents
+					.Where(i => !string.IsNullOrWhiteSpace(i.SiteId) && context.AccessibleSiteIds.Contains(i.SiteId))
+					.ToList();
+			}
+
+			incidents = incidents
+				.Where(i => PassesOfficerFilter(i, query.OfficerType))
+				.ToList();
+
+			if (!incidents.Any())
+			{
+				return new IncidentGraphAnalyticsResponseDto
+				{
+					Message = "No incident data available for the selected filters.",
+					Totals = new IncidentGraphTotalsDto()
+				};
+			}
+
+			var graphType = string.IsNullOrWhiteSpace(query.GraphType) ? "value" : query.GraphType.Trim().ToLowerInvariant();
+			var grouped = new Dictionary<string, IncidentGraphLocationDto>(StringComparer.OrdinalIgnoreCase);
+
+			foreach (var incident in incidents)
+			{
+				var location = string.IsNullOrWhiteSpace(incident.StoreName)
+					? string.IsNullOrWhiteSpace(incident.SiteId) ? "Unknown Location" : incident.SiteId
+					: incident.StoreName;
+
+				if (!grouped.TryGetValue(location, out var entry))
+				{
+					entry = new IncidentGraphLocationDto
+					{
+						Location = location,
+						SiteId = incident.SiteId ?? string.Empty,
+						SiteName = incident.StoreName ?? location,
+						RegionId = incident.RegionId ?? string.Empty,
+						RegionName = incident.RegionName ?? string.Empty,
+						CustomerName = string.Empty,
+					};
+					grouped[location] = entry;
+				}
+
+				entry.Count += 1;
+				entry.Value += IncidentFinancials.GetRecoveredValue(incident);
+				entry.LostValue += IncidentFinancials.GetLostValue(incident);
+				entry.Quantity += incident.TotalRecoveredQuantity
+					?? incident.QuantityRecovered
+					?? 1;
+			}
+
+			var locations = grouped.Values
+				.OrderByDescending(l => graphType switch
+				{
+					"lost" => l.LostValue,
+					"quantity" => l.Quantity,
+					"type" => l.Count,
+					_ => l.Value
+				})
+				.ToList();
+
+			var typeMap = incidents
+				.GroupBy(i => string.IsNullOrWhiteSpace(i.IncidentType) ? "Unknown" : i.IncidentType)
+				.Select(g => new IncidentGraphTypeCountDto { Type = g.Key, Count = g.Count() })
+				.OrderByDescending(t => t.Count)
+				.ToList();
+
+			var totals = new IncidentGraphTotalsDto
+			{
+				TotalIncidents = incidents.Count,
+				TotalValue = graphType switch
+				{
+					"lost" => incidents.Sum(IncidentFinancials.GetLostValue),
+					"quantity" => locations.Sum(l => l.Quantity),
+					"type" => incidents.Count,
+					_ => incidents.Sum(IncidentFinancials.GetRecoveredValue)
+				},
+				TotalQuantity = locations.Sum(l => l.Quantity)
+			};
+
+			return new IncidentGraphAnalyticsResponseDto
+			{
+				Locations = locations,
+				Totals = totals,
+				Types = typeMap
 			};
 		}
 
@@ -1095,24 +1223,54 @@ namespace AIPBackend.Services
 			}
 		}
 
-		private static decimal CalculateIncidentValue(Incident incident)
+		private static decimal CalculateIncidentValue(Incident incident) =>
+			IncidentFinancials.GetRecoveredValue(incident);
+
+		private static string NormalizeOfficerRole(string? role) =>
+			string.IsNullOrWhiteSpace(role)
+				? string.Empty
+				: role.Trim().ToLowerInvariant().Replace('_', ' ').Replace('-', ' ');
+
+		private static bool PassesOfficerFilter(Incident incident, string? officerType)
 		{
-			if (incident.TotalValueRecovered.HasValue)
+			if (string.IsNullOrWhiteSpace(officerType) || officerType.Equals("all", StringComparison.OrdinalIgnoreCase))
 			{
-				return incident.TotalValueRecovered.Value;
+				return true;
 			}
 
-			return incident.StolenItems?.Sum(item => item.TotalAmount) ?? 0;
+			var role = NormalizeOfficerRole(incident.StaffMemberRole);
+			if (string.IsNullOrEmpty(role))
+			{
+				return false;
+			}
+
+			return officerType.ToLowerInvariant() switch
+			{
+				"uniform" => role.Contains("uniform", StringComparison.Ordinal)
+					|| role == "security officer"
+					|| role == "officer",
+				"detective" => role.Contains("detective", StringComparison.Ordinal),
+				"store-user" => role == "store user"
+					|| role == "store"
+					|| role == "store colleague"
+					|| role == "colleague",
+				_ => true
+			};
 		}
 
 		private static List<CrimeInsightMetricDto> BuildHeroMetrics(
 			int totalIncidents,
-			decimal totalValue,
+			decimal totalRecoveredValue,
+			decimal totalLostValue,
+			bool hasEstimatedLossValues,
 			int distinctStores,
 			List<CrimeInsightListItemDto> incidentTypes,
 			List<CrimeInsightListItemDto> stores)
 		{
 			var currencyFormat = CultureInfo.CreateSpecificCulture("en-GB");
+			var recoveredFormatted = totalRecoveredValue.ToString("C0", currencyFormat);
+			var lossFormatted = totalLostValue.ToString("C0", currencyFormat);
+			var lossLabel = hasEstimatedLossValues ? "Est. loss" : "Loss";
 
 			var metrics = new List<CrimeInsightMetricDto>
 			{
@@ -1126,9 +1284,15 @@ namespace AIPBackend.Services
 				new CrimeInsightMetricDto
 				{
 					Title = "Value Impact",
-					Value = totalValue.ToString("C0", currencyFormat),
-					Subtext = "Recovered / estimated loss",
-					TrendIsPositive = totalValue <= 0
+					Value = recoveredFormatted,
+					Subtext = "Recovered / Estimated loss",
+					ValueImpact = new CrimeInsightValueImpactDto
+					{
+						Recovered = recoveredFormatted,
+						EstimatedLoss = lossFormatted,
+						LossLabel = lossLabel
+					},
+					TrendIsPositive = totalLostValue <= totalRecoveredValue
 				}
 			};
 

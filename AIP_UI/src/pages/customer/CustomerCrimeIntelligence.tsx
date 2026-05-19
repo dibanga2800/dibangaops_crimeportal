@@ -16,7 +16,7 @@ import {
 	ChevronRight,
 	SlidersHorizontal,
 } from 'lucide-react'
-import { format } from 'date-fns'
+import { format, startOfYear } from 'date-fns'
 import {
 	BarChart,
 	Bar,
@@ -36,8 +36,7 @@ import { useCustomerSelection } from '@/contexts/CustomerSelectionContext'
 import { useAvailableCustomers, findCustomerById } from '@/hooks/useAvailableCustomers'
 import { siteService } from '@/services/siteService'
 import { incidentGraphService, type RegionOption } from '@/services/incidentGraphService'
-import { incidentsApi } from '@/services/api/incidents'
-import type { Incident } from '@/types/incidents'
+import { crimeIntelligenceService } from '@/services/crimeIntelligenceService'
 import type { Site } from '@/types/customer'
 import type {
 	CrimeInsightListItem,
@@ -72,8 +71,6 @@ const CHART_GRADIENTS = [
 
 const HERO_ICONS = [Activity, BarChart3, Shield, Target]
 
-const DEFAULT_RANGE_DAYS = 90
-
 // ============================================================================
 // Utility helpers
 // ============================================================================
@@ -87,215 +84,16 @@ const fromDateInputValue = (value: string): Date | undefined => {
 	return Number.isNaN(parsed.getTime()) ? undefined : parsed
 }
 
-const formatCurrency = (value: number): string => {
-	if (!Number.isFinite(value) || value === 0) return '£0'
-
-	return new Intl.NumberFormat('en-GB', {
-		style: 'currency',
-		currency: 'GBP',
-		notation: 'compact',
-		maximumFractionDigits: 1,
-	}).format(value)
-}
-
-const getIncidentValue = (inc: Incident): number => {
-	const raw =
-		inc.totalValueRecovered ??
-		(inc as any).TotalValueRecovered ??
-		inc.value ??
-		(inc as any).Value ??
-		inc.valueRecovered ??
-		(inc as any).ValueRecovered ??
-		0
-	return typeof raw === 'number' ? raw : parseFloat(raw) || 0
-}
-
-const getIncidentLostValue = (inc: Incident): number => {
-	const explicitLoss =
-		(inc as any).totalLostValue ??
-		(inc as any).TotalLostValue ??
-		(inc as any).valueLost ??
-		(inc as any).ValueLost ??
-		(inc as any).lostValue ??
-		(inc as any).LostValue
-
-	if (explicitLoss !== undefined && explicitLoss !== null) {
-		return typeof explicitLoss === 'number' ? explicitLoss : parseFloat(explicitLoss) || 0
-	}
-
-	const stolenValueRaw =
-		(inc as any).totalStolenValue ??
-		(inc as any).TotalStolenValue ??
-		(inc as any).stolenValue ??
-		(inc as any).StolenValue
-	const stolenValue =
-		stolenValueRaw !== undefined && stolenValueRaw !== null
-			? typeof stolenValueRaw === 'number'
-				? stolenValueRaw
-				: parseFloat(stolenValueRaw) || 0
-			: (inc.stolenItems ?? []).reduce((sum, item) => {
-					const amount = (item as any).totalAmount ?? (item as any).TotalAmount
-					if (amount !== undefined && amount !== null) {
-						const parsed = typeof amount === 'number' ? amount : parseFloat(amount) || 0
-						return sum + parsed
-					}
-					return sum + ((item.cost ?? 0) * (item.quantity ?? 0))
-			  }, 0)
-
-	return Math.max(stolenValue - getIncidentValue(inc), 0)
-}
-
-const isIncidentLossEstimated = (inc: Incident): boolean => {
-	const explicitLoss =
-		(inc as any).totalLostValue ??
-		(inc as any).TotalLostValue ??
-		(inc as any).valueLost ??
-		(inc as any).ValueLost ??
-		(inc as any).lostValue ??
-		(inc as any).LostValue
-
-	return explicitLoss === undefined || explicitLoss === null
-}
-
-// ============================================================================
-// Data processing
-// ============================================================================
-
-const processIncidents = (incidents: Incident[]): CrimeIntelligenceResponse => {
-	const total = incidents.length
-	const totalRecoveredValue = incidents.reduce((sum, inc) => sum + getIncidentValue(inc), 0)
-	const totalEstimatedLoss = incidents.reduce((sum, inc) => sum + getIncidentLostValue(inc), 0)
-	const hasEstimatedLossValues = incidents.some(isIncidentLossEstimated)
-	const distinctStores = new Set(incidents.map(i => i.siteName).filter(Boolean)).size
-
-	const countBy = <T extends string | undefined>(
-		key: (inc: Incident) => T,
-		fallback: string
-	): Record<string, { count: number; value: number }> =>
-		incidents.reduce(
-			(acc, inc) => {
-				const k = key(inc) || fallback
-				if (!acc[k]) acc[k] = { count: 0, value: 0 }
-				acc[k].count++
-				acc[k].value += getIncidentValue(inc)
-				return acc
-			},
-			{} as Record<string, { count: number; value: number }>
-		)
-
-	const toListItems = (
-		map: Record<string, { count: number; value: number }>,
-		limit: number,
-		denominator = total
-	): CrimeInsightListItem[] =>
-		Object.entries(map)
-			.map(([name, d]) => ({
-				name,
-				count: d.count,
-				value: d.value,
-				percentage: denominator > 0 ? Math.round((d.count / denominator) * 1000) / 10 : 0,
-			}))
-			.sort((a, b) => b.count - a.count)
-			.slice(0, limit)
-
-	const topIncidentTypes = toListItems(countBy(i => i.incidentType as any, 'Unspecified'), 6)
-	const topStores = toListItems(countBy(i => i.siteName as any, 'Unassigned Site'), 20)
-	const topRegions = toListItems(countBy(i => i.regionName as any, 'Unassigned Region'), 20)
-
-	// Products — grouped by product name across stolen items
-	const productMap = new Map<string, { count: number; value: number }>()
-	incidents.forEach(inc => {
-		(inc.stolenItems ?? []).forEach(item => {
-			const name = item.productName || item.category || 'Unspecified Product'
-			const itemValue =
-				(item as any).totalAmount ?? (item as any).TotalAmount ?? (item as any).value ?? 0
-			const prev = productMap.get(name) ?? { count: 0, value: 0 }
-			productMap.set(name, {
-				count: prev.count + (item.quantity || 1),
-				value: prev.value + (typeof itemValue === 'number' ? itemValue : parseFloat(itemValue) || 0),
-			})
-		})
-	})
-	const totalItems = Array.from(productMap.values()).reduce((s, p) => s + p.count, 0)
-	const topProducts = Array.from(productMap.entries())
-		.map(([name, d]) => ({
-			name,
-			count: d.count,
-			value: d.value,
-			percentage: totalItems > 0 ? Math.round((d.count / totalItems) * 1000) / 10 : 0,
-		}))
-		.sort((a, b) => b.count - a.count)
-		.slice(0, 10)
-
-	// Time buckets
-	const timeBuckets: CrimeInsightTimeBucket[] = [
-		{ bucket: '00:00 – 05:59', count: 0, percentage: 0 },
-		{ bucket: '06:00 – 11:59', count: 0, percentage: 0 },
-		{ bucket: '12:00 – 17:59', count: 0, percentage: 0 },
-		{ bucket: '18:00 – 23:59', count: 0, percentage: 0 },
-	]
-	incidents.forEach(inc => {
-		if (!inc.timeOfIncident) return
-		const h = parseInt(inc.timeOfIncident.split(':')[0], 10)
-		if (h < 6) timeBuckets[0].count++
-		else if (h < 12) timeBuckets[1].count++
-		else if (h < 18) timeBuckets[2].count++
-		else timeBuckets[3].count++
-	})
-	timeBuckets.forEach(b => {
-		b.percentage = total > 0 ? Math.round((b.count / total) * 1000) / 10 : 0
-	})
-
-	// Hero metrics
-	const heroMetrics: CrimeInsightMetric[] = [
-		{
-			title: 'Total Incidents',
-			value: total.toLocaleString(),
-			subtext: distinctStores > 0 ? `${(total / distinctStores).toFixed(1)} per store avg` : 'No store data',
-			trendIsPositive: false,
-		},
-		{
-			title: 'Value Impact',
-			value: formatCurrency(totalRecoveredValue),
-			subtext: 'Recovered / Estimated loss',
-			valueImpact: {
-				recovered: formatCurrency(totalRecoveredValue),
-				estimatedLoss: formatCurrency(totalEstimatedLoss),
-				lossLabel: hasEstimatedLossValues ? 'Est. loss' : 'Loss',
-			},
-			trendIsPositive: totalEstimatedLoss <= totalRecoveredValue,
-		},
-	]
-	if (topIncidentTypes[0]) {
-		const t = topIncidentTypes[0]
-		heroMetrics.push({
-			title: 'Top Incident Type',
-			value: t.name,
-			subtext: `${t.count.toLocaleString()} reports · ${t.percentage.toFixed(1)}%`,
-			trendIsPositive: false,
-		})
-	}
-	if (topStores[0]) {
-		const s = topStores[0]
-		heroMetrics.push({
-			title: 'Hot Store',
-			value: s.name,
-			subtext: `${s.count.toLocaleString()} incidents · ${s.percentage.toFixed(1)}%`,
-			trendIsPositive: false,
-		})
-	}
-
-	return {
-		success: true,
-		heroMetrics,
-		topIncidentTypes,
-		topStores,
-		topProducts,
-		topRegions,
-		timeBuckets,
-		generatedAt: new Date().toISOString(),
-	}
-}
+const emptyInsights = (): CrimeIntelligenceResponse => ({
+	success: true,
+	heroMetrics: [],
+	topIncidentTypes: [],
+	topStores: [],
+	topProducts: [],
+	topRegions: [],
+	timeBuckets: [],
+	generatedAt: new Date().toISOString(),
+})
 
 const buildAnalystNotes = (d: CrimeIntelligenceResponse): string[] => {
 	const notes: string[] = []
@@ -814,11 +612,7 @@ export default function CustomerCrimeIntelligence() {
 	const [selectedSiteId, setSelectedSiteId] = useState<string>('all')
 	const [selectedRegionId, setSelectedRegionId] = useState<string>('all')
 	const [filtersVersion, setFiltersVersion] = useState(0)
-	const [startDate, setStartDate] = useState<Date | undefined>(() => {
-		const d = new Date()
-		d.setDate(d.getDate() - DEFAULT_RANGE_DAYS)
-		return d
-	})
+	const [startDate, setStartDate] = useState<Date | undefined>(() => startOfYear(new Date()))
 	const [endDate, setEndDate] = useState<Date | undefined>(new Date())
 
 	const [insights, setInsights] = useState<CrimeIntelligenceResponse | null>(null)
@@ -913,51 +707,28 @@ export default function CustomerCrimeIntelligence() {
 		setLoadingInsights(true)
 		setPageError(null)
 		try {
-			const res = await incidentsApi.getIncidents({
-				page: 1,
-				pageSize: 250,
-				customerId: customerId.toString(),
-				fromDate: toIsoDate(startDate),
-				toDate: toIsoDate(endDate),
+			const data = await crimeIntelligenceService.getInsights({
+				customerId,
+				startDate: toIsoDate(startDate),
+				endDate: toIsoDate(endDate),
 				siteId: selectedSiteId !== 'all' ? selectedSiteId : undefined,
 				regionId: selectedRegionId !== 'all' ? selectedRegionId : undefined,
 			})
 
-			if (res.success === false) throw new Error(res.message || 'Failed to fetch incidents')
-
-			const raw = res as any
-			let incidents: Incident[] = Array.isArray(raw.data)
-				? raw.data
-				: Array.isArray(raw)
-					? raw
-					: Array.isArray(raw.data?.data)
-						? raw.data.data
-						: []
-
-			// Client-side date guard (belt-and-suspenders)
-			if (startDate && endDate && incidents.length) {
-				const s = startDate.getTime()
-				const e = endDate.getTime()
-				incidents = incidents.filter(i => {
-					const t = new Date(i.dateOfIncident).getTime()
-					return t >= s && t <= e
-				})
+			if (data.success === false) {
+				throw new Error(data.message || 'Failed to fetch crime intelligence')
 			}
 
-			incidents = filterByAssignedSiteIds(incidents, user, (incident) =>
-				(incident as any).siteId ?? (incident as any).SiteId ?? (incident as any).siteID ?? (incident as any).SiteID ?? null
-			)
-
-			setInsights(processIncidents(incidents))
+			setInsights(data)
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : 'Unable to load insights'
 			setPageError(msg)
-			setInsights(processIncidents([]))
+			setInsights(emptyInsights())
 			toast({ variant: 'destructive', title: 'Unable to load data', description: msg })
 		} finally {
 			setLoadingInsights(false)
 		}
-	}, [resolvedCustomerId, selectedSiteId, selectedRegionId, startDate, endDate, toast, user])
+	}, [resolvedCustomerId, selectedSiteId, selectedRegionId, startDate, endDate, toast])
 
 	useEffect(() => {
 		if (!customer && resolvedCustomerId) {
@@ -1053,6 +824,11 @@ export default function CustomerCrimeIntelligence() {
 						<p className="text-sm text-slate-500">
 							Live incident telemetry across stores, products, and time-of-day patterns.
 						</p>
+						{startDate && endDate && (
+							<p className="text-xs text-slate-500">
+								Period: {format(startDate, 'PP')} – {format(endDate, 'PP')} (year to date by default)
+							</p>
+						)}
 						{(isAdmin || (isManager && assignedCustomers.length > 1)) && (
 							<div className="mt-3 max-w-xs">
 								<p className="text-xs font-medium text-slate-500 mb-1">Customer</p>

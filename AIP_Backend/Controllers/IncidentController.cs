@@ -273,6 +273,43 @@ namespace AIPBackend.Controllers
 		}
 
 		/// <summary>
+		/// Get aggregated incident graph analytics (full dataset, not paginated list).
+		/// </summary>
+		[HttpGet("graph-analytics")]
+		public async Task<ActionResult<IncidentGraphAnalyticsResponseDto>> GetIncidentGraphAnalytics(
+			[FromQuery] IncidentGraphAnalyticsQueryDto query)
+		{
+			try
+			{
+				var result = await _incidentService.GetIncidentGraphAnalyticsAsync(query);
+				return Ok(result);
+			}
+			catch (ArgumentException ex)
+			{
+				_logger.LogWarning(ex, "Invalid graph analytics query");
+				return BadRequest(new IncidentGraphAnalyticsResponseDto
+				{
+					Success = false,
+					Message = ex.Message
+				});
+			}
+			catch (ForbiddenAccessException ex)
+			{
+				_logger.LogWarning(ex, "Forbidden graph analytics request");
+				return Forbid();
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error generating incident graph analytics");
+				return StatusCode(500, new IncidentGraphAnalyticsResponseDto
+				{
+					Success = false,
+					Message = "Error generating incident graph analytics"
+				});
+			}
+		}
+
+		/// <summary>
 		/// Get crime intelligence insights for a customer
 		/// </summary>
 		[HttpGet("insights")]

@@ -17,6 +17,7 @@ namespace AIPBackend.Services
 		Task<List<IncidentDto>> GetAllForStatsAsync(int? customerId = null, string? siteId = null, string? regionId = null);
 		Task<RepeatOffenderSearchResponseDto> SearchRepeatOffendersAsync(RepeatOffenderSearchQueryDto query);
 		Task<CrimeIntelligenceResponseDto> GetCrimeInsightsAsync(CrimeIntelligenceQueryDto query);
+		Task<IncidentGraphAnalyticsResponseDto> GetIncidentGraphAnalyticsAsync(IncidentGraphAnalyticsQueryDto query);
 	}
 }
 

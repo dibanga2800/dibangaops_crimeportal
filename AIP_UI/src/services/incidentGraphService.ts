@@ -8,44 +8,10 @@ import {
 import { api } from '@/config/api'
 import { regionService } from '@/services/regionService'
 import { getCurrentCustomerId } from '@/lib/utils'
-import { filterByAssignedSiteIds } from '@/utils/siteAccess'
-import { sessionStore } from '@/state/sessionStore'
 
 export interface RegionOption {
 	id: string
 	name: string
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-const extractRegionId = (incident: any): string | undefined =>
-	incident.regionId?.toString() ||
-	incident.RegionId?.toString() ||
-	incident.regionID?.toString() ||
-	incident.RegionID?.toString()
-
-const getIncidentValue = (inc: any): number => {
-	const raw =
-		inc.totalValueRecovered ??
-		inc.TotalValueRecovered ??
-		inc.value ??
-		inc.Value ??
-		inc.valueRecovered ??
-		inc.ValueRecovered ??
-		0
-	return typeof raw === 'number' ? raw : parseFloat(raw) || 0
-}
-
-const getIncidentLostValue = (inc: any): number => {
-	const raw =
-		inc.totalLostValue ??
-		inc.TotalLostValue ??
-		inc.valueLost ??
-		inc.ValueLost ??
-		inc.lostValue ??
-		inc.LostValue ??
-		0
-	return typeof raw === 'number' ? raw : parseFloat(raw) || 0
 }
 
 const buildAuthHeaders = (): Record<string, string> => {
@@ -53,210 +19,150 @@ const buildAuthHeaders = (): Record<string, string> => {
 	return customerId ? { 'X-Customer-Id': customerId.toString() } : {}
 }
 
-const buildIncidentsUrl = (filters: Omit<IncidentGraphFilters, 'graphType'>): string => {
+const buildGraphAnalyticsUrl = (filters: IncidentGraphFilters): string => {
 	const p = new URLSearchParams({
-		page: '1',
-		pageSize: '1000',
 		customerId: filters.customerId.toString(),
+		officerType: filters.officerType || 'all',
+		graphType: filters.graphType || 'value',
 	})
 	if (filters.startDate) p.append('fromDate', filters.startDate)
 	if (filters.endDate) p.append('toDate', filters.endDate)
-	return `/incidents?${p.toString()}`
+	if (filters.regionId) p.append('regionId', filters.regionId)
+	return `/incidents/graph-analytics?${p.toString()}`
 }
 
-const normalizeRole = (value: unknown): string =>
-	String(value ?? '')
-		.trim()
-		.toLowerCase()
-		.replace(/[_-]+/g, ' ')
-		.replace(/\s+/g, ' ')
+const mapLocationToGraphData = (
+	location: Record<string, unknown>,
+	filters: IncidentGraphFilters,
+	graphType: string
+): IncidentGraphData => {
+	const now = new Date().toISOString().split('T')[0]
+	const siteName = String(location.siteName ?? location.location ?? 'Unknown Location')
+	const value = Number(location.value ?? 0)
+	const lostValue = Number(location.lostValue ?? 0)
+	const quantity = Number(location.quantity ?? 0)
+	const count = Number(location.count ?? 0)
 
-const getIncidentRole = (incident: any): string => {
-	const rawRole =
-		incident.officerRole ??
-		incident.OfficerRole ??
-		incident.officerType ??
-		incident.OfficerType ??
-		incident.userRole ??
-		incident.UserRole ??
-		''
+	const displayValue =
+		graphType === 'lost' ? lostValue : graphType === 'quantity' ? quantity : value
 
-	return normalizeRole(rawRole)
+	return {
+		id: `location-${siteName}`,
+		customerId: filters.customerId,
+		customerName: String(location.customerName ?? ''),
+		siteName,
+		siteId: String(location.siteId ?? siteName),
+		regionId: String(location.regionId ?? ''),
+		regionName: String(location.regionName ?? ''),
+		location: String(location.location ?? siteName),
+		officerName: '',
+		officerRole: '',
+		officerType: '',
+		dutyManagerName: '',
+		dateOfIncident: now,
+		timeOfIncident: '',
+		date: now,
+		incidentType: '',
+		type: '',
+		actionCode: '',
+		description: '',
+		incidentInvolved: [],
+		stolenItems: [],
+		totalStolenValue: 0,
+		totalRecoveredValue: value,
+		totalLostValue: lostValue,
+		totalRecoveredQuantity: quantity,
+		totalValueRecovered: value,
+		value: displayValue,
+		valueRecovered: value,
+		quantityRecovered: quantity,
+		quantity,
+		amount: displayValue,
+		total: displayValue,
+		policeInvolvement: false,
+		urnNumber: '',
+		crimeRefNumber: '',
+		policeID: '',
+		status: 'resolved',
+		priority: 'medium',
+		actionTaken: '',
+		evidenceAttached: false,
+		witnessStatements: [],
+		involvedParties: [],
+		reportNumber: '',
+		offenderName: '',
+		offenderSex: '',
+		gender: 'N/A or N/K',
+		offenderDOB: '',
+		offenderPlaceOfBirth: '',
+		offenderAddress: {},
+		arrestSaveComment: '',
+		dateInputted: now,
+		assignedTo: '',
+		count,
+	}
 }
 
-const isUniformRole = (role: string): boolean =>
-	role.includes('uniform') ||
-	role === 'security officer' ||
-	role === 'security-officer' ||
-	role === 'officer'
+const mapAnalyticsPayload = (
+	payload: Record<string, unknown>,
+	filters: IncidentGraphFilters
+): { graphResponse: IncidentGraphResponse; types: IncidentTypeData[] } => {
+	const graphType = filters.graphType || 'value'
+	const locations = Array.isArray(payload.locations) ? payload.locations : []
+	const totals = (payload.totals ?? {}) as Record<string, unknown>
+	const typesRaw = Array.isArray(payload.types) ? payload.types : []
 
-const isDetectiveRole = (role: string): boolean =>
-	role.includes('detective')
+	const incidents = locations.map((loc) =>
+		mapLocationToGraphData(loc as Record<string, unknown>, filters, graphType)
+	)
 
-const isStoreUserRole = (role: string): boolean =>
-	role === 'store user' ||
-	role === 'store' ||
-	role === 'store colleague' ||
-	role === 'colleague'
+	const typeData: IncidentTypeData[] = typesRaw.map((entry) => {
+		const row = entry as Record<string, unknown>
+		const type = String(row.type ?? 'Unknown')
+		const count = Number(row.count ?? 0)
+		return {
+			code: type,
+			type,
+			count,
+			description: type,
+			fullName: type,
+		}
+	})
 
-const passesOfficerFilter = (incident: any, officerType: string | undefined): boolean => {
-	if (!officerType || officerType === 'all') return true
+	const graphResponse: IncidentGraphResponse = {
+		success: payload.success !== false,
+		data: {
+			incidents,
+			totals: {
+				totalValue: Number(totals.totalValue ?? 0),
+				totalQuantity: Number(totals.totalQuantity ?? 0),
+				totalIncidents: Number(totals.totalIncidents ?? 0),
+			},
+			filters: {
+				customerId: filters.customerId,
+				regionId: filters.regionId,
+				officerType: filters.officerType || 'all',
+				graphType,
+				startDate: filters.startDate,
+				endDate: filters.endDate,
+			},
+		},
+	}
 
-	const role = getIncidentRole(incident)
-	if (!role) return false
-
-	if (officerType === 'uniform') return isUniformRole(role)
-	if (officerType === 'detective') return isDetectiveRole(role)
-	if (officerType === 'store-user') return isStoreUserRole(role)
-
-	return true
+	return { graphResponse, types: typeData }
 }
-
-// ── Service ───────────────────────────────────────────────────────────────────
 
 export const incidentGraphService = {
-	/**
-	 * Fetch incident graph data with client-side aggregation by location.
-	 */
-	async fetchGraphData(filters: IncidentGraphFilters, scopeUser?: unknown): Promise<IncidentGraphResponse> {
-		const url = buildIncidentsUrl(filters)
-
+	async fetchGraphData(filters: IncidentGraphFilters): Promise<IncidentGraphResponse> {
 		try {
-			const response = await api.get(url, { headers: buildAuthHeaders() })
-			const scopeSource = scopeUser ?? sessionStore.getUser()
-			const incidents: any[] = filterByAssignedSiteIds(
-				response.data.data || [],
-				scopeSource,
-				(incident) => incident.siteId ?? incident.SiteId ?? incident.siteID ?? incident.SiteID ?? null
-			)
-
-			const grouped = new Map<string, { value: number; count: number; quantity: number; lostValue: number }>()
-
-			for (const incident of incidents) {
-				const location: string =
-					incident.siteName || incident.location || incident.siteId || 'Unknown Location'
-				if (!location) continue
-
-				if (filters.regionId) {
-					const rid = extractRegionId(incident)
-					if (!rid || rid !== filters.regionId) continue
-				}
-
-				if (!passesOfficerFilter(incident, filters.officerType)) continue
-
-				const existing = grouped.get(location) ?? { value: 0, count: 0, quantity: 0, lostValue: 0 }
-				existing.count += 1
-
-				if (filters.graphType === 'value') {
-					existing.value += getIncidentValue(incident)
-				} else if (filters.graphType === 'lost') {
-					const lostValue = getIncidentLostValue(incident)
-					existing.lostValue += lostValue
-					existing.value += lostValue
-				} else if (filters.graphType === 'quantity') {
-					const qty =
-						incident.quantityRecovered ??
-						incident.QuantityRecovered ??
-						incident.quantity ??
-						1
-					existing.quantity += qty
-					existing.value += qty
-				} else {
-					existing.value += 1
-				}
-
-				grouped.set(location, existing)
-			}
-
-			let totalValue = 0
-			let totalQuantity = 0
-			let totalIncidents = 0
-			const graphData: IncidentGraphData[] = []
-			const now = new Date().toISOString().split('T')[0]
-
-			grouped.forEach((data, location) => {
-				const sample = incidents.find(
-					(i: any) => (i.siteName || i.location || i.siteId) === location
-				)
-
-				graphData.push({
-					id: `location-${location}`,
-					customerId: filters.customerId,
-					customerName: sample?.customerName || '',
-					siteName: location,
-					siteId: sample?.siteId || location,
-					regionId: sample?.regionId || '',
-					regionName: sample?.regionName || '',
-					location,
-					officerName: '',
-					officerRole: '',
-					officerType: '',
-					dutyManagerName: '',
-					dateOfIncident: now,
-					timeOfIncident: '',
-					date: now,
-					incidentType: '',
-					type: '',
-					actionCode: '',
-					description: '',
-					incidentInvolved: [],
-					stolenItems: [],
-					totalLostValue: data.lostValue,
-					totalValueRecovered: data.value,
-					value: data.value,
-					lostValue: data.lostValue,
-					valueRecovered: data.value,
-					quantityRecovered: data.quantity,
-					quantity: data.quantity,
-					amount: data.value,
-					total: data.value,
-					policeInvolvement: false,
-					urnNumber: '',
-					crimeRefNumber: '',
-					policeID: '',
-					status: 'resolved' as const,
-					priority: 'medium' as const,
-					actionTaken: '',
-					evidenceAttached: false,
-					witnessStatements: [],
-					involvedParties: [],
-					reportNumber: '',
-					offenderName: '',
-					offenderSex: '',
-					gender: 'N/A or N/K' as const,
-					offenderDOB: '',
-					offenderPlaceOfBirth: '',
-					offenderAddress: {},
-					arrestSaveComment: '',
-					dateInputted: now,
-					assignedTo: '',
-					count: data.count,
-				})
-
-				totalValue += data.value
-				totalQuantity += data.quantity || data.count
-				totalIncidents += data.count
+			const response = await api.get(buildGraphAnalyticsUrl(filters), {
+				headers: buildAuthHeaders(),
 			})
-
-			graphData.sort((a, b) => b.value - a.value)
-
-			return {
-				success: true,
-				data: {
-					incidents: graphData,
-					totals: { totalValue, totalQuantity, totalIncidents },
-					filters: {
-						customerId: filters.customerId,
-						regionId: filters.regionId,
-						officerType: filters.officerType || 'all',
-						graphType: filters.graphType || 'value',
-						startDate: filters.startDate,
-						endDate: filters.endDate,
-					},
-				},
-			}
-		} catch (error: any) {
-			console.error('[IncidentGraphService] fetchGraphData error:', error?.message)
+			const { graphResponse } = mapAnalyticsPayload(response.data ?? {}, filters)
+			return graphResponse
+		} catch (error: unknown) {
+			const message = error instanceof Error ? error.message : 'Failed to fetch graph data'
+			console.error('[IncidentGraphService] fetchGraphData error:', message)
 			return {
 				success: false,
 				data: {
@@ -275,67 +181,46 @@ export const incidentGraphService = {
 		}
 	},
 
-	/**
-	 * Fetch incident types summary with client-side aggregation.
-	 */
 	async fetchTypesData(
-		filters: Omit<IncidentGraphFilters, 'graphType'>,
-		scopeUser?: unknown
+		filters: Omit<IncidentGraphFilters, 'graphType'>
 	): Promise<IncidentTypesResponse> {
 		try {
-			const response = await api.get(buildIncidentsUrl(filters), { headers: buildAuthHeaders() })
-			const scopeSource = scopeUser ?? sessionStore.getUser()
-			const incidents: any[] = filterByAssignedSiteIds(
-				response.data.data || [],
-				scopeSource,
-				(incident) => incident.siteId ?? incident.SiteId ?? incident.siteID ?? incident.SiteID ?? null
+			const response = await api.get(
+				buildGraphAnalyticsUrl({ ...filters, graphType: 'type' }),
+				{ headers: buildAuthHeaders() }
 			)
-			const typeMap = new Map<string, number>()
-
-			for (const incident of incidents) {
-				if (filters.regionId) {
-					const rid = extractRegionId(incident)
-					if (!rid || rid !== filters.regionId) continue
-				}
-				if (!passesOfficerFilter(incident, filters.officerType)) continue
-
-				const type: string = incident.incidentType || 'Unknown'
-				typeMap.set(type, (typeMap.get(type) ?? 0) + 1)
-			}
-
-			const typeData: IncidentTypeData[] = Array.from(typeMap.entries())
-				.map(([type, count]) => ({ type, count }))
-				.sort((a, b) => b.count - a.count)
-
-			return { success: true, data: typeData }
-		} catch (error: any) {
-			console.error('[IncidentGraphService] fetchTypesData error:', error?.message)
+			const { types } = mapAnalyticsPayload(response.data ?? {}, {
+				...filters,
+				graphType: 'type',
+			})
+			return { success: true, data: types }
+		} catch (error: unknown) {
+			const message = error instanceof Error ? error.message : 'Failed to fetch types data'
+			console.error('[IncidentGraphService] fetchTypesData error:', message)
 			return {
 				success: false,
 				data: [],
-				message: error instanceof Error ? error.message : 'Failed to fetch types data',
+				message,
 			}
 		}
 	},
 
-	/**
-	 * Fetch available regions for a customer.
-	 */
 	async fetchRegions(customerId: number): Promise<{ success: boolean; data: RegionOption[] }> {
 		try {
 			const result = await regionService.getRegionsByCustomer(customerId)
 			if (!result.success) return { success: false, data: [] }
 
 			const data = result.data
-				.filter(r => (r.regionID ?? r.RegionID ?? (r as any).id) !== undefined)
-				.map(r => ({
-					id: (r.regionID ?? r.RegionID ?? (r as any).id).toString(),
+				.filter((r) => (r.regionID ?? r.RegionID ?? (r as { id?: number }).id) !== undefined)
+				.map((r) => ({
+					id: (r.regionID ?? r.RegionID ?? (r as { id?: number }).id)!.toString(),
 					name: r.regionName || r.RegionName || 'Unnamed Region',
 				}))
 
 			return { success: true, data }
-		} catch (error: any) {
-			console.error('[IncidentGraphService] fetchRegions error:', error?.message)
+		} catch (error: unknown) {
+			const message = error instanceof Error ? error.message : 'Failed to fetch regions'
+			console.error('[IncidentGraphService] fetchRegions error:', message)
 			return { success: false, data: [] }
 		}
 	},
@@ -347,5 +232,4 @@ export type {
 	IncidentTypeData,
 	IncidentTypesResponse,
 	IncidentGraphFilters,
-	RegionOption,
 }

@@ -1,7 +1,8 @@
 import { CrimeIntelligenceQuery, CrimeIntelligenceResponse } from '@/types/crimeIntelligence'
-import { BASE_API_URL } from '@/config/api'
+import { api } from '@/config/api'
+import { getCurrentCustomerId } from '@/lib/utils'
 
-const buildQueryString = (params: CrimeIntelligenceQuery) => {
+const buildQueryString = (params: CrimeIntelligenceQuery): string => {
 	const search = new URLSearchParams()
 	search.append('customerId', params.customerId.toString())
 	if (params.siteId) search.append('siteId', params.siteId)
@@ -11,23 +12,32 @@ const buildQueryString = (params: CrimeIntelligenceQuery) => {
 	return search.toString()
 }
 
+const buildAuthHeaders = (): Record<string, string> => {
+	const customerId = getCurrentCustomerId()
+	return customerId ? { 'X-Customer-Id': customerId.toString() } : {}
+}
+
+const mapInsightsResponse = (data: Record<string, unknown>): CrimeIntelligenceResponse => ({
+	success: data.success !== false,
+	message: typeof data.message === 'string' ? data.message : undefined,
+	heroMetrics: Array.isArray(data.heroMetrics) ? data.heroMetrics : [],
+	topIncidentTypes: Array.isArray(data.topIncidentTypes) ? data.topIncidentTypes : [],
+	topStores: Array.isArray(data.topStores) ? data.topStores : [],
+	topProducts: Array.isArray(data.topProducts) ? data.topProducts : [],
+	topRegions: Array.isArray(data.topRegions) ? data.topRegions : [],
+	timeBuckets: Array.isArray(data.timeBuckets) ? data.timeBuckets : [],
+	hotProduct: data.hotProduct as CrimeIntelligenceResponse['hotProduct'],
+	generatedAt: typeof data.generatedAt === 'string' ? data.generatedAt : new Date().toISOString(),
+})
+
 export const crimeIntelligenceService = {
 	async getInsights(query: CrimeIntelligenceQuery): Promise<CrimeIntelligenceResponse> {
 		const qs = buildQueryString(query)
-		const response = await fetch(`${BASE_API_URL}/incidents/insights?${qs}`, {
-			headers: {
-				'Content-Type': 'application/json',
-				'X-Customer-Id': query.customerId.toString()
-			}
+		const response = await api.get(`/incidents/insights?${qs}`, {
+			headers: buildAuthHeaders(),
 		})
-
-		if (!response.ok) {
-			throw new Error('Failed to fetch crime intelligence data')
-		}
-
-		return response.json()
-	}
+		return mapInsightsResponse(response.data ?? {})
+	},
 }
 
 export type CrimeIntelligenceService = typeof crimeIntelligenceService
-
