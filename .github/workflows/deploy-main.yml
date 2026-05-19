@@ -363,6 +363,20 @@ jobs:
             'azurerm_static_web_app_custom_domain.frontend_www_custom_domain[0]' \
             "${WWW_RESOURCE_ID}"
 
+      - name: Sync unified Front Door Terraform state (import rule set, drop legacy route)
+        env:
+          TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
+          TF_VAR_sql_admin_password: ${{ secrets.TF_VAR_SQL_ADMIN_PASSWORD }}
+          TF_VAR_smtp_password: ${{ secrets.TF_VAR_SMTP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          chmod +x ../scripts/sync-unified-front-door-terraform-state.sh
+          ../scripts/sync-unified-front-door-terraform-state.sh crimeportal-rg crimeportal-frontend-unified-fd unifiedrouting apiorigingroup \
+            -var-file="terraform.prod.tfvars" \
+            -var="budget_start_date=${{ steps.budget-date.outputs.value }}" \
+            -var="backend_image=${{ needs.build-and-push-images.outputs.backend_image }}" \
+            -var="ai_image=${{ needs.build-and-push-images.outputs.ai_image }}"
+
       - name: Terraform Apply (release images)
         env:
           TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}

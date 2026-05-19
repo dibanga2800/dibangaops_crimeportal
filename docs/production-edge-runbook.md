@@ -74,6 +74,10 @@ Configure an external uptime check every 5 minutes:
 - `GET https://www.dibangops.com/api/health` → body contains `"healthy"`
 - Optional: TLS certificate expiry alert on `www.dibangops.com`
 
+## Terraform state (one-time / CI)
+
+If `unifiedrouting` was created in Azure before Terraform managed it, full-stack deploy runs `scripts/sync-unified-front-door-terraform-state.sh` to **import** the rule set and rule and **remove** the legacy `unified_api` route from state.
+
 ## Related files
 
 - `Infrastructure/frontdoor-unified.tf` — unified profile, route, custom domain
