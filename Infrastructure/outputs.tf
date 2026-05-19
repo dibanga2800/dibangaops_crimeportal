@@ -2,6 +2,23 @@ output "frontend_url" {
   value = "https://${azurerm_static_web_app.frontend.default_host_name}"
 }
 
+output "public_app_url" {
+  description = "Canonical public URL for the SPA (unified Front Door hostname when enabled, else SWA default)"
+  value       = local.public_app_url
+}
+
+output "unified_front_door_endpoint_host" {
+  description = "Azure Front Door endpoint hostname for unified SPA+API (CNAME www to this before cutover)"
+  value       = try(azurerm_cdn_frontdoor_endpoint.unified[0].host_name, null)
+}
+
+output "unified_front_door_url" {
+  description = "HTTPS URL for unified app when custom hostname is configured"
+  value = var.enable_unified_front_door && local.unified_front_door_hostname_effective != null && local.unified_front_door_hostname_effective != "" ? (
+    "https://${local.unified_front_door_hostname_effective}"
+  ) : try("https://${azurerm_cdn_frontdoor_endpoint.unified[0].host_name}", null)
+}
+
 output "backend_url" {
   value = local.effective_api_public_url
 }

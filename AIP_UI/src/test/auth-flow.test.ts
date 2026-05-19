@@ -37,10 +37,28 @@ describe('sessionStore (cookie auth)', () => {
 	})
 })
 
+describe('getCsrfToken', () => {
+	beforeEach(() => {
+		sessionStorage.clear()
+		sessionStore.clearAll()
+		document.cookie = 'aip_csrf=; Max-Age=0; path=/'
+	})
+
+	it('prefers aip_csrf cookie over sessionStorage', async () => {
+		const { getCsrfToken } = await import('@/utils/csrf')
+		sessionStore.setCsrfToken('from-session')
+		document.cookie = 'aip_csrf=from-cookie; path=/'
+
+		expect(getCsrfToken()).toBe('from-cookie')
+	})
+})
+
 describe('services/auth', () => {
 	beforeEach(() => {
 		localStorage.clear()
+		sessionStorage.clear()
 		sessionStore.clearAll()
+		document.cookie = 'aip_csrf=; Max-Age=0; path=/'
 		vi.restoreAllMocks()
 	})
 

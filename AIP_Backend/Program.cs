@@ -17,6 +17,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
 var enableSwaggerInProduction = builder.Configuration.GetValue<bool>("Security:EnableSwaggerInProduction");
@@ -334,6 +335,13 @@ builder.Services.AddScoped<IIncidentPatternService, IncidentPatternService>();
 builder.Services.AddScoped<IRiskScoringService, RiskScoringService>();
 // Stock notifications removed with legacy stock module; configuration section reserved for future use.
 
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+	options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost;
+	options.KnownNetworks.Clear();
+	options.KnownProxies.Clear();
+});
+
 // Configure CORS
 builder.Services.AddCors(options =>
 {
@@ -377,6 +385,18 @@ builder.Services.AddCors(options =>
 					{
 						if (!string.IsNullOrEmpty(part))
 							allowedOrigins.Add(part);
+					}
+				}
+
+				var additionalCorsOrigins = builder.Configuration["Security:AdditionalCorsOrigins"];
+				if (!string.IsNullOrWhiteSpace(additionalCorsOrigins))
+				{
+					foreach (var part in additionalCorsOrigins.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+					{
+						if (!string.IsNullOrEmpty(part))
+						{
+							allowedOrigins.Add(part);
+						}
 					}
 				}
 
@@ -607,6 +627,7 @@ else
 		}
     }
 
+	app.UseForwardedHeaders();
 	app.UseHsts();
     app.UseHttpsRedirection();
 }

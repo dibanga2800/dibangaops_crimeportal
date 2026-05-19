@@ -27,8 +27,10 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 	enforcePageAccess = true,
 }) => {
 	const { user: authUser, isLoading: authLoading } = useAuth();
-	// sessionStore updates synchronously on login/2FA; context user can lag one render behind navigate().
-	const user = authUser ?? sessionStore.getUser();
+	// Do not trust localStorage user until AuthContext finishes server verification (authLoading).
+	const user = authLoading
+		? null
+		: (authUser ?? sessionStore.getUser());
 	const pageAccess = useContext(PageAccessContext);
 	const location = useLocation();
 	const previousPathRef = useRef<string>('');

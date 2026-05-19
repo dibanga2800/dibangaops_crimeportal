@@ -422,6 +422,19 @@ variable "container_apps_subnet_prefix" {
   default     = "10.40.0.0/23"
 }
 
+variable "enable_unified_front_door" {
+  description = "Single Front Door for SPA + API on one hostname (www): /api/* → backend, /* → Static Web App. Enables first-party auth cookies."
+  type        = bool
+  default     = false
+}
+
+variable "unified_front_door_hostname" {
+  description = "Public hostname for unified Front Door (e.g. www.dibangops.com). Defaults to frontend_www_custom_domain when null."
+  type        = string
+  default     = null
+  nullable    = true
+}
+
 variable "enable_api_front_door" {
   description = "Place Azure Front Door + WAF in front of the public API Container App"
   type        = bool

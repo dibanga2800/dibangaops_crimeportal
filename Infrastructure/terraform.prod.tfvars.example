@@ -18,12 +18,18 @@ sql_allowed_ip_ranges = []
 # VNet + private endpoint (disables SQL public access; may recreate Container Apps environment).
 enable_sql_private_endpoint = true
 
-# Azure Front Door + WAF in front of the API (recommended for production).
-# IMPORTANT: Container App ingress remains publicly reachable unless you add IP restrictions.
-# Pentesters can bypass WAF via backend_container_app_url — restrict ingress or accept as documented risk.
-enable_api_front_door = true
+# Unified Front Door: www.example.com/api/* → API, /* → SPA (same-origin auth cookies).
+# Point www DNS CNAME to terraform output unified_front_door_endpoint_host, then set VITE_API_BASE_URL=/api in CI.
+enable_unified_front_door   = true
+unified_front_door_hostname   = "www.example.com"
+frontend_www_custom_domain  = "www.example.com"
+frontend_custom_domain      = "example.com"
+frontend_url                = "https://www.example.com,https://example.com"
+
+# Optional: separate API hostname for Swagger/tools (not used by the SPA when unified FD is enabled).
+enable_api_front_door = false
 api_custom_domain     = "api.example.com"
-auth_cookie_domain    = ".example.com"
+# auth_cookie_domain not needed when enable_unified_front_door = true (host-only Lax cookies on www).
 storage_blob_delete_retention_days      = 30
 storage_container_delete_retention_days = 7
 storage_blob_versioning_enabled         = true
@@ -67,11 +73,6 @@ insightface_base_url           = "https://your-ai-app.internal.your-region.azure
 insightface_timeout_seconds    = 30
 insightface_min_similarity     = 0.85
 insightface_max_search_results = 3
-
-# Comma-separated origins for backend CORS
-frontend_url               = "https://www.example.com,https://example.com"
-frontend_custom_domain     = "example.com"
-frontend_www_custom_domain = "www.example.com"
 
 jwt_access_token_expiration_minutes = 60
 jwt_refresh_token_expiration_days   = 7

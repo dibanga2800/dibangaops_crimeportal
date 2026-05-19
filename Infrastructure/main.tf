@@ -41,8 +41,18 @@ locals {
   effective_frontend_url         = var.frontend_url != null && var.frontend_url != "" ? trimspace(var.frontend_url) : "https://${azurerm_static_web_app.frontend.default_host_name}"
   effective_insightface_base_url = var.insightface_base_url != null && var.insightface_base_url != "" ? var.insightface_base_url : local.ai_container_fqdn
   effective_api_public_url = var.enable_api_front_door && var.api_custom_domain != null && var.api_custom_domain != "" ? "https://${var.api_custom_domain}" : local.backend_container_fqdn
-  auth_cookie_domain            = var.auth_cookie_domain != null && var.auth_cookie_domain != "" ? var.auth_cookie_domain : null
-  auth_cookie_same_site_effective = local.auth_cookie_domain != null ? var.auth_cookie_same_site : "None"
+  auth_cookie_domain = var.auth_cookie_domain != null && var.auth_cookie_domain != "" ? var.auth_cookie_domain : null
+  # Same-origin (unified Front Door): host-only cookies on www + SameSite=Lax.
+  # Cross-site (SWA → Container Apps FQDN): SameSite=None until shared domain is configured.
+  auth_cookie_domain_effective = var.enable_unified_front_door ? null : local.auth_cookie_domain
+  auth_cookie_same_site_effective = var.enable_unified_front_door ? var.auth_cookie_same_site : (
+    local.auth_cookie_domain != null ? var.auth_cookie_same_site : "None"
+  )
+  unified_front_door_hostname_effective = coalesce(
+    var.unified_front_door_hostname,
+    var.frontend_www_custom_domain,
+  )
+  public_app_url = var.enable_unified_front_door && local.unified_front_door_hostname_effective != null && local.unified_front_door_hostname_effective != "" ? "https://${local.unified_front_door_hostname_effective}" : local.effective_frontend_url
 }
 
 resource "azurerm_resource_group" "rg" {
@@ -373,10 +383,10 @@ resource "azurerm_container_app" "backend" {
       }
 
       dynamic "env" {
-        for_each = local.auth_cookie_domain != null ? [1] : []
+        for_each = local.auth_cookie_domain_effective != null ? [1] : []
         content {
           name  = "Auth__Cookies__Domain"
-          value = local.auth_cookie_domain
+          value = local.auth_cookie_domain_effective
         }
       }
 

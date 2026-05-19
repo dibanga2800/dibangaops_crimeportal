@@ -5,8 +5,14 @@ import { z } from 'zod'
  * Ensures all required environment variables are present and valid
  */
 const envSchema = z.object({
-	// API Configuration
-	VITE_API_BASE_URL: z.string().url().default('http://localhost:5128/api'),
+	// API Configuration — absolute URL (dev direct) or same-origin path (production /api)
+	VITE_API_BASE_URL: z
+		.string()
+		.refine(
+			(value) => value.startsWith('/') || /^https?:\/\//i.test(value),
+			{ message: 'Must be an absolute URL or a path such as /api' },
+		)
+		.default('/api'),
 	
 	// Application Environment
 	VITE_APP_ENV: z.enum(['development', 'staging', 'production']).default('development'),

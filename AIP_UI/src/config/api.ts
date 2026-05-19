@@ -3,6 +3,7 @@ import { sessionStore } from '@/state/sessionStore'
 import { applyCsrfHeader } from '@/utils/csrf'
 import { applyBearerHeader } from '@/utils/bearerAuth'
 import { persistAuthMetadataFromApiEnvelope } from '@/utils/authSession'
+import { isCsrfForbidden } from '@/utils/apiErrors'
 import { API_BASE_URL, isDevelopment } from './env'
 
 export const BASE_API_URL = API_BASE_URL
@@ -176,12 +177,18 @@ api.interceptors.response.use(
       }
     }
 
+    if (status === 403 && isCsrfForbidden(status, error.response?.data)) {
+      if (isDevelopment) {
+        console.warn('⚠️ [API] CSRF validation failed — re-login required (no session refresh loop)')
+      }
+      return Promise.reject(error)
+    }
+
     if (status === 401) {
       const config = (error.config || {}) as AxiosRequestConfigWithRetry
       const isLoginPage = window.location.pathname.includes('/login')
       const isLoginEndpoint = url.includes('/Auth/login')
       const isRefreshEndpoint = url.includes('/Auth/refresh')
-      const isAuthValidation = url.includes('/Auth/me') || isRefreshEndpoint
       const hasSession = sessionStore.hasSession()
 
       if (!isLoginEndpoint && !isRefreshEndpoint && !config._retry) {

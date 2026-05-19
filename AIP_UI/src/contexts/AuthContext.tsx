@@ -39,31 +39,19 @@ interface AuthContextType {
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  // Initialize user from localStorage immediately to prevent login on refresh
-  const [user, setUser] = useState<User | null>(() => sessionStore.getUser());
+  const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchCurrentUser = useCallback(async () => {
-    const cachedUser = sessionStore.getUser();
-    if (!cachedUser) {
-      setUser(null);
-      setError(null);
-      setIsLoading(false);
-      return;
-    }
+    setIsLoading(true);
+    setError(null);
 
-    // Restore user from localStorage first for immediate UI rendering
-    if (cachedUser) {
-      setUser(cachedUser);
-      setIsLoading(false);
-    }
-
-    try {
-      setIsLoading(true);
+    const loadMe = async (): Promise<User | null> => {
       const response = await api.get<BackendApiResponse<User>>('/Auth/me', {
         timeout: AUTH_REQUEST_TIMEOUT_MS,
-      });
+        _skipAuthRedirect: true,
+      } as Parameters<typeof api.get>[1]);
       // ApiResponseDto: backend JSON uses camelCase (success/data) per Program.cs
       const apiResponse = response.data as BackendApiResponse<User> & {
         success?: boolean;
@@ -75,37 +63,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const message = apiResponse?.Message ?? apiResponse?.message;
 
       if (isSuccess && userData) {
-        sessionStore.setUser(userData);
-        setUser(sessionStore.getUser());
-        setError(null);
-      } else {
-        throw new Error(message || 'Failed to fetch user data');
+        return userData;
       }
-    } catch (err: any) {
-      // Only clear token if it's a 401 (unauthorized) - token is invalid
-      // For other errors (network, 500, etc.), keep the cached user
-      const isUnauthorized = err?.response?.status === 401;
-      const isTimeout = err?.code === 'ECONNABORTED' || err?.message?.includes('timeout');
-      
+
+      throw new Error(message || 'Failed to fetch user data');
+    };
+
+    try {
+      const userData = await loadMe();
+      sessionStore.setUser(userData);
+      setUser(sessionStore.getUser());
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { status?: number }; code?: string; message?: string };
+      const status = axiosErr?.response?.status;
+      const isUnauthorized = status === 401;
+      const isTimeout =
+        axiosErr?.code === 'ECONNABORTED' || axiosErr?.message?.includes('timeout');
+      const cachedUser = sessionStore.getUser();
+
       if (isUnauthorized) {
         const refreshed = await tryRefreshAccessToken();
         if (refreshed) {
           try {
-            const retry = await api.get<BackendApiResponse<User>>('/Auth/me', {
-              timeout: AUTH_REQUEST_TIMEOUT_MS,
-            });
-            const retryBody = retry.data as BackendApiResponse<User> & {
-              success?: boolean;
-              data?: User;
-            };
-            const retrySuccess = retryBody?.Success ?? retryBody?.success ?? false;
-            const retryUser = retryBody?.Data ?? retryBody?.data;
-            if (retrySuccess && retryUser) {
-              sessionStore.setUser(retryUser);
-              setUser(sessionStore.getUser());
-              setError(null);
-              return;
-            }
+            const userData = await loadMe();
+            sessionStore.setUser(userData);
+            setUser(sessionStore.getUser());
+            return;
           } catch (retryErr) {
             if (import.meta.env.DEV) {
               console.warn('Failed to fetch current user after refresh:', retryErr);
@@ -113,18 +96,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        console.error('Failed to fetch current user - unauthorized:', err);
         sessionStore.clearAll();
         setUser(null);
-        setError(null);
-      } else if (isTimeout) {
-        // For timeout errors, don't set error state - just log and keep cached user
-        console.warn('Failed to fetch current user - timeout (keeping cached user):', err);
-        setError(null); // Clear any stale timeout errors
+      } else if (isTimeout && cachedUser) {
+        console.warn('Failed to fetch current user - timeout (using cached profile until next refresh)');
+        setUser(cachedUser);
       } else {
-        // For other errors, keep the cached user and just log the error
-        console.warn('Failed to fetch current user (keeping cached user):', err);
-        setError(null); // Don't persist errors from fetchCurrentUser
+        sessionStore.clearAll();
+        setUser(null);
       }
     } finally {
       setIsLoading(false);

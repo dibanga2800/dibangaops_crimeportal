@@ -1,9 +1,8 @@
 # Frontend-only: build AIP_UI and deploy to Azure Static Web Apps.
 # Does not build container images or run Terraform apply.
 #
-# API URL resolution (first match wins):
-#   1. GitHub secret PRODUCTION_API_BASE_URL (no Azure login; use when OIDC/subscription is unavailable)
-#   2. Terraform output api_front_door_url, else Container App ingress FQDN (requires Azure OIDC)
+# Production SPA uses same-origin VITE_API_BASE_URL=/api (unified Front Door on www).
+# The resolve-api-url job remains for diagnostics; build does not embed the Container Apps FQDN.
 
 name: Deploy Frontend
 
@@ -56,15 +55,10 @@ jobs:
           case "${URL}" in
             https://*) ;;
             *)
-              echo "PRODUCTION_API_BASE_URL must start with https://"
+              echo "PRODUCTION_API_BASE_URL must be a full https URL (no trailing path)."
               exit 1
               ;;
           esac
-          REST="${URL#https://}"
-          if [[ "${REST}" == */* ]]; then
-            echo "PRODUCTION_API_BASE_URL must be origin only (https://host[:port]); do not include a path or /api — the build appends /api."
-            exit 1
-          fi
           echo "found=true" >> "$GITHUB_OUTPUT"
           echo "backend_url=${URL}" >> "$GITHUB_OUTPUT"
           echo "Using PRODUCTION_API_BASE_URL from GitHub secret (skipping Azure login)."
@@ -153,7 +147,8 @@ jobs:
         working-directory: AIP_UI
         env:
           VITE_APP_ENV: production
-          VITE_API_BASE_URL: ${{ needs.resolve-api-url.outputs.backend_url }}/api
+          # Same-origin API via unified Front Door (www.example.com/api). Requires enable_unified_front_door + www DNS cutover.
+          VITE_API_BASE_URL: /api
           VITE_IDLE_TIMEOUT_MINUTES: '60'
         run: npm run build:production
 

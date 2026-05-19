@@ -90,7 +90,7 @@ For GitHub Actions:
 - `AZURE_SUBSCRIPTION_ID` (must match an **active** subscription the app can access)
 - `PRODUCTION_API_BASE_URL` (optional) — full `https://` API base **without** `/api` suffix; when set, **Deploy Frontend** skips Azure OIDC and uses this URL for `VITE_API_BASE_URL`
 
-**Production auth (pentest):** Keep `Auth__Cookies__ExposeTokensInResponse=false`. Use a shared registrable domain for the SPA and API (e.g. Front Door + `auth_cookie_domain`) so HttpOnly cookies are first-party. Do not expose JWTs in login JSON responses in production.
+**Production auth (pentest):** Keep `Auth__Cookies__ExposeTokensInResponse=false`. Prefer **unified Front Door** (`enable_unified_front_door = true`) so the SPA calls `/api` on the same origin as `www` — first-party `SameSite=Lax` cookies without `auth_cookie_domain`. Do not expose JWTs in login JSON responses in production.
 - `TF_STATE_RESOURCE_GROUP`
 - `TF_STATE_STORAGE_ACCOUNT`
 - `TF_STATE_CONTAINER`
@@ -116,17 +116,43 @@ Default alert thresholds:
 
 The API sets `aip_access`, `aip_refresh`, and `aip_csrf` cookies. Configure the backend Container App via:
 
-- `auth_cookie_domain` — e.g. `.dibangops.com` when the SPA and API share a registrable domain (`www` + `api` subdomains)
-- `auth_cookie_same_site` — use `Lax` when `auth_cookie_domain` is set; cross-origin setups (SWA → Container Apps FQDN) use `None` automatically until a shared domain is configured
+- **`enable_unified_front_door = true`** (recommended) — cookies are host-only on `www` with `SameSite=Lax`; no `auth_cookie_domain` required
+- **`auth_cookie_domain`** — only when using separate API hostname (e.g. `.example.com` for `www` + `api` subdomains)
+- **`auth_cookie_same_site`** — `Lax` for unified or shared-domain setups; cross-origin SWA → Container Apps FQDN uses `None` automatically when unified FD is disabled and `auth_cookie_domain` is unset
 
-### Azure Front Door + WAF
+### Unified Front Door (same-origin SPA + API)
+
+```hcl
+enable_unified_front_door  = true
+unified_front_door_hostname = "www.example.com"
+frontend_www_custom_domain  = "www.example.com"
+```
+
+**DNS cutover (do in order):**
+
+1. `terraform apply` with unified Front Door enabled (www can still point at SWA).
+2. Note `terraform output unified_front_door_endpoint_host`.
+3. Validate via Front Door default hostname (before custom DNS):
+   - `curl -sS "https://<unified-fd-host>/api/health"` → `{"status":"healthy"}`
+   - Open `https://<unified-fd-host>/` → SPA loads.
+4. In Azure Portal → Front Door → custom domain `www.example.com` → wait for **Managed certificate** = Deployed.
+5. Change **www** DNS CNAME from Static Web App to `unified_front_door_endpoint_host` (TTL 300s or lower for rollback).
+6. Redeploy frontend with `VITE_API_BASE_URL=/api` (Deploy Frontend workflow does this when unified FD is enabled).
+7. Confirm cookies appear under `www.example.com` in DevTools → Application → Cookies (not under `azurecontainerapps.io`).
+8. Smoke-test login on iOS Safari (non-private).
+
+**Rollback:** Point www CNAME back to SWA; redeploy frontend with previous `VITE_API_BASE_URL` if needed.
+
+CI: set `public_app_url` / use relative `/api` — see `.github/workflows/deploy-frontend.yml`.
+
+### Azure Front Door + WAF (API-only, optional)
 
 ```hcl
 enable_api_front_door = true
 api_custom_domain     = "api.example.com"
 ```
 
-Point DNS for `api.example.com` to the Front Door endpoint (`terraform output api_front_door_endpoint_host`). CI builds the frontend with `terraform output backend_url` (Front Door URL when enabled).
+Point DNS for `api.example.com` to the Front Door endpoint (`terraform output api_front_door_endpoint_host`). Use for Swagger/tools when the SPA uses unified Front Door on `www`.
 
 **Pentest note — direct API bypass:** The backend Container App FQDN (`terraform output backend_container_app_url`) remains reachable when `external_enabled` is true. WAF rules on Front Door do not apply to direct Container App requests. For pentest scope, either document this as an accepted finding, add Container App ingress IP restrictions, or use private ingress with Front Door as the only public entry.
 
