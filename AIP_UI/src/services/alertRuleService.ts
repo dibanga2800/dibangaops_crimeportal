@@ -1,4 +1,4 @@
-import { api, BASE_API_URL } from '@/config/api'
+import { api } from '@/config/api'
 import type { StoreAlertRule, LPMAlertRule } from '@/types/alertRules'
 
 export interface AlertRuleResponse {
@@ -20,7 +20,7 @@ export interface AlertRuleListResponse {
 }
 
 class AlertRuleService {
-	private baseUrl = `${BASE_API_URL}/alert-rules`
+	private baseUrl = '/alert-rules'
 
 	/**
 	 * Get paginated list of alert rules
