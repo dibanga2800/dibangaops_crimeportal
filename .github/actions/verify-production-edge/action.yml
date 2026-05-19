@@ -6,7 +6,7 @@ inputs:
     required: false
     default: www.dibangops.com
   tfvars_path:
-    description: Path to terraform.prod.tfvars for guardrail validation.
+    description: Path to terraform.prod.tfvars for guardrail validation (relative to repo root).
     required: false
     default: Infrastructure/terraform.prod.tfvars
   skip_tfvars_validation:
@@ -29,30 +29,34 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        chmod +x scripts/validate-terraform-prod-tfvars.sh
-        scripts/validate-terraform-prod-tfvars.sh "${{ inputs.tfvars_path }}"
+        ROOT="${GITHUB_WORKSPACE}"
+        chmod +x "${ROOT}/scripts/validate-terraform-prod-tfvars.sh"
+        "${ROOT}/scripts/validate-terraform-prod-tfvars.sh" "${ROOT}/${{ inputs.tfvars_path }}"
 
     - name: Remove orphan unified Front Door API route
       if: inputs.skip_orphan_cleanup != 'true'
       shell: bash
       run: |
         set -euo pipefail
-        chmod +x scripts/cleanup-unified-front-door-orphans.sh
-        scripts/cleanup-unified-front-door-orphans.sh
+        ROOT="${GITHUB_WORKSPACE}"
+        chmod +x "${ROOT}/scripts/cleanup-unified-front-door-orphans.sh"
+        "${ROOT}/scripts/cleanup-unified-front-door-orphans.sh"
 
     - name: Verify Azure custom domain route binding
       if: inputs.skip_azure_binding_check != 'true'
       shell: bash
       run: |
         set -euo pipefail
-        chmod +x scripts/verify-unified-front-door-azure.sh
+        ROOT="${GITHUB_WORKSPACE}"
+        chmod +x "${ROOT}/scripts/verify-unified-front-door-azure.sh"
         HOST="${{ inputs.production_hostname }}"
         CUSTOM_DOMAIN_NAME="$(echo "${HOST}" | tr '.' '-')"
-        scripts/verify-unified-front-door-azure.sh crimeportal-rg crimeportal-frontend-unified-fd crimeportal-frontend-unified-ep crimeportal-frontend-unified-spa-route "${CUSTOM_DOMAIN_NAME}" "${HOST}"
+        "${ROOT}/scripts/verify-unified-front-door-azure.sh" crimeportal-rg crimeportal-frontend-unified-fd crimeportal-frontend-unified-ep crimeportal-frontend-unified-spa-route "${CUSTOM_DOMAIN_NAME}" "${HOST}"
 
     - name: Smoke-test www TLS and API health
       shell: bash
       run: |
         set -euo pipefail
-        chmod +x scripts/verify-production-edge.sh
-        scripts/verify-production-edge.sh "${{ inputs.production_hostname }}"
+        ROOT="${GITHUB_WORKSPACE}"
+        chmod +x "${ROOT}/scripts/verify-production-edge.sh"
+        "${ROOT}/scripts/verify-production-edge.sh" "${{ inputs.production_hostname }}"
