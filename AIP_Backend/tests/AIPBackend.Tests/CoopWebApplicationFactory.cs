@@ -25,6 +25,7 @@ public class CoopWebApplicationFactory : WebApplicationFactory<Program>
 		{
 			configBuilder.AddInMemoryCollection(new Dictionary<string, string?>
 			{
+				["ConnectionStrings:DefaultConnection"] = ConnectionString,
 				["ConnectionStrings:DefaultDbConnection"] = ConnectionString,
 				["Security:RunMigrationsOnStartup"] = "false",
 				["Security:RunPageAccessInitializationOnStartup"] = "false",
@@ -34,7 +35,8 @@ public class CoopWebApplicationFactory : WebApplicationFactory<Program>
 
 		builder.ConfigureServices(services =>
 		{
-			services.RemoveAll<DbContextOptions<ApplicationDbContext>>();
+			services.RemoveDbContext<ApplicationDbContext>();
+
 			services.AddDbContext<ApplicationDbContext>(options =>
 				options.UseSqlServer(ConnectionString));
 

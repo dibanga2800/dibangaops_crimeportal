@@ -1,9 +1,6 @@
 using Microsoft.AspNetCore.Http;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
 using Swashbuckle.AspNetCore.SwaggerGen;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
 
 namespace AIPBackend.Filters
 {
@@ -16,7 +13,6 @@ namespace AIPBackend.Filters
                 var t = p.ParameterType;
                 if (t == typeof(IFormFile) || t == typeof(IFormFileCollection))
                     return true;
-                // Nullable<IFormFile> if ever used as value-type nullable
                 if (Nullable.GetUnderlyingType(t) is { } ut &&
                     (ut == typeof(IFormFile) || ut == typeof(IFormFileCollection)))
                     return true;
@@ -28,14 +24,12 @@ namespace AIPBackend.Filters
             if (fileParameters.Count == 0)
                 return;
 
-            // Clear existing parameters that are IFormFile (Parameters can be null before assignment).
-            var existing = operation.Parameters ?? new List<OpenApiParameter>();
-            operation.Parameters = existing
+            operation.Parameters ??= [];
+            operation.Parameters = operation.Parameters
                 .Where(p => fileParameters.All(fp => fp.Name != p.Name))
                 .ToList();
 
-            // Build property map with unique keys (duplicate param names would throw otherwise).
-            var properties = new Dictionary<string, OpenApiSchema>();
+            var properties = new Dictionary<string, IOpenApiSchema>();
             var required = new HashSet<string>();
             foreach (var p in fileParameters)
             {
@@ -46,9 +40,9 @@ namespace AIPBackend.Filters
 
                 properties[key] = new OpenApiSchema
                 {
-                    Type = "string",
+                    Type = JsonSchemaType.String,
                     Format = "binary",
-                    Description = "File to upload"
+                    Description = "File to upload",
                 };
 
                 if (!p.HasDefaultValue && !p.IsOptional)
@@ -63,14 +57,13 @@ namespace AIPBackend.Filters
                     {
                         Schema = new OpenApiSchema
                         {
-                            Type = "object",
+                            Type = JsonSchemaType.Object,
                             Properties = properties,
-                            Required = required
-                        }
-                    }
-                }
+                            Required = required,
+                        },
+                    },
+                },
             };
         }
     }
 }
-

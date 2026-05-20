@@ -25,13 +25,12 @@ public class SecurityWebApplicationFactory : WebApplicationFactory<Program>
 			{
 				["Security:RunMigrationsOnStartup"] = "false",
 				["Security:RunPageAccessInitializationOnStartup"] = "false",
-				["Security:EnableRateLimiting"] = "false"
+				["Security:EnableRateLimiting"] = "false",
 			});
 		});
 
 		builder.ConfigureServices(services =>
 		{
-			services.RemoveAll<DbContextOptions<ApplicationDbContext>>();
 			services.AddDbContext<ApplicationDbContext>(options =>
 				options.UseInMemoryDatabase(_databaseName, _databaseRoot));
 

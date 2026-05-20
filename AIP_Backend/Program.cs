@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
 using Microsoft.Extensions.FileProviders;
 using System.Text;
 using System.Security.Claims;
@@ -123,19 +123,23 @@ else
 }
 
 // Add services to the container.
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
+// Integration tests (ASPNETCORE_ENVIRONMENT=Testing) register in-memory EF via WebApplicationFactory.
+if (!builder.Environment.IsEnvironment("Testing"))
 {
-    var defaultConnection =
-        builder.Configuration.GetConnectionString("DefaultConnection") ??
-        builder.Configuration.GetConnectionString("DefaultDbConnection");
+	builder.Services.AddDbContext<ApplicationDbContext>(options =>
+	{
+		var defaultConnection =
+			builder.Configuration.GetConnectionString("DefaultConnection") ??
+			builder.Configuration.GetConnectionString("DefaultDbConnection");
 
-    if (string.IsNullOrWhiteSpace(defaultConnection))
-    {
-        throw new InvalidOperationException("Missing SQL connection string. Configure ConnectionStrings:DefaultConnection (or legacy DefaultDbConnection).");
-    }
+		if (string.IsNullOrWhiteSpace(defaultConnection))
+		{
+			throw new InvalidOperationException("Missing SQL connection string. Configure ConnectionStrings:DefaultConnection (or legacy DefaultDbConnection).");
+		}
 
-    options.UseSqlServer(defaultConnection);
-});
+		options.UseSqlServer(defaultConnection);
+	});
+}
 
 builder.Services.Configure<IncidentImageStorageOptions>(builder.Configuration.GetSection("IncidentImageStorage"));
 
@@ -338,7 +342,7 @@ builder.Services.AddScoped<IRiskScoringService, RiskScoringService>();
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
 	options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost;
-	options.KnownNetworks.Clear();
+	options.KnownIPNetworks.Clear();
 	options.KnownProxies.Clear();
 });
 
@@ -448,36 +452,25 @@ builder.Services.AddSwaggerGen(options =>
         Description = "DibangOps Crime Portal\u2122 \u2014 AI-Driven Enterprise Security Intelligence Platform API"
     });
     
-    // Add JWT Bearer token authentication to Swagger
+    // Add JWT Bearer token authentication to Swagger (OpenAPI.NET v2 / Swashbuckle 10)
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Description = "JWT Authorization header using the Bearer scheme. Enter 'Bearer' [space] and then your token in the text input below.",
-        Name = "Authorization",
-        In = ParameterLocation.Header,
-        Type = SecuritySchemeType.ApiKey,
-        Scheme = "Bearer"
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
     });
-    
-    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+
+    options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
     {
-        {
-            new OpenApiSecurityScheme
-            {
-                Reference = new OpenApiReference
-                {
-                    Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                }
-            },
-            Array.Empty<string>()
-        }
+        [new OpenApiSecuritySchemeReference("Bearer", document)] = [],
     });
 
     // Stable schema IDs (avoids collisions from duplicate short type names across namespaces).
     options.CustomSchemaIds(type => type.FullName!.Replace('+', '.'));
 
     // Required for IFormFile / IFormFile? in [FromForm] DTOs (e.g. contact form) so swagger.json generates.
-    options.MapType<IFormFile>(() => new OpenApiSchema { Type = "string", Format = "binary" });
+    options.MapType<IFormFile>(() => new OpenApiSchema { Type = JsonSchemaType.String, Format = "binary" });
 
     // Avoid aggressive polymorphism/inheritance expansion — it frequently throws during
     // swagger.json generation for real-world DTO graphs (500 on GET /swagger/v1/swagger.json).

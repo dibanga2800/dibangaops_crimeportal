@@ -18,8 +18,8 @@ namespace AIPBackend.Services
             _context = context;
             _logger = logger;
             
-            // Set EPPlus license context (free for non-commercial use)
-            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+            // EPPlus 8+ non-commercial license (see https://epplussoftware.com/en/developers/epplus8)
+            ExcelPackage.License.SetNonCommercialOrganization("AIP Crime Portal");
         }
 
         public async Task<int> ImportProductsFromExcelAsync(string filePath, string createdBy, CancellationToken cancellationToken = default)

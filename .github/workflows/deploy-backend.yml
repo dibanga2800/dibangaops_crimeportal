@@ -21,6 +21,7 @@ concurrency:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  DOTNET_VERSION: '10.0.x'
   BACKEND_IMAGE_NAME: 'crimeportal-backend'
   AI_IMAGE_NAME: 'crimeportal-ai'
   RESOURCE_GROUP: 'crimeportal-rg'
@@ -41,6 +42,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore and test backend
+        working-directory: AIP_Backend
+        run: |
+          set -euo pipefail
+          dotnet restore AIPBackend.sln
+          dotnet test AIPBackend.sln -c Release --no-restore
 
       - name: Azure Login (OIDC)
         uses: azure/login@v3

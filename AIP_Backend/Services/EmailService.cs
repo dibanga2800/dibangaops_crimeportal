@@ -3,8 +3,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Net.Mail;
 using System.Net;
-using System.Net.Security;
-using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using System.Linq;
@@ -64,17 +62,12 @@ namespace AIPBackend.Services
             }
             else
             {
-                // Handle SSL certificate validation for mail servers with self-signed or mismatched certificates
-                // This is necessary for mail.advantage1.co.uk which may have certificate name mismatches
-                if (enableSsl)
+                var bypassCertificateValidation = bool.Parse(smtpSettings["BypassCertificateValidation"] ?? "false");
+                if (bypassCertificateValidation)
                 {
-                    ServicePointManager.ServerCertificateValidationCallback =
-                        delegate (object s, X509Certificate? certificate, X509Chain? chain, SslPolicyErrors sslPolicyErrors)
-                        {
-                            // Accept certificates for the configured mail server
-                            // In production, you may want to add more specific validation
-                            return true;
-                        };
+                    _logger.LogWarning(
+                        "Smtp:BypassCertificateValidation is set but SmtpClient on .NET 10 uses standard TLS validation only. " +
+                        "Use a trusted mail certificate, add the issuing CA to the host trust store, or switch EmailProvider to Graph.");
                 }
 
                 _smtpClient = new SmtpClient
