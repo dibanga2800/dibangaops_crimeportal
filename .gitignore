@@ -150,7 +150,6 @@ assets/
 # Backend configuration
 # Keep cloud secrets in hosted environment settings and local secrets in ignored files.
 # Local dev secrets: appsettings.Local.json only (never commit).
-AIP_Backend/appsettings.json
 AIP_Backend/appsettings.Development.json
 AIP_Backend/appsettings.Production.json
 AIP_Backend/appsettings.Local.json
