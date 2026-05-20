@@ -4,6 +4,12 @@ import { BarcodeFormat, DecodeHintType, Result } from '@zxing/library';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { AlertTriangle, Camera, Loader2, SwitchCamera } from 'lucide-react';
+import {
+	buildLowResolutionWarning,
+	buildUpgradeConstraintsFromCapabilities,
+	formatResolution,
+	meetsMinimumScanResolution,
+} from '@/lib/barcode-scanner/camera-resolution';
 
 interface BarcodeScannerProps {
   isOpen: boolean;
@@ -64,6 +70,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
 	useEffect(() => {
 		const hints = new Map();
 		hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.EAN_13, BarcodeFormat.EAN_8]);
+		hints.set(DecodeHintType.TRY_HARDER, true);
 
 		readerRef.current = new BrowserMultiFormatReader(hints);
 
@@ -146,9 +153,9 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
 				video: {
 					deviceId: { exact: deviceId },
 					facingMode: { ideal: 'environment' },
-					width: { ideal: 1920 },
-					height: { ideal: 1080 }
-				}
+					width: { ideal: 1920, min: 640 },
+					height: { ideal: 1080, min: 480 },
+				},
 			};
 
 			controlsRef.current?.stop();
@@ -178,25 +185,50 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
 			});
 
 			setTimeout(() => {
-				const track = videoRef.current?.srcObject instanceof MediaStream ? videoRef.current.srcObject.getVideoTracks()[0] : null;
-				if (!track) {
-					return;
-				}
-				const settings = track.getSettings();
-				const resolution = `${settings.width || '?'} x ${settings.height || '?'}`;
-				const deviceLabel = availableDevices.find(device => device.deviceId === deviceId)?.label || 'unknown camera';
-				setDiagnostics(`Camera: ${deviceLabel} • Resolution: ${resolution}`);
-				if ((settings.width ?? 0) < 1280 || (settings.height ?? 0) < 720) {
-					setResolutionWarning(
-						`Detected resolution ${resolution}. Increase camera resolution to at least 1280×720 or move the barcode closer so it fills most of the frame.`
-					);
-				}
+				void reportCameraResolution(deviceId);
 			}, 1200);
 		} catch (err) {
 			setError('Failed to start scanning. Please try again.');
 			console.error('Scanning error:', err);
 		} finally {
 			setIsLoading(false);
+		}
+	};
+
+	const reportCameraResolution = async (deviceId: string) => {
+		const track =
+			videoRef.current?.srcObject instanceof MediaStream
+				? videoRef.current.srcObject.getVideoTracks()[0]
+				: null;
+		if (!track) {
+			return;
+		}
+
+		let width = track.getSettings().width ?? 0;
+		let height = track.getSettings().height ?? 0;
+		const deviceLabel =
+			availableDevices.find(device => device.deviceId === deviceId)?.label || 'unknown camera';
+
+		if (!meetsMinimumScanResolution({ width, height })) {
+			try {
+				const upgradeConstraints = buildUpgradeConstraintsFromCapabilities(track.getCapabilities());
+				if (upgradeConstraints) {
+					await track.applyConstraints(upgradeConstraints);
+					const upgraded = track.getSettings();
+					width = upgraded.width ?? width;
+					height = upgraded.height ?? height;
+				}
+			} catch (upgradeErr) {
+				console.warn('[BarcodeScanner] Could not upgrade camera resolution:', upgradeErr);
+			}
+		}
+
+		const resolutionLabel =
+			width > 0 && height > 0 ? formatResolution(width, height) : 'unknown';
+		setDiagnostics(`Camera: ${deviceLabel} • Resolution: ${resolutionLabel}`);
+
+		if (!meetsMinimumScanResolution({ width, height })) {
+			setResolutionWarning(buildLowResolutionWarning(width, height));
 		}
 	};
 
@@ -255,7 +287,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
 								<Loader2 className="h-8 w-8 animate-spin text-white" />
 							</div>
 						)}
-						<video ref={videoRef} className="h-full w-full object-cover" muted playsInline />
+						<video ref={videoRef} className="h-full w-full object-contain" muted playsInline />
 						<div className="pointer-events-none absolute inset-4 rounded-lg border-2 border-white/25">
 							<div className="absolute inset-x-10 top-1/3 h-1/3 border-2 border-blue-500/60">
 								<div className="absolute inset-0 flex items-center justify-center">
