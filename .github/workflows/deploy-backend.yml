@@ -21,6 +21,7 @@ concurrency:
 
 env:
   DOTNET_VERSION: '10.0.x'
+  PRODUCTION_WWW_HOSTNAME: ${{ vars.PRODUCTION_WWW_HOSTNAME || 'www.dibangops.com' }}
   BACKEND_IMAGE_NAME: 'crimeportal-backend'
   AI_IMAGE_NAME: 'crimeportal-ai'
   RESOURCE_GROUP: 'crimeportal-rg'
@@ -116,6 +117,9 @@ jobs:
     needs: build-and-push-images
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
       - name: Azure Login (OIDC)
         uses: azure/login@v3
         with:
@@ -131,6 +135,7 @@ jobs:
             --resource-group "${{ env.RESOURCE_GROUP }}" \
             --name "${{ env.BACKEND_APP_NAME }}" \
             --image "${{ needs.build-and-push-images.outputs.backend_image }}" \
+            --set-env-vars "AllowedHosts=${{ env.PRODUCTION_WWW_HOSTNAME }};dibangops.com;*.azurecontainerapps.io" \
             --query "properties.latestRevisionName" -o tsv)"
           echo "backend_latest_revision=${BACKEND_LATEST_REVISION}" >> "$GITHUB_OUTPUT"
 
@@ -172,6 +177,13 @@ jobs:
             --revision "${TARGET_REV}" \
             --tail 200 || true
           exit 1
+
+      - name: Verify production API health
+        run: |
+          set -euo pipefail
+          chmod +x scripts/verify-production-edge.sh
+          EDGE_VERIFY_ATTEMPTS=12 EDGE_VERIFY_SLEEP_SECONDS=15 \
+            ./scripts/verify-production-edge.sh "${{ env.PRODUCTION_WWW_HOSTNAME }}"
 
       - name: Update AI image
         id: update_ai

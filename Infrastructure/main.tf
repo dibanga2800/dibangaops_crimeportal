@@ -53,6 +53,12 @@ locals {
     var.frontend_www_custom_domain,
   )
   public_app_url = var.enable_unified_front_door && local.unified_front_door_hostname_effective != null && local.unified_front_door_hostname_effective != "" ? "https://${local.unified_front_door_hostname_effective}" : local.effective_frontend_url
+  # Host filtering: allow public www/apex and Container Apps ingress FQDNs (Front Door forwards Host: www).
+  backend_allowed_hosts = join(";", compact([
+    var.frontend_www_custom_domain,
+    var.frontend_custom_domain,
+    "*.azurecontainerapps.io",
+  ]))
 }
 
 resource "azurerm_resource_group" "rg" {
@@ -502,6 +508,11 @@ resource "azurerm_container_app" "backend" {
       env {
         name  = "InsightFace__MaxSearchResults"
         value = tostring(var.insightface_max_search_results)
+      }
+
+      env {
+        name  = "AllowedHosts"
+        value = local.backend_allowed_hosts
       }
     }
 
