@@ -168,6 +168,8 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
     setAlertCountCustomerScope(selectedCustomerId);
   }, [selectedCustomerId]);
 
+  const { alertCount, isLoading: alertCountLoading } = useAlertCount();
+
   const isAuthenticated = !!authenticatedUser;
   
   // If context is not available, return minimal header
@@ -285,8 +287,6 @@ export function Header({ onMobileMenuClick }: HeaderProps) {
   const handleNavigate = () => {
     setIsSheetOpen(false);
   };
-
-  const { alertCount, isLoading: alertCountLoading } = useAlertCount();
 
   return (
     <header className="sticky top-0 z-50 w-full bg-header-bg dark:bg-gray-900 border-b border-header-border dark:border-gray-800 shadow-sm text-header-text dark:text-white">

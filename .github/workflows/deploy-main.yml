@@ -21,7 +21,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   TERRAFORM_VERSION: '1.13.4'
   DOTNET_VERSION: '8.0.x'
-  NODE_VERSION: '20'
+  NODE_VERSION: '22'
   BACKEND_IMAGE_NAME: 'crimeportal-backend'
   AI_IMAGE_NAME: 'crimeportal-ai'
   # Public www hostname for post-deploy TLS/API smoke tests (override via repository variable PRODUCTION_WWW_HOSTNAME).

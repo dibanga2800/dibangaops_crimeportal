@@ -25,7 +25,7 @@ concurrency:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   TERRAFORM_VERSION: '1.13.4'
-  NODE_VERSION: '20'
+  NODE_VERSION: '22'
   PRODUCTION_WWW_HOSTNAME: ${{ vars.PRODUCTION_WWW_HOSTNAME || 'www.dibangops.com' }}
 
 jobs:

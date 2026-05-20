@@ -55,11 +55,6 @@ export default defineConfig(({ mode }) => ({
     react({
       jsxRuntime: 'automatic',
       jsxImportSource: 'react',
-      babel: {
-        plugins: [
-          ['@babel/plugin-transform-react-jsx', { runtime: 'automatic' }]
-        ]
-      }
     }),
     fixFramerMotionPlugin(),
     ...(mode === 'production' ? [visualizer({ 
