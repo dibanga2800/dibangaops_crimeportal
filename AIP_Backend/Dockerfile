@@ -2,8 +2,8 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-COPY AIPBackend.csproj .
-RUN dotnet restore
+COPY AIPBackend.csproj Directory.Build.props global.json ./
+RUN dotnet restore AIPBackend.csproj
 
 COPY . .
 # Publish only the API project — do not build the solution (tests would need a separate restore).
