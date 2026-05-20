@@ -21,12 +21,7 @@ public class SecurityWebApplicationFactory : WebApplicationFactory<Program>
 
 		builder.ConfigureAppConfiguration((_, configBuilder) =>
 		{
-			configBuilder.AddInMemoryCollection(new Dictionary<string, string?>
-			{
-				["Security:RunMigrationsOnStartup"] = "false",
-				["Security:RunPageAccessInitializationOnStartup"] = "false",
-				["Security:EnableRateLimiting"] = "false",
-			});
+			configBuilder.AddInMemoryCollection(TestAppSettings.Values);
 		});
 
 		builder.ConfigureServices(services =>

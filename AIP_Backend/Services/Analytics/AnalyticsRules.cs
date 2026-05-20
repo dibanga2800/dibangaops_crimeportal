@@ -122,7 +122,8 @@ namespace AIPBackend.Services.Analytics
 				? string.Join(" · ", breakdown.Factors.Take(3).Select(f => f.Description))
 				: "Insufficient factor data";
 
-			return $"{breakdown.Level.ToUpperInvariant()} ({breakdown.Score:P0}): {factorText}";
+			var scorePercent = (int)Math.Round(breakdown.Score * 100, MidpointRounding.AwayFromZero);
+			return $"{breakdown.Level.ToUpperInvariant()} ({scorePercent}%): {factorText}";
 		}
 
 		public static string ToDeploymentPriority(double ratio) =>

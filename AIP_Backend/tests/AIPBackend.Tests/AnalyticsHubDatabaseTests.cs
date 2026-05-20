@@ -11,6 +11,7 @@ namespace AIPBackend.Tests;
 /// <summary>
 /// Validates analytics hub generation against the local COOP database schema.
 /// </summary>
+[Trait("Category", "LocalDatabase")]
 public class AnalyticsHubDatabaseTests
 {
 	private const string ConnectionString =
@@ -41,6 +42,7 @@ public class AnalyticsHubDatabaseTests
 	}
 }
 
+[Trait("Category", "LocalDatabase")]
 public class AnalyticsHubApiTests : IClassFixture<CoopWebApplicationFactory>
 {
 	private readonly CoopWebApplicationFactory _factory;

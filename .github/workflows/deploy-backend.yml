@@ -53,7 +53,7 @@ jobs:
         run: |
           set -euo pipefail
           dotnet restore AIPBackend.sln
-          dotnet test AIPBackend.sln -c Release --no-restore
+          dotnet test AIPBackend.sln -c Release --no-restore --filter "Category!=LocalDatabase"
 
       - name: Azure Login (OIDC)
         uses: azure/login@v3
