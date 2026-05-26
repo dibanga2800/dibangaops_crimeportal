@@ -24,24 +24,24 @@ resource "random_password" "jwt_signing_key" {
 }
 
 locals {
-  suffix                         = random_string.suffix.result
-  sql_server_name                = substr("${var.sql_server_name_prefix}${local.suffix}", 0, 63)
-  storage_account_name           = substr("${var.blob_storage_name_prefix}${local.suffix}", 0, 24)
-  acr_name                       = substr("${var.acr_name_prefix}${local.suffix}", 0, 50)
-  key_vault_name                 = substr("${var.keyvault_name_prefix}-${local.suffix}", 0, 24)
-  sql_admin_password             = var.sql_admin_password != null && var.sql_admin_password != "" ? var.sql_admin_password : random_password.sql_admin[0].result
-  backend_target_port            = var.backend_target_port == null ? (strcontains(var.backend_image, "azuredocs/containerapps-helloworld") ? 80 : 8080) : var.backend_target_port
-  ai_target_port                 = var.ai_target_port == null ? (strcontains(var.ai_image, "azuredocs/containerapps-helloworld") ? 80 : 8000) : var.ai_target_port
-  backend_uses_acr               = strcontains(var.backend_image, ".azurecr.io/")
-  ai_uses_acr                    = strcontains(var.ai_image, ".azurecr.io/")
-  jwt_signing_key_value          = var.jwt_signing_key != null && var.jwt_signing_key != "" ? var.jwt_signing_key : random_password.jwt_signing_key.result
+  suffix                = random_string.suffix.result
+  sql_server_name       = substr("${var.sql_server_name_prefix}${local.suffix}", 0, 63)
+  storage_account_name  = substr("${var.blob_storage_name_prefix}${local.suffix}", 0, 24)
+  acr_name              = substr("${var.acr_name_prefix}${local.suffix}", 0, 50)
+  key_vault_name        = substr("${var.keyvault_name_prefix}-${local.suffix}", 0, 24)
+  sql_admin_password    = var.sql_admin_password != null && var.sql_admin_password != "" ? var.sql_admin_password : random_password.sql_admin[0].result
+  backend_target_port   = var.backend_target_port == null ? (strcontains(var.backend_image, "azuredocs/containerapps-helloworld") ? 80 : 8080) : var.backend_target_port
+  ai_target_port        = var.ai_target_port == null ? (strcontains(var.ai_image, "azuredocs/containerapps-helloworld") ? 80 : 8000) : var.ai_target_port
+  backend_uses_acr      = strcontains(var.backend_image, ".azurecr.io/")
+  ai_uses_acr           = strcontains(var.ai_image, ".azurecr.io/")
+  jwt_signing_key_value = var.jwt_signing_key != null && var.jwt_signing_key != "" ? var.jwt_signing_key : random_password.jwt_signing_key.result
   # Stable app ingress FQDN — do not use latest_revision_fqdn (stale after each backend image deploy).
   backend_container_fqdn         = "https://${azurerm_container_app.backend.ingress[0].fqdn}"
   ai_container_fqdn              = "https://${var.ai_name}.internal.${azurerm_container_app_environment.env.default_domain}"
   effective_frontend_url         = var.frontend_url != null && var.frontend_url != "" ? trimspace(var.frontend_url) : "https://${azurerm_static_web_app.frontend.default_host_name}"
   effective_insightface_base_url = var.insightface_base_url != null && var.insightface_base_url != "" ? var.insightface_base_url : local.ai_container_fqdn
-  effective_api_public_url = var.enable_api_front_door && var.api_custom_domain != null && var.api_custom_domain != "" ? "https://${var.api_custom_domain}" : local.backend_container_fqdn
-  auth_cookie_domain = var.auth_cookie_domain != null && var.auth_cookie_domain != "" ? var.auth_cookie_domain : null
+  effective_api_public_url       = var.enable_api_front_door && var.api_custom_domain != null && var.api_custom_domain != "" ? "https://${var.api_custom_domain}" : local.backend_container_fqdn
+  auth_cookie_domain             = var.auth_cookie_domain != null && var.auth_cookie_domain != "" ? var.auth_cookie_domain : null
   # Same-origin (unified Front Door): host-only cookies on www + SameSite=Lax.
   # Cross-site (SWA → Container Apps FQDN): SameSite=None until shared domain is configured.
   auth_cookie_domain_effective = var.enable_unified_front_door ? null : local.auth_cookie_domain
@@ -122,13 +122,13 @@ resource "azurerm_role_assignment" "terraform_kv_admin" {
 # ---------------- SQL ----------------
 
 resource "azurerm_mssql_server" "sql_server" {
-  name                         = local.sql_server_name
-  resource_group_name          = azurerm_resource_group.rg.name
-  location                     = azurerm_resource_group.rg.location
-  version                      = "12.0"
-  administrator_login          = var.sql_admin_username
-  administrator_login_password = local.sql_admin_password
-  minimum_tls_version          = "1.2"
+  name                          = local.sql_server_name
+  resource_group_name           = azurerm_resource_group.rg.name
+  location                      = azurerm_resource_group.rg.location
+  version                       = "12.0"
+  administrator_login           = var.sql_admin_username
+  administrator_login_password  = local.sql_admin_password
+  minimum_tls_version           = "1.2"
   public_network_access_enabled = var.enable_sql_private_endpoint ? false : var.sql_public_network_access_enabled
 }
 
@@ -179,7 +179,11 @@ resource "azurerm_key_vault_secret" "sql_connection_string" {
   name         = "sql-connection-string"
   value        = "Server=tcp:${azurerm_mssql_server.sql_server.fully_qualified_domain_name},1433;Initial Catalog=${azurerm_mssql_database.sql_db.name};Persist Security Info=False;User ID=${var.sql_admin_username};Password=${local.sql_admin_password};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
   key_vault_id = azurerm_key_vault.kv.id
-  depends_on   = [azurerm_role_assignment.terraform_kv_admin]
+  depends_on = [
+    azurerm_role_assignment.terraform_kv_admin,
+    azurerm_mssql_database.sql_db,
+    azurerm_private_endpoint.sql,
+  ]
 }
 
 resource "azurerm_key_vault_secret" "storage_connection_string" {
@@ -525,6 +529,17 @@ resource "azurerm_container_app" "backend" {
     target_port                = local.backend_target_port
     transport                  = "auto"
     allow_insecure_connections = var.backend_allow_insecure_connections
+
+    dynamic "ip_security_restriction" {
+      for_each = var.backend_ingress_ip_restrictions_enabled ? var.backend_ingress_allowed_cidrs : []
+      content {
+        name             = ip_security_restriction.value.name
+        description      = coalesce(ip_security_restriction.value.description, "Allow inbound from Front Door or break-glass range")
+        action           = "Allow"
+        ip_address_range = ip_security_restriction.value.cidr
+      }
+    }
+
     traffic_weight {
       latest_revision = true
       percentage      = 100

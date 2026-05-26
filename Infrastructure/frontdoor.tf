@@ -64,21 +64,21 @@ resource "azurerm_cdn_frontdoor_origin" "api" {
   origin_host_header             = azurerm_container_app.backend.latest_revision_fqdn
   priority                       = 1
   weight                         = 1000
-  certificate_name_check_enabled   = true
+  certificate_name_check_enabled = true
 }
 
 resource "azurerm_cdn_frontdoor_route" "api" {
-  count                          = var.enable_api_front_door ? 1 : 0
-  name                           = "${var.backend_name}-route"
-  cdn_frontdoor_endpoint_id      = azurerm_cdn_frontdoor_endpoint.api[0].id
-  cdn_frontdoor_origin_group_id  = azurerm_cdn_frontdoor_origin_group.api[0].id
-  cdn_frontdoor_origin_ids       = [azurerm_cdn_frontdoor_origin.api[0].id]
-  enabled                        = true
-  forwarding_protocol            = "HttpsOnly"
-  https_redirect_enabled         = true
-  patterns_to_match              = ["/*"]
-  supported_protocols            = ["Http", "Https"]
-  link_to_default_domain         = true
+  count                         = var.enable_api_front_door ? 1 : 0
+  name                          = "${var.backend_name}-route"
+  cdn_frontdoor_endpoint_id     = azurerm_cdn_frontdoor_endpoint.api[0].id
+  cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.api[0].id
+  cdn_frontdoor_origin_ids      = [azurerm_cdn_frontdoor_origin.api[0].id]
+  enabled                       = true
+  forwarding_protocol           = "HttpsOnly"
+  https_redirect_enabled        = true
+  patterns_to_match             = ["/*"]
+  supported_protocols           = ["Http", "Https"]
+  link_to_default_domain        = true
 }
 
 resource "azurerm_cdn_frontdoor_custom_domain" "api" {

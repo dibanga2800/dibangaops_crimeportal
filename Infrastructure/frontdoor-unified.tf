@@ -53,30 +53,30 @@ resource "azurerm_cdn_frontdoor_origin_group" "unified_spa" {
 }
 
 resource "azurerm_cdn_frontdoor_origin" "unified_api" {
-  count                         = var.enable_unified_front_door ? 1 : 0
-  name                          = "${var.backend_name}-unified-api-origin"
-  cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.unified_api[0].id
-  enabled                       = true
-  host_name                     = azurerm_container_app.backend.ingress[0].fqdn
-  http_port                     = 80
-  https_port                    = 443
-  origin_host_header            = azurerm_container_app.backend.ingress[0].fqdn
-  priority                      = 1
-  weight                        = 1000
+  count                          = var.enable_unified_front_door ? 1 : 0
+  name                           = "${var.backend_name}-unified-api-origin"
+  cdn_frontdoor_origin_group_id  = azurerm_cdn_frontdoor_origin_group.unified_api[0].id
+  enabled                        = true
+  host_name                      = azurerm_container_app.backend.ingress[0].fqdn
+  http_port                      = 80
+  https_port                     = 443
+  origin_host_header             = azurerm_container_app.backend.ingress[0].fqdn
+  priority                       = 1
+  weight                         = 1000
   certificate_name_check_enabled = true
 }
 
 resource "azurerm_cdn_frontdoor_origin" "unified_spa" {
-  count                         = var.enable_unified_front_door ? 1 : 0
-  name                          = "${var.frontend_name}-unified-spa-origin"
-  cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.unified_spa[0].id
-  enabled                       = true
-  host_name                     = azurerm_static_web_app.frontend.default_host_name
-  http_port                     = 80
-  https_port                    = 443
-  origin_host_header            = azurerm_static_web_app.frontend.default_host_name
-  priority                      = 1
-  weight                        = 1000
+  count                          = var.enable_unified_front_door ? 1 : 0
+  name                           = "${var.frontend_name}-unified-spa-origin"
+  cdn_frontdoor_origin_group_id  = azurerm_cdn_frontdoor_origin_group.unified_spa[0].id
+  enabled                        = true
+  host_name                      = azurerm_static_web_app.frontend.default_host_name
+  http_port                      = 80
+  https_port                     = 443
+  origin_host_header             = azurerm_static_web_app.frontend.default_host_name
+  priority                       = 1
+  weight                         = 1000
   certificate_name_check_enabled = true
 }
 
@@ -105,8 +105,8 @@ resource "azurerm_cdn_frontdoor_rule" "unified_api_override" {
   conditions {
     url_path_condition {
       operator         = "BeginsWith"
-      match_values       = ["/api"]
-      negate_condition   = false
+      match_values     = ["/api"]
+      negate_condition = false
     }
   }
 
@@ -129,7 +129,7 @@ resource "azurerm_cdn_frontdoor_route" "unified_spa" {
   patterns_to_match             = ["/*"]
   supported_protocols           = ["Http", "Https"]
   # When www custom domain is enabled, do not bind the default *.azurefd.net host on this route (avoids wrong edge cert on www).
-  link_to_default_domain = var.enable_unified_front_door_custom_domain && length(azurerm_cdn_frontdoor_custom_domain.unified) > 0 ? false : true
+  link_to_default_domain          = var.enable_unified_front_door_custom_domain && length(azurerm_cdn_frontdoor_custom_domain.unified) > 0 ? false : true
   cdn_frontdoor_custom_domain_ids = var.enable_unified_front_door_custom_domain && length(azurerm_cdn_frontdoor_custom_domain.unified) > 0 ? [azurerm_cdn_frontdoor_custom_domain.unified[0].id] : []
 
   depends_on = [azurerm_cdn_frontdoor_rule.unified_api_override]

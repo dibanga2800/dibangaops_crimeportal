@@ -506,6 +506,22 @@ variable "sql_allowed_ip_ranges" {
   default = []
 }
 
+variable "backend_ingress_ip_restrictions_enabled" {
+  description = "When true, backend Container App ingress only accepts traffic from backend_ingress_allowed_cidrs (Allow rules). Requires populated CIDR list."
+  type        = bool
+  default     = false
+}
+
+variable "backend_ingress_allowed_cidrs" {
+  description = "Allow-only CIDR rules for backend ingress. Populate AzureFrontDoor.Backend ranges from the weekly Service Tags JSON (see scripts/extract-front-door-backend-cidrs.ps1)."
+  type = list(object({
+    name        = string
+    description = optional(string, "")
+    cidr        = string
+  }))
+  default = []
+}
+
 variable "storage_blob_delete_retention_days" {
   description = "Retention days for soft-deleted blobs"
   type        = number
