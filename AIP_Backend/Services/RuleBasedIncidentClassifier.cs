@@ -73,8 +73,10 @@ namespace AIPBackend.Services
 			var combinedText = $"{request.Description} {request.IncidentDetails}".ToLowerInvariant();
 			var suggestedCategory = DetermineCategory(combinedText, request.IncidentType);
 			var rawScore = CalculateRiskScore(request, combinedText);
-			var riskScore = Math.Round(IncidentRiskLevel.ClampScore(rawScore), 2);
-			var riskLevel = IncidentRiskLevel.FromScore(riskScore);
+			// Bucket() derives the level from the precise score and only rounds for
+			// storage afterwards - so a raw 0.6999 stays "medium" instead of being
+			// rounded up to 0.70 and mis-bucketed into "high".
+			var (riskLevel, riskScore) = IncidentRiskLevel.Bucket(rawScore);
 
 			var actions = GenerateSuggestedActions(riskLevel, request, combinedText);
 			var tags = GenerateTags(request, combinedText);

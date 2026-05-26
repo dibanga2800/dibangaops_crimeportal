@@ -56,5 +56,26 @@ namespace AIPBackend.Services
 
 			return riskScore;
 		}
+
+		/// <summary>
+		/// Resolves a raw classifier output into a coherent <c>(Level, StoredScore)</c>
+		/// pair. The level is derived from the <em>precise</em> clamped score so that
+		/// values just below a threshold (e.g. 0.6999 or 0.3999) are bucketed correctly;
+		/// the stored score is rounded to 2 decimal places only for persistence and
+		/// display.
+		///
+		/// Use this from every classifier to guarantee that "round-then-bucket"
+		/// cliff errors near thresholds cannot regress in the future. A 0.6999 raw
+		/// score will return <c>("medium", 0.7)</c> - the displayed 0.7 may look
+		/// borderline but the level is the source of truth for alerting and colour
+		/// coding.
+		/// </summary>
+		public static (string Level, double StoredScore) Bucket(double rawScore)
+		{
+			var clamped = ClampScore(rawScore);
+			var level = FromScore(clamped);
+			var storedScore = Math.Round(clamped, 2);
+			return (level, storedScore);
+		}
 	}
 }

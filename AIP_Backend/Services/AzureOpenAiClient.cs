@@ -157,10 +157,13 @@ namespace AIPBackend.Services
 
 				// Canonicalise the score and re-derive the level server-side. The LLM has
 				// been observed returning incoherent pairs like (riskLevel="low", riskScore=0.7).
-				// IncidentRiskLevel.FromScore is the single source of truth - applying it here
-				// guarantees the persisted level is always consistent with the persisted score.
-				result.RiskScore = Math.Round(IncidentRiskLevel.ClampScore(result.RiskScore), 2);
-				result.RiskLevel = IncidentRiskLevel.FromScore(result.RiskScore);
+				// IncidentRiskLevel.Bucket is the single source of truth - it derives the
+				// level from the precise (unrounded) score and only rounds for storage
+				// afterwards, so an LLM-emitted 0.6999 stays "medium" rather than being
+				// rounded up to 0.70 and mis-bucketed into "high".
+				var (level, storedScore) = IncidentRiskLevel.Bucket(result.RiskScore);
+				result.RiskScore = storedScore;
+				result.RiskLevel = level;
 				result.Confidence = IncidentRiskLevel.ClampScore(result.Confidence);
 
 				// Bump version so v1 (incoherent level) and v2 (canonicalised) rows are
