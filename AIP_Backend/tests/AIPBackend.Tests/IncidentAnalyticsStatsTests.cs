@@ -261,6 +261,7 @@ public class IncidentAnalyticsStatsTests
 			userContext.Object,
 			new ServiceCollection().BuildServiceProvider(),
 			new Mock<IIncidentClassifier>().Object,
+			new RuleBasedIncidentClassifier(NullLogger<RuleBasedIncidentClassifier>.Instance),
 			new Mock<IIncidentImageStorageService>().Object,
 			new Mock<IImageReferenceContentResolver>().Object);
 	}

@@ -19,12 +19,22 @@ namespace AIPBackend.Services
 	{
 		private const int MinPageSize = 1;
 		private const int MaxPageSize = 100;
+		/// <summary>
+		/// Maximum wall-clock time the API thread will wait for the configured
+		/// classifier (Azure OpenAI) before falling back to the deterministic
+		/// rule-based path inline. Keeps Create/Update responses snappy even when
+		/// the LLM endpoint is sluggish; the LLM-refined fields can still land on
+		/// the row later via the backfill loop.
+		/// </summary>
+		private static readonly TimeSpan InlineClassificationTimeout = TimeSpan.FromMilliseconds(750);
+
 		private readonly IIncidentRepository _repository;
 		private readonly ISiteRepository _siteRepository;
 		private readonly ILogger<IncidentService> _logger;
 		private readonly IUserContextService _userContext;
 		private readonly IServiceProvider _serviceProvider;
 		private readonly IIncidentClassifier _classifier;
+		private readonly RuleBasedIncidentClassifier _ruleBasedFallback;
 		private readonly IIncidentImageStorageService _incidentImageStorageService;
 		private readonly IImageReferenceContentResolver _imageReferenceContentResolver;
 
@@ -35,6 +45,7 @@ namespace AIPBackend.Services
 			IUserContextService userContext,
 			IServiceProvider serviceProvider,
 			IIncidentClassifier classifier,
+			RuleBasedIncidentClassifier ruleBasedFallback,
 			IIncidentImageStorageService incidentImageStorageService,
 			IImageReferenceContentResolver imageReferenceContentResolver)
 		{
@@ -44,6 +55,7 @@ namespace AIPBackend.Services
 			_userContext = userContext;
 			_serviceProvider = serviceProvider;
 			_classifier = classifier;
+			_ruleBasedFallback = ruleBasedFallback;
 			_incidentImageStorageService = incidentImageStorageService;
 			_imageReferenceContentResolver = imageReferenceContentResolver;
 		}
@@ -184,11 +196,13 @@ namespace AIPBackend.Services
 				incident.TotalValueRecovered = incident.StolenItems.Sum(item => item.TotalAmount);
 			}
 
+		// Classify inline before the INSERT so the persisted row already carries
+		// the AI fields and the API response returns up-to-date insight values.
+		await ApplyClassificationInlineAsync(incident);
+
 		var created = await _repository.CreateAsync(incident);
 
 		_logger.LogInformation("Incident created with ID {IncidentId} by user {UserId}", created.IncidentId, context.UserId);
-
-		EnqueuePostSaveClassification(created.IncidentId);
 
 		_ = Task.Run(async () =>
 		{
@@ -265,14 +279,18 @@ namespace AIPBackend.Services
 			}
 
 		var afterFingerprint = SnapshotForClassification(existing);
+
+		// Re-classify inline when any risk-relevant field changed so the API
+		// response carries fresh AI insight values without waiting for the
+		// hourly backfill pass to catch up.
+		if (!beforeFingerprint.Equals(afterFingerprint))
+		{
+			await ApplyClassificationInlineAsync(existing);
+		}
+
 		var updated = await _repository.UpdateAsync(existing);
 
 		_logger.LogInformation("Incident updated with ID {IncidentId} by user {UserId}", updated.IncidentId, context.UserId);
-
-		if (!beforeFingerprint.Equals(afterFingerprint))
-		{
-			EnqueuePostSaveClassification(updated.IncidentId);
-		}
 
 		// Check for matching alert rules and send notifications (async fire-and-forget)
 		_ = Task.Run(async () =>
@@ -1397,64 +1415,84 @@ namespace AIPBackend.Services
 			!string.IsNullOrWhiteSpace(incident.OffenderName));
 
 		/// <summary>
-		/// Fire-and-forget background classification. Re-fetches the incident inside a fresh DI scope,
-		/// runs the configured classifier, and persists the AI-derived fields. Safe to call from both
-		/// create and update flows.
+		/// Synchronously classifies the in-memory incident and applies the AI-derived
+		/// fields directly on the entity. Called by Create/Update before persistence
+		/// so the single INSERT/UPDATE already contains the AI insight values and
+		/// the API response returns up-to-date data.
+		///
+		/// Race semantics: the configured classifier (Azure OpenAI when enabled) is
+		/// given <see cref="InlineClassificationTimeout"/> to respond. If it does
+		/// not respond in time, the deterministic rule-based classifier runs inline
+		/// as a fast, always-available fallback and the result is tagged
+		/// <c>"rule-based-fallback (inline-timeout)"</c> so the periodic backfill
+		/// can later re-classify with the LLM once it recovers.
 		/// </summary>
-		private void EnqueuePostSaveClassification(int incidentId)
+		private async Task ApplyClassificationInlineAsync(Incident incident)
 		{
-			_ = Task.Run(async () =>
+			var request = new IncidentClassificationRequestDto
 			{
-				try
+				IncidentId = incident.IncidentId,
+				IncidentType = incident.IncidentType ?? string.Empty,
+				Description = incident.Description,
+				IncidentDetails = incident.IncidentDetails,
+				TotalValueRecovered = incident.TotalValueRecovered,
+				TotalLostValue = incident.TotalLostValue,
+				PoliceInvolvement = incident.PoliceInvolvement,
+				OffenderName = incident.OffenderName,
+				StolenItemCount = incident.StolenItems?.Count ?? 0
+			};
+
+			IncidentClassificationResultDto classification;
+			try
+			{
+				var classifyTask = _classifier.ClassifyAsync(request);
+				var timeoutTask = Task.Delay(InlineClassificationTimeout);
+				var winner = await Task.WhenAny(classifyTask, timeoutTask);
+
+				if (winner == classifyTask)
 				{
-					using var scope = _serviceProvider.CreateScope();
-
-					var classifier = scope.ServiceProvider.GetService<IIncidentClassifier>();
-					if (classifier == null)
-					{
-						return;
-					}
-
-					var repo = scope.ServiceProvider.GetRequiredService<IIncidentRepository>();
-					var toUpdate = await repo.GetByIdWithItemsAsync(incidentId);
-					if (toUpdate == null)
-					{
-						return;
-					}
-
-					var request = new IncidentClassificationRequestDto
-					{
-						IncidentId = toUpdate.IncidentId,
-						IncidentType = toUpdate.IncidentType,
-						Description = toUpdate.Description,
-						IncidentDetails = toUpdate.IncidentDetails,
-						TotalValueRecovered = toUpdate.TotalValueRecovered,
-						TotalLostValue = toUpdate.TotalLostValue,
-						PoliceInvolvement = toUpdate.PoliceInvolvement,
-						OffenderName = toUpdate.OffenderName,
-						StolenItemCount = toUpdate.StolenItems?.Count ?? 0
-					};
-
-					var classification = await classifier.ClassifyAsync(request);
-
-					toUpdate.IncidentCategory = classification.SuggestedCategory;
-					toUpdate.IncidentCategoryConfidence = classification.Confidence;
-					toUpdate.RiskLevel = classification.RiskLevel;
-					toUpdate.RiskScore = classification.RiskScore;
-					toUpdate.ClassificationVersion = classification.ClassifierVersion;
-
-					if (string.IsNullOrWhiteSpace(toUpdate.Priority))
-					{
-						toUpdate.Priority = classification.RiskLevel;
-					}
-
-					await repo.UpdateAsync(toUpdate);
+					classification = await classifyTask;
 				}
-				catch (Exception ex)
+				else
 				{
-					_logger.LogError(ex, "Error during post-save classification for incident {IncidentId}", incidentId);
+					_logger.LogWarning(
+						"Inline classifier exceeded {TimeoutMs}ms for incident {IncidentId}; using rule-based fallback",
+						InlineClassificationTimeout.TotalMilliseconds,
+						incident.IncidentId);
+
+					classification = await _ruleBasedFallback.ClassifyAsync(request);
+					classification.ClassifierVersion = "rule-based-fallback (inline-timeout)";
+
+					// Observe the orphaned task so a late failure does not surface as
+					// an unobserved task exception in process logs.
+					_ = classifyTask.ContinueWith(
+						t => _logger.LogWarning(
+							t.Exception,
+							"Inline classifier task faulted after fallback was applied for incident {IncidentId}",
+							incident.IncidentId),
+						TaskContinuationOptions.OnlyOnFaulted);
 				}
-			});
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(
+					ex,
+					"Inline classification failed for incident {IncidentId}; using rule-based fallback",
+					incident.IncidentId);
+				classification = await _ruleBasedFallback.ClassifyAsync(request);
+				classification.ClassifierVersion = "rule-based-fallback (inline-error)";
+			}
+
+			incident.IncidentCategory = classification.SuggestedCategory;
+			incident.IncidentCategoryConfidence = classification.Confidence;
+			incident.RiskLevel = classification.RiskLevel;
+			incident.RiskScore = classification.RiskScore;
+			incident.ClassificationVersion = classification.ClassifierVersion;
+
+			if (string.IsNullOrWhiteSpace(incident.Priority))
+			{
+				incident.Priority = classification.RiskLevel;
+			}
 		}
 
 		#endregion

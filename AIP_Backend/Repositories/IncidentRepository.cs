@@ -473,14 +473,27 @@ namespace AIPBackend.Repositories
 			// Pick up:
 			//   1. Rows missing any AI field (never classified or partially saved).
 			//   2. Rows tagged with a superseded classifier version. v1 LLM output
-			//      was sometimes incoherent (e.g. "Risk: Low 70/100") and the v1
-			//      rule-based scorer used the wrong inputs - both produced rows
-			//      that look populated but are not trustworthy.
+			//      was sometimes incoherent (e.g. "Risk: Low 70/100"); the v1 and
+			//      v2 rule-based scorers used a type-baseline that produced
+			//      implausible scores (e.g. "Attempted Shoplifting" with no loss
+			//      bucketed as Medium 45/100); and the v3 scorer applied the
+			//      stage dampener whenever the type matched "Deter/Attempted/
+			//      Prevent" regardless of whether a real loss was recorded, so
+			//      "Deter + £500 lost" was suppressed to Low 38/100 instead of
+			//      registering as High. None of these look untrustworthy on the
+			//      surface but they are under the v4 formula.
 			//
 			// Deliberately NOT picked up:
-			//   - "rule-based-fallback (...)" rows. They had one fallback pass and
-			//     we do not want a busy-retry loop while Azure OpenAI is down. An
-			//     admin can manually re-trigger once Azure is back up if needed.
+			//   - "rule-based-fallback (azure-error)" / "rule-based-fallback (disabled)"
+			//     rows. They had one fallback pass and we do not want a busy-retry
+			//     loop while Azure OpenAI is down. An admin can manually re-trigger
+			//     once Azure is back up if needed.
+			//
+			// Deliberately picked up:
+			//   - "rule-based-fallback (inline-timeout)" rows. These were set by the
+			//     inline Create/Update path when the LLM exceeded the 750ms response
+			//     budget. The LLM may have been healthy but momentarily slow, so the
+			//     periodic loop is the right place to refine these once load eases.
 			//
 			// Ordered newest-first so the recent-incidents dashboard fills in
 			// before the deep history.
@@ -492,7 +505,10 @@ namespace AIPBackend.Repositories
 						|| i.RiskScore == null
 						|| i.ClassificationVersion == null
 						|| i.ClassificationVersion == "rule-based-v1"
-						|| i.ClassificationVersion == "azure-openai-v1"))
+						|| i.ClassificationVersion == "rule-based-v2"
+						|| i.ClassificationVersion == "rule-based-v3"
+						|| i.ClassificationVersion == "azure-openai-v1"
+						|| i.ClassificationVersion == "rule-based-fallback (inline-timeout)"))
 				.OrderByDescending(i => i.IncidentId)
 				.Take(limit)
 				.ToListAsync();
