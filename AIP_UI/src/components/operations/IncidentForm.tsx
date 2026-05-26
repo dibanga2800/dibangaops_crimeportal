@@ -249,7 +249,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
   const [repeatOffenderCount, setRepeatOffenderCount] = useState(0)
   const [isSearchingOffender, setIsSearchingOffender] = useState(false)
   const [offenderHistory, setOffenderHistory] = useState<{
-    matches: (RepeatOffenderMatch & { similarity?: number; similarityLabel?: 'High' | 'Medium' | 'Low' });
+    matches: (RepeatOffenderMatch & { similarity?: number; similarityLabel?: 'High' | 'Medium' | 'Low' })[];
     totalCount: number;
   } | null>(null)
   const [offenderSearchError, setOffenderSearchError] = useState<string | null>(null)
@@ -413,9 +413,8 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
         }
 
         return {
-          offenderName: (c as { offenderName?: string }).offenderName,
-          incidentCount: (c as { incidentCount?: number }).incidentCount,
-          recentIncidents: (c as { recentIncidents?: unknown[] }).recentIncidents ?? [],
+          ...c,
+          recentIncidents: c.recentIncidents ?? [],
           similarity,
           similarityLabel,
         }
@@ -689,9 +688,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
         }
         if (sitesResponse.success) {
           let nextSites = sitesResponse.data;
-          nextSites = filterByAssignedSiteIds(nextSites, user, (site) =>
-            site.siteID ?? site.siteId ?? site.id ?? null
-          )
+          nextSites = filterByAssignedSiteIds(nextSites, user, (site) => site.siteID ?? null)
 
           setSites(nextSites)
           console.log('✅ [IncidentForm] Loaded sites for customer:', nextSites.length)
@@ -1498,102 +1495,42 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                   <FormField
                     control={form.control}
                     name="dateOfIncident"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Date of Incident *</FormLabel>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button
-                                variant={"outline"}
-                                className={cn(
-                                  "w-full h-12 px-4 text-left font-medium bg-white border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 rounded-lg shadow-sm",
-                                  !field.value && "text-gray-400"
-                                )}
-                              >
-                                <div className="flex items-center justify-between w-full">
-                                  <span className="flex items-center gap-3">
-                                    <CalendarIcon className="h-5 w-5 text-blue-500" />
-                                    {field.value ? (
-                                      <span className="text-gray-900 font-medium">
-                                        {format(field.value, "EEE, MMM d, yyyy")}
-                                      </span>
-                                    ) : (
-                                      <span className="text-gray-400">Select incident date</span>
-                                    )}
-                                  </span>
-                                </div>
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0 border-2 border-gray-200 shadow-lg rounded-lg" align="start">
-                            <div className="p-4 bg-white rounded-lg">
-                              <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center gap-2">
-                                  <select
-                                    className="px-3 py-2 border border-gray-300 rounded-md text-sm font-medium bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    value={field.value ? field.value.getMonth() : new Date().getMonth()}
-                                    onChange={(e) => {
-                                      const newDate = new Date(field.value || new Date())
-                                      newDate.setMonth(parseInt(e.target.value))
-                                      field.onChange(newDate)
-                                    }}
-                                  >
-                                    {Array.from({ length: 12 }, (_, i) => (
-                                      <option key={i} value={i}>
-                                        {new Date(2000, i).toLocaleDateString('en-US', { month: 'long' })}
-                                      </option>
-                                    ))}
-                                  </select>
-                                  <select
-                                    className="px-3 py-2 border border-gray-300 rounded-md text-sm font-medium bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    value={field.value ? field.value.getFullYear() : new Date().getFullYear()}
-                                    onChange={(e) => {
-                                      const newDate = new Date(field.value || new Date())
-                                      newDate.setFullYear(parseInt(e.target.value))
-                                      field.onChange(newDate)
-                                    }}
-                                  >
-                                    {Array.from({ length: 100 }, (_, i) => {
-                                      const year = new Date().getFullYear() - i
-                                      return (
-                                        <option key={year} value={year}>
-                                          {year}
-                                        </option>
-                                      )
-                                    })}
-                                  </select>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => field.onChange(new Date())}
-                                  className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors"
-                                >
-                                  Today
-                                </button>
-                              </div>
-                              <Calendar
-                                mode="single"
-                                selected={field.value}
-                                onSelect={field.onChange}
-                                month={field.value || new Date()}
-                                onMonthChange={(month) => {
-                                  const newDate = new Date(field.value || new Date())
-                                  newDate.setMonth(month.getMonth())
-                                  newDate.setFullYear(month.getFullYear())
-                                  field.onChange(newDate)
-                                }}
-                                disabled={(date) =>
-                                  date > new Date() || date < new Date('1920-01-01')
-                                }
-                                className="rounded-lg"
-                              />
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                    render={({ field }) => {
+                      const todayStr = format(new Date(), 'yyyy-MM-dd')
+                      const inputValue = field.value ? format(field.value, 'yyyy-MM-dd') : ''
+                      const handleDateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+                        const raw = event.target.value
+                        if (!raw) {
+                          field.onChange(undefined)
+                          return
+                        }
+                        const [year, month, day] = raw.split('-').map(Number)
+                        if (!year || !month || !day) {
+                          field.onChange(undefined)
+                          return
+                        }
+                        field.onChange(new Date(year, month - 1, day))
+                      }
+                      return (
+                        <FormItem>
+                          <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Date of Incident *</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="date"
+                              max={todayStr}
+                              value={inputValue}
+                              onChange={handleDateChange}
+                              onBlur={field.onBlur}
+                              name={field.name}
+                              ref={field.ref}
+                              className="h-12 px-4 bg-white border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 rounded-lg shadow-sm"
+                              aria-label="Date of incident"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )
+                    }}
                   />
 
                   <FormField

@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.ComponentModel.DataAnnotations;
+using System.Diagnostics;
 using System.Security.Claims;
 
 namespace AIPBackend.Controllers
@@ -18,6 +19,11 @@ namespace AIPBackend.Controllers
     [Route("api/[controller]")]
     public class AuthController : ControllerBase
     {
+        private const string PasswordResetRequestMessage =
+            "If the email address exists in our system, you will receive a password reset link.";
+
+        private const string PasswordResetInvalidMessage = "Invalid reset token or email.";
+
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly IJwtService _jwtService;
@@ -26,6 +32,7 @@ namespace AIPBackend.Controllers
         private readonly ApplicationDbContext _context;
         private readonly IEmailService _emailService;
         private readonly ILoginProtectionService _loginProtectionService;
+        private readonly IPendingTwoFactorCodeHasher _pendingTwoFactorCodeHasher;
         private readonly IAuthCookieService _authCookieService;
 
         public AuthController(
@@ -37,6 +44,7 @@ namespace AIPBackend.Controllers
             ApplicationDbContext context,
             IEmailService emailService,
             ILoginProtectionService loginProtectionService,
+            IPendingTwoFactorCodeHasher pendingTwoFactorCodeHasher,
             IAuthCookieService authCookieService)
         {
             _userManager = userManager;
@@ -47,6 +55,7 @@ namespace AIPBackend.Controllers
             _context = context;
             _emailService = emailService;
             _loginProtectionService = loginProtectionService;
+            _pendingTwoFactorCodeHasher = pendingTwoFactorCodeHasher;
             _authCookieService = authCookieService;
         }
 
@@ -76,15 +85,31 @@ namespace AIPBackend.Controllers
                     });
                 }
 
+                var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+                var clientIp = GetClientIpAddress();
+
                 var user = await _userManager.FindByEmailAsync(request.Email);
                 if (user == null)
                 {
                     _logger.LogWarning("2FA completion failed: user not found for email {Email}", request.Email);
+                    await _loginProtectionService.RegisterLoginFailureAsync(null, normalizedEmail, clientIp);
+                    await Task.Delay(250);
                     return Unauthorized(new ApiResponseDto<LoginResponseDto>
                     {
                         Success = false,
                         Message = "Invalid code or email"
                     });
+                }
+
+                var protectionResult = await _loginProtectionService.CheckPreLoginAsync(
+                    user,
+                    normalizedEmail,
+                    clientIp);
+
+                var protectionBlock = CreateLoginProtectionBlockResponse<LoginResponseDto>(protectionResult);
+                if (protectionBlock != null)
+                {
+                    return protectionBlock;
                 }
 
                 if (string.IsNullOrEmpty(user.PendingTwoFactorCode) || !user.PendingTwoFactorExpiryUtc.HasValue)
@@ -97,9 +122,27 @@ namespace AIPBackend.Controllers
                     });
                 }
 
-                if (DateTime.UtcNow > user.PendingTwoFactorExpiryUtc.Value || !string.Equals(user.PendingTwoFactorCode, request.Code))
+                var isExpired = DateTime.UtcNow > user.PendingTwoFactorExpiryUtc.Value;
+                var isCodeValid = !isExpired &&
+                    _pendingTwoFactorCodeHasher.Verify(request.Code, user.Id, user.PendingTwoFactorCode);
+
+                if (!isCodeValid)
                 {
                     _logger.LogWarning("2FA completion failed: invalid or expired code for user {UserId}", user.Id);
+
+                    await _loginProtectionService.RegisterLoginFailureAsync(user, normalizedEmail, clientIp);
+                    await Task.Delay(250);
+
+                    var protectionAfterFailure = await _loginProtectionService.CheckPreLoginAsync(
+                        user,
+                        normalizedEmail,
+                        clientIp);
+                    var blockAfterFailure = CreateLoginProtectionBlockResponse<LoginResponseDto>(protectionAfterFailure);
+                    if (blockAfterFailure != null)
+                    {
+                        return blockAfterFailure;
+                    }
+
                     return Unauthorized(new ApiResponseDto<LoginResponseDto>
                     {
                         Success = false,
@@ -107,7 +150,6 @@ namespace AIPBackend.Controllers
                     });
                 }
 
-                // Clear pending code
                 user.PendingTwoFactorCode = null;
                 user.PendingTwoFactorExpiryUtc = null;
 
@@ -119,6 +161,7 @@ namespace AIPBackend.Controllers
                     user.TwoFactorEnabled = true;
                 }
 
+                await _loginProtectionService.RegisterLoginSuccessAsync(user, normalizedEmail, clientIp);
                 await _userManager.UpdateAsync(user);
 
                 var accessToken = _jwtService.GenerateAccessToken(user, roles);
@@ -297,7 +340,7 @@ namespace AIPBackend.Controllers
                 if (requiresTwoFactor)
                 {
                     var code = System.Security.Cryptography.RandomNumberGenerator.GetInt32(100000, 999999).ToString("D6");
-                    user.PendingTwoFactorCode = code;
+                    user.PendingTwoFactorCode = _pendingTwoFactorCodeHasher.Hash(code, user.Id);
                     user.PendingTwoFactorExpiryUtc = DateTime.UtcNow.AddMinutes(10);
                     await _userManager.UpdateAsync(user);
 
@@ -908,6 +951,7 @@ namespace AIPBackend.Controllers
         [AllowAnonymous]
         public async Task<ActionResult<ApiResponseDto<object>>> ForgotPassword([FromBody] ForgotPasswordRequestDto request)
         {
+            var elapsed = Stopwatch.StartNew();
             try
             {
                 _logger.LogInformation("Forgot password request for email {Email}", request.Email);
@@ -927,25 +971,34 @@ namespace AIPBackend.Controllers
                     });
                 }
 
+                var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+                var clientIp = GetClientIpAddress();
                 var user = await _userManager.FindByEmailAsync(request.Email);
+
+                var protectionResult = await _loginProtectionService.CheckPreLoginAsync(
+                    user,
+                    normalizedEmail,
+                    clientIp);
+                var protectionBlock = CreateLoginProtectionBlockResponse<object>(protectionResult);
+                if (protectionBlock != null)
+                {
+                    return protectionBlock;
+                }
+
                 if (user == null)
                 {
-                    // Don't reveal that the user doesn't exist
                     _logger.LogInformation("Forgot password request for non-existent email {Email}", request.Email);
+                    await _loginProtectionService.RegisterLoginFailureAsync(null, normalizedEmail, clientIp);
                     return Ok(new ApiResponseDto<object>
                     {
                         Success = true,
-                        Message = "If the email address exists in our system, you will receive a password reset link."
+                        Message = PasswordResetRequestMessage
                     });
                 }
 
-                // Generate password reset token
                 var token = await _userManager.GeneratePasswordResetTokenAsync(user);
-                
-                // Create reset link
                 var resetLink = $"{Request.Scheme}://{Request.Host}/reset-password?token={Uri.EscapeDataString(token)}&email={Uri.EscapeDataString(request.Email)}";
-                
-                // Send password reset email
+
                 try
                 {
                     await _emailService.SendPasswordResetEmailAsync(request.Email, resetLink);
@@ -954,13 +1007,12 @@ namespace AIPBackend.Controllers
                 catch (Exception emailEx)
                 {
                     _logger.LogWarning(emailEx, "Failed to send password reset email to {Email}", request.Email);
-                    // Don't fail the request if email fails
                 }
 
                 return Ok(new ApiResponseDto<object>
                 {
                     Success = true,
-                    Message = "If the email address exists in our system, you will receive a password reset link."
+                    Message = PasswordResetRequestMessage
                 });
             }
             catch (Exception ex)
@@ -972,6 +1024,10 @@ namespace AIPBackend.Controllers
                     Message = "An error occurred during password reset request. Please try again."
                 });
             }
+            finally
+            {
+                await EnsureMinimumPasswordResetResponseDelayAsync(elapsed);
+            }
         }
 
         /// <summary>
@@ -981,6 +1037,7 @@ namespace AIPBackend.Controllers
         [AllowAnonymous]
         public async Task<ActionResult<ApiResponseDto<object>>> ResetPassword([FromBody] ResetPasswordRequestDto request)
         {
+            var elapsed = Stopwatch.StartNew();
             try
             {
                 _logger.LogInformation("Reset password request for email {Email}", request.Email);
@@ -1000,28 +1057,48 @@ namespace AIPBackend.Controllers
                     });
                 }
 
+                var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+                var clientIp = GetClientIpAddress();
                 var user = await _userManager.FindByEmailAsync(request.Email);
+
+                var protectionResult = await _loginProtectionService.CheckPreLoginAsync(
+                    user,
+                    normalizedEmail,
+                    clientIp);
+                var protectionBlock = CreateLoginProtectionBlockResponse<object>(protectionResult);
+                if (protectionBlock != null)
+                {
+                    return protectionBlock;
+                }
+
                 if (user == null)
                 {
+                    await _loginProtectionService.RegisterLoginFailureAsync(null, normalizedEmail, clientIp);
                     return BadRequest(new ApiResponseDto<object>
                     {
                         Success = false,
-                        Message = "Invalid reset token or email"
+                        Message = PasswordResetInvalidMessage
                     });
                 }
 
                 var result = await _userManager.ResetPasswordAsync(user, request.Token, request.NewPassword);
                 if (!result.Succeeded)
                 {
-                    var errors = result.Errors.Select(e => e.Description).ToList();
+                    _logger.LogWarning(
+                        "Password reset failed for user {UserId}: {ErrorCount} validation errors",
+                        user.Id,
+                        result.Errors.Count());
+
+                    await _loginProtectionService.RegisterLoginFailureAsync(user, normalizedEmail, clientIp);
+
                     return BadRequest(new ApiResponseDto<object>
                     {
                         Success = false,
-                        Message = "Failed to reset password",
-                        Errors = errors
+                        Message = PasswordResetInvalidMessage
                     });
                 }
 
+                await _loginProtectionService.RegisterLoginSuccessAsync(user, normalizedEmail, clientIp);
                 _logger.LogInformation("Password reset successfully for user {UserId}", user.Id);
 
                 return Ok(new ApiResponseDto<object>
@@ -1038,6 +1115,10 @@ namespace AIPBackend.Controllers
                     Success = false,
                     Message = "An error occurred during password reset. Please try again."
                 });
+            }
+            finally
+            {
+                await EnsureMinimumPasswordResetResponseDelayAsync(elapsed);
             }
         }
 
@@ -1258,6 +1339,50 @@ namespace AIPBackend.Controllers
                 UpdatedAt = user.UpdatedAt,
                 UpdatedBy = user.UpdatedBy ?? ""
             };
+        }
+
+        private string GetClientIpAddress() =>
+            HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
+
+        private ActionResult<ApiResponseDto<T>>? CreateLoginProtectionBlockResponse<T>(
+            LoginProtectionResult protectionResult)
+        {
+            if (!protectionResult.IsBlocked)
+            {
+                return null;
+            }
+
+            if (protectionResult.IsUserLockedOut)
+            {
+                return Unauthorized(new ApiResponseDto<T>
+                {
+                    Success = false,
+                    Message = protectionResult.LockoutUntilUtc.HasValue
+                        ? $"Account is temporarily locked. Please try again after {protectionResult.LockoutUntilUtc.Value:yyyy-MM-dd HH:mm:ss} UTC"
+                        : "Too many failed attempts. Please try again later."
+                });
+            }
+
+            if (protectionResult.IsIpThrottled)
+            {
+                return StatusCode(StatusCodes.Status429TooManyRequests, new ApiResponseDto<T>
+                {
+                    Success = false,
+                    Message = "Too many login attempts from your network. Please wait a few minutes and try again."
+                });
+            }
+
+            return null;
+        }
+
+        private static async Task EnsureMinimumPasswordResetResponseDelayAsync(Stopwatch elapsed)
+        {
+            const int minimumMilliseconds = 350;
+            var remaining = minimumMilliseconds - (int)elapsed.ElapsedMilliseconds;
+            if (remaining > 0)
+            {
+                await Task.Delay(remaining);
+            }
         }
 
         private void FinalizeAuthenticatedLoginResponse(LoginResponseDto response)

@@ -9,6 +9,7 @@ namespace AIPBackend.Models.DTOs
 		public string? Description { get; set; }
 		public string? IncidentDetails { get; set; }
 		public decimal? TotalValueRecovered { get; set; }
+		public decimal? TotalLostValue { get; set; }
 		public bool PoliceInvolvement { get; set; }
 		public string? OffenderName { get; set; }
 		public List<string>? IncidentInvolved { get; set; }

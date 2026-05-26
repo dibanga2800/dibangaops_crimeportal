@@ -1,5 +1,6 @@
 #nullable enable
 
+using System.Text.RegularExpressions;
 using AIPBackend.Models.DTOs;
 using Microsoft.Extensions.Logging;
 
@@ -23,18 +24,43 @@ namespace AIPBackend.Services
 			["Anti-Social Behaviour"] = new[] { "drunk", "disorderly", "abuse", "verbal", "harassment", "nuisance" }
 		};
 
-		private static readonly Dictionary<string, double> TypeBaseRisk = new(StringComparer.OrdinalIgnoreCase)
+		/// <summary>
+		/// Word-boundary matched keywords that signal a violent component.
+		/// Boundaries prevent false positives like "attackable" or "knifeless".
+		/// </summary>
+		private static readonly Regex ViolentRegex = new(
+			@"\b(weapon|knife|knives|assault|attack(ed|ing)?|blood(ied)?|injured|stabbed)\b",
+			RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+		/// <summary>
+		/// Substring fragments used to derive a base risk for the incident type.
+		/// Frontend types come from a runtime LookupTable (e.g. "Shoplifting", "Arrest - Saved?",
+		/// "Anti-social behaviour"), so we match on normalised substrings rather than an exact enum.
+		/// First match wins; ordered most-severe first.
+		/// </summary>
+		private static readonly (string Fragment, double Baseline)[] TypeBaselines = new[]
 		{
-			["THEFT"] = 0.3,
-			["THEFT_PREVENTION"] = 0.2,
-			["ARREST"] = 0.5,
-			["DETER"] = 0.1,
-			["ASSAULT"] = 0.7,
-			["FRAUD"] = 0.5,
-			["ANTI_SOCIAL"] = 0.3,
-			["CRIMINAL_DAMAGE"] = 0.4,
-			["TRESPASS"] = 0.2,
-			["OTHER"] = 0.2
+			("assault", 0.7),
+			("attack", 0.7),
+			("violent", 0.7),
+			("arrest", 0.5),
+			("fraud", 0.5),
+			("counterfeit", 0.5),
+			("criminal damage", 0.4),
+			("vandal", 0.4),
+			// "prevention" and "deter" must precede "theft"/"shoplift" so that compound
+			// types like "Theft Prevention" or "Deterred theft" - which describe a
+			// successful intervention - score low rather than inheriting a generic theft
+			// baseline.
+			("prevention", 0.1),
+			("deter", 0.1),
+			("theft", 0.3),
+			("shoplift", 0.3),
+			("steal", 0.3),
+			("anti-social", 0.3),
+			("antisocial", 0.3),
+			("disorder", 0.3),
+			("trespass", 0.2)
 		};
 
 		public RuleBasedIncidentClassifier(ILogger<RuleBasedIncidentClassifier> logger)
@@ -65,7 +91,7 @@ namespace AIPBackend.Services
 				Confidence = 0.75,
 				SuggestedActions = actions,
 				Tags = tags,
-				ClassifierVersion = "rule-based-v1"
+				ClassifierVersion = "rule-based-v2"
 			};
 
 			_logger.LogInformation(
@@ -96,33 +122,70 @@ namespace AIPBackend.Services
 			};
 		}
 
-		private static double CalculateRiskScore(IncidentClassificationRequestDto request, string text)
+		/// <summary>
+		/// Returns the base risk for a given (free-form) incident type by case-insensitive
+		/// substring match against <see cref="TypeBaselines"/>. Defaults to 0.2 if no match.
+		/// Exposed as internal-static for unit testing.
+		/// </summary>
+		internal static double DetermineBaseRisk(string? incidentType)
 		{
-			var score = TypeBaseRisk.GetValueOrDefault(request.IncidentType, 0.2);
-
-			if (request.TotalValueRecovered.HasValue)
+			if (string.IsNullOrWhiteSpace(incidentType))
 			{
-				score += request.TotalValueRecovered.Value switch
-				{
-					>= 1000m => 0.3,
-					>= 500m => 0.2,
-					>= 100m => 0.1,
-					_ => 0
-				};
+				return 0.2;
 			}
 
+			var normalised = incidentType.Trim().ToLowerInvariant();
+			foreach (var (fragment, baseline) in TypeBaselines)
+			{
+				if (normalised.Contains(fragment, StringComparison.Ordinal))
+				{
+					return baseline;
+				}
+			}
+
+			return 0.2;
+		}
+
+		/// <summary>
+		/// Computes a 0..1 risk score from the classification request.
+		/// Inputs: incident type baseline, value at risk (lost), police involvement,
+		/// stolen item count tiers, and word-boundary-matched violent language in
+		/// the combined description/details text.
+		/// </summary>
+		internal static double CalculateRiskScore(IncidentClassificationRequestDto request, string text)
+		{
+			var score = DetermineBaseRisk(request.IncidentType);
+
+			// Value at risk. Prefer TotalLostValue (the loss that actually represents risk);
+			// fall back to TotalValueRecovered only as a coarse proxy when lost is null
+			// (e.g. older incidents predating the field). Recovered value is NOT a risk
+			// driver on its own; the fallback is intentionally conservative.
+			var valueAtRisk = request.TotalLostValue ?? request.TotalValueRecovered ?? 0m;
+			score += valueAtRisk switch
+			{
+				>= 1000m => 0.3,
+				>= 500m => 0.2,
+				>= 100m => 0.1,
+				_ => 0
+			};
+
 			if (request.PoliceInvolvement)
+			{
 				score += 0.15;
+			}
 
-			if (!string.IsNullOrWhiteSpace(request.OffenderName))
-				score += 0.05;
+			score += request.StolenItemCount switch
+			{
+				> 20 => 0.15,
+				> 10 => 0.1,
+				> 5 => 0.05,
+				_ => 0
+			};
 
-			if (request.StolenItemCount > 5)
-				score += 0.1;
-
-			var violentKeywords = new[] { "weapon", "knife", "assault", "attack", "blood", "injured" };
-			if (violentKeywords.Any(kw => text.Contains(kw, StringComparison.OrdinalIgnoreCase)))
+			if (ViolentRegex.IsMatch(text))
+			{
 				score += 0.2;
+			}
 
 			return Math.Min(score, 1.0);
 		}

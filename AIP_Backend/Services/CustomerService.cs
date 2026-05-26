@@ -325,16 +325,6 @@ namespace AIPBackend.Services
                 blockingReasons.Add($"{customerRegions} region record{(customerRegions == 1 ? string.Empty : "s")}");
             }
 
-            // These modules are no longer used in the current app flow, so clean their rows up
-            // during customer deletion instead of letting old foreign keys block admin cleanup.
-            var legacyDailyActivityReports = await _context.DailyActivityReports
-                .Where(report => report.CustomerId == id)
-                .ToListAsync();
-            if (legacyDailyActivityReports.Count > 0)
-            {
-                _context.DailyActivityReports.RemoveRange(legacyDailyActivityReports);
-            }
-
             var legacyRiskScores = await _context.StoreRiskScores
                 .Where(score => score.CustomerId == id)
                 .ToListAsync();

@@ -110,8 +110,8 @@ namespace AIPBackend.Models
 
         public bool LoginAlertsEnabled { get; set; } = true;
 
-        // Email-based two-factor authentication (per-login verification code)
-        [MaxLength(12)]
+        // Email-based two-factor authentication (HMAC hash of per-login verification code)
+        [MaxLength(128)]
         public string? PendingTwoFactorCode { get; set; }
 
         public DateTime? PendingTwoFactorExpiryUtc { get; set; }

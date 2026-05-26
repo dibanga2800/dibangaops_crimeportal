@@ -6,6 +6,7 @@ using AIPBackend.Models;
 using AIPBackend.Models.DTOs;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using AIPBackend.Services.Security;
 using Microsoft.Extensions.Options;
 
 namespace AIPBackend.Services
@@ -26,19 +27,22 @@ namespace AIPBackend.Services
 		private readonly InsightFaceOptions _options;
 		private readonly ILogger<InsightFaceOffenderRecognitionService> _logger;
 		private readonly IUserContextService _userContext;
+		private readonly IImageReferenceContentResolver _imageReferenceContentResolver;
 
 		public InsightFaceOffenderRecognitionService(
 			ApplicationDbContext db,
 			IInsightFaceClient client,
 			IOptions<InsightFaceOptions> options,
 			ILogger<InsightFaceOffenderRecognitionService> logger,
-			IUserContextService userContext)
+			IUserContextService userContext,
+			IImageReferenceContentResolver imageReferenceContentResolver)
 		{
 			_db = db;
 			_client = client;
 			_options = options.Value;
 			_logger = logger;
 			_userContext = userContext;
+			_imageReferenceContentResolver = imageReferenceContentResolver;
 		}
 
 		public async Task<OffenderMatchResultDto> DetectFaceOnlyAsync(
@@ -259,7 +263,7 @@ namespace AIPBackend.Services
 					continue;
 				}
 
-				var imageBytes = await ResolveImageBytesAsync(incident.VerificationEvidenceImage, cancellationToken);
+				var imageBytes = await _imageReferenceContentResolver.ResolveAsync(incident.VerificationEvidenceImage, cancellationToken);
 				if (imageBytes == null || imageBytes.Length == 0)
 				{
 					result.Errors.Add($"Incident {incidentId}: could not decode verification image");
@@ -311,25 +315,7 @@ namespace AIPBackend.Services
 		{
 			if (imageReference == null) throw new ArgumentNullException(nameof(imageReference));
 
-			byte[]? imageBytes = null;
-			if (!string.IsNullOrWhiteSpace(imageReference.Url))
-			{
-				imageBytes = TryDecodeBase64DataUrl(imageReference.Url);
-				if (imageBytes == null && imageReference.Url.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-				{
-					try
-					{
-						using var http = new HttpClient();
-						var resp = await http.GetAsync(imageReference.Url, cancellationToken);
-						if (resp.IsSuccessStatusCode)
-							imageBytes = await resp.Content.ReadAsByteArrayAsync(cancellationToken);
-					}
-					catch (Exception ex)
-					{
-						_logger.LogWarning(ex, "InsightFace: could not fetch image from URL.");
-					}
-				}
-			}
+			var imageBytes = await _imageReferenceContentResolver.ResolveAsync(imageReference.Url, cancellationToken);
 
 			if (imageBytes == null || imageBytes.Length == 0)
 				return new OffenderMatchResultDto { FaceDetected = false, Candidates = new List<OffenderMatchCandidateDto>(), ClassifierVersion = "cv-not-configured" };
@@ -370,47 +356,6 @@ namespace AIPBackend.Services
 			for (var i = 0; i < a.Length; i++)
 				dot += a[i] * b[i];
 			return Math.Clamp(dot, -1, 1);
-		}
-
-		private static byte[]? TryDecodeBase64DataUrl(string url)
-		{
-			if (string.IsNullOrWhiteSpace(url) || !url.StartsWith("data:", StringComparison.OrdinalIgnoreCase)) return null;
-			var comma = url.IndexOf(',');
-			if (comma < 0) return null;
-			try { return Convert.FromBase64String(url[(comma + 1)..]); }
-			catch { return null; }
-		}
-
-		private async Task<byte[]?> ResolveImageBytesAsync(string? imageReference, CancellationToken cancellationToken)
-		{
-			var inlineBytes = TryDecodeBase64DataUrl(imageReference ?? string.Empty);
-			if (inlineBytes != null && inlineBytes.Length > 0)
-			{
-				return inlineBytes;
-			}
-
-			if (string.IsNullOrWhiteSpace(imageReference) ||
-				!Uri.TryCreate(imageReference, UriKind.Absolute, out var uri) ||
-				(uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
-			{
-				return null;
-			}
-
-			try
-			{
-				using var http = new HttpClient();
-				var response = await http.GetAsync(uri, cancellationToken);
-				if (!response.IsSuccessStatusCode)
-				{
-					return null;
-				}
-				return await response.Content.ReadAsByteArrayAsync(cancellationToken);
-			}
-			catch (Exception ex)
-			{
-				_logger.LogWarning(ex, "InsightFace: could not fetch verification image from URL.");
-				return null;
-			}
 		}
 
 		private async Task<List<OffenderMatchCandidateDto>> FindCandidatesByHeuristicsAsync(FaceEmbedding sourceEmbedding, int maxResults, CancellationToken cancellationToken)

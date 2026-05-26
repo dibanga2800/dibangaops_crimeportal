@@ -158,12 +158,12 @@ export const sessionStore = {
 			if (currentUser) {
 				return currentUser
 			}
-			const userStr = localStorage.getItem(USER_KEY)
+			const userStr = sessionStorage.getItem(USER_KEY)
 			if (!userStr) return null
 			const parsed = JSON.parse(userStr)
 			if (!parsed) return null
 			const normalized = normalizeUser(parsed)
-			const profilePic = localStorage.getItem(PROFILE_PIC_KEY)
+			const profilePic = sessionStorage.getItem(PROFILE_PIC_KEY)
 			normalized.profilePicture = profilePic ?? undefined
 			currentUser = normalized
 			return normalized
@@ -176,13 +176,13 @@ export const sessionStore = {
 	setUser: (user: User | null) => {
 		const normalized = user ? normalizeUser(user) : null
 		if (normalized) {
-			const profilePicFromLocalStorage = localStorage.getItem(PROFILE_PIC_KEY)
+			const profilePicFromLocalStorage = sessionStorage.getItem(PROFILE_PIC_KEY)
 
 			if (profilePicFromLocalStorage) {
 				normalized.profilePicture = profilePicFromLocalStorage
 			} else if (normalized.profilePicture) {
 				try {
-					localStorage.setItem(PROFILE_PIC_KEY, normalized.profilePicture as unknown as string)
+					sessionStorage.setItem(PROFILE_PIC_KEY, normalized.profilePicture as unknown as string)
 				} catch (error) {
 					console.error('Error caching profile picture in session storage:', error)
 				}
@@ -206,8 +206,8 @@ export const sessionStore = {
 		currentUser = null
 		listeners.forEach(listener => listener(null))
 		try {
-			localStorage.removeItem(USER_KEY)
-			localStorage.removeItem(PROFILE_PIC_KEY)
+			sessionStorage.removeItem(USER_KEY)
+			sessionStorage.removeItem(PROFILE_PIC_KEY)
 		} catch (error) {
 			console.error('Error clearing user from session storage:', error)
 		}
@@ -224,7 +224,7 @@ export const sessionStore = {
 
 	getProfilePicture: (): string | null => {
 		try {
-			return localStorage.getItem(PROFILE_PIC_KEY)
+			return sessionStorage.getItem(PROFILE_PIC_KEY)
 		} catch (error) {
 			console.error('Error getting profile picture:', error)
 			return null
@@ -234,9 +234,9 @@ export const sessionStore = {
 	setProfilePicture: (dataUrl: string | null): void => {
 		try {
 			if (dataUrl) {
-				localStorage.setItem(PROFILE_PIC_KEY, dataUrl)
+				sessionStorage.setItem(PROFILE_PIC_KEY, dataUrl)
 			} else {
-				localStorage.removeItem(PROFILE_PIC_KEY)
+				sessionStorage.removeItem(PROFILE_PIC_KEY)
 			}
 			if (currentUser) {
 				currentUser = { ...currentUser, profilePicture: dataUrl ?? undefined }

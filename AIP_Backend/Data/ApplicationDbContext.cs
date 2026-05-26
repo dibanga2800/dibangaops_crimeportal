@@ -31,11 +31,6 @@ namespace AIPBackend.Data
         public DbSet<StolenItem> StolenItems { get; set; }
         public DbSet<Product> Products { get; set; }
         public DbSet<CustomerPageAccess> CustomerPageAccesses { get; set; }
-        public DbSet<DailyActivityReport> DailyActivityReports { get; set; }
-        public DbSet<DailyActivityReportActivity> DailyActivityReportActivities { get; set; }
-        public DbSet<DailyActivityReportIncident> DailyActivityReportIncidents { get; set; }
-        public DbSet<DailyActivityReportSecurityCheck> DailyActivityReportSecurityChecks { get; set; }
-        public DbSet<DailyActivityReportVisitorEntry> DailyActivityReportVisitorEntries { get; set; }
         public DbSet<AlertRule> AlertRules { get; set; }
         public DbSet<AlertInstance> AlertInstances { get; set; }
         public DbSet<EvidenceItem> EvidenceItems { get; set; }
@@ -339,76 +334,6 @@ namespace AIPBackend.Data
             modelBuilder.Entity<Product>()
                 .HasIndex(p => p.EAN)
                 .IsUnique();
-
-            // Configure DailyActivityReport relationships
-            modelBuilder.Entity<DailyActivityReport>()
-                .HasOne(dar => dar.Customer)
-                .WithMany()
-                .HasForeignKey(dar => dar.CustomerId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            modelBuilder.Entity<DailyActivityReport>()
-                .HasOne<ApplicationUser>()
-                .WithMany()
-                .HasForeignKey(dar => dar.CreatedBy)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            modelBuilder.Entity<DailyActivityReport>()
-                .HasOne<ApplicationUser>()
-                .WithMany()
-                .HasForeignKey(dar => dar.UpdatedBy)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            // Configure DailyActivityReport one-to-many relationships
-            modelBuilder.Entity<DailyActivityReport>()
-                .HasMany(dar => dar.Activities)
-                .WithOne(a => a.DailyActivityReport)
-                .HasForeignKey(a => a.DailyActivityReportId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            modelBuilder.Entity<DailyActivityReport>()
-                .HasMany(dar => dar.Incidents)
-                .WithOne(i => i.DailyActivityReport)
-                .HasForeignKey(i => i.DailyActivityReportId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            modelBuilder.Entity<DailyActivityReport>()
-                .HasMany(dar => dar.SecurityChecks)
-                .WithOne(sc => sc.DailyActivityReport)
-                .HasForeignKey(sc => sc.DailyActivityReportId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            modelBuilder.Entity<DailyActivityReport>()
-                .HasMany(dar => dar.VisitorLog)
-                .WithOne(ve => ve.DailyActivityReport)
-                .HasForeignKey(ve => ve.DailyActivityReportId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            // Configure indexes for better performance
-            modelBuilder.Entity<DailyActivityReport>()
-                .HasIndex(dar => dar.CustomerId);
-
-            modelBuilder.Entity<DailyActivityReport>()
-                .HasIndex(dar => dar.SiteId);
-
-            modelBuilder.Entity<DailyActivityReport>()
-                .HasIndex(dar => dar.ReportDate);
-
-            modelBuilder.Entity<DailyActivityReport>()
-                .HasIndex(dar => dar.OfficerName);
-
-            // Configure indexes for child tables
-            modelBuilder.Entity<DailyActivityReportActivity>()
-                .HasIndex(a => a.DailyActivityReportId);
-
-            modelBuilder.Entity<DailyActivityReportIncident>()
-                .HasIndex(i => i.DailyActivityReportId);
-
-            modelBuilder.Entity<DailyActivityReportSecurityCheck>()
-                .HasIndex(sc => sc.DailyActivityReportId);
-
-            modelBuilder.Entity<DailyActivityReportVisitorEntry>()
-                .HasIndex(ve => ve.DailyActivityReportId);
 
             // Configure Employee relationships
             modelBuilder.Entity<Employee>()

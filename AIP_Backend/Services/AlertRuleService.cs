@@ -406,13 +406,22 @@ namespace AIPBackend.Services
 			};
 			sb.AppendLine($"<tr><td><strong>Priority</strong></td><td><span class=\"{priorityClass}\">{incident.Priority?.ToUpper() ?? "N/A"}</span></td></tr>");
 			sb.AppendLine($"<tr><td><strong>Description</strong></td><td>{incident.Description ?? "N/A"}</td></tr>");
-			
-			// Value Recovered (if applicable)
-			if (incident.TotalValueRecovered.HasValue && incident.TotalValueRecovered > 0)
+
+			// Financial impact - use the same canonical helpers as the dashboard so
+			// the email matches what staff see in the incident report UI.
+			var recoveredValue = IncidentFinancials.GetRecoveredValue(incident);
+			var lostValue = IncidentFinancials.GetLostValue(incident);
+
+			if (recoveredValue > 0)
 			{
-				sb.AppendLine($"<tr><td><strong>Value Recovered</strong></td><td>£{incident.TotalValueRecovered:N2}</td></tr>");
+				sb.AppendLine($"<tr><td><strong>Value Recovered</strong></td><td style=\"color:#137333;\">£{recoveredValue:N2}</td></tr>");
 			}
-			
+
+			if (lostValue > 0)
+			{
+				sb.AppendLine($"<tr><td><strong>Value Lost</strong></td><td style=\"color:#b3261e;\">£{lostValue:N2}</td></tr>");
+			}
+
 			sb.AppendLine("</table>");
 			
 			// Rule Information

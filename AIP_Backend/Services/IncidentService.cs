@@ -5,6 +5,7 @@ using AIPBackend.Models.DTOs;
 using AIPBackend.Repositories;
 using AIPBackend.Repositories.Models;
 using AIPBackend.Exceptions;
+using AIPBackend.Services.Security;
 using Microsoft.Extensions.Logging;
 using System.Globalization;
 using System.Text.Json;
@@ -25,6 +26,7 @@ namespace AIPBackend.Services
 		private readonly IServiceProvider _serviceProvider;
 		private readonly IIncidentClassifier _classifier;
 		private readonly IIncidentImageStorageService _incidentImageStorageService;
+		private readonly IImageReferenceContentResolver _imageReferenceContentResolver;
 
 		public IncidentService(
 			IIncidentRepository repository,
@@ -33,7 +35,8 @@ namespace AIPBackend.Services
 			IUserContextService userContext,
 			IServiceProvider serviceProvider,
 			IIncidentClassifier classifier,
-			IIncidentImageStorageService incidentImageStorageService)
+			IIncidentImageStorageService incidentImageStorageService,
+			IImageReferenceContentResolver imageReferenceContentResolver)
 		{
 			_repository = repository;
 			_siteRepository = siteRepository;
@@ -42,6 +45,7 @@ namespace AIPBackend.Services
 			_serviceProvider = serviceProvider;
 			_classifier = classifier;
 			_incidentImageStorageService = incidentImageStorageService;
+			_imageReferenceContentResolver = imageReferenceContentResolver;
 		}
 
 		public async Task<IncidentResponseDto> GetByIdAsync(string id)
@@ -184,49 +188,13 @@ namespace AIPBackend.Services
 
 		_logger.LogInformation("Incident created with ID {IncidentId} by user {UserId}", created.IncidentId, context.UserId);
 
-		// Auto-classify and set priority if not already provided
+		EnqueuePostSaveClassification(created.IncidentId);
+
 		_ = Task.Run(async () =>
 		{
 			try
 			{
 				using var scope = _serviceProvider.CreateScope();
-
-				var classifier = scope.ServiceProvider.GetService<IIncidentClassifier>();
-				if (classifier != null)
-				{
-					var classificationRequest = new Models.DTOs.IncidentClassificationRequestDto
-					{
-						IncidentId = created.IncidentId,
-						IncidentType = created.IncidentType,
-						Description = created.Description,
-						IncidentDetails = created.IncidentDetails,
-						TotalValueRecovered = created.TotalValueRecovered,
-						PoliceInvolvement = created.PoliceInvolvement,
-						OffenderName = created.OffenderName,
-						StolenItemCount = created.StolenItems?.Count ?? 0
-					};
-					var classification = await classifier.ClassifyAsync(classificationRequest);
-
-					var repo = scope.ServiceProvider.GetRequiredService<IIncidentRepository>();
-					var toUpdate = await repo.GetByIdAsync(created.IncidentId);
-					if (toUpdate != null)
-					{
-						// Persist AI-derived fields for downstream analytics and dashboards.
-						toUpdate.IncidentCategory = classification.SuggestedCategory;
-						toUpdate.IncidentCategoryConfidence = classification.Confidence;
-						toUpdate.RiskLevel = classification.RiskLevel;
-						toUpdate.RiskScore = classification.RiskScore;
-						toUpdate.ClassificationVersion = classification.ClassifierVersion;
-
-						// Only override manual priority when it has not been set by the user.
-						if (string.IsNullOrWhiteSpace(toUpdate.Priority))
-						{
-							toUpdate.Priority = classification.RiskLevel;
-						}
-
-						await repo.UpdateAsync(toUpdate);
-					}
-				}
 
 				var alertRuleService = scope.ServiceProvider.GetService<IAlertRuleService>();
 				if (alertRuleService != null)
@@ -237,7 +205,7 @@ namespace AIPBackend.Services
 				var offenderRecognition = scope.ServiceProvider.GetService<IOffenderRecognitionService>();
 				if (offenderRecognition != null && !string.IsNullOrWhiteSpace(created.VerificationEvidenceImage))
 				{
-					var imageBytes = storedImage.ImageBytes ?? await ResolveImageBytesAsync(created.VerificationEvidenceImage, CancellationToken.None);
+					var imageBytes = storedImage.ImageBytes ?? await _imageReferenceContentResolver.ResolveAsync(created.VerificationEvidenceImage, CancellationToken.None);
 					if (imageBytes != null && imageBytes.Length > 0)
 					{
 						await offenderRecognition.IndexVerificationEvidenceAsync(
@@ -283,7 +251,8 @@ namespace AIPBackend.Services
 			var storedImage = await _incidentImageStorageService.PersistVerificationImageAsync(dto.VerificationEvidenceImage);
 			dto.VerificationEvidenceImage = storedImage.StoredReference;
 
-			// Update entity from DTO
+			var beforeFingerprint = SnapshotForClassification(existing);
+
 			UpdateEntityFromDto(existing, dto);
 			var context = _userContext.GetCurrentContext();
 			existing.UpdatedBy = context.UserId;
@@ -295,9 +264,15 @@ namespace AIPBackend.Services
 				existing.TotalValueRecovered = existing.StolenItems.Sum(item => item.TotalAmount);
 			}
 
+		var afterFingerprint = SnapshotForClassification(existing);
 		var updated = await _repository.UpdateAsync(existing);
 
 		_logger.LogInformation("Incident updated with ID {IncidentId} by user {UserId}", updated.IncidentId, context.UserId);
+
+		if (!beforeFingerprint.Equals(afterFingerprint))
+		{
+			EnqueuePostSaveClassification(updated.IncidentId);
+		}
 
 		// Check for matching alert rules and send notifications (async fire-and-forget)
 		_ = Task.Run(async () =>
@@ -314,7 +289,7 @@ namespace AIPBackend.Services
 				var offenderRecognition = scope.ServiceProvider.GetService<IOffenderRecognitionService>();
 				if (offenderRecognition != null && !string.IsNullOrWhiteSpace(updated.VerificationEvidenceImage))
 				{
-					var imageBytes = storedImage.ImageBytes ?? await ResolveImageBytesAsync(updated.VerificationEvidenceImage, CancellationToken.None);
+					var imageBytes = storedImage.ImageBytes ?? await _imageReferenceContentResolver.ResolveAsync(updated.VerificationEvidenceImage, CancellationToken.None);
 					if (imageBytes != null && imageBytes.Length > 0)
 					{
 						await offenderRecognition.IndexVerificationEvidenceAsync(
@@ -1180,49 +1155,6 @@ namespace AIPBackend.Services
 			};
 		}
 
-		private static byte[]? TryDecodeBase64DataUrl(string? url)
-		{
-			if (string.IsNullOrWhiteSpace(url) || !url.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
-				return null;
-			var comma = url.IndexOf(',');
-			if (comma < 0) return null;
-			try
-			{
-				return Convert.FromBase64String(url[(comma + 1)..]);
-			}
-			catch
-			{
-				return null;
-			}
-		}
-
-		private async Task<byte[]?> ResolveImageBytesAsync(string? imageReference, CancellationToken cancellationToken)
-		{
-			var inlineBytes = TryDecodeBase64DataUrl(imageReference);
-			if (inlineBytes != null && inlineBytes.Length > 0)
-			{
-				return inlineBytes;
-			}
-
-			if (string.IsNullOrWhiteSpace(imageReference) ||
-				!Uri.TryCreate(imageReference, UriKind.Absolute, out var uri) ||
-				(uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
-			{
-				return null;
-			}
-
-			try
-			{
-				using var httpClient = new HttpClient();
-				return await httpClient.GetByteArrayAsync(uri, cancellationToken);
-			}
-			catch (Exception ex)
-			{
-				_logger.LogWarning(ex, "Could not fetch verification image bytes from URL.");
-				return null;
-			}
-		}
-
 		private static decimal CalculateIncidentValue(Incident incident) =>
 			IncidentFinancials.GetRecoveredValue(incident);
 
@@ -1434,6 +1366,95 @@ namespace AIPBackend.Services
 				MostTargetedStore = storeGroups?.Store,
 				TypicalTime = timeBuckets?.Bucket
 			};
+		}
+
+		#endregion
+
+		#region Classification helpers
+
+		/// <summary>
+		/// Risk-relevant fields used to decide whether re-classification is needed on update.
+		/// Uses a record so equality is structural.
+		/// </summary>
+		private sealed record ClassificationFingerprint(
+			string IncidentType,
+			string? Description,
+			string? IncidentDetails,
+			bool PoliceInvolvement,
+			decimal? TotalLostValue,
+			decimal? TotalValueRecovered,
+			int StolenItemCount,
+			bool HasOffenderName);
+
+		private static ClassificationFingerprint SnapshotForClassification(Incident incident) => new(
+			incident.IncidentType ?? string.Empty,
+			incident.Description,
+			incident.IncidentDetails,
+			incident.PoliceInvolvement,
+			incident.TotalLostValue,
+			incident.TotalValueRecovered,
+			incident.StolenItems?.Count ?? 0,
+			!string.IsNullOrWhiteSpace(incident.OffenderName));
+
+		/// <summary>
+		/// Fire-and-forget background classification. Re-fetches the incident inside a fresh DI scope,
+		/// runs the configured classifier, and persists the AI-derived fields. Safe to call from both
+		/// create and update flows.
+		/// </summary>
+		private void EnqueuePostSaveClassification(int incidentId)
+		{
+			_ = Task.Run(async () =>
+			{
+				try
+				{
+					using var scope = _serviceProvider.CreateScope();
+
+					var classifier = scope.ServiceProvider.GetService<IIncidentClassifier>();
+					if (classifier == null)
+					{
+						return;
+					}
+
+					var repo = scope.ServiceProvider.GetRequiredService<IIncidentRepository>();
+					var toUpdate = await repo.GetByIdWithItemsAsync(incidentId);
+					if (toUpdate == null)
+					{
+						return;
+					}
+
+					var request = new IncidentClassificationRequestDto
+					{
+						IncidentId = toUpdate.IncidentId,
+						IncidentType = toUpdate.IncidentType,
+						Description = toUpdate.Description,
+						IncidentDetails = toUpdate.IncidentDetails,
+						TotalValueRecovered = toUpdate.TotalValueRecovered,
+						TotalLostValue = toUpdate.TotalLostValue,
+						PoliceInvolvement = toUpdate.PoliceInvolvement,
+						OffenderName = toUpdate.OffenderName,
+						StolenItemCount = toUpdate.StolenItems?.Count ?? 0
+					};
+
+					var classification = await classifier.ClassifyAsync(request);
+
+					toUpdate.IncidentCategory = classification.SuggestedCategory;
+					toUpdate.IncidentCategoryConfidence = classification.Confidence;
+					toUpdate.RiskLevel = classification.RiskLevel;
+					toUpdate.RiskScore = classification.RiskScore;
+					toUpdate.ClassificationVersion = classification.ClassifierVersion;
+
+					if (string.IsNullOrWhiteSpace(toUpdate.Priority))
+					{
+						toUpdate.Priority = classification.RiskLevel;
+					}
+
+					await repo.UpdateAsync(toUpdate);
+				}
+				catch (Exception ex)
+				{
+					_logger.LogError(ex, "Error during post-save classification for incident {IncidentId}", incidentId);
+				}
+			});
 		}
 
 		#endregion

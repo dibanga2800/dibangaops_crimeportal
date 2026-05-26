@@ -74,12 +74,15 @@ const getStoreHourCount = (store: StoreDrilldownData, hour: number): number => {
 	return store.peakHour === hour ? store.incidents : 0
 }
 
+type DayOfWeekChartRow = DayOfWeekData & { storesPeaking: number }
+type TimeOfDayChartRow = TimeOfDayData & { storesPeaking: number }
+
 const DayOfWeekTooltip = ({ active, payload }: ChartTooltipProps) => {
 	if (!active || !payload?.length) {
 		return null
 	}
 
-	const point = payload[0]?.payload as DayOfWeekData | undefined
+	const point = payload[0]?.payload as DayOfWeekChartRow | undefined
 	if (!point) {
 		return null
 	}
@@ -87,9 +90,12 @@ const DayOfWeekTooltip = ({ active, payload }: ChartTooltipProps) => {
 	return (
 		<div className="rounded-md border border-border bg-background px-3 py-2 text-sm shadow-md">
 			<p className="font-semibold">{point.day}</p>
-			<p>{point.incidents} incidents</p>
-			<p>{point.stores} stores affected</p>
-			<p className="text-muted-foreground">{point.percentage.toFixed(1)}% of period</p>
+			<p>
+				{point.storesPeaking} {point.storesPeaking === 1 ? 'store peaks' : 'stores peak'} on this day
+			</p>
+			<p className="text-muted-foreground">
+				{point.incidents} incidents across all stores ({point.percentage.toFixed(1)}% of period)
+			</p>
 		</div>
 	)
 }
@@ -99,7 +105,7 @@ const TimeOfDayTooltip = ({ active, payload }: ChartTooltipProps) => {
 		return null
 	}
 
-	const point = payload[0]?.payload as TimeOfDayData | undefined
+	const point = payload[0]?.payload as TimeOfDayChartRow | undefined
 	if (!point) {
 		return null
 	}
@@ -107,8 +113,12 @@ const TimeOfDayTooltip = ({ active, payload }: ChartTooltipProps) => {
 	return (
 		<div className="rounded-md border border-border bg-background px-3 py-2 text-sm shadow-md">
 			<p className="font-semibold">{point.label}</p>
-			<p>{point.incidents} incidents</p>
-			<p className="text-muted-foreground">{point.percentage.toFixed(1)}% of period</p>
+			<p>
+				{point.storesPeaking} {point.storesPeaking === 1 ? 'store peaks' : 'stores peak'} at this hour
+			</p>
+			<p className="text-muted-foreground">
+				{point.incidents} incidents across all stores ({point.percentage.toFixed(1)}% of period)
+			</p>
 		</div>
 	)
 }
@@ -128,22 +138,26 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 	const [selectedHour, setSelectedHour] = useState<number | null>(null)
 	const [selectedStore, setSelectedStore] = useState<string | null>(null)
 
-	const dayOfWeekData = useMemo(() => {
+	const storeList = useMemo(() => Object.values(data.storeDrilldown), [data.storeDrilldown])
+
+	const dayOfWeekData = useMemo<DayOfWeekChartRow[]>(() => {
 		return data.dayOfWeek.map((item) => ({
 			...item,
+			storesPeaking: storeList.filter((store) => store.peakDay === item.day).length,
 			fill: CHART_COLORS[0],
 		}))
-	}, [data.dayOfWeek])
+	}, [data.dayOfWeek, storeList])
 
-	const timeOfDayData = useMemo(() => {
+	const timeOfDayData = useMemo<TimeOfDayChartRow[]>(() => {
 		// Filter to only show store operating hours (7 AM - 10 PM)
 		return data.timeOfDay
 			.filter((item) => item.hour >= 7 && item.hour <= 22)
 			.map((item) => ({
 				...item,
+				storesPeaking: storeList.filter((store) => store.peakHour === item.hour).length,
 				fill: CHART_COLORS[1],
 			}))
-	}, [data.timeOfDay])
+	}, [data.timeOfDay, storeList])
 
 	const incidentTypeData = useMemo(() => {
 		return data.incidentTypes.map((item, index) => ({
@@ -195,7 +209,11 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 			return []
 		}
 
+		// Strict mode: only show stores whose *own* peak day matches the selected slice.
+		// Stores that have some incidents on this day but peak on a different day are
+		// excluded to keep the drill-down focused on stores that PATTERN around this day.
 		return Object.values(data.storeDrilldown)
+			.filter((store) => store.peakDay === selectedDay)
 			.map((store) => ({
 				store,
 				sliceIncidents: getStoreDayCount(store, selectedDay),
@@ -209,7 +227,11 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 			return []
 		}
 
+		// Strict mode: only show stores whose *own* peak hour matches the selected slice.
+		// Stores that recorded incidents at this hour but peak at a different hour are
+		// excluded.
 		return Object.values(data.storeDrilldown)
+			.filter((store) => store.peakHour === selectedHour)
 			.map((store) => ({
 				store,
 				sliceIncidents: getStoreHourCount(store, selectedHour),
@@ -367,9 +389,9 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 										<YAxis className="text-xs" tick={{ fill: '#6b7280' }} />
 										<Tooltip content={<DayOfWeekTooltip />} />
 										<Bar
-											dataKey="incidents"
+											dataKey="storesPeaking"
 											fill={CHART_COLORS[0]}
-											name="Incidents"
+											name="Stores peaking"
 											radius={[8, 8, 0, 0]}
 											onClick={(barData) => {
 												const payload = barData?.payload as DayOfWeekData | undefined
@@ -388,8 +410,8 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 									<div className="flex items-center gap-2">
 										<MapPin className="h-4 w-4 text-gray-600" />
 										<h3 className="font-semibold">
-											Stores with incidents on {selectedDay} (
-											{data.dayOfWeek.find((d) => d.day === selectedDay)?.incidents ?? 0} total)
+											Stores peaking on {selectedDay} ({filteredStores.length}{' '}
+											{filteredStores.length === 1 ? 'store' : 'stores'})
 										</h3>
 									</div>
 									<div className="border rounded-lg">
@@ -397,9 +419,8 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 											<TableHeader>
 												<TableRow>
 													<TableHead>Store</TableHead>
-													<TableHead>Incidents</TableHead>
-													<TableHead>Peak Day</TableHead>
-													<TableHead>Peak Hour</TableHead>
+													<TableHead>{`Incidents on ${selectedDay}`}</TableHead>
+													<TableHead>Store Peak Hour</TableHead>
 													<TableHead className="text-right">Actions</TableHead>
 												</TableRow>
 											</TableHeader>
@@ -410,9 +431,6 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 															{store.storeName}
 														</TableCell>
 														<TableCell>{sliceIncidents}</TableCell>
-														<TableCell>
-															<Badge variant="outline">{store.peakDay}</Badge>
-														</TableCell>
 														<TableCell>
 															<Badge variant="outline">{store.peakHour}:00</Badge>
 														</TableCell>
@@ -436,7 +454,7 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 
 							{selectedDay && filteredStores.length === 0 && (
 								<div className="text-center py-8 text-gray-500">
-									No store-level data available for {selectedDay}
+									No stores peak on {selectedDay}
 								</div>
 							)}
 						</TabsContent>
@@ -457,9 +475,9 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 										<YAxis className="text-xs" tick={{ fill: '#6b7280' }} />
 										<Tooltip content={<TimeOfDayTooltip />} />
 										<Bar
-											dataKey="incidents"
+											dataKey="storesPeaking"
 											fill={CHART_COLORS[1]}
-											name="Incidents"
+											name="Stores peaking"
 											radius={[8, 8, 0, 0]}
 											onClick={(barData) => {
 												const payload = barData?.payload as TimeOfDayData | undefined
@@ -478,9 +496,9 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 									<div className="flex items-center gap-2">
 										<MapPin className="h-4 w-4 text-gray-600" />
 										<h3 className="font-semibold">
-											Stores with incidents at {selectedHourLabel ?? `${selectedHour}:00`} (
-											{data.timeOfDay.find((slot) => slot.hour === selectedHour)?.incidents ?? 0}{' '}
-											total)
+											Stores peaking at {selectedHourLabel ?? `${selectedHour}:00`} (
+											{filteredStoresByHour.length}{' '}
+											{filteredStoresByHour.length === 1 ? 'store' : 'stores'})
 										</h3>
 									</div>
 									<div className="border rounded-lg">
@@ -488,9 +506,8 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 											<TableHeader>
 												<TableRow>
 													<TableHead>Store</TableHead>
-													<TableHead>Incidents</TableHead>
-													<TableHead>Peak Day</TableHead>
-													<TableHead>Peak Hour</TableHead>
+													<TableHead>{`Incidents at ${selectedHourLabel ?? `${selectedHour}:00`}`}</TableHead>
+													<TableHead>Store Peak Day</TableHead>
 													<TableHead className="text-right">Actions</TableHead>
 												</TableRow>
 											</TableHeader>
@@ -503,9 +520,6 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 														<TableCell>{sliceIncidents}</TableCell>
 														<TableCell>
 															<Badge variant="outline">{store.peakDay}</Badge>
-														</TableCell>
-														<TableCell>
-															<Badge variant="outline">{store.peakHour}:00</Badge>
 														</TableCell>
 														<TableCell className="text-right">
 															<Button
@@ -527,41 +541,48 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 
 							{selectedHour !== null && filteredStoresByHour.length === 0 && (
 								<div className="text-center py-8 text-gray-500">
-									No store incidents recorded at {selectedHourLabel ?? `${selectedHour}:00`}
+									No stores peak at {selectedHourLabel ?? `${selectedHour}:00`}
 								</div>
 							)}
 
 							<div className="space-y-4">
 								<div className="flex items-center gap-2">
 									<Clock className="h-4 w-4 text-gray-600" />
-									<h3 className="font-semibold">Top 3 Busiest Hours</h3>
+									<h3 className="font-semibold">Top 3 Most Common Peak Hours</h3>
 								</div>
 								<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 									{[...timeOfDayData]
-										.sort((a, b) => b.incidents - a.incidents)
+										.filter((item) => item.storesPeaking > 0)
+										.sort((a, b) => b.storesPeaking - a.storesPeaking)
 										.slice(0, 3)
-										.map((item) => (
-											<Card 
-												key={item.hour}
-												className={`cursor-pointer transition-all hover:shadow-md ${
-													selectedHour === item.hour ? 'ring-2 ring-blue-500' : ''
-												}`}
-												onClick={() => handleHourClick(item.hour)}
-											>
-												<CardHeader className="pb-2">
-													<CardTitle className="text-sm font-medium flex items-center gap-2">
-														<Clock className="h-4 w-4" />
-														{item.label}
-													</CardTitle>
-												</CardHeader>
-												<CardContent>
-													<div className="text-2xl font-bold">{item.incidents}</div>
-													<p className="text-xs text-gray-500">
-														{item.percentage.toFixed(1)}% of total
-													</p>
-												</CardContent>
-											</Card>
-										))}
+										.map((item) => {
+											const totalStores = storeList.length
+											const sharePct = totalStores > 0 ? (item.storesPeaking / totalStores) * 100 : 0
+											return (
+												<Card
+													key={item.hour}
+													className={`cursor-pointer transition-all hover:shadow-md ${
+														selectedHour === item.hour ? 'ring-2 ring-blue-500' : ''
+													}`}
+													onClick={() => handleHourClick(item.hour)}
+												>
+													<CardHeader className="pb-2">
+														<CardTitle className="text-sm font-medium flex items-center gap-2">
+															<Clock className="h-4 w-4" />
+															{item.label}
+														</CardTitle>
+													</CardHeader>
+													<CardContent>
+														<div className="text-2xl font-bold">
+															{item.storesPeaking} {item.storesPeaking === 1 ? 'store' : 'stores'}
+														</div>
+														<p className="text-xs text-gray-500">
+															{sharePct.toFixed(1)}% of stores peak here
+														</p>
+													</CardContent>
+												</Card>
+											)
+										})}
 								</div>
 							</div>
 						</TabsContent>

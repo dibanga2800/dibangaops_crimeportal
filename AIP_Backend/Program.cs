@@ -1,6 +1,8 @@
 using AIPBackend.Data;
 using AIPBackend.Models;
 using AIPBackend.Services;
+using AIPBackend.Services.Auth;
+using AIPBackend.Services.Security;
 using AIPBackend.Repositories;
 using Azure.Storage.Blobs;
 using Microsoft.AspNetCore.Identity;
@@ -170,6 +172,15 @@ builder.Services.AddSingleton<IBlobService, BlobService>();
 builder.Services.AddScoped<IFileStorageService, FileStorageService>();
 builder.Services.AddScoped<IIncidentImageStorageService, IncidentImageStorageService>();
 builder.Services.AddHttpClient();
+builder.Services.AddHttpClient("SafeOutbound", client =>
+{
+	client.Timeout = TimeSpan.FromSeconds(15);
+}).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+{
+	AllowAutoRedirect = false,
+});
+builder.Services.AddSingleton<ISafeOutboundContentFetcher, SafeOutboundContentFetcher>();
+builder.Services.AddSingleton<IImageReferenceContentResolver, ImageReferenceContentResolver>();
 builder.Services.Configure<FormOptions>(options =>
 {
 	options.MultipartBodyLengthLimit = maxMultipartBodyLengthBytes;
@@ -313,7 +324,6 @@ builder.Services.AddScoped<IIncidentService, IncidentService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IExcelImportService, ExcelImportService>();
 builder.Services.AddScoped<IProductBarcodeCsvImportService, ProductBarcodeCsvImportService>();
-builder.Services.AddScoped<IDailyActivityReportService, DailyActivityReportService>();
 builder.Services.AddScoped<IAlertRuleService, AlertRuleService>();
 // AI classification: Azure OpenAI with rule-based fallback
 builder.Services.Configure<AzureOpenAiOptions>(
@@ -325,6 +335,7 @@ builder.Services.AddScoped<IIncidentAnalyticsService, IncidentAnalyticsService>(
 builder.Services.AddScoped<IEvidenceService, EvidenceService>();
 builder.Services.AddScoped<IAlertEscalationService, AlertEscalationService>();
 builder.Services.AddScoped<ILoginProtectionService, LoginProtectionService>();
+builder.Services.AddSingleton<IPendingTwoFactorCodeHasher, PendingTwoFactorCodeHasher>();
 builder.Services.Configure<AzureFaceOptions>(
 	builder.Configuration.GetSection("AzureFace"));
 builder.Services.AddHttpClient<IAzureFaceClient, AzureFaceClient>();

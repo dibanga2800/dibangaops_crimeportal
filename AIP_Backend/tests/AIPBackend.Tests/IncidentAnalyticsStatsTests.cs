@@ -4,6 +4,7 @@ using AIPBackend.Models;
 using AIPBackend.Models.DTOs;
 using AIPBackend.Repositories;
 using AIPBackend.Services;
+using AIPBackend.Services.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -260,6 +261,7 @@ public class IncidentAnalyticsStatsTests
 			userContext.Object,
 			new ServiceCollection().BuildServiceProvider(),
 			new Mock<IIncidentClassifier>().Object,
-			new Mock<IIncidentImageStorageService>().Object);
+			new Mock<IIncidentImageStorageService>().Object,
+			new Mock<IImageReferenceContentResolver>().Object);
 	}
 }
