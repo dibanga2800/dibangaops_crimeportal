@@ -331,6 +331,10 @@ builder.Services.Configure<AzureOpenAiOptions>(
 builder.Services.AddHttpClient<IAzureOpenAiClient, AzureOpenAiClient>();
 builder.Services.AddScoped<RuleBasedIncidentClassifier>();
 builder.Services.AddScoped<IIncidentClassifier, AzureOpenAiIncidentClassifier>();
+builder.Services.Configure<IncidentClassificationBackfillOptions>(
+	builder.Configuration.GetSection("IncidentClassificationBackfill"));
+builder.Services.AddScoped<IIncidentClassificationBackfillService, IncidentClassificationBackfillService>();
+builder.Services.AddHostedService<IncidentClassificationBackfillHostedService>();
 builder.Services.AddScoped<IIncidentAnalyticsService, IncidentAnalyticsService>();
 builder.Services.AddScoped<IEvidenceService, EvidenceService>();
 builder.Services.AddScoped<IAlertEscalationService, AlertEscalationService>();

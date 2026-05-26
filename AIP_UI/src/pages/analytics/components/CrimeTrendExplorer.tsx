@@ -74,8 +74,15 @@ const getStoreHourCount = (store: StoreDrilldownData, hour: number): number => {
 	return store.peakHour === hour ? store.incidents : 0
 }
 
-type DayOfWeekChartRow = DayOfWeekData & { storesPeaking: number }
-type TimeOfDayChartRow = TimeOfDayData & { storesPeaking: number }
+type DayOfWeekChartRow = DayOfWeekData & {
+	storesPeaking: number
+	incidentsFromPeakingStores: number
+}
+
+type TimeOfDayChartRow = TimeOfDayData & {
+	storesPeaking: number
+	incidentsFromPeakingStores: number
+}
 
 const DayOfWeekTooltip = ({ active, payload }: ChartTooltipProps) => {
 	if (!active || !payload?.length) {
@@ -92,6 +99,10 @@ const DayOfWeekTooltip = ({ active, payload }: ChartTooltipProps) => {
 			<p className="font-semibold">{point.day}</p>
 			<p>
 				{point.storesPeaking} {point.storesPeaking === 1 ? 'store peaks' : 'stores peak'} on this day
+			</p>
+			<p>
+				{point.incidentsFromPeakingStores}{' '}
+				{point.incidentsFromPeakingStores === 1 ? 'incident' : 'incidents'} on this day from peaking stores
 			</p>
 			<p className="text-muted-foreground">
 				{point.incidents} incidents across all stores ({point.percentage.toFixed(1)}% of period)
@@ -115,6 +126,10 @@ const TimeOfDayTooltip = ({ active, payload }: ChartTooltipProps) => {
 			<p className="font-semibold">{point.label}</p>
 			<p>
 				{point.storesPeaking} {point.storesPeaking === 1 ? 'store peaks' : 'stores peak'} at this hour
+			</p>
+			<p>
+				{point.incidentsFromPeakingStores}{' '}
+				{point.incidentsFromPeakingStores === 1 ? 'incident' : 'incidents'} at this hour from peaking stores
 			</p>
 			<p className="text-muted-foreground">
 				{point.incidents} incidents across all stores ({point.percentage.toFixed(1)}% of period)
@@ -141,22 +156,38 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 	const storeList = useMemo(() => Object.values(data.storeDrilldown), [data.storeDrilldown])
 
 	const dayOfWeekData = useMemo<DayOfWeekChartRow[]>(() => {
-		return data.dayOfWeek.map((item) => ({
-			...item,
-			storesPeaking: storeList.filter((store) => store.peakDay === item.day).length,
-			fill: CHART_COLORS[0],
-		}))
+		return data.dayOfWeek.map((item) => {
+			const peakingStores = storeList.filter((store) => store.peakDay === item.day)
+			const incidentsFromPeakingStores = peakingStores.reduce(
+				(sum, store) => sum + getStoreDayCount(store, item.day),
+				0,
+			)
+			return {
+				...item,
+				storesPeaking: peakingStores.length,
+				incidentsFromPeakingStores,
+				fill: CHART_COLORS[0],
+			}
+		})
 	}, [data.dayOfWeek, storeList])
 
 	const timeOfDayData = useMemo<TimeOfDayChartRow[]>(() => {
 		// Filter to only show store operating hours (7 AM - 10 PM)
 		return data.timeOfDay
 			.filter((item) => item.hour >= 7 && item.hour <= 22)
-			.map((item) => ({
-				...item,
-				storesPeaking: storeList.filter((store) => store.peakHour === item.hour).length,
-				fill: CHART_COLORS[1],
-			}))
+			.map((item) => {
+				const peakingStores = storeList.filter((store) => store.peakHour === item.hour)
+				const incidentsFromPeakingStores = peakingStores.reduce(
+					(sum, store) => sum + getStoreHourCount(store, item.hour),
+					0,
+				)
+				return {
+					...item,
+					storesPeaking: peakingStores.length,
+					incidentsFromPeakingStores,
+					fill: CHART_COLORS[1],
+				}
+			})
 	}, [data.timeOfDay, storeList])
 
 	const incidentTypeData = useMemo(() => {
@@ -222,6 +253,11 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 			.sort((a, b) => b.sliceIncidents - a.sliceIncidents)
 	}, [selectedDay, data.storeDrilldown])
 
+	const filteredDayIncidentTotal = useMemo(
+		() => filteredStores.reduce((sum, row) => sum + row.sliceIncidents, 0),
+		[filteredStores],
+	)
+
 	const filteredStoresByHour = useMemo((): StoreSliceRow[] => {
 		if (selectedHour === null) {
 			return []
@@ -239,6 +275,11 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 			.filter((row) => row.sliceIncidents > 0)
 			.sort((a, b) => b.sliceIncidents - a.sliceIncidents)
 	}, [selectedHour, data.storeDrilldown])
+
+	const filteredHourIncidentTotal = useMemo(
+		() => filteredStoresByHour.reduce((sum, row) => sum + row.sliceIncidents, 0),
+		[filteredStoresByHour],
+	)
 
 	const selectedHourLabel = useMemo(() => {
 		if (selectedHour === null) {
@@ -411,7 +452,9 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 										<MapPin className="h-4 w-4 text-gray-600" />
 										<h3 className="font-semibold">
 											Stores peaking on {selectedDay} ({filteredStores.length}{' '}
-											{filteredStores.length === 1 ? 'store' : 'stores'})
+											{filteredStores.length === 1 ? 'store' : 'stores'} ·{' '}
+											{filteredDayIncidentTotal}{' '}
+											{filteredDayIncidentTotal === 1 ? 'incident' : 'incidents'} on {selectedDay})
 										</h3>
 									</div>
 									<div className="border rounded-lg">
@@ -498,7 +541,10 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 										<h3 className="font-semibold">
 											Stores peaking at {selectedHourLabel ?? `${selectedHour}:00`} (
 											{filteredStoresByHour.length}{' '}
-											{filteredStoresByHour.length === 1 ? 'store' : 'stores'})
+											{filteredStoresByHour.length === 1 ? 'store' : 'stores'} ·{' '}
+											{filteredHourIncidentTotal}{' '}
+											{filteredHourIncidentTotal === 1 ? 'incident' : 'incidents'} at{' '}
+											{selectedHourLabel ?? `${selectedHour}:00`})
 										</h3>
 									</div>
 									<div className="border rounded-lg">

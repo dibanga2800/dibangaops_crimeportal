@@ -51,6 +51,14 @@ namespace AIPBackend.Repositories
 			DateTime? endDate = null);
 		Task<(List<RepeatOffenderRepositoryResult> Results, int TotalCount)> SearchRepeatOffendersAsync(RepeatOffenderSearchFilter filter);
 		Task<List<Incident>> GetIncidentsWithDetailsAsync(CrimeIntelligenceQueryDto query);
+
+		/// <summary>
+		/// Returns incidents whose AI classification fields are incomplete and therefore
+		/// need a (re-)classification pass. Used by the backfill background service and
+		/// the admin reclassify endpoint. Results are ordered oldest-first so we always
+		/// drain the backlog deterministically.
+		/// </summary>
+		Task<List<Incident>> GetIncidentsNeedingClassificationAsync(int limit);
 	}
 }
 

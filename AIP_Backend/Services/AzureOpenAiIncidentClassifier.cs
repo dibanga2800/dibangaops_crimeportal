@@ -34,8 +34,10 @@ namespace AIPBackend.Services
 		{
 			if (!_options.Enabled)
 			{
-				_logger.LogInformation("Azure OpenAI classification disabled; using rule-based classifier for incident {IncidentId}", request.IncidentId);
-				return await _fallback.ClassifyAsync(request);
+				_logger.LogInformation(
+					"Azure OpenAI classification disabled; using rule-based classifier for incident {IncidentId}",
+					request.IncidentId);
+				return await ClassifyWithRuleBasedFallbackAsync(request, fallbackReason: "disabled");
 			}
 
 			try
@@ -45,9 +47,30 @@ namespace AIPBackend.Services
 			}
 			catch (Exception ex)
 			{
-				_logger.LogError(ex, "Azure OpenAI classification failed for incident {IncidentId}; falling back to rule-based classifier", request.IncidentId);
-				return await _fallback.ClassifyAsync(request);
+				// Covers: network unreachable, HTTP 401/403/429/5xx, response timeout,
+				// malformed/empty JSON, deserialisation errors. We never want a single
+				// incident to end up unclassified just because the LLM is having a bad
+				// day - rule-based is deterministic and always available.
+				_logger.LogError(
+					ex,
+					"Azure OpenAI classification failed for incident {IncidentId}; falling back to rule-based classifier",
+					request.IncidentId);
+				return await ClassifyWithRuleBasedFallbackAsync(request, fallbackReason: "azure-error");
 			}
+		}
+
+		/// <summary>
+		/// Runs the rule-based classifier and tags the result so downstream consumers
+		/// (analytics, audit, manual review) can tell which incidents were classified
+		/// purely by the deterministic fallback path versus by Azure OpenAI.
+		/// </summary>
+		private async Task<IncidentClassificationResultDto> ClassifyWithRuleBasedFallbackAsync(
+			IncidentClassificationRequestDto request,
+			string fallbackReason)
+		{
+			var result = await _fallback.ClassifyAsync(request);
+			result.ClassifierVersion = $"rule-based-fallback ({fallbackReason})";
+			return result;
 		}
 	}
 }

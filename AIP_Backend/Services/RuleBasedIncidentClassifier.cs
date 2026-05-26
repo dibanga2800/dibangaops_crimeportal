@@ -72,13 +72,9 @@ namespace AIPBackend.Services
 		{
 			var combinedText = $"{request.Description} {request.IncidentDetails}".ToLowerInvariant();
 			var suggestedCategory = DetermineCategory(combinedText, request.IncidentType);
-			var riskScore = CalculateRiskScore(request, combinedText);
-			var riskLevel = riskScore switch
-			{
-				>= 0.7 => "high",
-				>= 0.4 => "medium",
-				_ => "low"
-			};
+			var rawScore = CalculateRiskScore(request, combinedText);
+			var riskScore = Math.Round(IncidentRiskLevel.ClampScore(rawScore), 2);
+			var riskLevel = IncidentRiskLevel.FromScore(riskScore);
 
 			var actions = GenerateSuggestedActions(riskLevel, request, combinedText);
 			var tags = GenerateTags(request, combinedText);
@@ -87,7 +83,7 @@ namespace AIPBackend.Services
 			{
 				SuggestedCategory = suggestedCategory,
 				RiskLevel = riskLevel,
-				RiskScore = Math.Round(riskScore, 2),
+				RiskScore = riskScore,
 				Confidence = 0.75,
 				SuggestedActions = actions,
 				Tags = tags,

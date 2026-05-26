@@ -463,6 +463,22 @@ namespace AIPBackend.Repositories
 			return await query.ToListAsync();
 		}
 
+		public async Task<List<Incident>> GetIncidentsNeedingClassificationAsync(int limit)
+		{
+			if (limit <= 0)
+			{
+				return new List<Incident>();
+			}
+
+			return await _context.Incidents
+				.Include(i => i.StolenItems)
+				.Where(i => !i.RecordIsDeletedYN &&
+					(i.IncidentCategory == null || i.RiskLevel == null))
+				.OrderBy(i => i.IncidentId)
+				.Take(limit)
+				.ToListAsync();
+		}
+
 		private static DateTime GetExclusiveEndDate(DateTime endDate)
 		{
 			return endDate.Date.AddDays(1);

@@ -68,7 +68,12 @@ namespace AIPBackend.Services
 				"\"riskScore\": number, \"confidence\": number, " +
 				"\"suggestedActions\": string[], \"tags\": string[], \"classifierVersion\": string }. " +
 				"Do not include any extra fields or text. " +
-				"RiskScore must be between 0 and 1.";
+				"RiskScore must be a number between 0 and 1 (inclusive). " +
+				"RiskLevel MUST be derived from riskScore using these exact thresholds: " +
+				"\"high\" if riskScore >= 0.7, \"medium\" if 0.4 <= riskScore < 0.7, \"low\" otherwise. " +
+				"Risk should reflect VALUE AT RISK (totalLostValue), violence, weapon use, organised crime indicators, " +
+				"and stolen-item volume. TotalValueRecovered is the value SAVED and should NOT increase risk. " +
+				"Confidence is your own self-assessment in [0, 1]; do not echo riskScore.";
 
 			var userContent = new
 			{
@@ -77,6 +82,7 @@ namespace AIPBackend.Services
 				request.Description,
 				request.IncidentDetails,
 				request.TotalValueRecovered,
+				request.TotalLostValue,
 				request.PoliceInvolvement,
 				request.OffenderName,
 				request.IncidentInvolved,
@@ -149,8 +155,17 @@ namespace AIPBackend.Services
 					throw new InvalidOperationException("Failed to deserialize Azure OpenAI JSON into IncidentClassificationResultDto.");
 				}
 
-				// Override version to make it clear this came from Azure OpenAI.
-				result.ClassifierVersion = "azure-openai-v1";
+				// Canonicalise the score and re-derive the level server-side. The LLM has
+				// been observed returning incoherent pairs like (riskLevel="low", riskScore=0.7).
+				// IncidentRiskLevel.FromScore is the single source of truth - applying it here
+				// guarantees the persisted level is always consistent with the persisted score.
+				result.RiskScore = Math.Round(IncidentRiskLevel.ClampScore(result.RiskScore), 2);
+				result.RiskLevel = IncidentRiskLevel.FromScore(result.RiskScore);
+				result.Confidence = IncidentRiskLevel.ClampScore(result.Confidence);
+
+				// Bump version so v1 (incoherent level) and v2 (canonicalised) rows are
+				// distinguishable in the database for audit and backfill purposes.
+				result.ClassifierVersion = "azure-openai-v2";
 				return result;
 			}
 			catch (Exception ex)
