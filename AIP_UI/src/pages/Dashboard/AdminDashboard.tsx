@@ -56,8 +56,13 @@ import type { AnalyticsHubData } from '@/types/analytics'
 import type { AlertSummary } from '@/types/alertInstances'
 import type { IncidentAnalyticsSummary, RiskIndicator } from '@/types/classification'
 import type { Incident } from '@/types/incidents'
-import { IncidentType } from '@/types/incidents'
 import type { IncidentsResponse, IncidentListSummary, PaginationInfo } from '@/types/api'
+import {
+	isIncidentPriority,
+	isIncidentStatus,
+	isIncidentToday,
+	isIncidentTypeShoplifting,
+} from '@/pages/Dashboard/incident-stat-predicates'
 import { BASE_API_URL } from '@/config/api'
 import { sessionStore } from '@/state/sessionStore'
 import { getAssignedSiteIds } from '@/utils/siteAccess'
@@ -143,22 +148,10 @@ const getIncidentFinancials = (incident: any) => {
   }
 }
 
-// True when the incident type names shoplifting as the primary offense.
-// Matches the canonical "Shoplifting" and qualified variants like
-// "Shoplifting / Theft" (first word is "shoplifting"); does NOT match
-// distinct offenses that merely contain the word as a modifier, notably
-// "Attempted Shoplifting" — where the theft never completed and the
-// dashboard "Shoplifting" card would otherwise overcount.
-// Kept in sync with the backend IsShopliftingIncidentType predicate so
-// the client-side fallback reconciles with the server-side summary.
-const isIncidentTypeShoplifting = (inc: Incident) => {
-  const raw = (inc.incidentType || inc.type || '').trim().toLowerCase()
-  if (!raw) return false
-  const prefix = IncidentType.SHOPLIFTING.toLowerCase()
-  if (!raw.startsWith(prefix)) return false
-  if (raw.length === prefix.length) return true
-  return !/^[a-z]/.test(raw.slice(prefix.length))
-}
+// Dashboard quick-stat fallback predicates live in a sibling module so
+// they can be unit-tested in isolation and so we don't drift away from
+// the backend `IncidentListSummary` semantics. See
+// ./incident-stat-predicates.ts for the parity rationale.
 
 interface AdminDashboardProps {
   viewRole?: 'administrator' | 'manager' | 'security-officer' | 'store'
@@ -738,22 +731,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
     const totalValue = summary?.totalAmountRecovered ?? fallback.totalValue
     const totalLostValue = summary?.totalAmountLost ?? fallback.totalLostValue
 
-    const todayIncidents = summary?.todayIncidents ?? filteredIncidents.filter(inc => {
-      const incidentDateValue = inc.dateOfIncident || inc.date
-      if (!incidentDateValue) return false
-      const incDate = new Date(incidentDateValue)
-      if (Number.isNaN(incDate.getTime())) return false
-      const today = new Date()
-      return incDate.toDateString() === today.toDateString()
-    }).length
+    const todayIncidents = summary?.todayIncidents
+      ?? filteredIncidents.filter(inc => isIncidentToday(inc)).length
 
     const highPriority = summary?.highPriorityIncidents
-      ?? filteredIncidents.filter(inc => inc.priority === 'high').length
+      ?? filteredIncidents.filter(inc => isIncidentPriority(inc, 'high')).length
 
     const pending = summary?.pendingIncidents
-      ?? filteredIncidents.filter(inc => inc.status === 'pending').length
+      ?? filteredIncidents.filter(inc => isIncidentStatus(inc, 'pending')).length
     const resolved = summary?.resolvedIncidents
-      ?? filteredIncidents.filter(inc => inc.status === 'resolved').length
+      ?? filteredIncidents.filter(inc => isIncidentStatus(inc, 'resolved')).length
 
     const shopliftingIncidents = summary?.shopliftingIncidents
       ?? filteredIncidents.filter(isIncidentTypeShoplifting).length
