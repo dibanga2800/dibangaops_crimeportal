@@ -411,13 +411,24 @@ variable "vnet_address_space" {
 }
 
 variable "private_endpoint_subnet_prefix" {
-  description = "Subnet for SQL private endpoint"
+  description = <<-EOT
+    CIDR for the SQL private endpoint subnet. MUST NOT overlap with
+    container_apps_subnet_prefix. The Container Apps delegated subnet is /23
+    (10.40.0.0 - 10.40.1.255), so the private endpoint subnet must start at
+    10.40.2.0/24 or higher.
+  EOT
   type        = string
-  default     = "10.40.1.0/24"
+  default     = "10.40.2.0/24"
 }
 
 variable "container_apps_subnet_prefix" {
-  description = "Delegated subnet for Container Apps environment (SQL private networking)"
+  description = <<-EOT
+    Delegated subnet for the Container Apps environment when SQL private
+    networking is enabled. Azure Container Apps requires a /23 or larger.
+    The default consumes 10.40.0.0 - 10.40.1.255 of the VNet, so the private
+    endpoint subnet (private_endpoint_subnet_prefix) must be 10.40.2.0/24
+    or higher.
+  EOT
   type        = string
   default     = "10.40.0.0/23"
 }
