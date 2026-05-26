@@ -53,10 +53,14 @@ namespace AIPBackend.Repositories
 		Task<List<Incident>> GetIncidentsWithDetailsAsync(CrimeIntelligenceQueryDto query);
 
 		/// <summary>
-		/// Returns incidents whose AI classification fields are incomplete and therefore
-		/// need a (re-)classification pass. Used by the backfill background service and
-		/// the admin reclassify endpoint. Results are ordered oldest-first so we always
-		/// drain the backlog deterministically.
+		/// Returns incidents that need a (re-)classification pass. Picks up rows where
+		/// any AI field is null AND rows persisted by superseded classifier versions
+		/// (e.g. <c>rule-based-v1</c>, <c>azure-openai-v1</c>) which are known to have
+		/// produced incoherent (level, score) pairs. Results are ordered newest-first
+		/// so the visible dashboard heals before the deep history. Rows tagged with
+		/// <c>rule-based-fallback (...)</c> are intentionally left alone - they had
+		/// one fallback pass and we do not want a busy-retry loop while Azure is down.
+		/// Used by the backfill background service and the admin reclassify endpoint.
 		/// </summary>
 		Task<List<Incident>> GetIncidentsNeedingClassificationAsync(int limit);
 	}

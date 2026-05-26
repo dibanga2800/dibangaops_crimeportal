@@ -470,11 +470,30 @@ namespace AIPBackend.Repositories
 				return new List<Incident>();
 			}
 
+			// Pick up:
+			//   1. Rows missing any AI field (never classified or partially saved).
+			//   2. Rows tagged with a superseded classifier version. v1 LLM output
+			//      was sometimes incoherent (e.g. "Risk: Low 70/100") and the v1
+			//      rule-based scorer used the wrong inputs - both produced rows
+			//      that look populated but are not trustworthy.
+			//
+			// Deliberately NOT picked up:
+			//   - "rule-based-fallback (...)" rows. They had one fallback pass and
+			//     we do not want a busy-retry loop while Azure OpenAI is down. An
+			//     admin can manually re-trigger once Azure is back up if needed.
+			//
+			// Ordered newest-first so the recent-incidents dashboard fills in
+			// before the deep history.
 			return await _context.Incidents
 				.Include(i => i.StolenItems)
 				.Where(i => !i.RecordIsDeletedYN &&
-					(i.IncidentCategory == null || i.RiskLevel == null))
-				.OrderBy(i => i.IncidentId)
+					(i.IncidentCategory == null
+						|| i.RiskLevel == null
+						|| i.RiskScore == null
+						|| i.ClassificationVersion == null
+						|| i.ClassificationVersion == "rule-based-v1"
+						|| i.ClassificationVersion == "azure-openai-v1"))
+				.OrderByDescending(i => i.IncidentId)
 				.Take(limit)
 				.ToListAsync();
 		}
