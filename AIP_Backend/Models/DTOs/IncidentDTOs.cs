@@ -161,6 +161,38 @@ namespace AIPBackend.Models.DTOs
 		public decimal TotalAmountRecovered { get; set; }
 		public decimal TotalAmountLost { get; set; }
 		public int UniqueSites { get; set; }
+
+		/// <summary>
+		/// Count of rows whose <see cref="Models.Incident.IncidentType"/> is a
+		/// shoplifting variant (case-insensitive substring "shoplifting").
+		/// </summary>
+		public int ShopliftingIncidents { get; set; }
+
+		/// <summary>
+		/// Count of rows whose <see cref="Models.Incident.DateOfIncident"/>
+		/// falls on the current UTC date. Surfaced on the dashboard "Today"
+		/// card so the value reflects the entire filtered population, not
+		/// just the paginated page.
+		/// </summary>
+		public int TodayIncidents { get; set; }
+
+		/// <summary>
+		/// Count of rows whose <see cref="Models.Incident.Priority"/> equals
+		/// "high" (case-insensitive). Backs the "High Priority" card.
+		/// </summary>
+		public int HighPriorityIncidents { get; set; }
+
+		/// <summary>
+		/// Count of rows whose <see cref="Models.Incident.Status"/> equals
+		/// "pending" (case-insensitive). Backs the "Pending" card.
+		/// </summary>
+		public int PendingIncidents { get; set; }
+
+		/// <summary>
+		/// Count of rows whose <see cref="Models.Incident.Status"/> equals
+		/// "resolved" (case-insensitive). Backs the "Resolved" card.
+		/// </summary>
+		public int ResolvedIncidents { get; set; }
 	}
 
 	/// <summary>

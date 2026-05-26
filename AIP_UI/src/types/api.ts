@@ -25,6 +25,17 @@ export interface IncidentListSummary {
 	totalAmountRecovered: number
 	totalAmountLost: number
 	uniqueSites: number
+	/**
+	 * Server-side counts computed across the full filtered set (not just
+	 * the paginated page), so dashboards can render headline cards that
+	 * reconcile with `totalIncidents` regardless of the backend's page-size
+	 * clamp. All optional for backwards compatibility with older servers.
+	 */
+	shopliftingIncidents?: number
+	todayIncidents?: number
+	highPriorityIncidents?: number
+	pendingIncidents?: number
+	resolvedIncidents?: number
 }
 
 export type IncidentResponse = ApiResponse<Incident>
