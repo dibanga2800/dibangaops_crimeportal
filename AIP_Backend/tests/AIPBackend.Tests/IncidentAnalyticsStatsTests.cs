@@ -96,15 +96,21 @@ public class IncidentAnalyticsStatsTests
 		await using var context = CreateDbContext();
 		SeedCustomer(context, customerId);
 
+		// Types that name shoplifting as the primary offense — first word
+		// "shoplifting" with the canonical or a qualifying tail.
 		var shopliftingTypes = new[]
 		{
 			"Shoplifting",
 			"Shoplifting / Theft",
 			"shoplifting",
-			"Attempted Shoplifting",
+			"Shoplifting (confirmed)",
 		};
+		// "Attempted Shoplifting" is intentionally in the non-shoplifting
+		// bucket: it is a distinct offense (the theft never completed)
+		// and would otherwise inflate the dashboard "Shoplifting" card.
 		var nonShopliftingTypes = new[]
 		{
+			"Attempted Shoplifting",
 			"Theft",
 			"Theft Prevention",
 			"Self Scan Tills",
