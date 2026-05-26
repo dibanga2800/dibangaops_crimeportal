@@ -112,6 +112,12 @@ namespace AIPBackend.Repositories
 			var uniqueSiteKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 			decimal totalRecovered = 0m;
 			decimal totalLost = 0m;
+			var shopliftingCount = 0;
+			var todayCount = 0;
+			var highPriorityCount = 0;
+			var pendingCount = 0;
+			var resolvedCount = 0;
+			var today = DateTime.UtcNow.Date;
 
 			foreach (var incident in incidents)
 			{
@@ -125,6 +131,30 @@ namespace AIPBackend.Repositories
 				{
 					uniqueSiteKeys.Add(siteKey.Trim());
 				}
+
+				if (IsShopliftingIncidentType(incident.IncidentType))
+				{
+					shopliftingCount++;
+				}
+
+				if (incident.DateOfIncident.Date == today)
+				{
+					todayCount++;
+				}
+
+				if (string.Equals(incident.Priority, "high", StringComparison.OrdinalIgnoreCase))
+				{
+					highPriorityCount++;
+				}
+
+				if (string.Equals(incident.Status, "pending", StringComparison.OrdinalIgnoreCase))
+				{
+					pendingCount++;
+				}
+				else if (string.Equals(incident.Status, "resolved", StringComparison.OrdinalIgnoreCase))
+				{
+					resolvedCount++;
+				}
 			}
 
 			return new IncidentListSummaryDto
@@ -133,7 +163,28 @@ namespace AIPBackend.Repositories
 				TotalAmountRecovered = totalRecovered,
 				TotalAmountLost = totalLost,
 				UniqueSites = uniqueSiteKeys.Count,
+				ShopliftingIncidents = shopliftingCount,
+				TodayIncidents = todayCount,
+				HighPriorityIncidents = highPriorityCount,
+				PendingIncidents = pendingCount,
+				ResolvedIncidents = resolvedCount,
 			};
+		}
+
+		/// <summary>
+		/// Mirrors the historical SPA predicate (substring match on
+		/// "shoplifting") so the server-side summary count reconciles with
+		/// any client-side fallback rendering that still iterates over the
+		/// paginated subset.
+		/// </summary>
+		private static bool IsShopliftingIncidentType(string? incidentType)
+		{
+			if (string.IsNullOrWhiteSpace(incidentType))
+			{
+				return false;
+			}
+
+			return incidentType.IndexOf("shoplifting", StringComparison.OrdinalIgnoreCase) >= 0;
 		}
 
 		private IQueryable<Incident> ApplyListFilters(
@@ -494,6 +545,13 @@ namespace AIPBackend.Repositories
 			//     inline Create/Update path when the LLM exceeded the 750ms response
 			//     budget. The LLM may have been healthy but momentarily slow, so the
 			//     periodic loop is the right place to refine these once load eases.
+			//   - "rule-based-fallback (inline-error)" rows. The Azure wrapper already
+			//     catches LLM errors and returns its own (azure-error) result without
+			//     throwing, so an exception reaching the inline handler is an
+			//     unexpected/transient condition (cancellation, transient infra, bug
+			//     in a downstream dependency). Re-trying via the periodic loop is
+			//     cheap and lets the row recover once the underlying issue clears;
+			//     leaving it out strands incidents on a first fallback pass forever.
 			//
 			// Ordered newest-first so the recent-incidents dashboard fills in
 			// before the deep history.
@@ -508,7 +566,8 @@ namespace AIPBackend.Repositories
 						|| i.ClassificationVersion == "rule-based-v2"
 						|| i.ClassificationVersion == "rule-based-v3"
 						|| i.ClassificationVersion == "azure-openai-v1"
-						|| i.ClassificationVersion == "rule-based-fallback (inline-timeout)"))
+						|| i.ClassificationVersion == "rule-based-fallback (inline-timeout)"
+						|| i.ClassificationVersion == "rule-based-fallback (inline-error)"))
 				.OrderByDescending(i => i.IncidentId)
 				.Take(limit)
 				.ToListAsync();
@@ -520,4 +579,3 @@ namespace AIPBackend.Repositories
 		}
 	}
 }
-

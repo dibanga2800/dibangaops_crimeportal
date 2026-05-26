@@ -60,7 +60,7 @@ import { IncidentType } from '@/types/incidents'
 import type { IncidentsResponse, IncidentListSummary, PaginationInfo } from '@/types/api'
 import { BASE_API_URL } from '@/config/api'
 import { sessionStore } from '@/state/sessionStore'
-import { getAssignedSiteIds, isSiteScopeEnforcedForUser } from '@/utils/siteAccess'
+import { getAssignedSiteIds } from '@/utils/siteAccess'
 import { toast } from '@/components/ui/use-toast'
 import {
 	dismissAllNotificationsFromServer,
@@ -285,12 +285,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
         
         console.log('ðŸ”„ Loading incidents using incidentsApi service');
         
-        // Use the proper incidents API service which handles authentication
+        // Pass every active filter to the API so the server-side summary
+        // (which backs the headline quick-stat cards) reflects the exact
+        // population the user is viewing. Without these the summary would
+        // span the unfiltered tenant scope while the cards advertise the
+        // filtered subset, and the two would silently disagree.
         const incidentQueryParams: {
           page: number
           pageSize: number
           customerId?: string
           siteId?: string
+          regionId?: string
+          fromDate?: string
+          toDate?: string
         } = {
           page: 1,
           pageSize: 1000
@@ -300,6 +307,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
         }
         if (effectiveSiteId) {
           incidentQueryParams.siteId = effectiveSiteId
+        }
+        if (selectedRegion && selectedRegion !== 'all') {
+          incidentQueryParams.regionId = selectedRegion
+        }
+        if (fromDate) {
+          incidentQueryParams.fromDate = fromDate
+        }
+        if (toDate) {
+          incidentQueryParams.toDate = toDate
         }
 
         const response = await incidentsApi.getIncidents(incidentQueryParams);
@@ -484,7 +500,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
       isActive = false;
       abortController.abort();
     };
-  }, [effectiveCustomerId, effectiveSiteId, isScopedRole, hasAssignedSites, assignedSiteIdsSet, assignedSiteIdsKey]);
+  }, [
+    effectiveCustomerId,
+    effectiveSiteId,
+    isScopedRole,
+    hasAssignedSites,
+    assignedSiteIdsSet,
+    assignedSiteIdsKey,
+    selectedRegion,
+    fromDate,
+    toDate,
+  ]);
 
   // Load analytics data for dashboard overview; for manager/scoped roles use assigned customer so regions/sites stay constrained
   React.useEffect(() => {
@@ -663,9 +689,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
     toDate
   ])
 
-  // Use filtered incidents for all calculations
+  // Headline quick-stat cards: the server-computed summary is the single
+  // source of truth. It spans the *full* filtered population (same
+  // customerId / siteId / regionId / fromDate / toDate the dashboard sent
+  // on the request), so counts always reconcile with each other regardless
+  // of the backend's PageSize ceiling (PageSize is clamped to 100 in
+  // IncidentService, which would otherwise truncate any client-side count).
+  //
+  // Client-side counting from `filteredIncidents` is retained only as a
+  // last-resort fallback for two scenarios:
+  //   1. The initial render before the API responds (`incidentsSummary` is
+  //      still null).
+  //   2. An older backend that doesn't populate the optional summary
+  //      fields (todayIncidents / highPriorityIncidents / etc.).
+  // In normal operation against a current backend, every fallback branch
+  // below short-circuits on the `summary?.X ?? …` left-hand side.
   const customerMetrics = React.useMemo(() => {
-    const enforceSiteScope = isSiteScopeEnforcedForUser(sessionUser)
+    const summary = incidentsSummary
 
     const sumFromIncidents = (incidents: Incident[]) => {
       let totalValue = 0
@@ -682,28 +722,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
       }
     }
 
-    const totalCount = incidentsPagination?.totalCount
-    const hasFullDatasetLoaded =
-      totalCount != null && totalCount > 0 && filteredIncidents.length >= totalCount
-    const isClientFiltered = selectedRegion !== 'all' || isDateRangeActive
+    const fallback = sumFromIncidents(filteredIncidents)
 
-    let totalIncidents: number
-    let totalValue: number
-    let totalLostValue: number
+    const totalIncidents = summary?.totalIncidents ?? fallback.totalIncidents
+    const totalValue = summary?.totalAmountRecovered ?? fallback.totalValue
+    const totalLostValue = summary?.totalAmountLost ?? fallback.totalLostValue
 
-    if (isClientFiltered) {
-      ;({ totalIncidents, totalValue, totalLostValue } = sumFromIncidents(filteredIncidents))
-    } else if (hasFullDatasetLoaded || enforceSiteScope) {
-      ;({ totalIncidents, totalValue, totalLostValue } = sumFromIncidents(filteredIncidents))
-    } else if (incidentsSummary) {
-      totalIncidents = incidentsSummary.totalIncidents
-      totalValue = incidentsSummary.totalAmountRecovered
-      totalLostValue = incidentsSummary.totalAmountLost
-    } else {
-      ;({ totalIncidents, totalValue, totalLostValue } = sumFromIncidents(filteredIncidents))
-    }
-
-    const todayIncidents = filteredIncidents.filter(inc => {
+    const todayIncidents = summary?.todayIncidents ?? filteredIncidents.filter(inc => {
       const incidentDateValue = inc.dateOfIncident || inc.date
       if (!incidentDateValue) return false
       const incDate = new Date(incidentDateValue)
@@ -712,16 +737,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
       return incDate.toDateString() === today.toDateString()
     }).length
 
-    const highPriority = filteredIncidents.filter(inc => inc.priority === 'high').length
+    const highPriority = summary?.highPriorityIncidents
+      ?? filteredIncidents.filter(inc => inc.priority === 'high').length
 
-    const pending = filteredIncidents.filter(inc => inc.status === 'pending').length
-    const resolved = filteredIncidents.filter(inc => inc.status === 'resolved').length
+    const pending = summary?.pendingIncidents
+      ?? filteredIncidents.filter(inc => inc.status === 'pending').length
+    const resolved = summary?.resolvedIncidents
+      ?? filteredIncidents.filter(inc => inc.status === 'resolved').length
 
-    const shopliftingIncidents = filteredIncidents.filter(isIncidentTypeShoplifting).length
+    const shopliftingIncidents = summary?.shopliftingIncidents
+      ?? filteredIncidents.filter(isIncidentTypeShoplifting).length
 
+    // Percentage uses the matching total so the two figures reconcile.
+    // Without this guard a server-side count of 75 over a paginated 100
+    // would read as 75%, dramatically over-reporting against the true
+    // ratio across all rows.
     const shopliftingPercentage =
-      filteredIncidents.length > 0
-        ? Math.round((shopliftingIncidents / filteredIncidents.length) * 100)
+      totalIncidents > 0
+        ? Math.round((shopliftingIncidents / totalIncidents) * 100)
         : 0
 
     return {
@@ -735,14 +768,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
       shopliftingIncidents,
       shopliftingPercentage,
     }
-  }, [
-    filteredIncidents,
-    incidentsPagination?.totalCount,
-    incidentsSummary,
-    selectedRegion,
-    isDateRangeActive,
-    sessionUser,
-  ])
+  }, [incidentsSummary, filteredIncidents])
 
   // Get recent incidents for table â€“ use real backend data
   const recentIncidents = React.useMemo(() => {
