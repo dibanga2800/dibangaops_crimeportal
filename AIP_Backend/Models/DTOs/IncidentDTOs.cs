@@ -163,8 +163,12 @@ namespace AIPBackend.Models.DTOs
 		public int UniqueSites { get; set; }
 
 		/// <summary>
-		/// Count of rows whose <see cref="Models.Incident.IncidentType"/> is a
-		/// shoplifting variant (case-insensitive substring "shoplifting").
+		/// Count of rows whose <see cref="Models.Incident.IncidentType"/>
+		/// names shoplifting as the primary offense (first word
+		/// "shoplifting", case-insensitive). Includes canonical
+		/// "Shoplifting" and qualified variants like "Shoplifting / Theft";
+		/// excludes distinct offenses such as "Attempted Shoplifting" where
+		/// the theft was not completed.
 		/// </summary>
 		public int ShopliftingIncidents { get; set; }
 

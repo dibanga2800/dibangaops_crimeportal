@@ -143,11 +143,21 @@ const getIncidentFinancials = (incident: any) => {
   }
 }
 
+// True when the incident type names shoplifting as the primary offense.
+// Matches the canonical "Shoplifting" and qualified variants like
+// "Shoplifting / Theft" (first word is "shoplifting"); does NOT match
+// distinct offenses that merely contain the word as a modifier, notably
+// "Attempted Shoplifting" — where the theft never completed and the
+// dashboard "Shoplifting" card would otherwise overcount.
+// Kept in sync with the backend IsShopliftingIncidentType predicate so
+// the client-side fallback reconciles with the server-side summary.
 const isIncidentTypeShoplifting = (inc: Incident) => {
   const raw = (inc.incidentType || inc.type || '').trim().toLowerCase()
   if (!raw) return false
-  const shoplifting = IncidentType.SHOPLIFTING.toLowerCase()
-  return raw === shoplifting || raw.includes('shoplifting')
+  const prefix = IncidentType.SHOPLIFTING.toLowerCase()
+  if (!raw.startsWith(prefix)) return false
+  if (raw.length === prefix.length) return true
+  return !/^[a-z]/.test(raw.slice(prefix.length))
 }
 
 interface AdminDashboardProps {
