@@ -172,10 +172,14 @@ namespace AIPBackend.Repositories
 		}
 
 		/// <summary>
-		/// Mirrors the historical SPA predicate (substring match on
-		/// "shoplifting") so the server-side summary count reconciles with
-		/// any client-side fallback rendering that still iterates over the
-		/// paginated subset.
+		/// True when the incident type names shoplifting as the primary
+		/// offense. We match on the first word so "Shoplifting",
+		/// "shoplifting", and qualified variants like "Shoplifting / Theft"
+		/// all count, but distinct offenses that merely contain the word
+		/// as a modifier (notably "Attempted Shoplifting", where the theft
+		/// never completed) are excluded. The next character after the
+		/// "shoplifting" prefix must be a non-letter so we don't accidentally
+		/// bucket implausible derivatives ("Shopliftings" etc.).
 		/// </summary>
 		private static bool IsShopliftingIncidentType(string? incidentType)
 		{
@@ -184,7 +188,20 @@ namespace AIPBackend.Repositories
 				return false;
 			}
 
-			return incidentType.IndexOf("shoplifting", StringComparison.OrdinalIgnoreCase) >= 0;
+			var trimmed = incidentType.Trim();
+			const string prefix = "shoplifting";
+
+			if (!trimmed.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+			{
+				return false;
+			}
+
+			if (trimmed.Length == prefix.Length)
+			{
+				return true;
+			}
+
+			return !char.IsLetter(trimmed[prefix.Length]);
 		}
 
 		private IQueryable<Incident> ApplyListFilters(
