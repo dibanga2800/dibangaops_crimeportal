@@ -178,6 +178,18 @@ sql_allowed_ip_ranges     = []
 
 This disables public SQL access, provisions a VNet + private endpoint, and integrates the Container Apps environment with the VNet. **Plan during a maintenance window** — it may recreate the Container Apps environment.
 
+### Phase 1 perimeter (Standard FD, no Premium WAF)
+
+Terraform supports:
+
+- `backend_ingress_ip_restrictions_enabled` + `backend_ingress_allowed_cidrs` on the backend Container App ingress (Allow-only CIDR list).
+- Terraform checks enforce SQL private endpoint + non-empty CIDR list when restrictions are enabled.
+
+**Deploy steps:** [`docs/phase1-perimeter-deploy-checklist.md`](../docs/phase1-perimeter-deploy-checklist.md)  
+**Generate CIDRs:** `scripts/extract-front-door-backend-cidrs.ps1` from weekly Azure Service Tags (`AzureFrontDoor.Backend`).
+
+Stay on `front_door_sku_name = "Standard_AzureFrontDoor"` unless budget allows Premium (~$330/mo base vs ~$35/mo).
+
 ## Notes
 
 - `terraform.tfvars`, `terraform.prod.tfvars`, and `terraform.dev.tfvars` are **gitignored**; keep real values in local files or CI secrets (`TERRAFORM_PROD_TFVARS`). Commit only the `*.tfvars.example` templates.

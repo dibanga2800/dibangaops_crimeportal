@@ -18,6 +18,15 @@ sql_allowed_ip_ranges = []
 # VNet + private endpoint (disables SQL public access; may recreate Container Apps environment).
 enable_sql_private_endpoint = true
 
+# Standard SKU only (~$35/mo base). Do not set Premium_AzureFrontDoor unless budget allows (~$330/mo).
+front_door_sku_name = "Standard_AzureFrontDoor"
+
+# Phase 1 perimeter: restrict direct *.azurecontainerapps.io access to Front Door backend CIDRs.
+# Before apply: run scripts/extract-front-door-backend-cidrs.ps1 and paste output into backend_ingress_allowed_cidrs.
+# Leave enabled = false until CIDR list is populated (Terraform check enforces non-empty list when true).
+backend_ingress_ip_restrictions_enabled = false
+backend_ingress_allowed_cidrs           = []
+
 # Unified Front Door: www.example.com/api/* → API, /* → SPA (same-origin auth cookies).
 #
 # PRODUCTION (crimeportal-rg already exists): keep BOTH flags true. CI fails apply if custom domain is disabled.

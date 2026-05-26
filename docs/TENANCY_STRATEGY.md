@@ -27,7 +27,6 @@ Organisation (Customer)
 │       │   ├── EvidenceItems
 │       │   │   └── CustodyEvents
 │       │   └── AlertInstances
-│       └── DailyActivityReports
 ├── AlertRules
 ├── Users (via UserCustomerAssignment)
 └── CustomerPageAccess (UI access control)
@@ -43,8 +42,6 @@ Organisation (Customer)
 | AlertRule | `CustomerId` (nullable — global rules allowed) | Service layer |
 | Site | `fkCustomerID` (required) | Repository |
 | Region | `fkCustomerID` (required) | Repository |
-| DailyActivityReport | `CustomerId` (required) | Service layer |
-| DailyOccurrenceBook | `CustomerId` (required) | Service layer |
 | CustomerPageAccess | `CustomerId` (required) | Service layer |
 
 ### Entities Scoped via Parent

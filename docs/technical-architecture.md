@@ -183,7 +183,7 @@ DTO casing: the UI explicitly handles backend **PascalCase** `ApiResponseDto` sh
 Grounded in [`ApplicationDbContext`](../AIP_Backend/Data/ApplicationDbContext.cs) (non-exhaustive):
 
 - **Tenant-like structure:** `Customer`, `Region`, `Site`, assignments and page access (`UserCustomerAssignment`, `CustomerPageAccess`, `PageAccess`, `RolePageAccess`, `PageAccessSettings`).
-- **Operations:** `Incident`, `StolenItem`, `EvidenceItem`, `EvidenceCustodyEvent`, `AlertRule`, `AlertInstance`, `Product`, `StockItem`, daily activity and occurrence entities.
+- **Operations:** `Incident`, `StolenItem`, `EvidenceItem`, `EvidenceCustodyEvent`, `AlertRule`, `AlertInstance`, `Product`, `StockItem`.
 - **Workforce / identity:** `Employee`, Identity tables via `IdentityDbContext`.
 - **Analytics / risk:** `StoreRiskScore`, services for patterns and risk scoring (`IIncidentPatternService`, `IRiskScoringService`).
 

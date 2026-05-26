@@ -73,4 +73,26 @@ if [ -z "${HOSTNAME}" ] && [ -z "${WWW_HOST}" ]; then
 	fail "Set unified_front_door_hostname or frontend_www_custom_domain in terraform.prod.tfvars (e.g. www.dibangops.com)."
 fi
 
+SQL_PE="$(hcl_bool enable_sql_private_endpoint)"
+SQL_PUBLIC="$(hcl_bool sql_public_network_access_enabled)"
+INGRESS_RESTRICT="$(hcl_bool backend_ingress_ip_restrictions_enabled)"
+
+if [ "${SQL_PE}" = "true" ] && [ "${SQL_PUBLIC}" = "true" ]; then
+	fail "enable_sql_private_endpoint = true requires sql_public_network_access_enabled = false."
+fi
+
+if [ "${INGRESS_RESTRICT}" = "true" ]; then
+	if ! grep -qE '^[[:space:]]*backend_ingress_allowed_cidrs[[:space:]]*=[[:space:]]*\[' "${TFVARS_PATH}"; then
+		fail "backend_ingress_ip_restrictions_enabled = true requires backend_ingress_allowed_cidrs with at least one CIDR. Run scripts/extract-front-door-backend-cidrs.ps1."
+	fi
+fi
+
+if [ "${SQL_PE}" != "true" ]; then
+	fail "enable_sql_private_endpoint must be true for production (SQL private endpoint required). See docs/phase1-perimeter-deploy-checklist.md"
+fi
+
+if [ "${INGRESS_RESTRICT}" != "true" ]; then
+	echo "::warning::backend_ingress_ip_restrictions_enabled is not true — direct Container App FQDN bypass remains open."
+fi
+
 echo "Production edge tfvars validation passed."
