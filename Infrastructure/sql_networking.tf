@@ -74,3 +74,41 @@ resource "azurerm_private_endpoint" "sql" {
     private_dns_zone_ids = [azurerm_private_dns_zone.sql[0].id]
   }
 }
+
+# NAT Gateway for VNet-integrated Container Apps outbound egress.
+# Required because VNet-integrated Container Apps cannot reliably reach ACR,
+# App Insights, Key Vault, SMTP relays, or external model CDNs through Azure's
+# default outbound. Adds a static, deterministic egress IP so external service
+# allow-lists can be configured (see output nat_gateway_egress_ip).
+# Phase 1 v2: gated by enable_sql_private_endpoint && enable_nat_gateway_egress;
+# the validation script and a Terraform `check` block in checks.tf both refuse
+# to apply Phase 1 without it.
+resource "azurerm_public_ip" "nat_egress" {
+  count               = var.enable_sql_private_endpoint && var.enable_nat_gateway_egress ? 1 : 0
+  name                = "${var.resource_group}-nat-egress-pip"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+  allocation_method   = "Static"
+  sku                 = "Standard"
+}
+
+resource "azurerm_nat_gateway" "egress" {
+  count                   = var.enable_sql_private_endpoint && var.enable_nat_gateway_egress ? 1 : 0
+  name                    = "${var.resource_group}-egress-natgw"
+  location                = azurerm_resource_group.rg.location
+  resource_group_name     = azurerm_resource_group.rg.name
+  sku_name                = "Standard"
+  idle_timeout_in_minutes = var.nat_gateway_idle_timeout_minutes
+}
+
+resource "azurerm_nat_gateway_public_ip_association" "egress" {
+  count                = var.enable_sql_private_endpoint && var.enable_nat_gateway_egress ? 1 : 0
+  nat_gateway_id       = azurerm_nat_gateway.egress[0].id
+  public_ip_address_id = azurerm_public_ip.nat_egress[0].id
+}
+
+resource "azurerm_subnet_nat_gateway_association" "container_apps" {
+  count          = var.enable_sql_private_endpoint && var.enable_nat_gateway_egress ? 1 : 0
+  subnet_id      = azurerm_subnet.container_apps[0].id
+  nat_gateway_id = azurerm_nat_gateway.egress[0].id
+}

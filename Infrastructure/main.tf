@@ -333,6 +333,19 @@ resource "azurerm_container_app_environment" "env" {
   log_analytics_workspace_id = azurerm_log_analytics_workspace.logs.id
   infrastructure_subnet_id   = var.enable_sql_private_endpoint ? azurerm_subnet.container_apps[0].id : null
 
+  # Azure auto-populates these attributes after creation (the infrastructure
+  # resource group is derived from the env name; workload_profile is added as
+  # a Consumption block by the control plane). Terraform sees them as drift
+  # on every plan and would otherwise destroy-recreate the entire environment
+  # plus both Container Apps every apply (Phase 1 v2 bug 4).
+  # Re-evaluate whenever upgrading the hashicorp/azurerm provider major version.
+  lifecycle {
+    ignore_changes = [
+      infrastructure_resource_group_name,
+      workload_profile,
+    ]
+  }
+
   depends_on = [null_resource.register_microsoft_app]
 }
 

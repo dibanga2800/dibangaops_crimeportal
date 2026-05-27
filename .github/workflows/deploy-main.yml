@@ -2,19 +2,35 @@
 # For day-to-day work use:
 #   - Deploy Frontend (.github/workflows/deploy-frontend.yml) for AIP_UI-only changes
 #   - Deploy Backend (.github/workflows/deploy-backend.yml) for AIP_Backend/Infrastructure changes
+#
+# target_environment routes Terraform state, tfvars secret, and resource group:
+#   prod            — legacy crimeportal-rg (public SQL, www.dibangops.com today)
+#   prod-v2         — green crimeportal-prod-v2-rg (private SQL from birth; blue/green cutover)
+#   phase1-scratch  — throwaway rehearsal RG (optional; same Terraform graph as prod-v2)
 
 name: Deploy Full Stack
 
 on:
   workflow_dispatch:
+    inputs:
+      target_environment:
+        description: Target environment to deploy to
+        required: true
+        default: prod
+        type: choice
+        options:
+          - prod
+          - prod-v2
+          - phase1-scratch
 
 permissions:
   id-token: write
   contents: read
 
 # One deploy at a time so two workflows do not fight over the same remote state lease.
+# Include the target environment in the group so prod and scratch can run independently.
 concurrency:
-  group: crimeportal-terraform-deploy-${{ github.ref }}
+  group: crimeportal-terraform-deploy-${{ github.ref }}-${{ github.event.inputs.target_environment || 'prod' }}
   cancel-in-progress: false
 
 env:
@@ -26,6 +42,15 @@ env:
   AI_IMAGE_NAME: 'crimeportal-ai'
   # Public www hostname for post-deploy TLS/API smoke tests (override via repository variable PRODUCTION_WWW_HOSTNAME).
   PRODUCTION_WWW_HOSTNAME: ${{ vars.PRODUCTION_WWW_HOSTNAME || 'www.dibangops.com' }}
+  # Target environment routing. Defaults to 'prod' when triggered without an input
+  # (e.g. via the API). Use 'phase1-scratch' for the parallel pre-prod RG.
+  TARGET_ENV: ${{ github.event.inputs.target_environment || 'prod' }}
+  IS_SCRATCH: ${{ github.event.inputs.target_environment == 'phase1-scratch' }}
+  IS_PROD_V2: ${{ github.event.inputs.target_environment == 'prod-v2' }}
+  IS_LEGACY_PROD: ${{ github.event.inputs.target_environment == 'prod' }}
+  TARGET_RESOURCE_GROUP: ${{ github.event.inputs.target_environment == 'phase1-scratch' && 'crimeportal-phase1-scratch-rg' || (github.event.inputs.target_environment == 'prod-v2' && 'crimeportal-prod-v2-rg' || 'crimeportal-rg') }}
+  TF_VAR_resource_group: ${{ github.event.inputs.target_environment == 'phase1-scratch' && 'crimeportal-phase1-scratch-rg' || (github.event.inputs.target_environment == 'prod-v2' && 'crimeportal-prod-v2-rg' || 'crimeportal-rg') }}
+  STRICT_PROD_EDGE: ${{ github.event.inputs.target_environment == 'prod' && 'true' || 'false' }}
 
 jobs:
   terraform-bootstrap:
@@ -45,10 +70,42 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Guard scratch target requires scratch-only secrets
+        if: env.IS_SCRATCH == 'true'
+        env:
+          SCRATCH_TFVARS: ${{ secrets.TERRAFORM_PHASE1_SCRATCH_TFVARS }}
+          SCRATCH_STATE_KEY: ${{ secrets.TF_STATE_KEY_SCRATCH }}
+        run: |
+          set -euo pipefail
+          missing=()
+          if [ -z "${SCRATCH_TFVARS}" ]; then missing+=("TERRAFORM_PHASE1_SCRATCH_TFVARS"); fi
+          if [ -z "${SCRATCH_STATE_KEY}" ]; then missing+=("TF_STATE_KEY_SCRATCH"); fi
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::target_environment=phase1-scratch requires the following secrets to be set: ${missing[*]}. See Infrastructure/README.md (Blue/green and Phase 1)."
+            exit 1
+          fi
+          echo "All required scratch secrets are present."
+
+      - name: Guard prod-v2 target requires v2 secrets
+        if: env.IS_PROD_V2 == 'true'
+        env:
+          V2_TFVARS: ${{ secrets.TERRAFORM_PROD_V2_TFVARS }}
+          V2_STATE_KEY: ${{ secrets.TF_STATE_KEY_V2 }}
+        run: |
+          set -euo pipefail
+          missing=()
+          if [ -z "${V2_TFVARS}" ]; then missing+=("TERRAFORM_PROD_V2_TFVARS"); fi
+          if [ -z "${V2_STATE_KEY}" ]; then missing+=("TF_STATE_KEY_V2"); fi
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::target_environment=prod-v2 requires: ${missing[*]}. See Infrastructure/README.md and docs/blue-green-cutover-runbook.md"
+            exit 1
+          fi
+          echo "All required prod-v2 secrets are present."
+
       - name: Write terraform.prod.tfvars from secret
         uses: ./.github/actions/write-terraform-prod-tfvars
         with:
-          content: ${{ secrets.TERRAFORM_PROD_TFVARS }}
+          content: ${{ env.IS_SCRATCH == 'true' && secrets.TERRAFORM_PHASE1_SCRATCH_TFVARS || (env.IS_PROD_V2 == 'true' && secrets.TERRAFORM_PROD_V2_TFVARS || secrets.TERRAFORM_PROD_TFVARS) }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
@@ -67,15 +124,20 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x scripts/validate-terraform-prod-tfvars.sh
-          scripts/validate-terraform-prod-tfvars.sh Infrastructure/terraform.prod.tfvars
+          scripts/validate-terraform-prod-tfvars.sh \
+            Infrastructure/terraform.prod.tfvars \
+            "${TARGET_RESOURCE_GROUP}" \
+            "${STRICT_PROD_EDGE}"
 
       - name: Break orphaned Terraform state blob lease (if any)
+        env:
+          TF_STATE_KEY_RESOLVED: ${{ env.IS_SCRATCH == 'true' && secrets.TF_STATE_KEY_SCRATCH || (env.IS_PROD_V2 == 'true' && secrets.TF_STATE_KEY_V2 || secrets.TF_STATE_KEY) }}
         run: |
           set -euo pipefail
           SA="${{ secrets.TF_STATE_STORAGE_ACCOUNT }}"
           RG="${{ secrets.TF_STATE_RESOURCE_GROUP }}"
           CONTAINER="${{ secrets.TF_STATE_CONTAINER }}"
-          BLOB="${{ secrets.TF_STATE_KEY }}"
+          BLOB="${TF_STATE_KEY_RESOLVED}"
           KEY="$(az storage account keys list --resource-group "${RG}" --account-name "${SA}" --query '[0].value' -o tsv)"
           az storage blob lease break \
             --blob-name "${BLOB}" \
@@ -85,17 +147,19 @@ jobs:
             || true
 
       - name: Terraform Init
+        env:
+          TF_STATE_KEY_RESOLVED: ${{ env.IS_SCRATCH == 'true' && secrets.TF_STATE_KEY_SCRATCH || (env.IS_PROD_V2 == 'true' && secrets.TF_STATE_KEY_V2 || secrets.TF_STATE_KEY) }}
         run: |
           terraform init \
             -backend-config="resource_group_name=${{ secrets.TF_STATE_RESOURCE_GROUP }}" \
             -backend-config="storage_account_name=${{ secrets.TF_STATE_STORAGE_ACCOUNT }}" \
             -backend-config="container_name=${{ secrets.TF_STATE_CONTAINER }}" \
-            -backend-config="key=${{ secrets.TF_STATE_KEY }}"
+            -backend-config="key=${TF_STATE_KEY_RESOLVED}"
 
       - name: Detect existing infrastructure
         id: infra-check
         run: |
-          EXISTS="$(az group exists --name "crimeportal-rg")"
+          EXISTS="$(az group exists --name "${TARGET_RESOURCE_GROUP}")"
           echo "resource_group_exists=${EXISTS}" >> "$GITHUB_OUTPUT"
 
       - name: Compute budget start date (current month UTC)
@@ -188,7 +252,7 @@ jobs:
       - name: Write terraform.prod.tfvars from secret
         uses: ./.github/actions/write-terraform-prod-tfvars
         with:
-          content: ${{ secrets.TERRAFORM_PROD_TFVARS }}
+          content: ${{ env.IS_SCRATCH == 'true' && secrets.TERRAFORM_PHASE1_SCRATCH_TFVARS || (env.IS_PROD_V2 == 'true' && secrets.TERRAFORM_PROD_V2_TFVARS || secrets.TERRAFORM_PROD_TFVARS) }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
@@ -207,15 +271,20 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x scripts/validate-terraform-prod-tfvars.sh
-          scripts/validate-terraform-prod-tfvars.sh Infrastructure/terraform.prod.tfvars
+          scripts/validate-terraform-prod-tfvars.sh \
+            Infrastructure/terraform.prod.tfvars \
+            "${TARGET_RESOURCE_GROUP}" \
+            "${STRICT_PROD_EDGE}"
 
       - name: Break orphaned Terraform state blob lease (if any)
+        env:
+          TF_STATE_KEY_RESOLVED: ${{ env.IS_SCRATCH == 'true' && secrets.TF_STATE_KEY_SCRATCH || (env.IS_PROD_V2 == 'true' && secrets.TF_STATE_KEY_V2 || secrets.TF_STATE_KEY) }}
         run: |
           set -euo pipefail
           SA="${{ secrets.TF_STATE_STORAGE_ACCOUNT }}"
           RG="${{ secrets.TF_STATE_RESOURCE_GROUP }}"
           CONTAINER="${{ secrets.TF_STATE_CONTAINER }}"
-          BLOB="${{ secrets.TF_STATE_KEY }}"
+          BLOB="${TF_STATE_KEY_RESOLVED}"
           KEY="$(az storage account keys list --resource-group "${RG}" --account-name "${SA}" --query '[0].value' -o tsv)"
           az storage blob lease break \
             --blob-name "${BLOB}" \
@@ -225,12 +294,14 @@ jobs:
             || true
 
       - name: Terraform Init
+        env:
+          TF_STATE_KEY_RESOLVED: ${{ env.IS_SCRATCH == 'true' && secrets.TF_STATE_KEY_SCRATCH || (env.IS_PROD_V2 == 'true' && secrets.TF_STATE_KEY_V2 || secrets.TF_STATE_KEY) }}
         run: |
           terraform init \
             -backend-config="resource_group_name=${{ secrets.TF_STATE_RESOURCE_GROUP }}" \
             -backend-config="storage_account_name=${{ secrets.TF_STATE_STORAGE_ACCOUNT }}" \
             -backend-config="container_name=${{ secrets.TF_STATE_CONTAINER }}" \
-            -backend-config="key=${{ secrets.TF_STATE_KEY }}"
+            -backend-config="key=${TF_STATE_KEY_RESOLVED}"
 
       - name: Compute budget start date (current month UTC)
         id: budget-date
@@ -245,7 +316,7 @@ jobs:
           set -euo pipefail
           KV_SCOPE="$(az keyvault show \
             --name "${{ needs.terraform-bootstrap.outputs.key_vault_name }}" \
-            --resource-group "crimeportal-rg" \
+            --resource-group "${TARGET_RESOURCE_GROUP}" \
             --query id -o tsv)"
           SP_OID="$(az ad sp show --id "${{ secrets.AZURE_CLIENT_ID }}" --query id -o tsv)"
           RA_ID="$(az role assignment list \
@@ -301,6 +372,7 @@ jobs:
         run: sleep 30
 
       - name: Import existing COOP database into Terraform state
+        if: env.IS_LEGACY_PROD == 'true'
         env:
           TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
           TF_VAR_sql_admin_password: ${{ secrets.TF_VAR_SQL_ADMIN_PASSWORD }}
@@ -320,7 +392,7 @@ jobs:
           if ! terraform state show azurerm_mssql_database.sql_db >/dev/null 2>&1; then
             SQL_SERVER_ID="$(az sql server show \
               --name "crimeportalsql0gf8g" \
-              --resource-group "crimeportal-rg" \
+              --resource-group "${TARGET_RESOURCE_GROUP}" \
               --query id -o tsv)"
             COOP_DB_ID="${SQL_SERVER_ID}/databases/COOP"
             if az sql db show --ids "${COOP_DB_ID}" --query id -o tsv >/dev/null 2>&1; then
@@ -338,6 +410,7 @@ jobs:
           fi
 
       - name: Import existing www Static Web App custom domain into Terraform state
+        if: env.IS_LEGACY_PROD == 'true'
         env:
           TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
           TF_VAR_sql_admin_password: ${{ secrets.TF_VAR_SQL_ADMIN_PASSWORD }}
@@ -349,7 +422,7 @@ jobs:
             exit 0
           fi
           SUB="$(az account show --query id -o tsv)"
-          WWW_RESOURCE_ID="/subscriptions/${SUB}/resourceGroups/crimeportal-rg/providers/Microsoft.Web/staticSites/crimeportal-frontend/customDomains/www.dibangops.com"
+          WWW_RESOURCE_ID="/subscriptions/${SUB}/resourceGroups/${TARGET_RESOURCE_GROUP}/providers/Microsoft.Web/staticSites/crimeportal-frontend/customDomains/www.dibangops.com"
           if ! az resource show --ids "${WWW_RESOURCE_ID}" -o none 2>/dev/null; then
             echo "www.dibangops.com custom domain not found in Azure; Terraform will create it on apply."
             exit 0
@@ -364,6 +437,7 @@ jobs:
             "${WWW_RESOURCE_ID}"
 
       - name: Sync unified Front Door Terraform state (import rule set, drop legacy route)
+        if: env.IS_LEGACY_PROD == 'true'
         env:
           TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
           TF_VAR_sql_admin_password: ${{ secrets.TF_VAR_SQL_ADMIN_PASSWORD }}
@@ -371,7 +445,7 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x ../scripts/sync-unified-front-door-terraform-state.sh
-          ../scripts/sync-unified-front-door-terraform-state.sh crimeportal-rg crimeportal-frontend-unified-fd unifiedrouting apiorigingroup \
+          ../scripts/sync-unified-front-door-terraform-state.sh "${TARGET_RESOURCE_GROUP}" crimeportal-frontend-unified-fd unifiedrouting apiorigingroup \
             -var-file="terraform.prod.tfvars" \
             -var="budget_start_date=${{ steps.budget-date.outputs.value }}" \
             -var="backend_image=${{ needs.build-and-push-images.outputs.backend_image }}" \
@@ -398,19 +472,71 @@ jobs:
           done
           exit 1
 
-      - name: Capture backend URL
+      - name: Capture Terraform outputs for smoke tests
         id: tf-output
-        run: echo "backend_url=$(terraform output -raw backend_url)" >> "$GITHUB_OUTPUT"
+        run: |
+          set -euo pipefail
+          echo "backend_url=$(terraform output -raw backend_url)" >> "$GITHUB_OUTPUT"
+          echo "backend_container_app_url=$(terraform output -raw backend_container_app_url 2>/dev/null || true)" >> "$GITHUB_OUTPUT"
+          echo "unified_fd_host=$(terraform output -raw unified_front_door_endpoint_host 2>/dev/null || true)" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for Front Door origin propagation (legacy prod only)
+        if: env.IS_LEGACY_PROD == 'true'
+        run: |
+          echo "Allowing 10 minutes for Front Door origin hostname changes to propagate before www verification."
+          sleep 600
 
       - name: Verify production edge (TLS, API health, Front Door binding)
+        if: env.IS_LEGACY_PROD == 'true'
         uses: ./.github/actions/verify-production-edge
+        env:
+          EDGE_VERIFY_ATTEMPTS: '24'
+          EDGE_VERIFY_SLEEP_SECONDS: '15'
         with:
           production_hostname: ${{ env.PRODUCTION_WWW_HOSTNAME }}
+
+      - name: Verify green stack ingress (prod-v2 and scratch)
+        if: env.IS_SCRATCH == 'true' || env.IS_PROD_V2 == 'true'
+        env:
+          BACKEND_URL: ${{ steps.tf-output.outputs.backend_url }}
+          CA_BACKEND_URL: ${{ steps.tf-output.outputs.backend_container_app_url }}
+          UNIFIED_FD_HOST: ${{ steps.tf-output.outputs.unified_fd_host }}
+        run: |
+          set -euo pipefail
+          smoke_url() {
+            local label="$1"
+            local base="$2"
+            if [ -z "${base}" ]; then
+              echo "::warning::${label} URL empty; skipping."
+              return 0
+            fi
+            echo "Smoke-testing ${label} at ${base}/api/health"
+            for attempt in $(seq 1 12); do
+              HTTP_CODE="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "${base}/api/health" || echo '000')"
+              if [ "${HTTP_CODE}" = "200" ]; then
+                echo "${label} /api/health returned 200."
+                return 0
+              fi
+              echo "Attempt ${attempt}/12: HTTP ${HTTP_CODE}; retrying in 20s..."
+              sleep 20
+            done
+            echo "::warning::${label} /api/health did not return 200. Inspect Container App / Front Door logs."
+            return 1
+          }
+          FAILED=0
+          smoke_url "Container App (direct)" "${CA_BACKEND_URL}" || FAILED=1
+          if [ -n "${UNIFIED_FD_HOST}" ] && [ "${UNIFIED_FD_HOST}" != "null" ]; then
+            smoke_url "Unified Front Door (*.azurefd.net)" "https://${UNIFIED_FD_HOST}" || FAILED=1
+          elif [ -n "${BACKEND_URL}" ]; then
+            smoke_url "Public API URL" "${BACKEND_URL}" || FAILED=1
+          fi
+          exit "${FAILED}"
 
   deploy-frontend:
     name: Build and Deploy Frontend
     runs-on: ubuntu-latest
     needs: terraform-release
+    if: needs.terraform-release.result == 'success' && github.event.inputs.target_environment != 'phase1-scratch'
 
     steps:
       - name: Checkout
@@ -450,7 +576,7 @@ jobs:
       - name: Deploy to Azure Static Web Apps
         uses: Azure/static-web-apps-deploy@v1
         with:
-          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          azure_static_web_apps_api_token: ${{ github.event.inputs.target_environment == 'prod-v2' && secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_V2 || secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: upload
           app_location: swa-publish
@@ -460,6 +586,7 @@ jobs:
     name: Verify production edge
     runs-on: ubuntu-latest
     needs: deploy-frontend
+    if: needs.deploy-frontend.result == 'success' && github.event.inputs.target_environment == 'prod'
 
     steps:
       - name: Checkout
@@ -472,8 +599,16 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Wait for Front Door origin propagation
+        run: |
+          echo "Allowing 10 minutes for Front Door origin propagation before final www verification."
+          sleep 600
+
       - name: Verify www TLS and /api/health
         uses: ./.github/actions/verify-production-edge
+        env:
+          EDGE_VERIFY_ATTEMPTS: '24'
+          EDGE_VERIFY_SLEEP_SECONDS: '15'
         with:
           production_hostname: ${{ env.PRODUCTION_WWW_HOSTNAME }}
           skip_tfvars_validation: 'true'

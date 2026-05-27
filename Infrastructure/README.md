@@ -94,9 +94,45 @@ For GitHub Actions:
 - `TF_STATE_RESOURCE_GROUP`
 - `TF_STATE_STORAGE_ACCOUNT`
 - `TF_STATE_CONTAINER`
-- `TF_STATE_KEY`
+- `TF_STATE_KEY` — production state blob key (e.g. `crimeportal-prod.tfstate`)
 - `AZURE_STATIC_WEB_APPS_API_TOKEN` (optional but required for frontend deploy job)
 - `TF_VAR_BUDGET_ALERT_EMAILS` (JSON array string, e.g. `["team@yourcompany.com"]`)
+
+### Deploy targets (`target_environment`)
+
+`Deploy Full Stack` routes Terraform state, tfvars, and resource group by input:
+
+| Input | Resource group | State secret | Tfvars secret | www verify |
+|-------|----------------|--------------|---------------|------------|
+| `prod` (default) | `crimeportal-rg` | `TF_STATE_KEY` | `TERRAFORM_PROD_TFVARS` | Yes (`www`) |
+| `prod-v2` | `crimeportal-prod-v2-rg` | `TF_STATE_KEY_V2` | `TERRAFORM_PROD_V2_TFVARS` | No (smoke `*.azurefd.net` + CA FQDN) |
+| `phase1-scratch` | `crimeportal-phase1-scratch-rg` | `TF_STATE_KEY_SCRATCH` | `TERRAFORM_PHASE1_SCRATCH_TFVARS` | No |
+
+**Tfvars templates (committed):**
+
+- [`terraform.prod.public.tfvars.example`](terraform.prod.public.tfvars.example) — Path A legacy (public SQL)
+- [`terraform.prod.private.tfvars.example`](terraform.prod.private.tfvars.example) — Path B green (private SQL + NAT from first apply)
+
+**Blue/green cutover:** [`docs/blue-green-cutover-runbook.md`](../docs/blue-green-cutover-runbook.md)
+
+### Green stack secrets (`prod-v2`)
+
+Create **new** secrets (do not overwrite legacy until DNS cutover):
+
+- `TF_STATE_KEY_V2` — e.g. `crimeportal-prod-v2.tfstate` (same storage account/container as `TF_STATE_KEY`)
+- `TERRAFORM_PROD_V2_TFVARS` — full HCL from `terraform.prod.private.tfvars.example` with production values; first line must be a variable assignment
+- `AZURE_STATIC_WEB_APPS_API_TOKEN_V2` — SWA deployment token from the green Static Web App (after first green apply)
+
+The workflow sets `TF_VAR_resource_group=crimeportal-prod-v2-rg` and skips legacy-only steps (COOP DB import, www custom domain import, unified FD state sync, `www` edge verification).
+
+### Scratch RG secrets (`phase1-scratch`)
+
+Optional throwaway rehearsal — not a migration source. See [`docs/phase1-perimeter-runbook.md`](../docs/phase1-perimeter-runbook.md).
+
+- `TF_STATE_KEY_SCRATCH` — e.g. `crimeportal-phase1-scratch.tfstate`
+- `TERRAFORM_PHASE1_SCRATCH_TFVARS` — copy prod-v2 body; often `enable_unified_front_door = false` for CA-only smoke tests; lower `monthly_budget_amount` if desired
+
+Bootstrap fails fast if scratch or prod-v2 secrets are missing when those targets are selected.
 
 ## Budget alert configuration
 
@@ -182,11 +218,18 @@ This disables public SQL access, provisions a VNet + private endpoint, and integ
 
 Terraform supports:
 
+- `enable_sql_private_endpoint` provisions VNet + private endpoint + private DNS for `privatelink.database.windows.net` and disables SQL public network access.
+- `enable_nat_gateway_egress` (default `true`) attaches a Standard SKU NAT Gateway to the Container Apps subnet so VNet-integrated apps have deterministic outbound to ACR, App Insights, Key Vault, SMTP, and the InsightFace model CDNs. **Required** when `enable_sql_private_endpoint = true`; the `check "phase1_requires_nat_gateway"` assertion in `checks.tf` plus the validation script will refuse to apply otherwise. Cost ≈ £30/mo (NAT hours + Standard public IP) plus £0.045/GB processed.
 - `backend_ingress_ip_restrictions_enabled` + `backend_ingress_allowed_cidrs` on the backend Container App ingress (Allow-only CIDR list).
-- Terraform checks enforce SQL private endpoint + non-empty CIDR list when restrictions are enabled.
+- `lifecycle.ignore_changes` on `azurerm_container_app_environment.env` for `infrastructure_resource_group_name` and `workload_profile` so Azure-populated drift does not destroy-recreate the environment on every apply.
+- Terraform checks enforce SQL private endpoint + non-empty CIDR list when restrictions are enabled, plus the NAT requirement and the /23 minimum on the Container Apps subnet.
 
 **Deploy steps:** [`docs/phase1-perimeter-deploy-checklist.md`](../docs/phase1-perimeter-deploy-checklist.md)  
+**Operator runbook:** [`docs/phase1-perimeter-runbook.md`](../docs/phase1-perimeter-runbook.md)  
+**Pre-prod validation:** scratch RG dry-run via `target_environment = phase1-scratch` (see [`docs/phase1-perimeter-runbook.md`](../docs/phase1-perimeter-runbook.md)).  
 **Generate CIDRs:** `scripts/extract-front-door-backend-cidrs.ps1` from weekly Azure Service Tags (`AzureFrontDoor.Backend`).
+
+When SQL PE + NAT Gateway are enabled, the `nat_gateway_egress_ip` Terraform output exposes the static public IP for downstream allow-lists (SMTP relay, third-party APIs).
 
 Stay on `front_door_sku_name = "Standard_AzureFrontDoor"` unless budget allows Premium (~$330/mo base vs ~$35/mo).
 

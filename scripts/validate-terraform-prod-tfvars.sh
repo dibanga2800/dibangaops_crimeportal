@@ -1,10 +1,27 @@
 #!/usr/bin/env bash
 # Validates production tfvars guardrails before Terraform apply.
-# When crimeportal-rg already exists, unified Front Door + www custom domain must stay enabled.
+# When the target resource group already exists, unified Front Door +
+# www custom domain must stay enabled (production edge invariants).
+#
+# Phase 1 perimeter internal-consistency checks (SQL PE / public access
+# / NAT Gateway / ingress allow-list / subnet CIDR overlap / /23 minimum)
+# always run regardless of the target environment so they catch
+# misconfiguration on bootstrap, prod, and scratch alike.
+#
+# Usage:
+#   validate-terraform-prod-tfvars.sh [tfvars] [resource_group] [strict_prod_edge]
+# Args:
+#   tfvars            Path to tfvars file (default Infrastructure/terraform.prod.tfvars)
+#   resource_group    Target resource group (default crimeportal-rg)
+#   strict_prod_edge  When "false", skip the production edge invariants
+#                     (unified Front Door, custom domain, hostname) and the
+#                     Phase 1 rollback warnings. Use for non-production
+#                     environments (e.g. phase1-scratch). Default "true".
 set -euo pipefail
 
 TFVARS_PATH="${1:-Infrastructure/terraform.prod.tfvars}"
 RESOURCE_GROUP="${2:-crimeportal-rg}"
+STRICT_PROD_EDGE="${3:-true}"
 
 if [ ! -f "${TFVARS_PATH}" ]; then
 	echo "::error::Missing tfvars file: ${TFVARS_PATH}"
@@ -115,6 +132,11 @@ cidr_to_range() {
 	echo "${ip_int} $((ip_int + size - 1))"
 }
 
+fail() {
+	echo "::error::$1"
+	exit 1
+}
+
 RG_EXISTS="false"
 if command -v az >/dev/null 2>&1; then
 	if [ "$(az group exists --name "${RESOURCE_GROUP}" -o tsv 2>/dev/null || echo false)" = "true" ]; then
@@ -127,55 +149,36 @@ CUSTOM_DOMAIN="$(hcl_bool enable_unified_front_door_custom_domain)"
 HOSTNAME="$(hcl_string unified_front_door_hostname)"
 WWW_HOST="$(hcl_string frontend_www_custom_domain)"
 
-echo "validate-terraform-prod-tfvars: resource_group_exists=${RG_EXISTS} unified_fd=${UNIFIED:-<unset>} custom_domain=${CUSTOM_DOMAIN:-<unset>}"
-
-if [ "${RG_EXISTS}" != "true" ]; then
-	echo "Bootstrap mode: skipping strict production edge checks (resource group not found)."
-	exit 0
-fi
-
-fail() {
-	echo "::error::$1"
-	exit 1
-}
-
-if [ "${UNIFIED}" != "true" ]; then
-	fail "Production resource group exists but enable_unified_front_door is not true. Disabling unified Front Door breaks www TLS and same-origin auth. See docs/production-edge-runbook.md"
-fi
-
-if [ "${CUSTOM_DOMAIN}" != "true" ]; then
-	fail "Production resource group exists but enable_unified_front_door_custom_domain is not true. This causes NET::ERR_CERT_COMMON_NAME_INVALID on www after DNS cutover. See docs/production-edge-runbook.md"
-fi
-
-if [ -z "${HOSTNAME}" ] && [ -z "${WWW_HOST}" ]; then
-	fail "Set unified_front_door_hostname or frontend_www_custom_domain in terraform.prod.tfvars (e.g. www.dibangops.com)."
-fi
-
 SQL_PE="$(hcl_bool enable_sql_private_endpoint)"
 SQL_PUBLIC="$(hcl_bool sql_public_network_access_enabled)"
 INGRESS_RESTRICT="$(hcl_bool backend_ingress_ip_restrictions_enabled)"
+ENABLE_NAT="$(hcl_bool enable_nat_gateway_egress)"
+# enable_nat_gateway_egress defaults to true in variables.tf; treat unset as enabled.
+if [ -z "${ENABLE_NAT}" ]; then
+	ENABLE_NAT="true"
+fi
+
+echo "validate-terraform-prod-tfvars: resource_group=${RESOURCE_GROUP} exists=${RG_EXISTS} strict_prod_edge=${STRICT_PROD_EDGE} unified_fd=${UNIFIED:-<unset>} custom_domain=${CUSTOM_DOMAIN:-<unset>} sql_pe=${SQL_PE:-<unset>} nat=${ENABLE_NAT:-<unset>}"
+
+# ---------------------------------------------------------------------------
+# Phase 1 perimeter internal-consistency checks.
+# These ALWAYS run, regardless of RG_EXISTS or STRICT_PROD_EDGE, because they
+# detect tfvars configurations that would either fail apply or leave production
+# in an unsafe state (e.g. PE on without public-access off).
+# ---------------------------------------------------------------------------
 
 if [ "${SQL_PE}" = "true" ] && [ "${SQL_PUBLIC}" = "true" ]; then
 	fail "enable_sql_private_endpoint = true requires sql_public_network_access_enabled = false."
+fi
+
+if [ "${SQL_PE}" = "true" ] && [ "${ENABLE_NAT}" = "false" ]; then
+	fail "enable_sql_private_endpoint = true requires enable_nat_gateway_egress = true. VNet-integrated Container Apps cannot reliably pull from ACR without a NAT Gateway."
 fi
 
 if [ "${INGRESS_RESTRICT}" = "true" ]; then
 	if ! grep -qE '^[[:space:]]*backend_ingress_allowed_cidrs[[:space:]]*=[[:space:]]*\[' "${TFVARS_PATH}"; then
 		fail "backend_ingress_ip_restrictions_enabled = true requires backend_ingress_allowed_cidrs with at least one CIDR. Run scripts/extract-front-door-backend-cidrs.ps1."
 	fi
-fi
-
-# Phase 1 perimeter is the desired posture, but rollback to the public-SQL +
-# allow-list configuration is a legitimate operational decision (see
-# docs/phase1-perimeter-deploy-checklist.md → Rollback). Emit a warning instead
-# of failing so an informed rollback can land. The accompanying SQL public /
-# Azure-services firewall toggles still enforce internal consistency above.
-if [ "${SQL_PE}" != "true" ]; then
-	echo "::warning::enable_sql_private_endpoint is not true — production SQL private endpoint is disabled. Confirm this is an intentional rollback, not a regression. See docs/phase1-perimeter-deploy-checklist.md"
-fi
-
-if [ "${INGRESS_RESTRICT}" != "true" ]; then
-	echo "::warning::backend_ingress_ip_restrictions_enabled is not true — direct Container App FQDN bypass remains open."
 fi
 
 # Phase 1 only creates these subnets when enable_sql_private_endpoint = true,
@@ -210,6 +213,52 @@ fi
 CA_PREFIX="${CA_SUBNET#*/}"
 if [ "${CA_PREFIX}" -gt 23 ] 2>/dev/null; then
 	fail "container_apps_subnet_prefix (${CA_SUBNET}) is smaller than /23. Azure Container Apps requires a /23 or larger delegated subnet."
+fi
+
+# ---------------------------------------------------------------------------
+# Production edge invariants.
+# Only enforced when the target RG already exists AND we are in strict prod
+# edge mode. Skipped for bootstrap (RG not yet created) and for non-prod
+# environments (e.g. phase1-scratch) where unified Front Door and the
+# dibangops.com custom domain do not apply.
+# ---------------------------------------------------------------------------
+
+if [ "${RG_EXISTS}" != "true" ]; then
+	echo "Bootstrap mode: skipping production edge invariants (resource group '${RESOURCE_GROUP}' not found). Phase 1 perimeter checks above still ran."
+	echo "Tfvars validation passed."
+	exit 0
+fi
+
+if [ "${STRICT_PROD_EDGE}" != "true" ]; then
+	echo "Non-strict mode (strict_prod_edge=${STRICT_PROD_EDGE}): skipping production edge invariants. Phase 1 perimeter checks above still ran."
+	echo "Tfvars validation passed."
+	exit 0
+fi
+
+if [ "${UNIFIED}" != "true" ]; then
+	fail "Production resource group exists but enable_unified_front_door is not true. Disabling unified Front Door breaks www TLS and same-origin auth. See docs/production-edge-runbook.md"
+fi
+
+if [ "${CUSTOM_DOMAIN}" != "true" ]; then
+	fail "Production resource group exists but enable_unified_front_door_custom_domain is not true. This causes NET::ERR_CERT_COMMON_NAME_INVALID on www after DNS cutover. See docs/production-edge-runbook.md"
+fi
+
+if [ -z "${HOSTNAME}" ] && [ -z "${WWW_HOST}" ]; then
+	fail "Set unified_front_door_hostname or frontend_www_custom_domain in terraform.prod.tfvars (e.g. www.dibangops.com)."
+fi
+
+# Phase 1 perimeter is the desired posture in production, but rollback to the
+# public-SQL + allow-list configuration is a legitimate operational decision
+# (see docs/phase1-perimeter-deploy-checklist.md → Rollback). Emit warnings
+# instead of failing so an informed rollback can land. The accompanying SQL
+# public-access / Azure-services firewall toggles still enforce internal
+# consistency above (Phase 1 perimeter section).
+if [ "${SQL_PE}" != "true" ]; then
+	echo "::warning::enable_sql_private_endpoint is not true — production SQL private endpoint is disabled. Confirm this is an intentional rollback, not a regression. See docs/phase1-perimeter-deploy-checklist.md"
+fi
+
+if [ "${INGRESS_RESTRICT}" != "true" ]; then
+	echo "::warning::backend_ingress_ip_restrictions_enabled is not true — direct Container App FQDN bypass remains open."
 fi
 
 echo "Production edge tfvars validation passed."

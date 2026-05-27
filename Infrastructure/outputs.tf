@@ -71,3 +71,8 @@ output "application_insights_connection_string" {
   value     = try(azurerm_application_insights.appinsights[0].connection_string, null)
   sensitive = true
 }
+
+output "nat_gateway_egress_ip" {
+  description = "Static public IP used for VNet-integrated Container App outbound traffic. Add to external service allow-lists (SMTP relay, etc.) when SQL private endpoint + NAT Gateway are enabled."
+  value       = (var.enable_sql_private_endpoint && var.enable_nat_gateway_egress) ? azurerm_public_ip.nat_egress[0].ip_address : null
+}

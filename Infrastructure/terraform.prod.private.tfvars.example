@@ -1,0 +1,80 @@
+# Path B — green production (crimeportal-prod-v2-rg)
+# Paste into GitHub secret TERRAFORM_PROD_V2_TFVARS (first line must be a variable assignment, not a comment).
+# Workflow: Deploy Full Stack → target_environment = prod-v2
+# State: TF_STATE_KEY_V2 (e.g. crimeportal-prod-v2.tfstate)
+#
+# Private SQL + VNet-integrated CAE + NAT from first apply. Validate on *.azurefd.net only until DNS cutover.
+
+enable_application_insights  = true
+log_analytics_retention_days = 30
+
+key_vault_soft_delete_retention_days   = 90
+key_vault_purge_protection_enabled     = true
+backend_allow_insecure_connections     = false
+ai_allow_insecure_connections          = false
+
+# Path B: private SQL from day one
+enable_sql_private_endpoint            = true
+enable_nat_gateway_egress              = true
+sql_public_network_access_enabled      = false
+sql_allow_azure_services_firewall_rule = false
+sql_allowed_ip_ranges                  = []
+
+front_door_sku_name = "Standard_AzureFrontDoor"
+
+# Defer ingress allow-list until after SQL PE is stable (separate maintenance window)
+backend_ingress_ip_restrictions_enabled = false
+backend_ingress_allowed_cidrs           = []
+
+enable_unified_front_door               = true
+enable_unified_front_door_custom_domain = false
+unified_front_door_hostname             = "www.example.com"
+frontend_www_custom_domain              = "www.example.com"
+frontend_custom_domain                  = "example.com"
+frontend_url                            = "https://www.example.com,https://example.com"
+
+enable_api_front_door = false
+
+storage_blob_delete_retention_days      = 30
+storage_container_delete_retention_days = 7
+storage_blob_versioning_enabled         = true
+storage_change_feed_enabled             = true
+
+backend_container_cpu    = 0.5
+backend_container_memory = "1Gi"
+backend_min_replicas     = 1
+backend_max_replicas     = 3
+
+ai_container_cpu    = 1.0
+ai_container_memory = "2Gi"
+ai_min_replicas     = 0
+ai_max_replicas     = 2
+
+sql_max_size_gb = 5
+
+monthly_budget_amount = 75
+enable_budget_alert   = true
+budget_start_date     = "2026-04-01T00:00:00Z"
+budget_alert_emails   = ["ops@example.com"]
+
+smtp_host       = "smtp.example.com"
+smtp_port       = 587
+smtp_enable_ssl = true
+smtp_username   = "notifications@example.com"
+smtp_from_email = "notifications@example.com"
+smtp_from_name  = "Crime Portal Notifications"
+
+azure_openai_enabled  = false
+azure_openai_endpoint = "https://your-resource.openai.azure.com/"
+
+insightface_enabled            = true
+# Omit insightface_base_url so Terraform derives internal URL from the VNet CAE
+insightface_timeout_seconds    = 30
+insightface_min_similarity     = 0.85
+insightface_max_search_results = 3
+
+jwt_access_token_expiration_minutes = 60
+jwt_refresh_token_expiration_days   = 7
+
+# At cutover: set enable_unified_front_door_custom_domain = true, apply prod-v2, then repoint www CNAME.
+# See docs/blue-green-cutover-runbook.md
