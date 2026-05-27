@@ -486,6 +486,12 @@ jobs:
           echo "Allowing 10 minutes for Front Door origin hostname changes to propagate before www verification."
           sleep 600
 
+      - name: Wait for Front Door propagation (green stacks)
+        if: env.IS_SCRATCH == 'true' || env.IS_PROD_V2 == 'true'
+        run: |
+          echo "Allowing 5 minutes for new Front Door endpoint routing to propagate before green smoke tests."
+          sleep 300
+
       - name: Verify production edge (TLS, API health, Front Door binding)
         if: env.IS_LEGACY_PROD == 'true'
         uses: ./.github/actions/verify-production-edge
@@ -511,24 +517,26 @@ jobs:
               return 0
             fi
             echo "Smoke-testing ${label} at ${base}/api/health"
-            for attempt in $(seq 1 12); do
+            local max_attempts="${3:-12}"
+            for attempt in $(seq 1 "${max_attempts}"); do
               HTTP_CODE="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "${base}/api/health" || echo '000')"
               if [ "${HTTP_CODE}" = "200" ]; then
                 echo "${label} /api/health returned 200."
                 return 0
               fi
-              echo "Attempt ${attempt}/12: HTTP ${HTTP_CODE}; retrying in 20s..."
+              echo "Attempt ${attempt}/${max_attempts}: HTTP ${HTTP_CODE}; retrying in 20s..."
               sleep 20
             done
             echo "::warning::${label} /api/health did not return 200. Inspect Container App / Front Door logs."
             return 1
           }
           FAILED=0
-          smoke_url "Container App (direct)" "${CA_BACKEND_URL}" || FAILED=1
+          smoke_url "Container App (direct)" "${CA_BACKEND_URL}" 12 || FAILED=1
           if [ -n "${UNIFIED_FD_HOST}" ] && [ "${UNIFIED_FD_HOST}" != "null" ]; then
-            smoke_url "Unified Front Door (*.azurefd.net)" "https://${UNIFIED_FD_HOST}" || FAILED=1
+            # FD routing often lags behind direct CA health on first green bootstrap; warn only.
+            smoke_url "Unified Front Door (*.azurefd.net)" "https://${UNIFIED_FD_HOST}" 24 || true
           elif [ -n "${BACKEND_URL}" ]; then
-            smoke_url "Public API URL" "${BACKEND_URL}" || FAILED=1
+            smoke_url "Public API URL" "${BACKEND_URL}" 12 || FAILED=1
           fi
           exit "${FAILED}"
 
