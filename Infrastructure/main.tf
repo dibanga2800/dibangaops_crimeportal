@@ -267,6 +267,65 @@ resource "azurerm_container_registry" "acr" {
 
 # ---------------- CONTAINER APPS ----------------
 
+# User-assigned identities are created before the Container Apps so AcrPull and
+# Key Vault Secrets User role assignments exist before the first revision
+# provisions (avoids "Operation expired" when recreating apps after CAE replacement).
+resource "azurerm_user_assigned_identity" "backend" {
+  name                = "${var.backend_name}-uai"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+}
+
+resource "azurerm_user_assigned_identity" "ai" {
+  name                = "${var.ai_name}-uai"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+}
+
+resource "azurerm_role_assignment" "backend_keyvault_secrets_user" {
+  scope                = azurerm_key_vault.kv.id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_user_assigned_identity.backend.principal_id
+}
+
+resource "azurerm_role_assignment" "ai_keyvault_secrets_user" {
+  scope                = azurerm_key_vault.kv.id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_user_assigned_identity.ai.principal_id
+}
+
+resource "azurerm_role_assignment" "backend_acr_pull" {
+  count                = local.backend_uses_acr ? 1 : 0
+  scope                = azurerm_container_registry.acr.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_user_assigned_identity.backend.principal_id
+}
+
+resource "azurerm_role_assignment" "ai_acr_pull" {
+  count                = local.ai_uses_acr ? 1 : 0
+  scope                = azurerm_container_registry.acr.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_user_assigned_identity.ai.principal_id
+}
+
+resource "time_sleep" "wait_for_backend_rbac" {
+  depends_on = [
+    azurerm_role_assignment.backend_keyvault_secrets_user,
+    azurerm_role_assignment.backend_acr_pull,
+  ]
+
+  create_duration = "90s"
+}
+
+resource "time_sleep" "wait_for_ai_rbac" {
+  depends_on = [
+    azurerm_role_assignment.ai_keyvault_secrets_user,
+    azurerm_role_assignment.ai_acr_pull,
+  ]
+
+  create_duration = "90s"
+}
+
 resource "azurerm_container_app_environment" "env" {
   name                       = var.container_app_environment_name
   location                   = azurerm_resource_group.rg.location
@@ -283,26 +342,29 @@ resource "azurerm_container_app" "backend" {
   resource_group_name          = azurerm_resource_group.rg.name
   revision_mode                = "Single"
 
+  depends_on = [time_sleep.wait_for_backend_rbac]
+
   identity {
-    type = "SystemAssigned"
+    type         = "UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.backend.id]
   }
 
   secret {
     name                = "sql-connection-string"
     key_vault_secret_id = azurerm_key_vault_secret.sql_connection_string.versionless_id
-    identity            = "System"
+    identity            = azurerm_user_assigned_identity.backend.id
   }
 
   secret {
     name                = "storage-connection-string"
     key_vault_secret_id = azurerm_key_vault_secret.storage_connection_string.versionless_id
-    identity            = "System"
+    identity            = azurerm_user_assigned_identity.backend.id
   }
 
   secret {
     name                = "jwt-signing-key"
     key_vault_secret_id = azurerm_key_vault_secret.jwt_signing_key.versionless_id
-    identity            = "System"
+    identity            = azurerm_user_assigned_identity.backend.id
   }
 
   dynamic "secret" {
@@ -310,7 +372,7 @@ resource "azurerm_container_app" "backend" {
     content {
       name                = "smtp-password"
       key_vault_secret_id = azurerm_key_vault_secret.smtp_password[0].versionless_id
-      identity            = "System"
+      identity            = azurerm_user_assigned_identity.backend.id
     }
   }
 
@@ -319,7 +381,7 @@ resource "azurerm_container_app" "backend" {
     content {
       name                = "azure-openai-api-key"
       key_vault_secret_id = azurerm_key_vault_secret.azure_openai_api_key[0].versionless_id
-      identity            = "System"
+      identity            = azurerm_user_assigned_identity.backend.id
     }
   }
 
@@ -550,7 +612,7 @@ resource "azurerm_container_app" "backend" {
     for_each = local.backend_uses_acr ? [1] : []
     content {
       server   = azurerm_container_registry.acr.login_server
-      identity = "System"
+      identity = azurerm_user_assigned_identity.backend.id
     }
   }
 }
@@ -561,8 +623,11 @@ resource "azurerm_container_app" "ai" {
   resource_group_name          = azurerm_resource_group.rg.name
   revision_mode                = "Single"
 
+  depends_on = [time_sleep.wait_for_ai_rbac]
+
   identity {
-    type = "SystemAssigned"
+    type         = "UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.ai.id]
   }
 
   template {
@@ -592,35 +657,9 @@ resource "azurerm_container_app" "ai" {
     for_each = local.ai_uses_acr ? [1] : []
     content {
       server   = azurerm_container_registry.acr.login_server
-      identity = "System"
+      identity = azurerm_user_assigned_identity.ai.id
     }
   }
-}
-
-resource "azurerm_role_assignment" "backend_keyvault_secrets_user" {
-  scope                = azurerm_key_vault.kv.id
-  role_definition_name = "Key Vault Secrets User"
-  principal_id         = azurerm_container_app.backend.identity[0].principal_id
-}
-
-resource "azurerm_role_assignment" "ai_keyvault_secrets_user" {
-  scope                = azurerm_key_vault.kv.id
-  role_definition_name = "Key Vault Secrets User"
-  principal_id         = azurerm_container_app.ai.identity[0].principal_id
-}
-
-resource "azurerm_role_assignment" "backend_acr_pull" {
-  count                = local.backend_uses_acr ? 1 : 0
-  scope                = azurerm_container_registry.acr.id
-  role_definition_name = "AcrPull"
-  principal_id         = azurerm_container_app.backend.identity[0].principal_id
-}
-
-resource "azurerm_role_assignment" "ai_acr_pull" {
-  count                = local.ai_uses_acr ? 1 : 0
-  scope                = azurerm_container_registry.acr.id
-  role_definition_name = "AcrPull"
-  principal_id         = azurerm_container_app.ai.identity[0].principal_id
 }
 
 # ---------------- COST CONTROL ----------------
