@@ -404,6 +404,28 @@ variable "enable_sql_private_endpoint" {
   default     = false
 }
 
+variable "enable_nat_gateway_egress" {
+  description = <<-EOT
+    Provision a Standard SKU NAT Gateway on the Container Apps subnet so VNet-
+    integrated apps have deterministic outbound to ACR, App Insights, Key Vault,
+    SMTP, and the InsightFace model CDNs. REQUIRED when
+    enable_sql_private_endpoint = true. Adds approximately GBP 30/month
+    (NAT Gateway hours + Standard public IP) plus GBP 0.045/GB processed.
+  EOT
+  type        = bool
+  default     = true
+}
+
+variable "nat_gateway_idle_timeout_minutes" {
+  description = "TCP idle timeout in minutes for the NAT Gateway (4-120)."
+  type        = number
+  default     = 10
+  validation {
+    condition     = var.nat_gateway_idle_timeout_minutes >= 4 && var.nat_gateway_idle_timeout_minutes <= 120
+    error_message = "nat_gateway_idle_timeout_minutes must be between 4 and 120."
+  }
+}
+
 variable "vnet_address_space" {
   description = "Address space for the optional SQL private networking VNet"
   type        = string

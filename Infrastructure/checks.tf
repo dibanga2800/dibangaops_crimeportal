@@ -36,3 +36,17 @@ check "backend_ingress_ip_restrictions_require_cidrs" {
     error_message = "backend_ingress_ip_restrictions_enabled requires at least one entry in backend_ingress_allowed_cidrs. Run scripts/extract-front-door-backend-cidrs.ps1."
   }
 }
+
+check "phase1_requires_nat_gateway" {
+  assert {
+    condition     = !var.enable_sql_private_endpoint || var.enable_nat_gateway_egress
+    error_message = "When enable_sql_private_endpoint = true, enable_nat_gateway_egress must also be true. VNet-integrated Container Apps cannot reliably reach ACR without a NAT Gateway."
+  }
+}
+
+check "container_apps_subnet_minimum_size" {
+  assert {
+    condition     = !var.enable_sql_private_endpoint || tonumber(split("/", var.container_apps_subnet_prefix)[1]) <= 23
+    error_message = "container_apps_subnet_prefix must be /23 or larger when enable_sql_private_endpoint = true (Azure Container Apps requirement)."
+  }
+}

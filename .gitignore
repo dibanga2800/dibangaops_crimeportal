@@ -178,6 +178,7 @@ terraform.rc
 # Infrastructure local variable values (may contain secrets)
 Infrastructure/terraform.tfvars
 Infrastructure/terraform.prod.tfvars
+Infrastructure/terraform.prod.*.tfvars
 Infrastructure/terraform.dev.tfvars
 
 # Secret files and credentials
