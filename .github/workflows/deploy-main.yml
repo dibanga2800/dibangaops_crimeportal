@@ -547,6 +547,18 @@ jobs:
     if: needs.terraform-release.result == 'success' && github.event.inputs.target_environment != 'phase1-scratch'
 
     steps:
+      - name: Guard prod-v2 frontend requires V2 SWA deployment token
+        if: env.IS_PROD_V2 == 'true'
+        env:
+          V2_SWA_TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_V2 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${V2_SWA_TOKEN}" ]; then
+            echo "::error::target_environment=prod-v2 requires AZURE_STATIC_WEB_APPS_API_TOKEN_V2 (deployment token from crimeportal-frontend-prod-v2). Without it, deploy targets legacy SWA and green shows the default congratulations page."
+            exit 1
+          fi
+          echo "AZURE_STATIC_WEB_APPS_API_TOKEN_V2 is set."
+
       - name: Checkout
         uses: actions/checkout@v6
 
@@ -584,7 +596,7 @@ jobs:
       - name: Deploy to Azure Static Web Apps
         uses: Azure/static-web-apps-deploy@v1
         with:
-          azure_static_web_apps_api_token: ${{ github.event.inputs.target_environment == 'prod-v2' && secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_V2 || secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          azure_static_web_apps_api_token: ${{ env.IS_PROD_V2 == 'true' && secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_V2 || secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: upload
           app_location: swa-publish
