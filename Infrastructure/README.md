@@ -125,6 +125,8 @@ Create **new** secrets (do not overwrite legacy until DNS cutover):
 
 The workflow sets `TF_VAR_resource_group=crimeportal-prod-v2-rg` and skips legacy-only steps (COOP DB import, www custom domain import, unified FD state sync, `www` edge verification).
 
+**Parallel stack naming:** When `resource_group` is not `crimeportal-rg`, Terraform automatically suffixes globally unique resource names (Static Web App, Container Apps, unified Front Door endpoint/profile, etc.) with the stack slug derived from the RG (e.g. `crimeportal-prod-v2-rg` → `-prod-v2`). Legacy prod keeps unsuffixed names. No extra tfvars keys required.
+
 ### Scratch RG secrets (`phase1-scratch`)
 
 Optional throwaway rehearsal — not a migration source. See [`docs/phase1-perimeter-runbook.md`](../docs/phase1-perimeter-runbook.md).

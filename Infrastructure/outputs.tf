@@ -2,6 +2,11 @@ output "frontend_url" {
   value = "https://${azurerm_static_web_app.frontend.default_host_name}"
 }
 
+output "static_web_app_name" {
+  description = "Static Web App resource name (includes stack suffix for prod-v2 / scratch)"
+  value       = azurerm_static_web_app.frontend.name
+}
+
 output "public_app_url" {
   description = "Canonical public URL for the SPA (unified Front Door hostname when enabled, else SWA default)"
   value       = local.public_app_url
@@ -10,6 +15,16 @@ output "public_app_url" {
 output "unified_front_door_endpoint_host" {
   description = "Azure Front Door endpoint hostname for unified SPA+API (CNAME www to this before cutover)"
   value       = try(azurerm_cdn_frontdoor_endpoint.unified[0].host_name, null)
+}
+
+output "unified_front_door_profile_name" {
+  description = "Unified Front Door profile resource name (stack-suffixed for parallel blue/green stacks)"
+  value       = try(azurerm_cdn_frontdoor_profile.unified[0].name, null)
+}
+
+output "unified_front_door_endpoint_name" {
+  description = "Unified Front Door endpoint resource name (globally unique; stack-suffixed for prod-v2)"
+  value       = try(azurerm_cdn_frontdoor_endpoint.unified[0].name, null)
 }
 
 output "unified_front_door_url" {

@@ -3,14 +3,14 @@
 
 resource "azurerm_cdn_frontdoor_profile" "api" {
   count               = var.enable_api_front_door ? 1 : 0
-  name                = "${var.backend_name}-fd"
+  name                = "${local.backend_name_effective}-fd"
   resource_group_name = azurerm_resource_group.rg.name
   sku_name            = var.front_door_sku_name
 }
 
 resource "azurerm_cdn_frontdoor_firewall_policy" "api" {
   count               = var.enable_api_front_door ? 1 : 0
-  name                = "${replace(var.backend_name, "-", "")}waf"
+  name                = "${replace(local.backend_name_effective, "-", "")}waf"
   resource_group_name = azurerm_resource_group.rg.name
   sku_name            = var.front_door_waf_sku_name
   enabled             = true
@@ -31,13 +31,13 @@ resource "azurerm_cdn_frontdoor_firewall_policy" "api" {
 
 resource "azurerm_cdn_frontdoor_endpoint" "api" {
   count                    = var.enable_api_front_door ? 1 : 0
-  name                     = "${var.backend_name}-ep"
+  name                     = "${local.backend_name_effective}-ep"
   cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.api[0].id
 }
 
 resource "azurerm_cdn_frontdoor_origin_group" "api" {
   count                    = var.enable_api_front_door ? 1 : 0
-  name                     = "${var.backend_name}-origins"
+  name                     = "${local.backend_name_effective}-origins"
   cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.api[0].id
 
   load_balancing {
@@ -55,7 +55,7 @@ resource "azurerm_cdn_frontdoor_origin_group" "api" {
 
 resource "azurerm_cdn_frontdoor_origin" "api" {
   count                          = var.enable_api_front_door ? 1 : 0
-  name                           = "${var.backend_name}-containerapp"
+  name                           = "${local.backend_name_effective}-containerapp"
   cdn_frontdoor_origin_group_id  = azurerm_cdn_frontdoor_origin_group.api[0].id
   enabled                        = true
   host_name                      = azurerm_container_app.backend.latest_revision_fqdn
@@ -69,7 +69,7 @@ resource "azurerm_cdn_frontdoor_origin" "api" {
 
 resource "azurerm_cdn_frontdoor_route" "api" {
   count                         = var.enable_api_front_door ? 1 : 0
-  name                          = "${var.backend_name}-route"
+  name                          = "${local.backend_name_effective}-route"
   cdn_frontdoor_endpoint_id     = azurerm_cdn_frontdoor_endpoint.api[0].id
   cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.api[0].id
   cdn_frontdoor_origin_ids      = [azurerm_cdn_frontdoor_origin.api[0].id]
@@ -95,7 +95,7 @@ resource "azurerm_cdn_frontdoor_custom_domain" "api" {
 
 resource "azurerm_cdn_frontdoor_security_policy" "api" {
   count                    = var.enable_api_front_door ? 1 : 0
-  name                     = "${var.backend_name}-sec"
+  name                     = "${local.backend_name_effective}-sec"
   cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.api[0].id
 
   security_policies {

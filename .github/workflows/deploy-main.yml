@@ -167,7 +167,7 @@ jobs:
         run: echo "value=$(date -u +%Y-%m-01T00:00:00Z)" >> "$GITHUB_OUTPUT"
 
       - name: Terraform Apply (create infra and ACR)
-        if: ${{ steps.infra-check.outputs.resource_group_exists != 'true' }}
+        if: ${{ steps.infra-check.outputs.resource_group_exists != 'true' || env.IS_PROD_V2 == 'true' || env.IS_SCRATCH == 'true' }}
         env:
           TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
           TF_VAR_sql_admin_password: ${{ secrets.TF_VAR_SQL_ADMIN_PASSWORD }}

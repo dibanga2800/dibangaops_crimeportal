@@ -24,20 +24,28 @@ resource "random_password" "jwt_signing_key" {
 }
 
 locals {
-  suffix                = random_string.suffix.result
-  sql_server_name       = substr("${var.sql_server_name_prefix}${local.suffix}", 0, 63)
-  storage_account_name  = substr("${var.blob_storage_name_prefix}${local.suffix}", 0, 24)
-  acr_name              = substr("${var.acr_name_prefix}${local.suffix}", 0, 50)
-  key_vault_name        = substr("${var.keyvault_name_prefix}-${local.suffix}", 0, 24)
-  sql_admin_password    = var.sql_admin_password != null && var.sql_admin_password != "" ? var.sql_admin_password : random_password.sql_admin[0].result
-  backend_target_port   = var.backend_target_port == null ? (strcontains(var.backend_image, "azuredocs/containerapps-helloworld") ? 80 : 8080) : var.backend_target_port
-  ai_target_port        = var.ai_target_port == null ? (strcontains(var.ai_image, "azuredocs/containerapps-helloworld") ? 80 : 8000) : var.ai_target_port
-  backend_uses_acr      = strcontains(var.backend_image, ".azurecr.io/")
-  ai_uses_acr           = strcontains(var.ai_image, ".azurecr.io/")
-  jwt_signing_key_value = var.jwt_signing_key != null && var.jwt_signing_key != "" ? var.jwt_signing_key : random_password.jwt_signing_key.result
+  suffix = random_string.suffix.result
+  # Parallel stacks (prod-v2, phase1-scratch) need distinct globally-unique Azure names
+  # (Front Door endpoints, Static Web Apps, etc.). Legacy crimeportal-rg keeps bare names.
+  stack_slug                               = var.resource_group == "crimeportal-rg" ? "" : trimsuffix(trimprefix(var.resource_group, "crimeportal-"), "-rg")
+  stack_name_infix                         = local.stack_slug != "" ? "-${local.stack_slug}" : ""
+  frontend_name_effective                  = "${var.frontend_name}${local.stack_name_infix}"
+  backend_name_effective                   = "${var.backend_name}${local.stack_name_infix}"
+  ai_name_effective                        = "${var.ai_name}${local.stack_name_infix}"
+  container_app_environment_name_effective = "${var.container_app_environment_name}${local.stack_name_infix}"
+  sql_server_name                          = substr("${var.sql_server_name_prefix}${local.suffix}", 0, 63)
+  storage_account_name                     = substr("${var.blob_storage_name_prefix}${local.suffix}", 0, 24)
+  acr_name                                 = substr("${var.acr_name_prefix}${local.suffix}", 0, 50)
+  key_vault_name                           = substr("${var.keyvault_name_prefix}-${local.suffix}", 0, 24)
+  sql_admin_password                       = var.sql_admin_password != null && var.sql_admin_password != "" ? var.sql_admin_password : random_password.sql_admin[0].result
+  backend_target_port                      = var.backend_target_port == null ? (strcontains(var.backend_image, "azuredocs/containerapps-helloworld") ? 80 : 8080) : var.backend_target_port
+  ai_target_port                           = var.ai_target_port == null ? (strcontains(var.ai_image, "azuredocs/containerapps-helloworld") ? 80 : 8000) : var.ai_target_port
+  backend_uses_acr                         = strcontains(var.backend_image, ".azurecr.io/")
+  ai_uses_acr                              = strcontains(var.ai_image, ".azurecr.io/")
+  jwt_signing_key_value                    = var.jwt_signing_key != null && var.jwt_signing_key != "" ? var.jwt_signing_key : random_password.jwt_signing_key.result
   # Stable app ingress FQDN — do not use latest_revision_fqdn (stale after each backend image deploy).
   backend_container_fqdn         = "https://${azurerm_container_app.backend.ingress[0].fqdn}"
-  ai_container_fqdn              = "https://${var.ai_name}.internal.${azurerm_container_app_environment.env.default_domain}"
+  ai_container_fqdn              = "https://${local.ai_name_effective}.internal.${azurerm_container_app_environment.env.default_domain}"
   effective_frontend_url         = var.frontend_url != null && var.frontend_url != "" ? trimspace(var.frontend_url) : "https://${azurerm_static_web_app.frontend.default_host_name}"
   effective_insightface_base_url = var.insightface_base_url != null && var.insightface_base_url != "" ? var.insightface_base_url : local.ai_container_fqdn
   effective_api_public_url       = var.enable_api_front_door && var.api_custom_domain != null && var.api_custom_domain != "" ? "https://${var.api_custom_domain}" : local.backend_container_fqdn
@@ -271,13 +279,13 @@ resource "azurerm_container_registry" "acr" {
 # Key Vault Secrets User role assignments exist before the first revision
 # provisions (avoids "Operation expired" when recreating apps after CAE replacement).
 resource "azurerm_user_assigned_identity" "backend" {
-  name                = "${var.backend_name}-uai"
+  name                = "${local.backend_name_effective}-uai"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
 }
 
 resource "azurerm_user_assigned_identity" "ai" {
-  name                = "${var.ai_name}-uai"
+  name                = "${local.ai_name_effective}-uai"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
 }
@@ -327,7 +335,7 @@ resource "time_sleep" "wait_for_ai_rbac" {
 }
 
 resource "azurerm_container_app_environment" "env" {
-  name                       = var.container_app_environment_name
+  name                       = local.container_app_environment_name_effective
   location                   = azurerm_resource_group.rg.location
   resource_group_name        = azurerm_resource_group.rg.name
   log_analytics_workspace_id = azurerm_log_analytics_workspace.logs.id
@@ -350,7 +358,7 @@ resource "azurerm_container_app_environment" "env" {
 }
 
 resource "azurerm_container_app" "backend" {
-  name                         = var.backend_name
+  name                         = local.backend_name_effective
   container_app_environment_id = azurerm_container_app_environment.env.id
   resource_group_name          = azurerm_resource_group.rg.name
   revision_mode                = "Single"
@@ -631,7 +639,7 @@ resource "azurerm_container_app" "backend" {
 }
 
 resource "azurerm_container_app" "ai" {
-  name                         = var.ai_name
+  name                         = local.ai_name_effective
   container_app_environment_id = azurerm_container_app_environment.env.id
   resource_group_name          = azurerm_resource_group.rg.name
   revision_mode                = "Single"
@@ -709,7 +717,7 @@ resource "azurerm_consumption_budget_subscription" "monthly" {
 # ---------------- STATIC WEB APP ----------------
 
 resource "azurerm_static_web_app" "frontend" {
-  name                = var.frontend_name
+  name                = local.frontend_name_effective
   resource_group_name = azurerm_resource_group.rg.name
   location            = var.static_web_app_location
   sku_tier            = "Free"

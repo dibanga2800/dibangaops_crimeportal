@@ -3,7 +3,7 @@
 
 resource "azurerm_cdn_frontdoor_profile" "unified" {
   count               = var.enable_unified_front_door ? 1 : 0
-  name                = "${var.frontend_name}-unified-fd"
+  name                = "${local.frontend_name_effective}-unified-fd"
   resource_group_name = azurerm_resource_group.rg.name
   sku_name            = var.front_door_sku_name
 }
@@ -12,13 +12,13 @@ resource "azurerm_cdn_frontdoor_profile" "unified" {
 
 resource "azurerm_cdn_frontdoor_endpoint" "unified" {
   count                    = var.enable_unified_front_door ? 1 : 0
-  name                     = "${var.frontend_name}-unified-ep"
+  name                     = "${local.frontend_name_effective}-unified-ep"
   cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.unified[0].id
 }
 
 resource "azurerm_cdn_frontdoor_origin_group" "unified_api" {
   count                    = var.enable_unified_front_door ? 1 : 0
-  name                     = "${var.backend_name}-unified-api"
+  name                     = "${local.backend_name_effective}-unified-api"
   cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.unified[0].id
 
   load_balancing {
@@ -36,7 +36,7 @@ resource "azurerm_cdn_frontdoor_origin_group" "unified_api" {
 
 resource "azurerm_cdn_frontdoor_origin_group" "unified_spa" {
   count                    = var.enable_unified_front_door ? 1 : 0
-  name                     = "${var.frontend_name}-unified-spa"
+  name                     = "${local.frontend_name_effective}-unified-spa"
   cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.unified[0].id
 
   load_balancing {
@@ -54,7 +54,7 @@ resource "azurerm_cdn_frontdoor_origin_group" "unified_spa" {
 
 resource "azurerm_cdn_frontdoor_origin" "unified_api" {
   count                          = var.enable_unified_front_door ? 1 : 0
-  name                           = "${var.backend_name}-unified-api-origin"
+  name                           = "${local.backend_name_effective}-unified-api-origin"
   cdn_frontdoor_origin_group_id  = azurerm_cdn_frontdoor_origin_group.unified_api[0].id
   enabled                        = true
   host_name                      = azurerm_container_app.backend.ingress[0].fqdn
@@ -68,7 +68,7 @@ resource "azurerm_cdn_frontdoor_origin" "unified_api" {
 
 resource "azurerm_cdn_frontdoor_origin" "unified_spa" {
   count                          = var.enable_unified_front_door ? 1 : 0
-  name                           = "${var.frontend_name}-unified-spa-origin"
+  name                           = "${local.frontend_name_effective}-unified-spa-origin"
   cdn_frontdoor_origin_group_id  = azurerm_cdn_frontdoor_origin_group.unified_spa[0].id
   enabled                        = true
   host_name                      = azurerm_static_web_app.frontend.default_host_name
@@ -118,7 +118,7 @@ resource "azurerm_cdn_frontdoor_rule" "unified_api_override" {
 
 resource "azurerm_cdn_frontdoor_route" "unified_spa" {
   count                         = var.enable_unified_front_door ? 1 : 0
-  name                          = "${var.frontend_name}-unified-spa-route"
+  name                          = "${local.frontend_name_effective}-unified-spa-route"
   cdn_frontdoor_endpoint_id     = azurerm_cdn_frontdoor_endpoint.unified[0].id
   cdn_frontdoor_origin_group_id = azurerm_cdn_frontdoor_origin_group.unified_spa[0].id
   cdn_frontdoor_origin_ids      = [azurerm_cdn_frontdoor_origin.unified_spa[0].id]
