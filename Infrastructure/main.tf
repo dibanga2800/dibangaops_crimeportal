@@ -33,6 +33,8 @@ locals {
   backend_name_effective                   = "${var.backend_name}${local.stack_name_infix}"
   ai_name_effective                        = "${var.ai_name}${local.stack_name_infix}"
   container_app_environment_name_effective = "${var.container_app_environment_name}${local.stack_name_infix}"
+  # Apex/www SWA custom domains are single-tenant; only legacy prod attaches them until DNS cutover.
+  attach_static_web_app_custom_domains = local.stack_slug == ""
   sql_server_name                          = substr("${var.sql_server_name_prefix}${local.suffix}", 0, 63)
   storage_account_name                     = substr("${var.blob_storage_name_prefix}${local.suffix}", 0, 24)
   acr_name                                 = substr("${var.acr_name_prefix}${local.suffix}", 0, 50)
@@ -725,14 +727,14 @@ resource "azurerm_static_web_app" "frontend" {
 }
 
 resource "azurerm_static_web_app_custom_domain" "frontend_custom_domain" {
-  count             = var.frontend_custom_domain != null && var.frontend_custom_domain != "" ? 1 : 0
+  count             = local.attach_static_web_app_custom_domains && var.frontend_custom_domain != null && var.frontend_custom_domain != "" ? 1 : 0
   static_web_app_id = azurerm_static_web_app.frontend.id
   domain_name       = var.frontend_custom_domain
   validation_type   = "dns-txt-token"
 }
 
 resource "azurerm_static_web_app_custom_domain" "frontend_www_custom_domain" {
-  count             = var.frontend_www_custom_domain != null && var.frontend_www_custom_domain != "" ? 1 : 0
+  count             = local.attach_static_web_app_custom_domains && var.frontend_www_custom_domain != null && var.frontend_www_custom_domain != "" ? 1 : 0
   static_web_app_id = azurerm_static_web_app.frontend.id
   domain_name       = var.frontend_www_custom_domain
   validation_type   = "dns-txt-token"

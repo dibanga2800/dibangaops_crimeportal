@@ -127,6 +127,8 @@ The workflow sets `TF_VAR_resource_group=crimeportal-prod-v2-rg` and skips legac
 
 **Parallel stack naming:** When `resource_group` is not `crimeportal-rg`, Terraform automatically suffixes globally unique resource names (Static Web App, Container Apps, unified Front Door endpoint/profile, etc.) with the stack slug derived from the RG (e.g. `crimeportal-prod-v2-rg` → `-prod-v2`). Legacy prod keeps unsuffixed names. No extra tfvars keys required.
 
+**SWA custom domains on green:** `dibangops.com` / `www` stay on the legacy Static Web App until cutover. Prod-v2 still sets `frontend_custom_domain` / `frontend_www_custom_domain` in tfvars for backend CORS, but Terraform does not attach those domains to the green SWA (Azure allows one SWA per hostname). UAT uses `unified_front_door_endpoint_host` (`*.azurefd.net`).
+
 ### Scratch RG secrets (`phase1-scratch`)
 
 Optional throwaway rehearsal — not a migration source. See [`docs/phase1-perimeter-runbook.md`](../docs/phase1-perimeter-runbook.md).

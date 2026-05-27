@@ -28,10 +28,11 @@ backend_ingress_allowed_cidrs           = []
 
 enable_unified_front_door               = true
 enable_unified_front_door_custom_domain = false
-unified_front_door_hostname             = "www.example.com"
-frontend_www_custom_domain              = "www.example.com"
-frontend_custom_domain                  = "example.com"
-frontend_url                            = "https://www.example.com,https://example.com"
+unified_front_door_hostname             = "www.dibangops.com"
+# Used for backend CORS/AllowedHosts on green; SWA custom domains are NOT attached on prod-v2 (legacy still owns www until cutover).
+frontend_www_custom_domain              = "www.dibangops.com"
+frontend_custom_domain                  = "dibangops.com"
+frontend_url                            = "https://www.dibangops.com,https://dibangops.com"
 
 enable_api_front_door = false
 
@@ -55,17 +56,17 @@ sql_max_size_gb = 5
 monthly_budget_amount = 75
 enable_budget_alert   = true
 budget_start_date     = "2026-04-01T00:00:00Z"
-budget_alert_emails   = ["ops@example.com"]
+budget_alert_emails   = ["crimeportalai@gmail.com"]
 
-smtp_host       = "smtp.example.com"
+smtp_host       = "smtp.gmail.com"
 smtp_port       = 587
 smtp_enable_ssl = true
-smtp_username   = "notifications@example.com"
-smtp_from_email = "notifications@example.com"
+smtp_username   = "crimeportalai@gmail.com"
+smtp_from_email = "crimeportalai@gmail.com"
 smtp_from_name  = "Crime Portal Notifications"
 
 azure_openai_enabled  = false
-azure_openai_endpoint = "https://your-resource.openai.azure.com/"
+azure_openai_endpoint = "https://crime-portal-ai.openai.azure.com/"
 
 insightface_enabled            = true
 # Omit insightface_base_url so Terraform derives internal URL from the VNet CAE
