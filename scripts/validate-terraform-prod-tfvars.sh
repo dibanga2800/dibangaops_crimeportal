@@ -165,8 +165,13 @@ if [ "${INGRESS_RESTRICT}" = "true" ]; then
 	fi
 fi
 
+# Phase 1 perimeter is the desired posture, but rollback to the public-SQL +
+# allow-list configuration is a legitimate operational decision (see
+# docs/phase1-perimeter-deploy-checklist.md → Rollback). Emit a warning instead
+# of failing so an informed rollback can land. The accompanying SQL public /
+# Azure-services firewall toggles still enforce internal consistency above.
 if [ "${SQL_PE}" != "true" ]; then
-	fail "enable_sql_private_endpoint must be true for production (SQL private endpoint required). See docs/phase1-perimeter-deploy-checklist.md"
+	echo "::warning::enable_sql_private_endpoint is not true — production SQL private endpoint is disabled. Confirm this is an intentional rollback, not a regression. See docs/phase1-perimeter-deploy-checklist.md"
 fi
 
 if [ "${INGRESS_RESTRICT}" != "true" ]; then
