@@ -76,10 +76,12 @@ const getStoreHourCount = (store: StoreDrilldownData, hour: number): number => {
 
 type DayOfWeekChartRow = DayOfWeekData & {
 	storesPeaking: number
+	storesWithIncidents: number
 }
 
 type TimeOfDayChartRow = TimeOfDayData & {
 	storesPeaking: number
+	storesWithIncidents: number
 }
 
 const DayOfWeekTooltip = ({ active, payload }: ChartTooltipProps) => {
@@ -99,7 +101,7 @@ const DayOfWeekTooltip = ({ active, payload }: ChartTooltipProps) => {
 				{point.incidents} {point.incidents === 1 ? 'incident' : 'incidents'} ({point.percentage.toFixed(1)}% of period)
 			</p>
 			<p className="text-muted-foreground">
-				{point.storesPeaking} {point.storesPeaking === 1 ? 'store peaks' : 'stores peak'} on this day
+				across {point.storesWithIncidents} {point.storesWithIncidents === 1 ? 'store' : 'stores'} on this day
 			</p>
 		</div>
 	)
@@ -122,7 +124,7 @@ const TimeOfDayTooltip = ({ active, payload }: ChartTooltipProps) => {
 				{point.incidents} {point.incidents === 1 ? 'incident' : 'incidents'} ({point.percentage.toFixed(1)}% of period)
 			</p>
 			<p className="text-muted-foreground">
-				{point.storesPeaking} {point.storesPeaking === 1 ? 'store peaks' : 'stores peak'} at this hour
+				across {point.storesWithIncidents} {point.storesWithIncidents === 1 ? 'store' : 'stores'} at this hour
 			</p>
 		</div>
 	)
@@ -148,9 +150,13 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 	const dayOfWeekData = useMemo<DayOfWeekChartRow[]>(() => {
 		return data.dayOfWeek.map((item) => {
 			const peakingStores = storeList.filter((store) => store.peakDay === item.day)
+			const storesWithIncidents = storeList.filter(
+				(store) => getStoreDayCount(store, item.day) > 0,
+			).length
 			return {
 				...item,
 				storesPeaking: peakingStores.length,
+				storesWithIncidents,
 				fill: CHART_COLORS[0],
 			}
 		})
@@ -163,9 +169,13 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 			.sort((a, b) => a.hour - b.hour)
 			.map((item) => {
 				const peakingStores = storeList.filter((store) => store.peakHour === item.hour)
+				const storesWithIncidents = storeList.filter(
+					(store) => getStoreHourCount(store, item.hour) > 0,
+				).length
 				return {
 					...item,
 					storesPeaking: peakingStores.length,
+					storesWithIncidents,
 					fill: CHART_COLORS[1],
 				}
 			})
