@@ -365,7 +365,11 @@ namespace AIPBackend.Services
 				.GroupBy(h => h!.Value)
 				.ToDictionary(g => g.Key, g => g.Count());
 
-			var timeOfDay = Enumerable.Range(7, 16).Select(h =>
+			// Emit all 24 hours so every incident is represented and the
+			// per-hour percentages reconcile to 100% of the period total.
+			// Hours outside store operating windows were previously dropped,
+			// which hid late-night/early-morning incidents from the chart.
+			var timeOfDay = Enumerable.Range(0, 24).Select(h =>
 			{
 				var count = hourGroups.GetValueOrDefault(h, 0);
 				return new TimeOfDayDataDto

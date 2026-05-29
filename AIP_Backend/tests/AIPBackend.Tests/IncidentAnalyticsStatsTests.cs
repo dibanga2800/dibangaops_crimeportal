@@ -388,6 +388,104 @@ public class IncidentAnalyticsStatsTests
 		Assert.Equal(seedCount, result.Types.Sum(t => t.Count));
 	}
 
+	[Fact]
+	public async Task GetAnalyticsHubAsync_time_of_day_covers_all_hours_and_keeps_late_night_incidents()
+	{
+		const int customerId = 53;
+
+		await using var context = CreateDbContext();
+		SeedCustomer(context, customerId);
+
+		var incidentDate = new DateTime(2026, 5, 13); // Wednesday
+		// Times deliberately span the previously dropped windows:
+		//   02:15 (early morning) and 23:30 (late night) were excluded by the
+		//   old 07:00-22:00 chart window even though they exist in the data.
+		var times = new[] { "02:15", "09:00", "14:45", "23:30" };
+		foreach (var time in times)
+		{
+			context.Incidents.Add(new Incident
+			{
+				CustomerId = customerId,
+				StoreName = "Central",
+				StaffMemberName = "Officer",
+				DateOfIncident = incidentDate,
+				TimeOfIncident = time,
+				DateInputted = DateTime.UtcNow,
+				IncidentType = "Shoplifting",
+				CreatedBy = "test-user",
+			});
+		}
+		await context.SaveChangesAsync();
+
+		var service = CreateAnalyticsService(context);
+		var result = await service.GetAnalyticsHubAsync(
+			from: new DateTime(2026, 5, 1),
+			to: new DateTime(2026, 5, 31));
+
+		var timeOfDay = result.CrimeTrends.TimeOfDay;
+
+		// Every hour of the 24-hour clock must be represented so no incident
+		// is silently hidden from the distribution.
+		Assert.Equal(24, timeOfDay.Count);
+		Assert.Equal(Enumerable.Range(0, 24), timeOfDay.Select(t => t.Hour));
+
+		// Late-night / early-morning incidents must now be counted.
+		Assert.Equal(1, timeOfDay.Single(t => t.Hour == 2).Incidents);
+		Assert.Equal(1, timeOfDay.Single(t => t.Hour == 23).Incidents);
+
+		// Every seeded incident has a parseable time, so the per-hour buckets
+		// must reconcile to the full total (percentages sum to 100%).
+		Assert.Equal(times.Length, timeOfDay.Sum(t => t.Incidents));
+	}
+
+	[Fact]
+	public async Task GetAnalyticsHubAsync_day_of_week_counts_map_to_the_correct_weekday()
+	{
+		const int customerId = 57;
+
+		await using var context = CreateDbContext();
+		SeedCustomer(context, customerId);
+
+		var mondayDate = new DateTime(2026, 5, 11); // Monday
+		Assert.Equal(DayOfWeek.Monday, mondayDate.DayOfWeek);
+
+		for (var i = 0; i < 3; i++)
+		{
+			context.Incidents.Add(new Incident
+			{
+				CustomerId = customerId,
+				StoreName = "Central",
+				StaffMemberName = "Officer",
+				DateOfIncident = mondayDate,
+				TimeOfIncident = "10:00",
+				DateInputted = DateTime.UtcNow,
+				IncidentType = "Shoplifting",
+				CreatedBy = "test-user",
+			});
+		}
+		await context.SaveChangesAsync();
+
+		var service = CreateAnalyticsService(context);
+		var result = await service.GetAnalyticsHubAsync(
+			from: new DateTime(2026, 5, 1),
+			to: new DateTime(2026, 5, 31));
+
+		var dayOfWeek = result.CrimeTrends.DayOfWeek;
+
+		// The bar value is the incident count for that weekday — all three
+		// seeded incidents land on Monday and no other day.
+		Assert.Equal(3, dayOfWeek.Single(d => d.Day == nameof(DayOfWeek.Monday)).Incidents);
+		Assert.All(
+			dayOfWeek.Where(d => d.Day != nameof(DayOfWeek.Monday)),
+			d => Assert.Equal(0, d.Incidents));
+	}
+
+	private static IncidentAnalyticsService CreateAnalyticsService(ApplicationDbContext context)
+	{
+		var repository = new IncidentRepository(context);
+		return new IncidentAnalyticsService(repository, NullLogger<IncidentAnalyticsService>.Instance);
+	}
+
 	private static ApplicationDbContext CreateDbContext()
 	{
 		var options = new DbContextOptionsBuilder<ApplicationDbContext>()

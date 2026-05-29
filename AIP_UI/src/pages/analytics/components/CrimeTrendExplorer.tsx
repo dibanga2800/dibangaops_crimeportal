@@ -76,12 +76,10 @@ const getStoreHourCount = (store: StoreDrilldownData, hour: number): number => {
 
 type DayOfWeekChartRow = DayOfWeekData & {
 	storesPeaking: number
-	incidentsFromPeakingStores: number
 }
 
 type TimeOfDayChartRow = TimeOfDayData & {
 	storesPeaking: number
-	incidentsFromPeakingStores: number
 }
 
 const DayOfWeekTooltip = ({ active, payload }: ChartTooltipProps) => {
@@ -98,14 +96,10 @@ const DayOfWeekTooltip = ({ active, payload }: ChartTooltipProps) => {
 		<div className="rounded-md border border-border bg-background px-3 py-2 text-sm shadow-md">
 			<p className="font-semibold">{point.day}</p>
 			<p>
-				{point.storesPeaking} {point.storesPeaking === 1 ? 'store peaks' : 'stores peak'} on this day
-			</p>
-			<p>
-				{point.incidentsFromPeakingStores}{' '}
-				{point.incidentsFromPeakingStores === 1 ? 'incident' : 'incidents'} on this day from peaking stores
+				{point.incidents} {point.incidents === 1 ? 'incident' : 'incidents'} ({point.percentage.toFixed(1)}% of period)
 			</p>
 			<p className="text-muted-foreground">
-				{point.incidents} incidents across all stores ({point.percentage.toFixed(1)}% of period)
+				{point.storesPeaking} {point.storesPeaking === 1 ? 'store peaks' : 'stores peak'} on this day
 			</p>
 		</div>
 	)
@@ -125,14 +119,10 @@ const TimeOfDayTooltip = ({ active, payload }: ChartTooltipProps) => {
 		<div className="rounded-md border border-border bg-background px-3 py-2 text-sm shadow-md">
 			<p className="font-semibold">{point.label}</p>
 			<p>
-				{point.storesPeaking} {point.storesPeaking === 1 ? 'store peaks' : 'stores peak'} at this hour
-			</p>
-			<p>
-				{point.incidentsFromPeakingStores}{' '}
-				{point.incidentsFromPeakingStores === 1 ? 'incident' : 'incidents'} at this hour from peaking stores
+				{point.incidents} {point.incidents === 1 ? 'incident' : 'incidents'} ({point.percentage.toFixed(1)}% of period)
 			</p>
 			<p className="text-muted-foreground">
-				{point.incidents} incidents across all stores ({point.percentage.toFixed(1)}% of period)
+				{point.storesPeaking} {point.storesPeaking === 1 ? 'store peaks' : 'stores peak'} at this hour
 			</p>
 		</div>
 	)
@@ -158,33 +148,24 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 	const dayOfWeekData = useMemo<DayOfWeekChartRow[]>(() => {
 		return data.dayOfWeek.map((item) => {
 			const peakingStores = storeList.filter((store) => store.peakDay === item.day)
-			const incidentsFromPeakingStores = peakingStores.reduce(
-				(sum, store) => sum + getStoreDayCount(store, item.day),
-				0,
-			)
 			return {
 				...item,
 				storesPeaking: peakingStores.length,
-				incidentsFromPeakingStores,
 				fill: CHART_COLORS[0],
 			}
 		})
 	}, [data.dayOfWeek, storeList])
 
 	const timeOfDayData = useMemo<TimeOfDayChartRow[]>(() => {
-		// Filter to only show store operating hours (7 AM - 10 PM)
-		return data.timeOfDay
-			.filter((item) => item.hour >= 7 && item.hour <= 22)
+		// Show every hour the backend reports so no incidents are hidden;
+		// order ascending by hour for a readable 24-hour distribution.
+		return [...data.timeOfDay]
+			.sort((a, b) => a.hour - b.hour)
 			.map((item) => {
 				const peakingStores = storeList.filter((store) => store.peakHour === item.hour)
-				const incidentsFromPeakingStores = peakingStores.reduce(
-					(sum, store) => sum + getStoreHourCount(store, item.hour),
-					0,
-				)
 				return {
 					...item,
 					storesPeaking: peakingStores.length,
-					incidentsFromPeakingStores,
 					fill: CHART_COLORS[1],
 				}
 			})
@@ -430,9 +411,9 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 										<YAxis className="text-xs" tick={{ fill: '#6b7280' }} />
 										<Tooltip content={<DayOfWeekTooltip />} />
 										<Bar
-											dataKey="storesPeaking"
+											dataKey="incidents"
 											fill={CHART_COLORS[0]}
-											name="Stores peaking"
+											name="Incidents"
 											radius={[8, 8, 0, 0]}
 											onClick={(barData) => {
 												const payload = barData?.payload as DayOfWeekData | undefined
@@ -518,9 +499,9 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 										<YAxis className="text-xs" tick={{ fill: '#6b7280' }} />
 										<Tooltip content={<TimeOfDayTooltip />} />
 										<Bar
-											dataKey="storesPeaking"
+											dataKey="incidents"
 											fill={CHART_COLORS[1]}
-											name="Stores peaking"
+											name="Incidents"
 											radius={[8, 8, 0, 0]}
 											onClick={(barData) => {
 												const payload = barData?.payload as TimeOfDayData | undefined
