@@ -1,8 +1,8 @@
 # Frontend-only: build AIP_UI and deploy to Azure Static Web Apps.
 # Does not build container images or run Terraform apply.
 #
+# Post blue/green cutover, path-triggered pushes target prod-v2 (green stack).
 # Production SPA uses same-origin VITE_API_BASE_URL=/api (unified Front Door on www).
-# The resolve-api-url job remains for diagnostics; build does not embed the Container Apps FQDN.
 
 name: Deploy Frontend
 
@@ -27,14 +27,16 @@ env:
   TERRAFORM_VERSION: '1.13.4'
   NODE_VERSION: '22'
   PRODUCTION_WWW_HOSTNAME: ${{ vars.PRODUCTION_WWW_HOSTNAME || 'www.dibangops.com' }}
+  RESOURCE_GROUP: crimeportal-prod-v2-rg
+  BACKEND_APP_NAME: crimeportal-backend-prod-v2
+  FD_PROFILE_NAME: crimeportal-frontend-prod-v2-unified-fd
+  FD_ENDPOINT_NAME: crimeportal-frontend-prod-v2-unified-ep
+  FD_ROUTE_NAME: crimeportal-frontend-prod-v2-unified-spa-route
 
 jobs:
   resolve-api-url:
     name: Resolve API URL
     runs-on: ubuntu-latest
-    env:
-      RESOURCE_GROUP: crimeportal-rg
-      BACKEND_APP_NAME: crimeportal-backend
     outputs:
       backend_url: ${{ steps.final.outputs.backend_url }}
 
@@ -86,7 +88,7 @@ jobs:
             -backend-config="resource_group_name=${{ secrets.TF_STATE_RESOURCE_GROUP }}" \
             -backend-config="storage_account_name=${{ secrets.TF_STATE_STORAGE_ACCOUNT }}" \
             -backend-config="container_name=${{ secrets.TF_STATE_CONTAINER }}" \
-            -backend-config="key=${{ secrets.TF_STATE_KEY }}"
+            -backend-config="key=${{ secrets.TF_STATE_KEY_V2 }}"
 
       - name: Resolve API URL from Azure
         if: steps.from-secret.outputs.found != 'true'
@@ -133,6 +135,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Guard prod-v2 frontend requires V2 SWA deployment token
+        env:
+          V2_SWA_TOKEN: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_V2 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${V2_SWA_TOKEN}" ]; then
+            echo "::error::prod-v2 frontend deploy requires AZURE_STATIC_WEB_APPS_API_TOKEN_V2."
+            exit 1
+          fi
+          echo "AZURE_STATIC_WEB_APPS_API_TOKEN_V2 is set."
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
@@ -148,7 +161,6 @@ jobs:
         working-directory: AIP_UI
         env:
           VITE_APP_ENV: production
-          # Same-origin API via unified Front Door (www.example.com/api). Requires enable_unified_front_door + www DNS cutover.
           VITE_API_BASE_URL: /api
           VITE_IDLE_TIMEOUT_MINUTES: '60'
         run: npm run build:production
@@ -165,7 +177,7 @@ jobs:
       - name: Deploy to Azure Static Web Apps
         uses: Azure/static-web-apps-deploy@v1
         with:
-          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_V2 }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: upload
           app_location: swa-publish
@@ -192,3 +204,8 @@ jobs:
         with:
           production_hostname: ${{ env.PRODUCTION_WWW_HOSTNAME }}
           skip_tfvars_validation: 'true'
+          skip_orphan_cleanup: 'true'
+          azure_resource_group: ${{ env.RESOURCE_GROUP }}
+          fd_profile_name: ${{ env.FD_PROFILE_NAME }}
+          fd_endpoint_name: ${{ env.FD_ENDPOINT_NAME }}
+          fd_route_name: ${{ env.FD_ROUTE_NAME }}

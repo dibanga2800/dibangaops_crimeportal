@@ -1,5 +1,7 @@
 # Backend + AI image release only (no Terraform apply, no Key Vault/infra mutation).
 # Frontend deploy remains separate in deploy-frontend.yml.
+#
+# Post blue/green cutover, path-triggered pushes target prod-v2 (green stack).
 
 name: Deploy Backend
 
@@ -24,9 +26,9 @@ env:
   PRODUCTION_WWW_HOSTNAME: ${{ vars.PRODUCTION_WWW_HOSTNAME || 'www.dibangops.com' }}
   BACKEND_IMAGE_NAME: 'crimeportal-backend'
   AI_IMAGE_NAME: 'crimeportal-ai'
-  RESOURCE_GROUP: 'crimeportal-rg'
-  BACKEND_APP_NAME: 'crimeportal-backend'
-  AI_APP_NAME: 'crimeportal-ai'
+  RESOURCE_GROUP: 'crimeportal-prod-v2-rg'
+  BACKEND_APP_NAME: 'crimeportal-backend-prod-v2'
+  AI_APP_NAME: 'crimeportal-ai-prod-v2'
 
 jobs:
   build-and-push-images:
@@ -189,7 +191,6 @@ jobs:
         id: update_ai
         run: |
           set -euo pipefail
-          # buffalo_l + ONNX needs more than 1Gi in practice; undersized apps get ActivationFailed / OOM.
           AI_LATEST_REVISION="$(az containerapp update \
             --resource-group "${{ env.RESOURCE_GROUP }}" \
             --name "${{ env.AI_APP_NAME }}" \

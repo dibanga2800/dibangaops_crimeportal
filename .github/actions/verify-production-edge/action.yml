@@ -21,6 +21,22 @@ inputs:
     description: Set true when Azure CLI is not logged in.
     required: false
     default: 'false'
+  azure_resource_group:
+    description: Resource group hosting the unified Front Door profile.
+    required: false
+    default: crimeportal-rg
+  fd_profile_name:
+    description: Unified Front Door profile name.
+    required: false
+    default: crimeportal-frontend-unified-fd
+  fd_endpoint_name:
+    description: Unified Front Door endpoint name.
+    required: false
+    default: crimeportal-frontend-unified-ep
+  fd_route_name:
+    description: Managed SPA route name on the unified Front Door endpoint.
+    required: false
+    default: crimeportal-frontend-unified-spa-route
 runs:
   using: composite
   steps:
@@ -40,7 +56,10 @@ runs:
         set -euo pipefail
         ROOT="${GITHUB_WORKSPACE}"
         chmod +x "${ROOT}/scripts/cleanup-unified-front-door-orphans.sh"
-        "${ROOT}/scripts/cleanup-unified-front-door-orphans.sh"
+        "${ROOT}/scripts/cleanup-unified-front-door-orphans.sh" \
+          "${{ inputs.azure_resource_group }}" \
+          "${{ inputs.fd_profile_name }}" \
+          "${{ inputs.fd_endpoint_name }}"
 
     - name: Verify Azure custom domain route binding
       if: inputs.skip_azure_binding_check != 'true'
@@ -51,7 +70,13 @@ runs:
         chmod +x "${ROOT}/scripts/verify-unified-front-door-azure.sh"
         HOST="${{ inputs.production_hostname }}"
         CUSTOM_DOMAIN_NAME="$(echo "${HOST}" | tr '.' '-')"
-        "${ROOT}/scripts/verify-unified-front-door-azure.sh" crimeportal-rg crimeportal-frontend-unified-fd crimeportal-frontend-unified-ep crimeportal-frontend-unified-spa-route "${CUSTOM_DOMAIN_NAME}" "${HOST}"
+        "${ROOT}/scripts/verify-unified-front-door-azure.sh" \
+          "${{ inputs.azure_resource_group }}" \
+          "${{ inputs.fd_profile_name }}" \
+          "${{ inputs.fd_endpoint_name }}" \
+          "${{ inputs.fd_route_name }}" \
+          "${CUSTOM_DOMAIN_NAME}" \
+          "${HOST}"
 
     - name: Smoke-test www TLS and API health
       shell: bash

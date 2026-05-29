@@ -1,7 +1,7 @@
 # Full stack: Terraform (bootstrap + release), container images, and Static Web App.
 # For day-to-day work use:
-#   - Deploy Frontend (.github/workflows/deploy-frontend.yml) for AIP_UI-only changes
-#   - Deploy Backend (.github/workflows/deploy-backend.yml) for AIP_Backend/Infrastructure changes
+#   - Deploy Frontend (.github/workflows/deploy-frontend.yml) for AIP_UI-only changes → prod-v2 (green)
+#   - Deploy Backend (.github/workflows/deploy-backend.yml) for AIP_Backend changes → prod-v2 (green)
 #
 # target_environment routes Terraform state, tfvars secret, and resource group:
 #   prod            — legacy crimeportal-rg (public SQL, www.dibangops.com today)
