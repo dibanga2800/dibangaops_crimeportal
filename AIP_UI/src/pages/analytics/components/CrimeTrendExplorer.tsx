@@ -221,11 +221,9 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 			return []
 		}
 
-		// Strict mode: only show stores whose *own* peak day matches the selected slice.
-		// Stores that have some incidents on this day but peak on a different day are
-		// excluded to keep the drill-down focused on stores that PATTERN around this day.
+		// Show every store that recorded at least one incident on the selected day so the
+		// per-store rows reconcile with the bar total (incidents across all stores that day).
 		return Object.values(data.storeDrilldown)
-			.filter((store) => store.peakDay === selectedDay)
 			.map((store) => ({
 				store,
 				sliceIncidents: getStoreDayCount(store, selectedDay),
@@ -244,11 +242,9 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 			return []
 		}
 
-		// Strict mode: only show stores whose *own* peak hour matches the selected slice.
-		// Stores that recorded incidents at this hour but peak at a different hour are
-		// excluded.
+		// Show every store that recorded at least one incident at the selected hour so the
+		// per-store rows reconcile with the bar total (incidents across all stores that hour).
 		return Object.values(data.storeDrilldown)
-			.filter((store) => store.peakHour === selectedHour)
 			.map((store) => ({
 				store,
 				sliceIncidents: getStoreHourCount(store, selectedHour),
@@ -432,7 +428,7 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 									<div className="flex items-center gap-2">
 										<MapPin className="h-4 w-4 text-gray-600" />
 										<h3 className="font-semibold">
-											Stores peaking on {selectedDay} ({filteredStores.length}{' '}
+											Stores with incidents on {selectedDay} ({filteredStores.length}{' '}
 											{filteredStores.length === 1 ? 'store' : 'stores'} ·{' '}
 											{filteredDayIncidentTotal}{' '}
 											{filteredDayIncidentTotal === 1 ? 'incident' : 'incidents'} on {selectedDay})
@@ -478,7 +474,7 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 
 							{selectedDay && filteredStores.length === 0 && (
 								<div className="text-center py-8 text-gray-500">
-									No stores peak on {selectedDay}
+									No stores recorded incidents on {selectedDay}
 								</div>
 							)}
 						</TabsContent>
@@ -520,7 +516,7 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 									<div className="flex items-center gap-2">
 										<MapPin className="h-4 w-4 text-gray-600" />
 										<h3 className="font-semibold">
-											Stores peaking at {selectedHourLabel ?? `${selectedHour}:00`} (
+											Stores with incidents at {selectedHourLabel ?? `${selectedHour}:00`} (
 											{filteredStoresByHour.length}{' '}
 											{filteredStoresByHour.length === 1 ? 'store' : 'stores'} ·{' '}
 											{filteredHourIncidentTotal}{' '}
@@ -568,7 +564,7 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 
 							{selectedHour !== null && filteredStoresByHour.length === 0 && (
 								<div className="text-center py-8 text-gray-500">
-									No stores peak at {selectedHourLabel ?? `${selectedHour}:00`}
+									No stores recorded incidents at {selectedHourLabel ?? `${selectedHour}:00`}
 								</div>
 							)}
 
