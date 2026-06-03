@@ -33,7 +33,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.0" />
-    <PackageReference Include="EPPlus" Version="8.5.4" />
+    <PackageReference Include="EPPlus" Version="8.6.0" />
   </ItemGroup>
 
 </Project>
