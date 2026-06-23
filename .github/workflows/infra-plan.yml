@@ -30,7 +30,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # Prefer secret TERRAFORM_PLAN_TFVARS (e.g. copy of real prod/dev tfvars) so plan matches deployed config.
       # Without it, the example is used — validate still passes but planned changes may not reflect production.
