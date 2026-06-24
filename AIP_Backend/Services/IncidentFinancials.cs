@@ -41,6 +41,14 @@ namespace AIPBackend.Services
 			return Math.Max(stolenValue - recoveredValue, 0m);
 		}
 
+		/// <summary>
+		/// Mirrors IncidentAnalyticsService.GetIncidentRecoveredQuantity.
+		/// </summary>
+		public static int GetRecoveredQuantity(Incident incident) =>
+			(incident.TotalRecoveredQuantity ?? 0) > 0
+				? incident.TotalRecoveredQuantity ?? 0
+				: incident.StolenItems?.Sum(item => item.RecoveredQuantity) ?? 0;
+
 		private static decimal GetStolenValue(Incident incident)
 		{
 			if (incident.TotalStolenValue.HasValue)

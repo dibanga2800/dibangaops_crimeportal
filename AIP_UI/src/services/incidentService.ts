@@ -75,6 +75,7 @@ export interface IncidentGraphData {
 	arrestSaveComment: string
 	dateInputted: string
 	assignedTo: string
+	count?: number
 	store?: string
 }
 

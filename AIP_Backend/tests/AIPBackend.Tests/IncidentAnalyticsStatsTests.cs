@@ -33,6 +33,111 @@ public class IncidentAnalyticsStatsTests
 	}
 
 	[Fact]
+	public void IncidentFinancials_recovered_quantity_matches_analytics_hub_rules()
+	{
+		var withTotal = new Incident { TotalRecoveredQuantity = 5 };
+		Assert.Equal(5, IncidentFinancials.GetRecoveredQuantity(withTotal));
+
+		var fromLineItems = new Incident
+		{
+			StolenItems = new List<StolenItem>
+			{
+				new() { RecoveredQuantity = 2, Cost = 1, Quantity = 3, TotalAmount = 3, RecoveredAmount = 2 },
+				new() { RecoveredQuantity = 3, Cost = 1, Quantity = 4, TotalAmount = 4, RecoveredAmount = 3 },
+			},
+		};
+		Assert.Equal(5, IncidentFinancials.GetRecoveredQuantity(fromLineItems));
+
+		var noRecovery = new Incident
+		{
+			StolenItems = new List<StolenItem>
+			{
+				new() { RecoveredQuantity = 0, Cost = 10, Quantity = 1, TotalAmount = 10, RecoveredAmount = 0 },
+			},
+		};
+		Assert.Equal(0, IncidentFinancials.GetRecoveredQuantity(noRecovery));
+
+		Assert.Equal(0, IncidentFinancials.GetRecoveredQuantity(new Incident()));
+	}
+
+	[Fact]
+	public async Task GetIncidentGraphAnalyticsAsync_quantity_matches_analytics_hub_totals()
+	{
+		const int customerId = 21;
+
+		await using var context = CreateDbContext();
+		SeedCustomer(context, customerId);
+
+		var incidentWithTotal = new Incident
+		{
+			CustomerId = customerId,
+			StoreName = "Store A",
+			StaffMemberName = "Officer",
+			StaffMemberRole = "uniform officer",
+			DateOfIncident = new DateTime(DateTime.UtcNow.Year, 3, 1),
+			DateInputted = DateTime.UtcNow,
+			IncidentType = "Theft",
+			TotalRecoveredQuantity = 4,
+			CreatedBy = "test-user",
+		};
+		var incidentFromLineItems = new Incident
+		{
+			CustomerId = customerId,
+			StoreName = "Store A",
+			StaffMemberName = "Officer",
+			StaffMemberRole = "uniform officer",
+			DateOfIncident = new DateTime(DateTime.UtcNow.Year, 3, 2),
+			DateInputted = DateTime.UtcNow,
+			IncidentType = "Theft",
+			CreatedBy = "test-user",
+			StolenItems = new List<StolenItem>
+			{
+				new() { RecoveredQuantity = 2, Cost = 5, Quantity = 2, TotalAmount = 10, RecoveredAmount = 10 },
+				new() { RecoveredQuantity = 1, Cost = 3, Quantity = 1, TotalAmount = 3, RecoveredAmount = 3 },
+			},
+		};
+		var incidentWithoutRecovery = new Incident
+		{
+			CustomerId = customerId,
+			StoreName = "Store B",
+			StaffMemberName = "Officer",
+			StaffMemberRole = "uniform officer",
+			DateOfIncident = new DateTime(DateTime.UtcNow.Year, 3, 3),
+			DateInputted = DateTime.UtcNow,
+			IncidentType = "Theft",
+			CreatedBy = "test-user",
+		};
+
+		context.Incidents.AddRange(incidentWithTotal, incidentFromLineItems, incidentWithoutRecovery);
+		await context.SaveChangesAsync();
+
+		var incidentService = CreateIncidentService(context);
+		var analyticsService = CreateAnalyticsService(context);
+
+		var graphResult = await incidentService.GetIncidentGraphAnalyticsAsync(new IncidentGraphAnalyticsQueryDto
+		{
+			CustomerId = customerId,
+			FromDate = $"{DateTime.UtcNow.Year}-01-01",
+			ToDate = DateTime.UtcNow.ToString("yyyy-MM-dd"),
+			GraphType = "quantity",
+		});
+
+		var hubResult = await analyticsService.GetAnalyticsHubAsync(
+			customerId: customerId,
+			from: new DateTime(DateTime.UtcNow.Year, 1, 1),
+			to: new DateTime(DateTime.UtcNow.Year, 12, 31));
+
+		const int expectedQuantity = 7; // 4 + (2 + 1) + 0
+		Assert.Equal(expectedQuantity, graphResult.Totals.TotalQuantity);
+		Assert.Equal(expectedQuantity, graphResult.Totals.TotalValue);
+		Assert.Equal(expectedQuantity, hubResult.FinancialSummary.TotalRecoveredQuantity);
+
+		var storeA = graphResult.Locations.Single(l => l.Location == "Store A");
+		Assert.Equal(7, storeA.Quantity);
+		Assert.Equal(0, graphResult.Locations.Single(l => l.Location == "Store B").Quantity);
+	}
+
+	[Fact]
 	public async Task GetIncidentsAsync_clamps_page_size_while_insights_return_full_count()
 	{
 		const int customerId = 7;

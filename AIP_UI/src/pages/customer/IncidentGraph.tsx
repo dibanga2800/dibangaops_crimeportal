@@ -48,9 +48,10 @@ interface FilteredData {
 	location: string
 	value: number
 	quantity: number
+	count: number
 }
 
-type GraphType = 'value' | 'lost' | 'quantity' | 'type'
+type GraphType = 'value' | 'lost' | 'quantity' | 'type' | 'count'
 type ScreenSize = 'sm' | 'md' | 'lg'
 
 interface IncidentGraphProps {
@@ -356,7 +357,9 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 				setFilteredTotal(
 					graphType === 'quantity'
 						? graphResponse.data.totals.totalQuantity
-						: graphResponse.data.totals.totalValue
+						: graphType === 'count'
+							? graphResponse.data.totals.totalIncidents
+							: graphResponse.data.totals.totalValue
 				)
 			} else if (!graphResponse.data?.incidents?.length) {
 				setError('Unable to load incident data. Please ensure the backend server is running.')
@@ -390,7 +393,7 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 	const { filteredData, paginatedData } = useMemo(() => {
 		const result: FilteredData[] =
 			graphType === 'type'
-				? incidentTypeData.map(item => ({ location: item.type, value: item.count, quantity: item.count }))
+				? incidentTypeData.map(item => ({ location: item.type, value: item.count, quantity: item.count, count: item.count }))
 				: graphData.map(item => ({
 					location: item.location || item.siteName || 'Unknown Location',
 					value:
@@ -400,10 +403,15 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 								? getIncidentLostValue(item)
 								: item.value || 0,
 					quantity: item.quantity || item.quantityRecovered || 0,
+					count: item.count || 0,
 				}))
 
 		const sorted = [...result].sort((a, b) =>
-			graphType === 'quantity' ? b.quantity - a.quantity : b.value - a.value
+			graphType === 'quantity'
+				? b.quantity - a.quantity
+				: graphType === 'count'
+					? b.count - a.count
+					: b.value - a.value
 		)
 
 		const start = (currentPage - 1) * storesPerPage
@@ -463,6 +471,7 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 			timeFilter === 'last30' ? 'Last 30 Days' :
 			'Selected Period'
 		if (graphType === 'type') return `Total Incidents by ${ofText} (${selectedRegionLabel}) — ${periodText}`
+		if (graphType === 'count') return `Total Incidents Reported per Store by ${ofText} (${selectedRegionLabel}) — ${periodText}`
 		if (graphType === 'quantity') return `Total Items Recovered by ${ofText} (${selectedRegionLabel}) — ${periodText}`
 		if (graphType === 'lost') return `Total Value Lost by ${ofText} (${selectedRegionLabel}) — ${periodText}`
 		return `Total Value Recovered by ${ofText} (${selectedRegionLabel}) — ${periodText}`
@@ -494,12 +503,14 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 				item.location.length > maxLen ? `${item.location.substring(0, maxLen - 2)}…` : item.location,
 			value: item.value,
 			quantity: item.quantity,
+			count: item.count,
 			fullLocation: item.location,
 		}))
 	}, [paginatedData, graphType, screenSize])
 
 	const barName =
 		graphType === 'type' ? 'Incident Count' :
+		graphType === 'count' ? 'Incidents Reported' :
 		graphType === 'quantity' ? 'Items Recovered' :
 		graphType === 'lost' ? 'Value Lost' :
 		officerType === 'uniform' ? 'Uniform Officer' :
@@ -591,7 +602,7 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 								{summaryTitle}
 							</h2>
 							<p className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-emerald-400 to-sky-400 bg-clip-text text-transparent mt-2">
-								{graphType === 'type'
+								{graphType === 'type' || graphType === 'count'
 									? `${filteredTotal.toLocaleString()} Incidents`
 									: graphType === 'quantity'
 										? `${filteredTotal.toLocaleString()} Items`
@@ -645,7 +656,7 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 									}}
 									className="flex flex-wrap gap-x-4 gap-y-2"
 								>
-									{([['value', 'Value Recovered'], ['lost', 'Value Lost'], ['quantity', 'Items Recovered'], ['type', 'Action Types']] as const).map(
+									{([['value', 'Value Recovered'], ['lost', 'Value Lost'], ['quantity', 'Items Recovered'], ['count', 'Incidents per Store'], ['type', 'Action Types']] as const).map(
 										([val, label]) => (
 											<div key={val} className="flex items-center gap-2">
 												<RadioGroupItem value={val} id={`gt-${val}`} className="border-slate-600 text-indigo-500" />
@@ -878,7 +889,7 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 											<YAxis
 												label={{
 													value:
-														graphType === 'type' ? 'Number of Incidents' :
+														graphType === 'type' || graphType === 'count' ? 'Number of Incidents' :
 														graphType === 'value' ? 'Amount Recovered (£)' :
 														graphType === 'lost' ? 'Amount Lost (£)' :
 														'Number of Items',
@@ -922,7 +933,7 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 											/>
 
 											<Bar
-												dataKey={graphType === 'type' ? 'count' : graphType === 'quantity' ? 'quantity' : 'value'}
+												dataKey={graphType === 'type' || graphType === 'count' ? 'count' : graphType === 'quantity' ? 'quantity' : 'value'}
 												name={barName}
 												radius={[0, 0, 0, 0]}
 												style={{ filter: 'url(#barShadow)' }}
@@ -954,7 +965,7 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 												}}
 											>
 												<LabelList
-													dataKey={graphType === 'type' ? 'count' : graphType === 'quantity' ? 'quantity' : 'value'}
+													dataKey={graphType === 'type' || graphType === 'count' ? 'count' : graphType === 'quantity' ? 'quantity' : 'value'}
 													position="top"
 													offset={cfg.labelOffset}
 													formatter={formatValue}

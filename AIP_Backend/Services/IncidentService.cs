@@ -644,9 +644,7 @@ namespace AIPBackend.Services
 				entry.Count += 1;
 				entry.Value += IncidentFinancials.GetRecoveredValue(incident);
 				entry.LostValue += IncidentFinancials.GetLostValue(incident);
-				entry.Quantity += incident.TotalRecoveredQuantity
-					?? incident.QuantityRecovered
-					?? 1;
+				entry.Quantity += IncidentFinancials.GetRecoveredQuantity(incident);
 			}
 
 			var locations = grouped.Values
@@ -655,6 +653,7 @@ namespace AIPBackend.Services
 					"lost" => l.LostValue,
 					"quantity" => l.Quantity,
 					"type" => l.Count,
+					"count" => l.Count,
 					_ => l.Value
 				})
 				.ToList();
@@ -673,9 +672,10 @@ namespace AIPBackend.Services
 					"lost" => incidents.Sum(IncidentFinancials.GetLostValue),
 					"quantity" => locations.Sum(l => l.Quantity),
 					"type" => incidents.Count,
+					"count" => incidents.Count,
 					_ => incidents.Sum(IncidentFinancials.GetRecoveredValue)
 				},
-				TotalQuantity = locations.Sum(l => l.Quantity)
+				TotalQuantity = incidents.Sum(IncidentFinancials.GetRecoveredQuantity)
 			};
 
 			return new IncidentGraphAnalyticsResponseDto
