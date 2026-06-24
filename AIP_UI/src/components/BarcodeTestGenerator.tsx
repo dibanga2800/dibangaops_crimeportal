@@ -130,7 +130,7 @@ const BarcodeTestGenerator: React.FC = () => {
 		if (selectedDbEan) {
 			handleUseDbEan(selectedDbEan);
 		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
+		 
 	}, []);
 
 	const handleGenerate = () => {

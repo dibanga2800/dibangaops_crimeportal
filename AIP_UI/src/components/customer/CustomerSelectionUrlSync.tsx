@@ -28,7 +28,7 @@ export const CustomerSelectionUrlSync: React.FC = () => {
 			}
 		}
 		// Only depend on pathname changes, not search params or selectedCustomerId
-		// eslint-disable-next-line react-hooks/exhaustive-deps
+		 
 	}, [location.pathname, isAdmin, setSelectedCustomerId])
 
 	return null // This component doesn't render anything

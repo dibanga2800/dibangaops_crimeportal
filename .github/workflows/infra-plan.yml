@@ -52,7 +52,14 @@ jobs:
         with:
           terraform_version: 1.13.4
 
+      # Pull requests use a local backend only. The Azure federated credential is
+      # scoped to ref:refs/heads/main (workflow_dispatch), not pull_request.
+      - name: Terraform Init (local backend for PR validate)
+        if: github.event_name == 'pull_request'
+        run: terraform init -backend=false
+
       - name: Azure Login (OIDC)
+        if: github.event_name != 'pull_request'
         uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -60,6 +67,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Terraform Init (remote backend)
+        if: github.event_name != 'pull_request'
         run: |
           terraform init \
             -backend-config="resource_group_name=${{ secrets.TF_STATE_RESOURCE_GROUP }}" \
@@ -74,6 +82,7 @@ jobs:
         run: terraform validate
 
       - name: Terraform Plan
+        if: github.event_name != 'pull_request'
         env:
           TF_VAR_budget_alert_emails: ${{ secrets.TF_VAR_BUDGET_ALERT_EMAILS }}
           TF_VAR_sql_admin_password: ${{ secrets.TF_VAR_SQL_ADMIN_PASSWORD }}

@@ -41,7 +41,7 @@ export default function LoginPage() {
 	useEffect(() => {
 		clearError()
 		setError(null)
-		// eslint-disable-next-line react-hooks/exhaustive-deps
+		 
 	}, [])
 
 	const triggerShake = () => {

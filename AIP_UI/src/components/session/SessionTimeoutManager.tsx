@@ -85,7 +85,7 @@ export const SessionTimeoutManager: React.FC = () => {
       })
       clearTimer()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [user, location.pathname])
 
   return null

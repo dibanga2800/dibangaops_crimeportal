@@ -2,7 +2,8 @@
 # Does not build container images or run Terraform apply.
 #
 # Post blue/green cutover, path-triggered pushes target prod-v2 (green stack).
-# Production SPA uses same-origin VITE_API_BASE_URL=/api (unified Front Door on www).
+# Production SPA uses same-origin VITE_API_BASE_URL=/api (unified Front Door on www),
+# so the backend API URL does not need to be resolved from Terraform/Azure at build time.
 
 name: Deploy Frontend
 
@@ -34,102 +35,9 @@ env:
   FD_ROUTE_NAME: crimeportal-frontend-prod-v2-unified-spa-route
 
 jobs:
-  resolve-api-url:
-    name: Resolve API URL
-    runs-on: ubuntu-latest
-    outputs:
-      backend_url: ${{ steps.final.outputs.backend_url }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Check production API URL secret
-        id: from-secret
-        env:
-          PRODUCTION_API_BASE_URL: ${{ secrets.PRODUCTION_API_BASE_URL }}
-        run: |
-          set -euo pipefail
-          URL="$(echo "${PRODUCTION_API_BASE_URL}" | tr -d '\r\n' | sed 's:/*$::')"
-          if [ -z "${URL}" ]; then
-            echo "found=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          case "${URL}" in
-            https://*) ;;
-            *)
-              echo "PRODUCTION_API_BASE_URL must be a full https URL (no trailing path)."
-              exit 1
-              ;;
-          esac
-          echo "found=true" >> "$GITHUB_OUTPUT"
-          echo "backend_url=${URL}" >> "$GITHUB_OUTPUT"
-          echo "Using PRODUCTION_API_BASE_URL from GitHub secret (skipping Azure login)."
-
-      - name: Setup Terraform
-        if: steps.from-secret.outputs.found != 'true'
-        uses: hashicorp/setup-terraform@v4
-        with:
-          terraform_version: ${{ env.TERRAFORM_VERSION }}
-
-      - name: Azure Login (OIDC)
-        if: steps.from-secret.outputs.found != 'true'
-        uses: azure/login@v3
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Terraform Init
-        if: steps.from-secret.outputs.found != 'true'
-        working-directory: Infrastructure
-        run: |
-          terraform init \
-            -backend-config="resource_group_name=${{ secrets.TF_STATE_RESOURCE_GROUP }}" \
-            -backend-config="storage_account_name=${{ secrets.TF_STATE_STORAGE_ACCOUNT }}" \
-            -backend-config="container_name=${{ secrets.TF_STATE_CONTAINER }}" \
-            -backend-config="key=${{ secrets.TF_STATE_KEY_V2 }}"
-
-      - name: Resolve API URL from Azure
-        if: steps.from-secret.outputs.found != 'true'
-        id: from-azure
-        working-directory: Infrastructure
-        run: |
-          set -euo pipefail
-          FD_URL=""
-          if terraform output -raw api_front_door_url > /tmp/api_front_door_url.txt 2>/dev/null; then
-            FD_URL="$(tr -d '\r\n' < /tmp/api_front_door_url.txt)"
-          fi
-          case "${FD_URL}" in
-            https://*)
-              echo "backend_url=${FD_URL}" >> "$GITHUB_OUTPUT"
-              exit 0
-              ;;
-          esac
-          FQDN="$(az containerapp show \
-            --resource-group "${{ env.RESOURCE_GROUP }}" \
-            --name "${{ env.BACKEND_APP_NAME }}" \
-            --query 'properties.configuration.ingress.fqdn' -o tsv)"
-          if [ -z "${FQDN}" ]; then
-            echo "Could not resolve Container App ingress FQDN."
-            exit 1
-          fi
-          echo "backend_url=https://${FQDN}" >> "$GITHUB_OUTPUT"
-
-      - name: Finalize API URL
-        id: final
-        run: |
-          set -euo pipefail
-          if [ "${{ steps.from-secret.outputs.found }}" = "true" ]; then
-            echo "backend_url=${{ steps.from-secret.outputs.backend_url }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "backend_url=${{ steps.from-azure.outputs.backend_url }}" >> "$GITHUB_OUTPUT"
-          fi
-
   deploy-frontend:
     name: Build and Deploy Frontend
     runs-on: ubuntu-latest
-    needs: resolve-api-url
 
     steps:
       - name: Checkout

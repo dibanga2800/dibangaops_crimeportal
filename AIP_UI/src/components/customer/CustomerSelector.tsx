@@ -57,7 +57,7 @@ export const CustomerSelector: React.FC = () => {
 		return () => {
 			mounted = false
 		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
+		 
 	}, [isAdmin])
 
 	if (!isAdmin) {
