@@ -784,7 +784,9 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 						<CardTitle className="text-base sm:text-lg font-semibold text-slate-200">
 							{graphType === 'type'
 								? `${selectedRegionLabel} — Incident Types Distribution`
-								: `${selectedRegionLabel} — ${
+								: graphType === 'count'
+									? `${selectedRegionLabel} — Incidents Reported by Location`
+									: `${selectedRegionLabel} — ${
 										graphType === 'value'
 											? officerType === 'uniform'
 												? 'Recovered Value by Location (Uniform Officers)'
