@@ -48,6 +48,31 @@ Use a remote backend. Do not use local `.tfstate` in source control.
 terraform init -backend-config=backend.hcl
 ```
 
+### Terraform state recovery (legacy RG deleted)
+
+If **Deploy Full Stack** fails at `terraform init` with `ResourceGroupNotFound` on the state backend, the `TF_STATE_*` secrets still point at **deleted** infrastructure (often legacy `crimeportal-rg`, removed when the blue stack was cut over).
+
+**Check in Azure Portal (subscription must be active):**
+
+1. **Resource groups** — confirm `crimeportal-tfstate-rg` or legacy `crimeportal-rg` exists. Today prod-v2 lives in `crimeportal-prod-v2-rg` only; **Terraform state is stored separately** in a storage account, not in the prod-v2 RG.
+2. **Storage accounts → Manage deleted accounts** — if the old tfstate account was soft-deleted with legacy `crimeportal-rg`, **recover it** and reuse the same `TF_STATE_*` values from before deletion.
+3. If no tfstate storage exists, create a dedicated backend (do **not** reuse `crimeportalstorage*` app blob storage):
+
+```powershell
+.\scripts\setup-tfstate-backend.ps1
+```
+
+Then set GitHub secrets from the script output:
+
+| Secret | Example |
+|--------|---------|
+| `TF_STATE_RESOURCE_GROUP` | `crimeportal-tfstate-rg` |
+| `TF_STATE_STORAGE_ACCOUNT` | `crimeportaltfstateXXXXX` |
+| `TF_STATE_CONTAINER` | `tfstate` |
+| `TF_STATE_KEY_V2` | `crimeportal-prod-v2.tfstate` |
+
+**Critical:** A **new empty** state blob is not the same as the old one. If `crimeportal-prod-v2.tfstate` was lost, **do not run `terraform apply`** until the blob is recovered or existing prod-v2 resources are imported into state — otherwise Terraform may plan duplicate resources with new random suffixes. Frontend/backend-only deploy workflows do not use this state file.
+
 ## Local plan/apply example
 
 ```bash
