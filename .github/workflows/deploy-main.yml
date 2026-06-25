@@ -138,7 +138,10 @@ jobs:
           RG="${{ secrets.TF_STATE_RESOURCE_GROUP }}"
           CONTAINER="${{ secrets.TF_STATE_CONTAINER }}"
           BLOB="${TF_STATE_KEY_RESOLVED}"
-          KEY="$(az storage account keys list --resource-group "${RG}" --account-name "${SA}" --query '[0].value' -o tsv)"
+          if ! KEY="$(az storage account keys list --resource-group "${RG}" --account-name "${SA}" --query '[0].value' -o tsv 2>/dev/null)"; then
+            echo "::warning::Could not access storage account ${SA} in ${RG}. Skipping lease break — verify TF_STATE_RESOURCE_GROUP, TF_STATE_STORAGE_ACCOUNT, and TF_STATE_CONTAINER secrets."
+            exit 0
+          fi
           az storage blob lease break \
             --blob-name "${BLOB}" \
             --container-name "${CONTAINER}" \
@@ -285,7 +288,10 @@ jobs:
           RG="${{ secrets.TF_STATE_RESOURCE_GROUP }}"
           CONTAINER="${{ secrets.TF_STATE_CONTAINER }}"
           BLOB="${TF_STATE_KEY_RESOLVED}"
-          KEY="$(az storage account keys list --resource-group "${RG}" --account-name "${SA}" --query '[0].value' -o tsv)"
+          if ! KEY="$(az storage account keys list --resource-group "${RG}" --account-name "${SA}" --query '[0].value' -o tsv 2>/dev/null)"; then
+            echo "::warning::Could not access storage account ${SA} in ${RG}. Skipping lease break — verify TF_STATE_RESOURCE_GROUP, TF_STATE_STORAGE_ACCOUNT, and TF_STATE_CONTAINER secrets."
+            exit 0
+          fi
           az storage blob lease break \
             --blob-name "${BLOB}" \
             --container-name "${CONTAINER}" \
