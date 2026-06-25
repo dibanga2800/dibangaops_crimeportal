@@ -37,6 +37,13 @@ check "backend_ingress_ip_restrictions_require_cidrs" {
   }
 }
 
+check "sql_basic_max_size" {
+  assert {
+    condition     = var.sql_sku_name != "Basic" || var.sql_max_size_gb <= 2
+    error_message = "Basic tier supports max_size_gb <= 2."
+  }
+}
+
 check "phase1_requires_nat_gateway" {
   assert {
     condition     = !var.enable_sql_private_endpoint || var.enable_nat_gateway_egress

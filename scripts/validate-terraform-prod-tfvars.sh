@@ -215,6 +215,15 @@ if [ "${CA_PREFIX}" -gt 23 ] 2>/dev/null; then
 	fail "container_apps_subnet_prefix (${CA_SUBNET}) is smaller than /23. Azure Container Apps requires a /23 or larger delegated subnet."
 fi
 
+SQL_SKU="$(hcl_string_resolved sql_sku_name)"
+SQL_MAX_GB="$(hcl_string "${sql_max_size_gb}")"
+if [ -z "${SQL_MAX_GB}" ]; then
+	SQL_MAX_GB="$(hcl_string_default sql_max_size_gb)"
+fi
+if [ "${SQL_SKU}" = "Basic" ] && [ -n "${SQL_MAX_GB}" ] && [ "${SQL_MAX_GB}" -gt 2 ] 2>/dev/null; then
+	fail "sql_sku_name = Basic requires sql_max_size_gb <= 2."
+fi
+
 # ---------------------------------------------------------------------------
 # Production edge invariants.
 # Only enforced when the target RG already exists AND we are in strict prod

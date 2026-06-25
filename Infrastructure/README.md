@@ -111,7 +111,11 @@ For GitHub Actions:
 **Tfvars templates (committed):**
 
 - [`terraform.prod.public.tfvars.example`](terraform.prod.public.tfvars.example) — Path A legacy (public SQL)
-- [`terraform.prod.private.tfvars.example`](terraform.prod.private.tfvars.example) — Path B green (private SQL + NAT from first apply)
+- [`terraform.prod.private.tfvars.example`](terraform.prod.private.tfvars.example) — Path B green (private SQL + NAT from first apply; **cost-optimised ~£90–100/mo** profile with Basic SQL)
+
+**Cost-optimised prod-v2 (private SQL kept):** The private tfvars template targets ~£90–100/month at full-month run rate: `sql_sku_name = "Basic"`, single backend replica at 0.25 vCPU, AI scale-to-zero, 7-day logs, no App Insights. NAT (~£29/mo) and Front Door (~£30/mo) remain — they are required for the current architecture. Update GitHub secret `TERRAFORM_PROD_V2_TFVARS` to match, then `Deploy Full Stack` → `prod-v2`.
+
+**Manual cleanup:** If Azure shows a Container App named `crimeportal-ui-prod-v2` (~£0/mo), it is not managed by Terraform (frontend is Static Web Apps). Delete it in Portal if unused.
 
 **Blue/green cutover:** [`docs/blue-green-cutover-runbook.md`](../docs/blue-green-cutover-runbook.md)
 

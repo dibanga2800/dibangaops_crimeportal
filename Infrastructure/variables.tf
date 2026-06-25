@@ -353,7 +353,7 @@ variable "backend_min_replicas" {
 variable "backend_max_replicas" {
   description = "Maximum replicas for backend container app"
   type        = number
-  default     = 3
+  default     = 1
 }
 
 variable "ai_container_cpu" {
@@ -377,13 +377,31 @@ variable "ai_min_replicas" {
 variable "ai_max_replicas" {
   description = "Maximum replicas for AI container app"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "sql_max_size_gb" {
-  description = "Maximum SQL database size in GB"
+  description = "Maximum SQL database size in GB (Basic tier max is 2)"
   type        = number
-  default     = 5
+  default     = 2
+}
+
+variable "sql_sku_name" {
+  description = "Azure SQL database SKU. Use Basic for small databases with private endpoint (~£5/mo). GP_S_* is serverless and costs much more at idle."
+  type        = string
+  default     = "Basic"
+}
+
+variable "sql_auto_pause_delay_in_minutes" {
+  description = "Auto-pause delay for GP_S serverless SKUs only"
+  type        = number
+  default     = 60
+}
+
+variable "sql_min_capacity" {
+  description = "Minimum vCores for GP_S serverless SKUs only"
+  type        = number
+  default     = 0.5
 }
 
 variable "sql_allow_azure_services_firewall_rule" {

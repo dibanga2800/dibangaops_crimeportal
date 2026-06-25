@@ -3,57 +3,59 @@
 # Workflow: Deploy Full Stack → target_environment = prod-v2
 # State: TF_STATE_KEY_V2 (e.g. crimeportal-prod-v2.tfstate)
 #
-# Private SQL + VNet-integrated CAE + NAT from first apply. Validate on *.azurefd.net only until DNS cutover.
+# Cost profile (~£90–100/month full month, private SQL + NAT kept):
+#   Basic SQL ~£5 | NAT ~£29 | Front Door ~£30 | Container Apps ~£25–35 | ACR/VNet/logs ~£10
+# Legacy crimeportal-rg deleted — no duplicate stack billing.
 
-enable_application_insights  = true
-log_analytics_retention_days = 30
+enable_application_insights  = false
+log_analytics_retention_days = 7
 
 key_vault_soft_delete_retention_days   = 90
 key_vault_purge_protection_enabled     = true
 backend_allow_insecure_connections     = false
 ai_allow_insecure_connections          = false
 
-# Path B: private SQL from day one
+# Path B: private SQL from day one (NAT required — do not disable without Path A migration)
 enable_sql_private_endpoint            = true
 enable_nat_gateway_egress              = true
 sql_public_network_access_enabled      = false
 sql_allow_azure_services_firewall_rule = false
 sql_allowed_ip_ranges                  = []
 
+sql_sku_name    = "Basic"
+sql_max_size_gb = 2
+
 front_door_sku_name = "Standard_AzureFrontDoor"
 
-# Defer ingress allow-list until after SQL PE is stable (separate maintenance window)
 backend_ingress_ip_restrictions_enabled = false
 backend_ingress_allowed_cidrs           = []
 
 enable_unified_front_door               = true
 enable_unified_front_door_custom_domain = false
 unified_front_door_hostname             = "www.dibangops.com"
-# Used for backend CORS/AllowedHosts on green; SWA custom domains are NOT attached on prod-v2 (legacy still owns www until cutover).
 frontend_www_custom_domain              = "www.dibangops.com"
 frontend_custom_domain                  = "dibangops.com"
 frontend_url                            = "https://www.dibangops.com,https://dibangops.com"
 
 enable_api_front_door = false
 
-storage_blob_delete_retention_days      = 30
+storage_blob_delete_retention_days      = 7
 storage_container_delete_retention_days = 7
-storage_blob_versioning_enabled         = true
-storage_change_feed_enabled             = true
+storage_blob_versioning_enabled         = false
+storage_change_feed_enabled             = false
 
-backend_container_cpu    = 0.5
-backend_container_memory = "1Gi"
+backend_container_cpu    = 0.25
+backend_container_memory = "0.5Gi"
 backend_min_replicas     = 1
-backend_max_replicas     = 3
+backend_max_replicas     = 1
 
-ai_container_cpu    = 1.0
-ai_container_memory = "2Gi"
+# InsightFace cold starts may need 2Gi — raise ai_container_memory if face search OOMs
+ai_container_cpu    = 0.5
+ai_container_memory = "1Gi"
 ai_min_replicas     = 0
-ai_max_replicas     = 2
+ai_max_replicas     = 1
 
-sql_max_size_gb = 5
-
-monthly_budget_amount = 75
+monthly_budget_amount = 100
 enable_budget_alert   = true
 budget_start_date     = "2026-04-01T00:00:00Z"
 budget_alert_emails   = ["crimeportalai@gmail.com"]
@@ -69,7 +71,6 @@ azure_openai_enabled  = false
 azure_openai_endpoint = "https://crime-portal-ai.openai.azure.com/"
 
 insightface_enabled            = true
-# Omit insightface_base_url so Terraform derives internal URL from the VNet CAE
 insightface_timeout_seconds    = 30
 insightface_min_similarity     = 0.85
 insightface_max_search_results = 3
@@ -78,4 +79,3 @@ jwt_access_token_expiration_minutes = 60
 jwt_refresh_token_expiration_days   = 7
 
 # At cutover: set enable_unified_front_door_custom_domain = true, apply prod-v2, then repoint www CNAME.
-# See docs/blue-green-cutover-runbook.md

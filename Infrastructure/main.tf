@@ -35,16 +35,17 @@ locals {
   container_app_environment_name_effective = "${var.container_app_environment_name}${local.stack_name_infix}"
   # Apex/www SWA custom domains are single-tenant; only legacy prod attaches them until DNS cutover.
   attach_static_web_app_custom_domains = local.stack_slug == ""
-  sql_server_name                          = substr("${var.sql_server_name_prefix}${local.suffix}", 0, 63)
-  storage_account_name                     = substr("${var.blob_storage_name_prefix}${local.suffix}", 0, 24)
-  acr_name                                 = substr("${var.acr_name_prefix}${local.suffix}", 0, 50)
-  key_vault_name                           = substr("${var.keyvault_name_prefix}-${local.suffix}", 0, 24)
-  sql_admin_password                       = var.sql_admin_password != null && var.sql_admin_password != "" ? var.sql_admin_password : random_password.sql_admin[0].result
-  backend_target_port                      = var.backend_target_port == null ? (strcontains(var.backend_image, "azuredocs/containerapps-helloworld") ? 80 : 8080) : var.backend_target_port
-  ai_target_port                           = var.ai_target_port == null ? (strcontains(var.ai_image, "azuredocs/containerapps-helloworld") ? 80 : 8000) : var.ai_target_port
-  backend_uses_acr                         = strcontains(var.backend_image, ".azurecr.io/")
-  ai_uses_acr                              = strcontains(var.ai_image, ".azurecr.io/")
-  jwt_signing_key_value                    = var.jwt_signing_key != null && var.jwt_signing_key != "" ? var.jwt_signing_key : random_password.jwt_signing_key.result
+  sql_server_name                      = substr("${var.sql_server_name_prefix}${local.suffix}", 0, 63)
+  storage_account_name                 = substr("${var.blob_storage_name_prefix}${local.suffix}", 0, 24)
+  acr_name                             = substr("${var.acr_name_prefix}${local.suffix}", 0, 50)
+  key_vault_name                       = substr("${var.keyvault_name_prefix}-${local.suffix}", 0, 24)
+  sql_admin_password                   = var.sql_admin_password != null && var.sql_admin_password != "" ? var.sql_admin_password : random_password.sql_admin[0].result
+  backend_target_port                  = var.backend_target_port == null ? (strcontains(var.backend_image, "azuredocs/containerapps-helloworld") ? 80 : 8080) : var.backend_target_port
+  ai_target_port                       = var.ai_target_port == null ? (strcontains(var.ai_image, "azuredocs/containerapps-helloworld") ? 80 : 8000) : var.ai_target_port
+  backend_uses_acr                     = strcontains(var.backend_image, ".azurecr.io/")
+  sql_is_serverless                    = can(regex("^GP_S_", var.sql_sku_name))
+  ai_uses_acr                          = strcontains(var.ai_image, ".azurecr.io/")
+  jwt_signing_key_value                = var.jwt_signing_key != null && var.jwt_signing_key != "" ? var.jwt_signing_key : random_password.jwt_signing_key.result
   # Stable app ingress FQDN — do not use latest_revision_fqdn (stale after each backend image deploy).
   backend_container_fqdn         = "https://${azurerm_container_app.backend.ingress[0].fqdn}"
   ai_container_fqdn              = "https://${local.ai_name_effective}.internal.${azurerm_container_app_environment.env.default_domain}"
@@ -163,12 +164,13 @@ resource "azurerm_mssql_firewall_rule" "explicit_allowed_ranges" {
 }
 
 resource "azurerm_mssql_database" "sql_db" {
-  name                        = var.sql_db_name
-  server_id                   = azurerm_mssql_server.sql_server.id
-  sku_name                    = "GP_S_Gen5_1"
-  max_size_gb                 = var.sql_max_size_gb
-  auto_pause_delay_in_minutes = 60
-  min_capacity                = 0.5
+  name        = var.sql_db_name
+  server_id   = azurerm_mssql_server.sql_server.id
+  sku_name    = var.sql_sku_name
+  max_size_gb = var.sql_max_size_gb
+
+  auto_pause_delay_in_minutes = local.sql_is_serverless ? var.sql_auto_pause_delay_in_minutes : null
+  min_capacity                = local.sql_is_serverless ? var.sql_min_capacity : null
 }
 
 resource "azurerm_key_vault_secret" "sql_admin_username" {
