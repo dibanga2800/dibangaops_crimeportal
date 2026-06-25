@@ -216,7 +216,7 @@ if [ "${CA_PREFIX}" -gt 23 ] 2>/dev/null; then
 fi
 
 SQL_SKU="$(hcl_string_resolved sql_sku_name)"
-SQL_MAX_GB="$(hcl_string "${sql_max_size_gb}")"
+SQL_MAX_GB="$(hcl_string "sql_max_size_gb")"
 if [ -z "${SQL_MAX_GB}" ]; then
 	SQL_MAX_GB="$(hcl_string_default sql_max_size_gb)"
 fi
