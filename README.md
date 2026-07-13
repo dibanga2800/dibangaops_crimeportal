@@ -69,7 +69,7 @@ This significantly improves classification accuracy and reduces manual workload.
 
 ## Architecture
 
-![Architecture Diagram]([./docs/architecture.png](https://github.com/dibanga2800/dibangaops_crimeportal/blob/main/docs/ARCHITECTURE.md))
+![Architecture Diagram](https://github.com/dibanga2800/dibangaops_crimeportal/blob/main/docs/ARCHITECTURE.md)
 
 The platform follows a modern distributed architecture:
 
