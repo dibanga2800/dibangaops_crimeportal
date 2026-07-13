@@ -4,7 +4,7 @@
 
 DibangOps Crime Portal™ is a production-grade, API-driven security incident management and crime intelligence platform designed for multi-organisation retail environments.
 
-The system is currently used to support operations across organisations including **Heart of England Co-operative** and **Central England Co-operative**, enabling real-time incident reporting, intelligence sharing, and data-driven decision-making across multiple store locations.
+The platform was demonstrated to two UK retail co-operatives — **Heart of England Co-operative** and **Central England Co-operative** — during early-stage evaluation. Heart of England moved quickly to production and is currently live across 40+ store locations, using the system for real-time incident reporting, intelligence sharing, and data-driven decision-making. Central England Co-operative remains interested but has paused its adoption decision pending an internal organisational merger, with no confirmed timeline to proceed.
 
 This platform was fully designed and developed by me as the sole technical lead and engineer.
 
@@ -27,7 +27,7 @@ To address these challenges, I designed and built a centralised, scalable platfo
 
 - Real-time incident reporting across multiple locations
 - AI-assisted incident classification and decision support
-- Barcode-based tracking for offender and incident linkage
+- Barcode-driven product and evidence tracking, paired with biometric offender recognition
 - Cross-organisation intelligence sharing
 - Role-based dashboards and operational workflows
 - Advanced analytics and reporting capabilities
@@ -49,10 +49,11 @@ To address these challenges, I designed and built a centralised, scalable platfo
 
 This significantly improves classification accuracy and reduces manual workload.
 
-### 🔹 Barcode-Based Tracking System (Innovation)
-- Unique barcode tagging of incidents and offenders
-- Enables tracking of repeat incidents across locations
-- Provides a linked intelligence trail across multiple stores
+### 🔹 Barcode & Biometric Intelligence (Innovation)
+- EAN barcode scanning links stolen items to a central product catalog, enabling hot-product analytics and cross-incident correlation
+- Barcode-tracked evidence chain of custody for physical items seized during incidents
+- Offender identification and repeat-offender linking via structured identity data, text search, and biometric face recognition (Azure Face API / InsightFace) — not barcode assignment to people
+- Together these provide a linked intelligence trail connecting products, evidence, and offenders across locations
 
 ### 🔹 Real-Time Alerts & Notifications
 - Immediate alert generation for high-risk incidents
@@ -104,20 +105,19 @@ I was the sole developer and technical lead responsible for the full lifecycle o
 - Slow response times
 
 ### After Implementation
-- Real-time reporting across 38+ stores
-- Centralised intelligence across multiple organisations
+- Real-time reporting across 40+ stores (Heart of England Co-operative)
+- Centralised intelligence across a multi-tenant platform
 - AI-assisted classification improving operational efficiency
 - Enhanced tracking of repeat incidents and offenders
 - Data-driven insights enabling proactive security management
 
 ## Evidence of Real-World Use
 
-The platform has been deployed and used within:
+The platform is live in production at:
 
-- **Heart of England Co-operative**
-- **Central England Co-operative**
+- **Heart of England Co-operative** — 40+ retail store locations, full production use
 
-Supporting security operations across multiple retail locations.
+It was also demonstrated to **Central England Co-operative**, which remains interested but has paused its adoption decision pending an internal organisational merger.
 
 ## Repository Structure
 /AIP_Backend – Backend API services (.NET)
@@ -148,8 +148,8 @@ Alerts and notification system
 
 This platform goes beyond traditional incident reporting tools by introducing:
 
-- **AI-assisted decision-making** using Azure OpenAI
-- **Barcode-based intelligence tracking** across locations
+- **AI-assisted decision-making** using Azure OpenAI, with a deterministic rule-based fallback ensuring every incident is classified
+- **Barcode-driven product and evidence intelligence**, paired with biometric offender recognition across locations
 - **Multi-organisation data sharing** architecture
 - **Real-time operational analytics**
 
