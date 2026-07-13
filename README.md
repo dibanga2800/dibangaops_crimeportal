@@ -141,8 +141,8 @@ Alerts and notification system
 |-------------|------|
 | Dashboard view | [View](./Dashboard.jpg) |
 | Incident reporting interface | [View](./impact%20metrics.webp) |
-| Analytics and reporting dashboards | [View](./docs/screenshots/analytics.png) |
-| Alerts and notification system | [View](./analytics.webp) |
+| Analytics and reporting dashboards | [View](./analytics.webp)) |
+| Alerts and notification system | [View](./alerts.png) |
 
 ## Innovation Summary
 
