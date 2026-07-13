@@ -139,7 +139,7 @@ Alerts and notification system
 
 | Description | Link |
 |-------------|------|
-| Dashboard view | [View](./docs/screenshots/dashboard.png) |
+| Dashboard view | [View](./Dashboard.jpg) |
 | Incident reporting interface | [View](./docs/screenshots/incident-reporting.png) |
 | Analytics and reporting dashboards | [View](./docs/screenshots/analytics.png) |
 | Alerts and notification system | [View](./docs/screenshots/alerts.png) |
