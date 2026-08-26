@@ -69,8 +69,6 @@ This significantly improves classification accuracy and reduces manual workload.
 
 ## Architecture
 
-![Architecture Diagram](https://github.com/dibanga2800/dibangaops_crimeportal/blob/main/docs/ARCHITECTURE.md)
-
 The platform follows a modern distributed architecture:
 
 | Component | Technology |
@@ -125,10 +123,6 @@ It was also demonstrated to **Central England Co-operative**, which remains inte
 /Infrastructure – Infrastructure as Code and deployment configs
 /.github/workflows – CI/CD pipelines
 /docs – Architecture diagrams and supporting documentation
-
-### Operations Runbooks
-
-- [Azure Subscription Reactivation Runbook](./docs/AZURE_SUBSCRIPTION_REACTIVATION_RUNBOOK.md)
 
 ## Screenshots
 Dashboard view
