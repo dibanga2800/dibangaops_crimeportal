@@ -55,7 +55,7 @@ jobs:
           echo "AZURE_STATIC_WEB_APPS_API_TOKEN_V2 is set."
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
