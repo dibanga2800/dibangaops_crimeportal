@@ -6,7 +6,7 @@ const CAPABILITIES = [
 		body: 'Built on a .NET Core backend with Azure cloud services, designed for reliability across multiple live sites.',
 	},
 	{
-		title: 'Computer vision and barcode-based identification',
+		title: 'Biometric offender recognition and barcode product tracking',
 		body: 'Integrated directly into the incident workflow, rather than bolted on as a separate tool.',
 	},
 	{
@@ -23,7 +23,7 @@ const AboutPage = () => {
 	return (
 		<PublicPageShell
 			title="About"
-			description="A production crime and incident management platform for the Heart of England Co-operative, deployed across multiple retail locations."
+			description="A production crime and incident management platform for the Heart of England Co-operative, deployed across all 40 of its retail stores."
 		>
 			<section className="space-y-2" aria-labelledby="about-what-it-does">
 				<h2 id="about-what-it-does" className="text-sm font-semibold text-slate-900">

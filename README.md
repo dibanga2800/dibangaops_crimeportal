@@ -8,9 +8,21 @@
 
 DibangOps Crime Portal™ is a multi-tenant security incident management and crime intelligence platform for retail loss prevention teams. It is live at [www.dibangops.com](https://www.dibangops.com).
 
-It is in production at **Heart of England Co-operative**: all **40 stores** have been provisioned, and **32 of them** were actively reporting incidents as of August 2026. It was also demonstrated to **Central England Co-operative**, which is interested but has paused its adoption decision until an internal organisational merger is complete.
+It is in production at **Heart of England Co-operative** across all **40 of its retail stores**. 32 of those stores had logged incidents as of August 2026.
 
-I designed and built the platform and am its technical owner: architecture, backend, frontend, database, infrastructure, deployment and client onboarding.
+I designed and built the platform and am its principal architect and technical owner: architecture, backend, frontend, database, infrastructure, deployment and client onboarding.
+
+## Origin and rollout
+
+Heart of England's previous incident reporting system was unreliable. Advantage 1 Ltd, the co-operative's security services provider and my employer, committed to deliver a replacement, and I was given that brief as a Software Engineer. I conceived the architecture and built the platform myself, including capabilities that were not in the brief, such as AI-assisted classification and biometric offender recognition.
+
+| Period | Milestone |
+|--------|-----------|
+| December 2025 to April 2026 | Platform designed, built and deployed to Azure |
+| February 2026 | Requirements discussions with Heart of England's Loss Prevention Manager |
+| April 2026 | Early build tested by the client, then a pilot in trial stores; first live incident logged on 20 April 2026 |
+| May 2026 | Rollout to 38 stores across three operational areas |
+| June 2026 | Two newly opened stores added, bringing the platform to all 40 stores |
 
 ## Problem
 
@@ -28,8 +40,9 @@ Before the platform, incident management across the Heart of England store estat
 | Measure | Before | After |
 |---------|--------|-------|
 | Time to report an incident | 20 to 30 minutes | 5 to 10 minutes |
-| Stores on the platform | 0 | 40 provisioned, 32 actively reporting (August 2026) |
-| Incidents recorded | Paper and email | 581 incidents by July 2026 (see the incident reports screenshot below) |
+| Stores on the platform | 0 | All 40 stores live; 32 had logged incidents (August 2026) |
+| Incidents recorded | Paper and spreadsheets | 977 incidents logged since go-live on 20 April 2026 (August 2026) |
+| Users | None | 48 active user accounts across store and management roles |
 | Management admin | Manual collation | Several hours per week saved |
 | Cross-store visibility | None | Live dashboards by store, region and period |
 
@@ -97,7 +110,7 @@ I am the technical lead and have been the only developer on the project. I was r
 - Azure OpenAI classification with a rule-based fallback, and the face recognition pipeline
 - Barcode product and evidence workflows
 - Terraform infrastructure, CI/CD pipelines and production deployment on Azure
-- Client demonstrations, rollout and onboarding for the 40 Heart of England stores
+- Client requirements, pilot, rollout and user onboarding for the 40 Heart of England stores
 
 **Tooling:** I use AI-assisted development tools (including Cursor) in my day-to-day workflow. The product and architecture decisions, security model, infrastructure design, code review and client delivery are my own.
 
