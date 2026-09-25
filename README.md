@@ -1,154 +1,132 @@
 # DibangOps Crime Portal™
 
+[![CodeQL](https://github.com/dibanga2800/dibangaops_crimeportal/actions/workflows/codeql.yml/badge.svg)](https://github.com/dibanga2800/dibangaops_crimeportal/actions/workflows/codeql.yml)
+[![Deploy Backend](https://github.com/dibanga2800/dibangaops_crimeportal/actions/workflows/deploy-backend.yml/badge.svg)](https://github.com/dibanga2800/dibangaops_crimeportal/actions/workflows/deploy-backend.yml)
+[![Deploy Frontend](https://github.com/dibanga2800/dibangaops_crimeportal/actions/workflows/deploy-frontend.yml/badge.svg)](https://github.com/dibanga2800/dibangaops_crimeportal/actions/workflows/deploy-frontend.yml)
+
 ## Overview
 
-DibangOps Crime Portal™ is a production-grade, API-driven security incident management and crime intelligence platform designed for multi-organisation retail environments.
+DibangOps Crime Portal™ is a multi-tenant security incident management and crime intelligence platform for retail loss prevention teams. It is live at [www.dibangops.com](https://www.dibangops.com).
 
-The platform was demonstrated to two UK retail co-operatives — **Heart of England Co-operative** and **Central England Co-operative** — during early-stage evaluation. Heart of England moved quickly to production and is currently live across 40+ store locations, using the system for real-time incident reporting, intelligence sharing, and data-driven decision-making. Central England Co-operative remains interested but has paused its adoption decision pending an internal organisational merger, with no confirmed timeline to proceed.
+It is in production at **Heart of England Co-operative**: all **40 stores** have been provisioned, and **32 of them** were actively reporting incidents as of August 2026. It was also demonstrated to **Central England Co-operative**, which is interested but has paused its adoption decision until an internal organisational merger is complete.
 
-This platform was fully designed and developed by me as the sole technical lead and engineer.
+I designed and built the platform and am its technical owner: architecture, backend, frontend, database, infrastructure, deployment and client onboarding.
 
-## Problem Statement
+## Problem
 
-Prior to this system, incident management within retail security environments faced several challenges:
+Before the platform, incident management across the Heart of England store estate had these gaps:
 
-- Manual and fragmented incident reporting processes
-- Lack of centralised visibility across multiple store locations
-- Inconsistent classification of incidents
-- Limited ability to track repeat offenders
-- No real-time alerting or intelligence sharing
-- Minimal analytics for operational decision-making
+- Incident reporting was manual and fragmented, with no consistent audit trail
+- Stores had no shared view of incidents, so cross-store patterns went unseen
+- Incident classification depended on individual judgement
+- Repeat offenders were hard to track across locations
+- High-risk incidents were escalated ad hoc, by phone or email
+- Management reporting was collated by hand
 
-These limitations significantly reduced response efficiency and prevented organisations from leveraging data for proactive security management.
+## Measured impact
 
-## Solution
+| Measure | Before | After |
+|---------|--------|-------|
+| Time to report an incident | 20 to 30 minutes | 5 to 10 minutes |
+| Stores on the platform | 0 | 40 provisioned, 32 actively reporting (August 2026) |
+| Incidents recorded | Paper and email | 581 incidents by July 2026 (see the incident reports screenshot below) |
+| Management admin | Manual collation | Several hours per week saved |
+| Cross-store visibility | None | Live dashboards by store, region and period |
 
-To address these challenges, I designed and built a centralised, scalable platform that provides:
+Before and after figures come from a signed operational impact letter from the client's Loss Prevention Manager (August 2026). Usage figures come from the production system. [`scripts/impact-metrics.sql`](./scripts/impact-metrics.sql) gives the queries used to refresh them.
 
-- Real-time incident reporting across multiple locations
-- AI-assisted incident classification and decision support
-- Barcode-driven product and evidence tracking, paired with biometric offender recognition
-- Cross-organisation intelligence sharing
-- Role-based dashboards and operational workflows
-- Advanced analytics and reporting capabilities
+## Core capabilities
 
-## Core Capabilities
-
-### 🔹 Incident Management
+### Incident management
 - Structured incident reporting with configurable workflows
-- Centralised data storage and retrieval
-- Role-based access control per organisation/store
+- Role-based access at four levels: role, organisation, page and record
+- Database-driven page permissions, so access changes need no redeploy
 
-### 🔹 AI-Assisted Intelligence (Innovation)
-- Integration with Azure OpenAI for incident classification
-- Automatic suggestion of:
-  - Incident categories
-  - Risk levels
-  - Recommended actions
-  - Confidence scoring with rule-based fallback mechanisms
+### AI-assisted classification
+- Every new incident is classified inline by Azure OpenAI, returning a category, a confidence score (0 to 1), a risk level and recommended actions
+- If Azure OpenAI is disabled, times out or errors, a deterministic rule-based classifier takes over, so **every incident is still classified**
+- Each incident records which classifier produced its result (`ClassificationVersion`), so AI and fallback usage can be audited
 
-This significantly improves classification accuracy and reduces manual workload.
+### Barcode and biometric intelligence
+- EAN barcode scanning links stolen items to a central product catalogue, enabling hot-product analytics and cross-incident correlation
+- Barcode-tracked chain of custody for physical evidence (register, transfer, audit trail)
+- Offender identification and repeat-offender linking through structured identity data, text search and face recognition (Azure Face API, or a self-hosted InsightFace service on internal-only ingress)
+- Face indexing runs in the background after an incident is saved, so reporting stays fast
 
-### 🔹 Barcode & Biometric Intelligence (Innovation)
-- EAN barcode scanning links stolen items to a central product catalog, enabling hot-product analytics and cross-incident correlation
-- Barcode-tracked evidence chain of custody for physical items seized during incidents
-- Offender identification and repeat-offender linking via structured identity data, text search, and biometric face recognition (Azure Face API / InsightFace) — not barcode assignment to people
-- Together these provide a linked intelligence trail connecting products, evidence, and offenders across locations
+### Alerts and escalation
+- Configurable alert rules (keywords, incident types, region, trigger condition) are evaluated automatically against every new incident
+- Alerts go through an in-app lifecycle (acknowledge, escalate, resolve) and trigger email notifications to Loss Prevention Managers
+- Alert checks run in the background after the incident is saved
 
-### 🔹 Real-Time Alerts & Notifications
-- Immediate alert generation for high-risk incidents
-- Supports rapid response and escalation
-
-### 🔹 Analytics & Insights
-- Drill-down dashboards by:
-  - Store
-  - Region
-  - Time period
-- Identification of trends and high-risk patterns
-- Supports data-driven operational decisions
+### Analytics
+- Drill-down dashboards by store, region and time period
+- Crime trends, hot products, recovery rates, offender activity, crime linking and daily per-store risk scores
 
 ## Architecture
 
-The platform follows a modern distributed architecture:
-
 | Component | Technology |
 |-----------|-----------|
-| **Frontend** | React + Vite + TypeScript (SPA) |
-| **Backend** | .NET API services (C#) |
-| **Database** | Microsoft SQL Server |
-| **Infrastructure** | Microsoft Azure (Container Apps, App Services) |
-| **Monitoring** | Application Insights |
-| **CI/CD** | GitHub Actions pipelines |
+| Frontend | React 19, Vite, TypeScript (SPA) on Azure Static Web Apps |
+| Backend | ASP.NET Core (.NET 10) API on Azure Container Apps |
+| Face recognition | Python InsightFace service (internal-only Container App) and Azure Face API |
+| Database | Azure SQL with Entity Framework Core (150+ migrations) |
+| Storage | Azure Blob Storage for incident images and evidence |
+| Edge | Azure Front Door, serving the SPA and `/api/*` from one origin |
+| Secrets | Azure Key Vault (RBAC); no credentials in source control |
+| Infrastructure | Terraform, including blue/green production environments |
+| CI/CD | GitHub Actions with Azure OIDC login, CodeQL and Dependabot |
+| Monitoring | Log Analytics and Container Apps diagnostics, post-deploy `/api/health` and TLS smoke tests; Application Insights can be enabled via Terraform |
 
-## Technical Contribution (My Role)
+Diagrams (system context, containers, AI request sequence, deployment and tenancy) and the main design decisions and trade-offs are in **[ARCHITECTURE.md](./ARCHITECTURE.md)**.
 
-I was the sole developer and technical lead responsible for the full lifecycle of the system, including:
+## Quality and security
 
-- Designing the overall system architecture
-- Developing backend APIs using .NET (C#)
-- Building the frontend application using React + TypeScript
-- Designing and implementing the SQL Server database schema
-- Integrating AI capabilities using Azure OpenAI
-- Implementing barcode tracking logic and workflows
-- Setting up CI/CD pipelines using GitHub Actions
-- Deploying and managing infrastructure on Microsoft Azure
-- Implementing monitoring and logging (Application Insights)
+- 119 backend tests (xUnit, `WebApplicationFactory` integration tests) run in the backend deploy pipeline
+- Frontend tests use Vitest and Testing Library
+- CodeQL scans every push and pull request; Dependabot keeps dependencies current
+- Authentication uses HttpOnly cookies, CSRF validation, login protection and two-factor authentication for management roles
+- Tenant isolation is enforced in the API through claim-based query filters on a shared database
 
-## Impact
+## My role
 
-### Before Implementation
-- Manual, inconsistent incident reporting
-- No shared intelligence between stores
-- Limited visibility into trends and repeat offenders
-- Slow response times
+I am the technical lead and have been the only developer on the project. I was responsible for:
 
-### After Implementation
-- Real-time reporting across 40+ stores (Heart of England Co-operative)
-- Centralised intelligence across a multi-tenant platform
-- AI-assisted classification improving operational efficiency
-- Enhanced tracking of repeat incidents and offenders
-- Data-driven insights enabling proactive security management
+- System architecture and the multi-tenant data model
+- Backend APIs in .NET (C#) and the SQL Server schema
+- The React and TypeScript frontend
+- Azure OpenAI classification with a rule-based fallback, and the face recognition pipeline
+- Barcode product and evidence workflows
+- Terraform infrastructure, CI/CD pipelines and production deployment on Azure
+- Client demonstrations, rollout and onboarding for the 40 Heart of England stores
 
-## Evidence of Real-World Use
+**Tooling:** I use AI-assisted development tools (including Cursor) in my day-to-day workflow. The product and architecture decisions, security model, infrastructure design, code review and client delivery are my own.
 
-The platform is live in production at:
+## Repository history
 
-- **Heart of England Co-operative** — 40+ retail store locations, full production use
+The first commit (December 2025) imported the application as it stood then, which is why it is a single large commit. In March 2026 this repository was merged with a working repository (`crime-portal-ai`). All development since then is visible commit by commit.
 
-It was also demonstrated to **Central England Co-operative**, which remains interested but has paused its adoption decision pending an internal organisational merger.
+## Repository structure
 
-## Repository Structure
-/AIP_Backend – Backend API services (.NET)
-/AIP_UI – Frontend application (React + TypeScript)
-/Infrastructure – Infrastructure as Code and deployment configs
-/.github/workflows – CI/CD pipelines
-/docs – Architecture diagrams and supporting documentation
+| Path | Contents |
+|------|----------|
+| `/AIP_Backend` | ASP.NET Core API, EF Core migrations, tests, InsightFace service |
+| `/AIP_UI` | React and TypeScript frontend |
+| `/Infrastructure` | Terraform for Azure (Front Door, Container Apps, SQL, Key Vault, networking) |
+| `/.github/workflows` | CI/CD, infrastructure plan and CodeQL pipelines |
+| `/scripts` | Deployment, verification and reporting scripts |
+| `ARCHITECTURE.md` | Architecture diagrams and design decisions |
 
 ## Screenshots
-Dashboard view
-Incident reporting interface
-Analytics and reporting dashboards
-Alerts and notification system
 
+Staff names are blurred in the screenshots.
 
-| Description | Link |
-|-------------|------|
-| Dashboard view | [View](./Dashboard.jpg) |
-| Incident reporting interface | [View](./impact%20metrics.webp) |
-| Analytics and reporting dashboards | [View](./analytics.jpg)) |
-| Alerts and notification system | [View](./alerts.png) |
+| Screen | Link |
+|--------|------|
+| Management dashboard | [View](./Dashboard.jpg) |
+| Incident reports (581 incidents across 31 stores, July 2026) | [View](./impact%20metrics.webp) |
+| Crime Analytics and AI Hub | [View](./analytics.jpg) |
+| Alert rule configuration | [View](./alerts.png) |
 
-## Innovation Summary
+## Licence
 
-This platform goes beyond traditional incident reporting tools by introducing:
-
-- **AI-assisted decision-making** using Azure OpenAI, with a deterministic rule-based fallback ensuring every incident is classified
-- **Barcode-driven product and evidence intelligence**, paired with biometric offender recognition across locations
-- **Multi-organisation data sharing** architecture
-- **Real-time operational analytics**
-
-These features collectively enable a modern, intelligent security operations platform rather than a basic reporting system.
-
-## License
-
-MIT License
+MIT Licence
