@@ -389,6 +389,11 @@ namespace AIPBackend.Models.DTOs
 		public string? Status { get; set; }
 		public string? CustomerId { get; set; }
 		public string? RegionId { get; set; }
+		/// <summary>
+		/// When false the list skips the summary totals. Callers reading
+		/// pages 2..n of the same filter already have them from page 1.
+		/// </summary>
+		public bool IncludeSummary { get; set; } = true;
 	}
 
 	public class RepeatOffenderIncidentSummaryDto

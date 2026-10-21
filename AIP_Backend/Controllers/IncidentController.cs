@@ -43,7 +43,8 @@ namespace AIPBackend.Controllers
 			[FromQuery] string? siteId = null,
 			[FromQuery] string? status = null,
 			[FromQuery] string? customerId = null,
-			[FromQuery] string? regionId = null)
+			[FromQuery] string? regionId = null,
+			[FromQuery] bool includeSummary = true)
 		{
 			try
 			{
@@ -59,7 +60,8 @@ namespace AIPBackend.Controllers
 					SiteId = siteId,
 					Status = status,
 					CustomerId = customerId,
-					RegionId = regionId
+					RegionId = regionId,
+					IncludeSummary = includeSummary
 				};
 
 				var result = await _incidentService.GetIncidentsAsync(query);

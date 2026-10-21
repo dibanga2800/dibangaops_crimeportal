@@ -340,7 +340,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
           for (let start = 2; start <= pageCount; start += PARALLEL_PAGES) {
             if (!isActive) return
             const batch = Array.from({ length: Math.min(PARALLEL_PAGES, pageCount - start + 1) }, (_, k) =>
-              incidentsApi.getIncidents({ ...incidentQueryParams, page: start + k }).then(rowsOf),
+              incidentsApi.getIncidents({ ...incidentQueryParams, page: start + k, includeSummary: false }).then(rowsOf),
             )
             rest.push(...(await Promise.all(batch)))
           }
@@ -574,13 +574,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
 
         setSiteOptions(storeOptions);
         setRegionOptions(regionOpts);
-
-        const data = await analyticsService.getAnalyticsHub({
-          stores: storeOptions,
-          regions: regionOpts,
-        });
-
-        setAnalyticsData(data);
+        // The dashboard builds every panel from its own incident rows, so it no
+        // longer calls the analytics hub endpoint (the heaviest query in the app).
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') return;
         console.error('Failed to load admin analytics overview:', err);
@@ -600,32 +595,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
   React.useEffect(() => {
     const loadEnhancedData = async () => {
       try {
-        const analyticsParams = {
-          customerId: effectiveCustomerId ?? undefined,
-          siteId: effectiveSiteId ?? undefined,
-          regionId: selectedRegion !== 'all' ? selectedRegion : undefined,
-          from: fromDate || undefined,
-          to: toDate || undefined
-        }
-
-        const [alertData, analyticsData] = await Promise.allSettled([
-          alertInstancesApi.getSummary(effectiveCustomerId ?? undefined),
-          classificationApi.getAnalyticsSummary(analyticsParams)
-        ])
-
-        if (alertData.status === 'fulfilled') {
-          setAlertSummary(alertData.value)
-        }
-        if (analyticsData.status === 'fulfilled') {
-          setAiAnalytics(analyticsData.value)
-        }
+        // Risk signals are computed from the incidents in view, so only the
+        // alert summary (which depends on the company alone) is fetched here.
+        const alertData = await alertInstancesApi.getSummary(effectiveCustomerId ?? undefined)
+        setAlertSummary(alertData)
       } catch (err) {
         console.warn('Enhanced dashboard data not available:', err)
       }
     }
 
     loadEnhancedData()
-  }, [effectiveCustomerId, effectiveSiteId, selectedRegion, fromDate, toDate])
+  }, [effectiveCustomerId])
 
   // Get regions for dropdown â€“ use ONLY real regions from API for the current customer
   const regions = React.useMemo(() => {
