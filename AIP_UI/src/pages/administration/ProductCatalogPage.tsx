@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { Link } from 'react-router-dom'
-import { Package, Search, Loader2, Pencil, Upload } from 'lucide-react'
+import { Search, Loader2, Pencil, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -119,25 +120,21 @@ export const ProductCatalogPage = () => {
 	}
 
 	return (
-		<div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gradient-to-br from-background via-muted/30 to-background">
-			<div className="container mx-auto max-w-screen-2xl space-y-4 px-3 py-4 sm:px-4 md:space-y-6 md:px-6 lg:px-8">
-				<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-					<div className="flex items-center gap-2">
-						<Package className="h-7 w-7 shrink-0 text-primary" aria-hidden />
-						<div>
-							<h1 className="text-xl font-bold tracking-tight sm:text-2xl md:text-3xl">Product catalog</h1>
-							<p className="text-sm text-muted-foreground">
-								Search by barcode, department, or name. Barcode is stored as <strong>EAN</strong> in the database.
-							</p>
-						</div>
-					</div>
-					<Button variant="outline" size="sm" asChild>
-						<Link to="/administration/barcode-catalog-import">
-							<Upload className="mr-2 h-4 w-4" aria-hidden />
-							Import CSV
-						</Link>
-					</Button>
-				</div>
+		<div className="w-full">
+			<div className="space-y-6">
+				<PageHeader
+					title="Product catalog"
+					description={<>Products staff can pick when recording stolen items. Search by barcode (stored as <strong className="font-medium text-foreground">EAN</strong>), department or name.</>}
+					className="pb-0"
+					actions={
+						<Button variant="outline" asChild>
+							<Link to="/administration/barcode-catalog-import">
+								<Upload className="h-4 w-4" aria-hidden />
+								Import CSV
+							</Link>
+						</Button>
+					}
+				/>
 
 				<Card>
 					<CardHeader>
@@ -193,7 +190,7 @@ export const ProductCatalogPage = () => {
 									<TableRow>
 										<TableHead>Barcode</TableHead>
 										<TableHead>Department</TableHead>
-										<TableHead>VMECode</TableHead>
+										<TableHead>VME code</TableHead>
 										<TableHead>Product name</TableHead>
 										<TableHead className="text-right">Retail price</TableHead>
 										<TableHead className="w-24">Actions</TableHead>

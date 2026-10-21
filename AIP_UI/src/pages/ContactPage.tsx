@@ -1,4 +1,5 @@
 import { useForm } from 'react-hook-form'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useState, useRef } from 'react'
@@ -14,10 +15,10 @@ import {
 	FormLabel,
 	FormMessage,
 } from '@/components/ui/form'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { useToast } from '@/hooks/use-toast'
 import { submitContactForm } from '@/services/contactService'
-import { Mail, Loader2, Paperclip } from 'lucide-react'
+import { Loader2, Paperclip } from 'lucide-react'
 
 const contactFormSchema = z.object({
 	name: z.string().min(1, 'Name is required').min(2, 'Name must be at least 2 characters'),
@@ -93,18 +94,13 @@ const ContactPage = () => {
 	}
 
 	return (
-		<div className="w-full max-w-2xl mx-auto">
+		<div className="mx-auto w-full max-w-2xl">
+			<PageHeader
+				title="Contact support"
+				description="Report a problem or ask a question. Attach a screenshot if it helps show what happened."
+			/>
 			<Card>
-				<CardHeader>
-					<CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-						<Mail className="h-5 w-5" aria-hidden />
-						Contact Us
-					</CardTitle>
-					<p className="text-sm text-muted-foreground">
-						Send us a message or report an issue. Screenshots and documents can be attached.
-					</p>
-				</CardHeader>
-				<CardContent>
+				<CardContent className="pt-5">
 					<Form {...form}>
 						<form
 							onSubmit={form.handleSubmit(handleSubmit)}

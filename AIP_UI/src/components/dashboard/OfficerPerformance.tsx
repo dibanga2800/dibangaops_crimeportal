@@ -26,13 +26,13 @@ export function OfficerPerformance({ data }: OfficerPerformanceProps) {
   const getStatusColor = (status: OfficerStats['status']) => {
     switch (status) {
       case 'excellent':
-        return 'bg-green-500/10 text-green-500 hover:bg-green-500/20'
+        return 'bg-recovered/10 text-recovered hover:bg-recovered/20'
       case 'good':
-        return 'bg-blue-500/10 text-blue-500 hover:bg-blue-500/20'
+        return 'bg-primary/10 text-primary hover:bg-primary/20'
       case 'needs-improvement':
-        return 'bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20'
+        return 'bg-warning/10 text-warning hover:bg-warning/20'
       case 'non-reporter':
-        return 'bg-red-500/10 text-red-500 hover:bg-red-500/20'
+        return 'bg-destructive/10 text-loss hover:bg-destructive/20'
     }
   }
 
@@ -113,7 +113,7 @@ export function OfficerPerformance({ data }: OfficerPerformanceProps) {
                 <td className="p-2 align-middle text-center tabular-nums md:p-4">
                   {officer.incidents}
                 </td>
-                <td className="p-2 align-middle text-right font-medium tabular-nums text-green-600 dark:text-green-400 md:p-4">
+                <td className="p-2 align-middle text-right font-medium tabular-nums text-recovered md:p-4">
                   £{officer.valueSaved.toLocaleString()}
                 </td>
                 <td className="p-2 align-middle text-center md:p-4">

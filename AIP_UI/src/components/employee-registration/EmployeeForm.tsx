@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import { FormSection, FormActions } from "@/components/common/FormSection"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
@@ -381,23 +381,16 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
 
   return (
     <Form {...form} key={initialData?.id || 'new-employee'}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-8">
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
         
         {/* Basic Information Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <User className="h-5 w-5" />
-              Basic Information
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <FormSection icon={<User />} title="Basic information" className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField
               control={form.control}
               name="aipAccessLevel"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>AIP Access Level</FormLabel>
+                  <FormLabel>AIP access level</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
@@ -436,7 +429,7 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
               name="firstName"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>First Name</FormLabel>
+                  <FormLabel>First name</FormLabel>
                   <FormControl>
                     <Input placeholder="John" {...field} />
                   </FormControl>
@@ -450,7 +443,7 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
               name="surname"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Last Name</FormLabel>
+                  <FormLabel>Last name</FormLabel>
                   <FormControl>
                     <Input placeholder="Doe" {...field} />
                   </FormControl>
@@ -464,7 +457,7 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
               name="startDate"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Start Date</FormLabel>
+                  <FormLabel>Start date</FormLabel>
                   <FormControl>
                     <Input 
                       type="date" 
@@ -482,7 +475,7 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
               name="employeeNumber"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Employee Number</FormLabel>
+                  <FormLabel>Employee number</FormLabel>
                   <FormControl>
                     <Input
                       placeholder="Auto-generated when employee is created"
@@ -501,24 +494,16 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
                 </FormItem>
               )}
             />
-          </CardContent>
-        </Card>
+          </FormSection>
 
         {/* Contact Information Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Mail className="h-5 w-5" />
-              Contact Information
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <FormSection icon={<Mail />} title="Contact information" className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField
               control={form.control}
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Email Address</FormLabel>
+                  <FormLabel>Email address</FormLabel>
                   <FormControl>
                     <Input type="email" placeholder="john.doe@example.com" {...field} />
                   </FormControl>
@@ -532,7 +517,7 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
               name="contactNumber"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Contact Number</FormLabel>
+                  <FormLabel>Contact number</FormLabel>
                   <FormControl>
                     <Input placeholder="+44 123 456 7890" {...field} />
                   </FormControl>
@@ -540,24 +525,16 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
                 </FormItem>
               )}
             />
-          </CardContent>
-        </Card>
+          </FormSection>
 
         {/* Address Information Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <MapPin className="h-5 w-5" />
-              Address Information
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <FormSection icon={<MapPin />} title="Address information" className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField
               control={form.control}
               name="houseName"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>House Name</FormLabel>
+                  <FormLabel>House name</FormLabel>
                   <FormControl>
                     <Input placeholder="The Cottage" {...field} />
                   </FormControl>
@@ -571,7 +548,7 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
               name="numberAndStreet"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Number and Street</FormLabel>
+                  <FormLabel>Number and street</FormLabel>
                   <FormControl>
                     <Input placeholder="123 Main Street" {...field} />
                   </FormControl>
@@ -624,7 +601,7 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
               name="postCode"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Post Code</FormLabel>
+                  <FormLabel>Post code</FormLabel>
                   <FormControl>
                     <Input placeholder="B1 1AA" {...field} />
                   </FormControl>
@@ -657,18 +634,10 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
                 </FormItem>
               )}
             />
-          </CardContent>
-        </Card>
+          </FormSection>
 
         {/* Employment Information Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Briefcase className="h-5 w-5" />
-              Employment Information
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <FormSection icon={<Briefcase />} title="Employment information" className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField
               control={form.control}
               name="position"
@@ -699,7 +668,7 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
               name="employeeStatus"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Employee Status</FormLabel>
+                  <FormLabel>Employee status</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
@@ -723,7 +692,7 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
               name="employmentType"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Employment Type</FormLabel>
+                  <FormLabel>Employment type</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
@@ -781,11 +750,10 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
                 </FormItem>
               )}
             />
-          </CardContent>
-        </Card>
+          </FormSection>
 
         {submitError && (
-          <div className="bg-red-50 border border-red-200 rounded-md p-4">
+          <div className="bg-loss-soft border border-loss/30 rounded-md p-4">
             <div className="flex">
               <div className="flex-shrink-0">
                 <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
@@ -793,8 +761,8 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
                 </svg>
               </div>
               <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800">Error</h3>
-                <div className="mt-2 text-sm text-red-700">
+                <h3 className="text-sm font-medium text-loss">Error</h3>
+                <div className="mt-2 text-sm text-loss">
                   {submitError}
                 </div>
               </div>
@@ -802,14 +770,14 @@ export function EmployeeForm({ onSubmit, onCancel, initialData, isLoading }: Emp
           </div>
         )}
 
-        <div className="flex justify-end space-x-4">
+        <FormActions>
           <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
             Cancel
           </Button>
           <Button type="submit" disabled={isLoading || isSubmitting}>
-            {isLoading || isSubmitting ? "Saving..." : initialData ? "Update" : "Create"}
+            {isLoading || isSubmitting ? "Saving…" : initialData ? "Save changes" : "Register employee"}
           </Button>
-        </div>
+        </FormActions>
       </form>
     </Form>
   )

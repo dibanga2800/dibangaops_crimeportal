@@ -10,6 +10,7 @@
  */
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { useSearchParams } from 'react-router-dom'
 import {
 	Card,
@@ -44,7 +45,6 @@ import { RepeatOffenderAnalysis } from './components/RepeatOffenderAnalysis'
 import { ResourceDeploymentEngine } from './components/ResourceDeploymentEngine'
 import { CrimeLinkingPanel } from './components/CrimeLinkingPanel'
 import {
-	BarChart3,
 	RefreshCw,
 	Calendar as CalendarIcon,
 	Download,
@@ -70,6 +70,17 @@ import { useAvailableCustomers } from '@/hooks/useAvailableCustomers'
 import { useAuth } from '@/hooks/useAuth'
 import { getAssignedSiteIds, isSiteScopeEnforcedForUser } from '@/utils/siteAccess'
 import { MapPin, Building2 } from 'lucide-react'
+import { FilterBar, DateRangeField, FilterChip } from '@/components/common/FilterBar'
+import { Segmented } from '@/components/common/Segmented'
+import { StatLedger, type StatLedgerItem } from '@/components/common/StatLedger'
+import { EmptyState } from '@/components/common/EmptyState'
+
+type PeriodPreset = '30d' | '6m' | '12m' | 'custom'
+const PERIOD_PRESETS: ReadonlyArray<{ value: PeriodPreset; label: string }> = [
+	{ value: '30d', label: '30 days' },
+	{ value: '6m', label: '6 months' },
+	{ value: '12m', label: '12 months' },
+]
 
 const formatCurrencyExact = (value: number) =>
 	value.toLocaleString('en-GB', {
@@ -784,6 +795,7 @@ const DataAnalyticsHub = () => {
 	const [selectedRegionId, setSelectedRegionId] = useState<string>('all')
 	const [selectedStoreId, setSelectedStoreId] = useState<string>('all')
 	const [loadingFilters, setLoadingFilters] = useState(true)
+	const [activeTab, setActiveTab] = useState('crime-trends')
 	const { isAdmin, selectedCustomerId, setSelectedCustomerId } = useCustomerSelection()
 	const { availableCustomers, isLoading: loadingCustomers } = useAvailableCustomers()
 	const [selectedCustomerForAdmin, setSelectedCustomerForAdmin] = useState<number | null>(null)
@@ -1097,585 +1109,452 @@ const DataAnalyticsHub = () => {
 
 	if (error && !data) {
 		return (
-			<div className="container mx-auto px-3 sm:px-4 md:px-6 py-3 sm:py-4 md:py-6">
-				<Card>
-					<CardHeader className="p-4 sm:p-6">
-						<CardTitle className="text-lg sm:text-xl">Data Analytics Hub</CardTitle>
-						<CardDescription className="text-xs sm:text-sm">Error loading analytics data</CardDescription>
-					</CardHeader>
-					<CardContent className="p-4 sm:p-6">
-						<div className="flex flex-col items-center justify-center py-8 sm:py-12 space-y-4">
-							<AlertCircle className="h-10 w-10 sm:h-12 sm:w-12 text-red-500" />
-							<p className="text-sm sm:text-base text-red-600 text-center">{error}</p>
-							<Button onClick={handleRefresh} className="text-sm">
-								<RefreshCw className="h-4 w-4 mr-2" />
-								Retry
+			<div className="space-y-6">
+				<PageHeader title="Data analytics hub" className="pb-0" />
+				<div className="rounded-lg border border-border bg-card">
+					<EmptyState
+						icon={<AlertCircle className="h-5 w-5 text-loss" />}
+						title="Analytics could not be loaded"
+						description={error}
+						action={
+							<Button onClick={handleRefresh}>
+								<RefreshCw className="h-4 w-4" />
+								Try again
 							</Button>
-						</div>
-					</CardContent>
-				</Card>
+						}
+					/>
+				</div>
 			</div>
 		)
 	}
 
+	const fromValue = dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : ''
+	const toValue = dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : ''
+	const activePreset: PeriodPreset = (() => {
+		if (!dateRange?.from || !dateRange?.to) return 'custom'
+		const to = startOfDay(dateRange.to).getTime()
+		const from = startOfDay(dateRange.from).getTime()
+		if (to !== startOfDay(new Date()).getTime()) return 'custom'
+		if (from === startOfDay(subDays(new Date(to), ANALYTICS_DEFAULT_LOOKBACK_DAYS)).getTime()) return '30d'
+		if (from === startOfDay(subMonths(new Date(to), 6)).getTime()) return '6m'
+		if (from === startOfDay(subMonths(new Date(to), 12)).getTime()) return '12m'
+		return 'custom'
+	})()
+	const applyPreset = (preset: PeriodPreset) => {
+		if (preset === '30d') handleQuickDateRangeDays(ANALYTICS_DEFAULT_LOOKBACK_DAYS)
+		if (preset === '6m') handleQuickDateRangeMonths(6)
+		if (preset === '12m') handleQuickDateRangeMonths(12)
+	}
+	const selectedRegionName = regions.find((r) => String(r.id) === selectedRegionId)?.name
+	const selectedStoreName = (() => {
+		const site = filteredSites.find((s) => String((s as any).siteID || (s as any).id) === selectedStoreId) as any
+		return site ? site.locationName || site.name : undefined
+	})()
+	const scopeFilters = (selectedRegionId !== 'all' ? 1 : 0) + (selectedStoreId !== 'all' ? 1 : 0)
+
+	const trend = data?.crimeTrends.recoveryTrend ?? []
+	const series = (pick: (p: (typeof trend)[number]) => number) => (trend.length > 2 ? trend.map(pick) : undefined)
+	const pounds = (v: number) => `£${Math.round(v).toLocaleString('en-GB')}`
+	const ledgerItems: StatLedgerItem[] = data
+		? [
+				{
+					label: 'Incidents',
+					value: data.crimeTrends.totalIncidents.toLocaleString('en-GB'),
+					hint: `${format(new Date(data.metadata.dateRange.start), 'd MMM')} to ${format(new Date(data.metadata.dateRange.end), 'd MMM yyyy')}`,
+					trend: series((p) => p.incidentCount),
+				},
+				{ label: 'Value stolen', value: pounds(data.financialSummary.totalStolenValue), trend: series((p) => p.stolenValue) },
+				{
+					label: 'Recovered',
+					value: pounds(data.financialSummary.totalRecoveredValue),
+					tone: 'recovered',
+					trend: series((p) => p.recoveredValue),
+				},
+				{ label: 'Lost', value: pounds(data.financialSummary.totalLostValue), tone: 'loss', trend: series((p) => p.lostValue) },
+				{ label: 'Recovery rate', value: `${data.financialSummary.recoveryRate.toFixed(1)}%`, hint: 'Share of stolen value recovered' },
+				{ label: 'Offenders tracked', value: data.repeatOffenders.totalOffenders.toLocaleString('en-GB'), hint: 'Seen in this period' },
+			]
+		: []
+
+	const riskTotal = aiRiskSummary ? aiRiskSummary.highCount + aiRiskSummary.mediumCount + aiRiskSummary.lowCount : 0
+	const riskTone: Record<string, string> = { high: 'text-loss', critical: 'text-loss', medium: 'text-warning', low: 'text-recovered' }
+
+	const tabs = [
+		{ value: 'crime-trends', label: 'Crime trends' },
+		{ value: 'deployment', label: 'Deployment' },
+		{ value: 'hot-products', label: 'Hot products' },
+		{ value: 'recovery-performance', label: 'Recovery by store' },
+		{ value: 'repeat-offenders', label: 'Offenders' },
+		{ value: 'crime-linking', label: 'Crime linking' },
+	]
+
 	return (
 		<ErrorBoundary>
-			<div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gradient-to-br from-background via-muted/30 to-background">
-				<div className="container mx-auto px-3 sm:px-4 md:px-6 py-3 sm:py-4 md:py-6 space-y-4 sm:space-y-6 md:space-y-8 max-w-screen-2xl">
-				{/* Header */}
-				<Card className="overflow-hidden border-border shadow-sm bg-card">
-					<CardHeader className="p-4 sm:p-6 overflow-x-hidden">
-						<div className="flex flex-col gap-4 w-full">
-							<div className="min-w-0">
-								<div className="flex flex-col gap-2 sm:gap-3">
-									<CardTitle className="flex items-center gap-2 text-lg sm:text-xl md:text-2xl text-card-foreground">
-										<BarChart3 className="h-5 w-5 sm:h-6 sm:w-6 text-indigo-500" />
-										Crime Analytics &amp; AI Hub
-									</CardTitle>
-									<CardDescription className="text-xs sm:text-sm text-muted-foreground">
-										Comprehensive crime analytics, AI-driven risk insights, and repeat offender intelligence.
-										{(selectedRegionId !== 'all' || selectedStoreId !== 'all') && (
-											<span className="block mt-1 text-xs text-indigo-500 dark:text-indigo-300">
-												Filters: {selectedRegionId !== 'all' && 'Region • '}
-												{selectedStoreId !== 'all' && 'Store'}
-											</span>
-										)}
-									</CardDescription>
-									{isAdmin && (
-										<div className="mt-1 max-w-xs">
-											<p className="text-[11px] sm:text-xs font-medium text-muted-foreground mb-1">
-												Customer
-											</p>
-											<Select
-												disabled={loadingCustomers || availableCustomers.length === 0}
-												value={selectedCustomerForAdmin?.toString() ?? ''}
-												onValueChange={value => {
-													const id = parseInt(value, 10)
-													setSelectedCustomerForAdmin(id)
-													setSelectedCustomerId(id)
-													const params = new URLSearchParams(searchParams)
-													params.set('customerId', value)
-													setSearchParams(params, { replace: true })
-													loadData()
-												}}
-											>
-												<SelectTrigger className="h-9 text-xs sm:text-sm w-full sm:w-64">
-													<SelectValue placeholder={loadingCustomers ? 'Loading customers…' : 'Select customer'} />
-												</SelectTrigger>
-												<SelectContent>
-													{availableCustomers.map(c => (
-														<SelectItem key={c.id} value={c.id.toString()}>
-															{c.name}
-														</SelectItem>
-													))}
-												</SelectContent>
-											</Select>
-										</div>
-									)}
-								</div>
-							</div>
-							
-							{/* Filters Section */}
-							<div className="flex flex-col gap-3 w-full min-w-0">
-								{/* Date Range: Start and End date inputs */}
-								<div className="w-full min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-2">
-									<div className="space-y-1">
-										<p className="text-xs font-medium text-muted-foreground">Start date</p>
-										<Input
-											type="date"
-											value={dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : ''}
-											onChange={(e) => {
-												const parsed = parseAnalyticsDateInput(e.target.value)
-												setDateRange((prev) =>
-													normalizeAnalyticsDateRange({
-														from: parsed ?? prev?.from,
-														to: prev?.to,
-													}),
-												)
-											}}
-											className="h-9 text-xs sm:text-sm"
-										/>
-									</div>
-									<div className="space-y-1">
-										<p className="text-xs font-medium text-muted-foreground">End date</p>
-										<Input
-											type="date"
-											value={dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : ''}
-											onChange={(e) => {
-												const parsed = parseAnalyticsDateInput(e.target.value)
-												setDateRange((prev) =>
-													normalizeAnalyticsDateRange({
-														from: prev?.from,
-														to: parsed ?? prev?.to,
-													}),
-												)
-											}}
-											className="h-9 text-xs sm:text-sm"
-										/>
-									</div>
-								</div>
-								<div className="flex flex-wrap gap-2">
-									<Button
-										type="button"
-										variant="secondary"
-										size="sm"
-										className="text-xs h-8"
-										onClick={() => handleQuickDateRangeDays(ANALYTICS_DEFAULT_LOOKBACK_DAYS)}
-									>
-										Last 30 days
-									</Button>
-									<Button
-										type="button"
-										variant="outline"
-										size="sm"
-										className="text-xs h-8"
-										onClick={() => handleQuickDateRangeMonths(6)}
-									>
-										6 months
-									</Button>
-									<Button
-										type="button"
-										variant="outline"
-										size="sm"
-										className="text-xs h-8"
-										onClick={() => handleQuickDateRangeMonths(12)}
-									>
-										12 months
-									</Button>
-								</div>
+			<div className="w-full space-y-5">
+				<PageHeader
+					title="Data analytics hub"
+					description="Crime trends, hot products, repeat offenders and where to deploy store detectives, for the dates and stores you choose."
+					className="pb-0"
+					actions={
+						<>
+							<Button variant="outline" onClick={handleRefresh} disabled={loading}>
+								<RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
+								Refresh
+							</Button>
+							<Button variant="outline" onClick={handleExport}>
+								<Download className="h-4 w-4" />
+								Export
+							</Button>
+						</>
+					}
+				/>
 
-								{/* Region and Store Filters */}
-								<div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 w-full">
-									<div className="min-w-0">
-										<Select
-											value={selectedRegionId}
-											onValueChange={setSelectedRegionId}
-											disabled={loadingFilters}
-										>
-											<SelectTrigger className="w-full text-xs sm:text-sm">
-												<Building2 className="h-4 w-4 mr-2 flex-shrink-0" />
-												<SelectValue placeholder="All Regions" />
-											</SelectTrigger>
-											<SelectContent>
-												<SelectItem value="all">All Regions</SelectItem>
-												{regions.map((region) => (
-													<SelectItem key={region.id} value={String(region.id)}>
-														{region.name}
-													</SelectItem>
-												))}
-											</SelectContent>
-										</Select>
-									</div>
-									<div className="min-w-0">
-										<Select
-											value={selectedStoreId}
-											onValueChange={setSelectedStoreId}
-											disabled={loadingFilters || filteredSites.length === 0}
-										>
-											<SelectTrigger className="w-full text-xs sm:text-sm">
-												<MapPin className="h-4 w-4 mr-2 flex-shrink-0" />
-												<SelectValue placeholder="All Stores" />
-											</SelectTrigger>
-											<SelectContent>
-												<SelectItem value="all">All Stores</SelectItem>
-												{filteredSites.map((site) => {
-													const siteId = (site as any).siteID || (site as any).id
-													const siteName = (site as any).locationName || (site as any).name || `Store ${siteId}`
-													return (
-														<SelectItem key={siteId} value={String(siteId)}>
-															{siteName}
-														</SelectItem>
-													)
-												})}
-											</SelectContent>
-										</Select>
-									</div>
-								</div>
+				<FilterBar
+					label="Analytics filters"
+					activeCount={scopeFilters + (activePreset === 'custom' ? 1 : 0)}
+					primary={
+						<Segmented<PeriodPreset>
+							ariaLabel="Period"
+							value={activePreset}
+							onChange={applyPreset}
+							options={PERIOD_PRESETS}
+							className="w-full sm:w-auto [&>button]:flex-1"
+						/>
+					}
+					actions={
+						scopeFilters > 0 ? (
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={() => {
+									setSelectedRegionId('all')
+									setSelectedStoreId('all')
+								}}
+							>
+								Clear region and store
+							</Button>
+						) : null
+					}
+					summary={
+						<>
+							<span>Showing</span>
+							<FilterChip>{isAdmin ? availableCustomers.find((c) => c.id === selectedCustomerForAdmin)?.name ?? 'No company selected' : 'Your stores'}</FilterChip>
+							<FilterChip>
+								{dateRange?.from && dateRange?.to
+									? `${format(dateRange.from, 'd MMM yyyy')} to ${format(dateRange.to, 'd MMM yyyy')}`
+									: 'All dates'}
+							</FilterChip>
+							{selectedRegionName ? (
+								<FilterChip onRemove={() => setSelectedRegionId('all')} removeLabel="Remove region filter">
+									{selectedRegionName}
+								</FilterChip>
+							) : null}
+							{selectedStoreName ? (
+								<FilterChip onRemove={() => setSelectedStoreId('all')} removeLabel="Remove store filter">
+									{selectedStoreName}
+								</FilterChip>
+							) : null}
+						</>
+					}
+				>
+					{isAdmin && (
+						<Select
+							disabled={loadingCustomers || availableCustomers.length === 0}
+							value={selectedCustomerForAdmin?.toString() ?? ''}
+							onValueChange={(value) => {
+								const id = parseInt(value, 10)
+								setSelectedCustomerForAdmin(id)
+								setSelectedCustomerId(id)
+								const params = new URLSearchParams(searchParams)
+								params.set('customerId', value)
+								setSearchParams(params, { replace: true })
+								loadData()
+							}}
+						>
+							<SelectTrigger className="h-9 w-full gap-2 sm:w-56" aria-label="Company">
+								<Building2 className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+								<SelectValue placeholder={loadingCustomers ? 'Loading companies…' : 'Select company'} />
+							</SelectTrigger>
+							<SelectContent>
+								{availableCustomers.map((c) => (
+									<SelectItem key={c.id} value={c.id.toString()}>
+										{c.name}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					)}
+					<DateRangeField
+						from={fromValue}
+						to={toValue}
+						onFromChange={(value) => {
+							const parsed = parseAnalyticsDateInput(value)
+							setDateRange((prev) => normalizeAnalyticsDateRange({ from: parsed ?? prev?.from, to: prev?.to }))
+						}}
+						onToChange={(value) => {
+							const parsed = parseAnalyticsDateInput(value)
+							setDateRange((prev) => normalizeAnalyticsDateRange({ from: prev?.from, to: parsed ?? prev?.to }))
+						}}
+					/>
+					<Select value={selectedRegionId} onValueChange={setSelectedRegionId} disabled={loadingFilters}>
+						<SelectTrigger className="h-9 w-full gap-2 sm:w-44" aria-label="Region">
+							<SelectValue placeholder="All regions" />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="all">All regions</SelectItem>
+							{regions.map((region) => (
+								<SelectItem key={region.id} value={String(region.id)}>
+									{region.name}
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
+					<Select value={selectedStoreId} onValueChange={setSelectedStoreId} disabled={loadingFilters || filteredSites.length === 0}>
+						<SelectTrigger className="h-9 w-full gap-2 sm:w-48" aria-label="Store">
+							<MapPin className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+							<SelectValue placeholder="All stores" />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="all">All stores</SelectItem>
+							{filteredSites.map((site) => {
+								const siteId = (site as any).siteID || (site as any).id
+								const siteName = (site as any).locationName || (site as any).name || `Store ${siteId}`
+								return (
+									<SelectItem key={siteId} value={String(siteId)}>
+										{siteName}
+									</SelectItem>
+								)
+							})}
+						</SelectContent>
+					</Select>
+				</FilterBar>
 
-								{/* Action Buttons */}
-								<div className="flex flex-wrap gap-2 w-full">
-									<Button
-										variant="outline"
-										onClick={handleRefresh}
-										disabled={loading}
-										size="sm"
-										className="flex-1 sm:flex-none text-xs sm:text-sm"
-									>
-										<RefreshCw
-											className={`h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 ${loading ? 'animate-spin' : ''}`}
-										/>
-										Refresh
-									</Button>
-									<Button 
-										variant="outline" 
-										onClick={handleExport}
-										size="sm"
-										className="flex-1 sm:flex-none text-xs sm:text-sm"
-									>
-										<Download className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5" />
-										Export
-									</Button>
-									{(selectedRegionId !== 'all' || selectedStoreId !== 'all') && (
-										<Button
-											variant="outline"
-											onClick={() => {
-												setSelectedRegionId('all')
-												setSelectedStoreId('all')
-											}}
-											size="sm"
-											className="w-full sm:w-auto text-xs sm:text-sm"
-										>
-											<Filter className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5" />
-											Clear Filters
-										</Button>
-									)}
-								</div>
-							</div>
-
-							{data && (
-								<div className="mt-4 rounded-xl border border-indigo-300/60 bg-gradient-to-r from-indigo-100/90 via-indigo-50/85 to-sky-100/85 dark:border-indigo-800/60 dark:from-indigo-950/55 dark:via-indigo-900/45 dark:to-sky-950/45 p-3 sm:p-4 shadow-sm">
-									<div className="grid grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4 w-full">
-										<div className="text-center sm:text-left min-w-0">
-											<div className="text-[11px] sm:text-xs font-semibold uppercase tracking-wide text-muted-foreground truncate">
-												Date Range
-											</div>
-											<div className="text-xs sm:text-sm font-semibold text-card-foreground truncate">
-												{format(new Date(data.metadata.dateRange.start), 'MMM dd')} -{' '}
-												{format(new Date(data.metadata.dateRange.end), 'MMM dd, yy')}
-											</div>
-										</div>
-										<div className="text-center sm:text-left min-w-0">
-											<div className="text-[11px] sm:text-xs font-semibold uppercase tracking-wide text-muted-foreground truncate">
-												Total Incidents
-											</div>
-											<div className="text-xs sm:text-sm font-semibold text-card-foreground truncate">
-												{data.crimeTrends.totalIncidents.toLocaleString()}
-											</div>
-										</div>
-										<div className="text-center sm:text-left min-w-0">
-											<div className="text-[11px] sm:text-xs font-semibold uppercase tracking-wide text-muted-foreground truncate">
-												Total Stolen
-											</div>
-											<div className="text-xs sm:text-sm font-semibold text-card-foreground truncate">
-												£{formatCurrencyExact(data.financialSummary.totalStolenValue)}
-											</div>
-										</div>
-										<div className="text-center sm:text-left min-w-0">
-											<div className="text-[11px] sm:text-xs font-semibold uppercase tracking-wide text-muted-foreground truncate">
-												Value Saved
-											</div>
-											<div className="text-xs sm:text-sm font-semibold text-emerald-700 dark:text-emerald-300 truncate">
-												£{formatCurrencyExact(data.financialSummary.totalRecoveredValue)}
-											</div>
-										</div>
-										<div className="text-center sm:text-left min-w-0">
-											<div className="text-[11px] sm:text-xs font-semibold uppercase tracking-wide text-muted-foreground truncate">
-												Value Lost
-											</div>
-											<div className="text-xs sm:text-sm font-semibold text-rose-700 dark:text-rose-300 truncate">
-												£{formatCurrencyExact(data.financialSummary.totalLostValue)}
-											</div>
-										</div>
-										<div className="text-center sm:text-left min-w-0">
-											<div className="text-[11px] sm:text-xs font-semibold uppercase tracking-wide text-muted-foreground truncate">
-												Recovery Rate
-											</div>
-											<div className="text-xs sm:text-sm font-semibold text-indigo-700 dark:text-indigo-300 truncate">
-												{data.financialSummary.recoveryRate.toFixed(1)}%
-											</div>
-										</div>
-										<div className="text-center sm:text-left min-w-0">
-											<div className="text-[11px] sm:text-xs font-semibold uppercase tracking-wide text-muted-foreground truncate">
-												Offenders Tracked
-											</div>
-											<div className="text-xs sm:text-sm font-semibold text-card-foreground truncate">
-												{data.repeatOffenders.totalOffenders}
-											</div>
-										</div>
-									</div>
-
-									{aiRiskSummary && (
-										<div className="mt-3 sm:mt-4 flex flex-col sm:flex-row gap-2 sm:gap-3 items-start sm:items-center w-full">
-											<div className="inline-flex items-center gap-2 rounded-full bg-indigo-600 text-white px-3 py-1 text-[10px] sm:text-xs">
-												<Shield className="h-3 w-3 text-emerald-200" />
-												<span className="font-semibold tracking-wide uppercase">
-													AI Risk Engine
-												</span>
-												<span className="text-[11px] font-medium">
-													{aiRiskSummary.overallLabel}
-												</span>
-											</div>
-											<div className="flex flex-wrap gap-1 text-[10px] sm:text-xs text-foreground/80">
-												<span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-red-700 border border-red-100 dark:bg-red-950/50 dark:text-red-200 dark:border-red-900">
-													{aiRiskSummary.highCount} high
-												</span>
-												<span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-amber-800 border border-amber-100 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-900">
-													{aiRiskSummary.mediumCount} medium
-												</span>
-												<span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-800 border border-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-900">
-													{aiRiskSummary.lowCount} low
-												</span>
-												<span className="ml-1">
-													Top store:{' '}
-													<span className="font-semibold">
-														{aiRiskSummary.topStoreName} ({aiRiskSummary.topStoreLevelLabel})
-													</span>
-												</span>
-											</div>
-										</div>
-									)}
-
-									{recoveryInsights.length > 0 && (
-										<div className="mt-3 grid gap-2">
-											{recoveryInsights.map((insight) => (
-												<div
-													key={insight}
-													className="rounded-lg border border-border bg-background/90 px-3 py-2 text-xs sm:text-sm text-foreground"
-												>
-													{insight}
-												</div>
-											))}
-										</div>
-									)}
-
-									{data.crimeTrends.totalIncidents === 0 && (
-										<div className="mt-4 rounded-xl border border-amber-300/70 bg-amber-50/90 dark:border-amber-800/60 dark:bg-amber-950/40 p-3 sm:p-4">
-											<div className="flex flex-col sm:flex-row sm:items-center gap-3">
-												<div className="flex items-start gap-2 flex-1 min-w-0">
-													<AlertCircle className="h-4 w-4 text-amber-700 dark:text-amber-300 flex-shrink-0 mt-0.5" />
-													<div className="text-xs sm:text-sm text-amber-900 dark:text-amber-100">
-														<p className="font-semibold">No incidents in this date range</p>
-														<p className="mt-1 text-amber-800/90 dark:text-amber-200/90">
-															The hub defaults to the last 30 days. If your incident data is older,
-															widen the range to include those records.
-														</p>
-													</div>
-												</div>
-												<div className="flex flex-wrap gap-2">
-													<Button
-														type="button"
-														variant="outline"
-														size="sm"
-														className="text-xs"
-														onClick={() => handleQuickDateRangeDays(ANALYTICS_DEFAULT_LOOKBACK_DAYS)}
-													>
-														Last 30 days
-													</Button>
-													<Button
-														type="button"
-														variant="outline"
-														size="sm"
-														className="text-xs"
-														onClick={() => handleQuickDateRangeMonths(6)}
-													>
-														Last 6 months
-													</Button>
-													<Button
-														type="button"
-														variant="outline"
-														size="sm"
-														className="text-xs"
-														onClick={() => handleQuickDateRangeMonths(12)}
-													>
-														Last 12 months
-													</Button>
-												</div>
-											</div>
-										</div>
-									)}
-								</div>
-							)}
-						</div>
-					</CardHeader>
-				</Card>
-
-				{/* Loading State */}
 				{loading && !data && (
-					<div className="space-y-4 sm:space-y-6">
-						{Array.from({ length: 5 }).map((_, i) => (
-							<Card key={i}>
-								<CardHeader className="p-4 sm:p-6">
-									<Skeleton className="h-5 sm:h-6 w-32 sm:w-48" />
-									<Skeleton className="h-3 sm:h-4 w-48 sm:w-64 mt-2" />
-								</CardHeader>
-								<CardContent className="p-4 sm:p-6 pt-0">
-									<Skeleton className="h-64 sm:h-80 md:h-96 w-full" />
-								</CardContent>
-							</Card>
-						))}
+					<div className="space-y-5" aria-busy="true" aria-label="Loading analytics">
+						<StatLedger items={Array.from({ length: 6 }, (_, i) => ({ label: ' ', value: ' ', key: i }))} loading />
+						<Skeleton className="h-[420px] w-full rounded-lg" />
 					</div>
 				)}
 
-				{/* Analytics Modules - single focused view at a time */}
 				{data && (
-					<Card className="overflow-hidden">
-						<CardHeader className="p-4 sm:p-6 pb-3 sm:pb-4">
-							<CardTitle className="text-sm sm:text-base">
-								Select an analytics view to focus on a single insight at a time
-							</CardTitle>
-							<CardDescription className="text-xs sm:text-sm">
-								All views respect the date range, region and store filters from the header above.
-							</CardDescription>
-						</CardHeader>
-						<CardContent className="p-4 sm:p-6 pt-0 overflow-x-hidden">
-							<Tabs defaultValue="crime-trends" className="w-full">
-								<div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
-									<TabsList className="w-full h-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1 sm:gap-0 mb-4 p-1 min-w-max sm:min-w-0 rounded-xl bg-muted border border-border">
-										<TabsTrigger
-											value="crime-trends"
-											className="text-[11px] sm:text-sm py-2 whitespace-nowrap text-muted-foreground data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-sm data-[state=active]:shadow-indigo-500/40 hover:bg-accent hover:text-accent-foreground"
-										>
-											Crime Trends
-										</TabsTrigger>
-										<TabsTrigger
-											value="deployment"
-											className="text-[11px] sm:text-sm py-2 whitespace-nowrap text-muted-foreground data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-sm data-[state=active]:shadow-indigo-500/40 hover:bg-accent hover:text-accent-foreground"
-										>
-											Deployment
-										</TabsTrigger>
-										<TabsTrigger
-											value="hot-products"
-											className="text-[11px] sm:text-sm py-2 whitespace-nowrap text-muted-foreground data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-sm data-[state=active]:shadow-indigo-500/40 hover:bg-accent hover:text-accent-foreground"
-										>
-											Hot Products
-										</TabsTrigger>
-										<TabsTrigger
-											value="recovery-performance"
-											className="text-[11px] sm:text-sm py-2 whitespace-nowrap text-muted-foreground data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-sm data-[state=active]:shadow-indigo-500/40 hover:bg-accent hover:text-accent-foreground"
-										>
-											Recovery
-										</TabsTrigger>
-										<TabsTrigger
-											value="repeat-offenders"
-											className="text-[11px] sm:text-sm py-2 whitespace-nowrap text-muted-foreground data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-sm data-[state=active]:shadow-indigo-500/40 hover:bg-accent hover:text-accent-foreground"
-										>
-											Offenders
-										</TabsTrigger>
-										<TabsTrigger
-											value="crime-linking"
-											className="text-[11px] sm:text-sm py-2 whitespace-nowrap text-muted-foreground data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-sm data-[state=active]:shadow-indigo-500/40 hover:bg-accent hover:text-accent-foreground"
-										>
-											Crime Linking
-										</TabsTrigger>
+					<>
+						<StatLedger items={ledgerItems} />
+
+						{data.crimeTrends.totalIncidents === 0 ? (
+							<div className="rounded-lg border border-border bg-card">
+								<EmptyState
+									icon={<CalendarIcon className="h-5 w-5" />}
+									title="No incidents in this period"
+									description="The hub opens on the last 30 days. If your records are older, widen the period to include them."
+									action={
+										<div className="flex flex-wrap justify-center gap-2">
+											<Button variant="outline" size="sm" onClick={() => handleQuickDateRangeMonths(6)}>
+												Last 6 months
+											</Button>
+											<Button variant="outline" size="sm" onClick={() => handleQuickDateRangeMonths(12)}>
+												Last 12 months
+											</Button>
+										</div>
+									}
+								/>
+							</div>
+						) : (aiRiskSummary || recoveryInsights.length > 0) ? (
+							<div className="grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+								{aiRiskSummary && (
+									<section aria-labelledby="risk-heading" className="rounded-lg border border-border bg-card p-4 sm:p-5">
+										<div className="flex items-start justify-between gap-3">
+											<div>
+												<h2 id="risk-heading" className="flex items-center gap-2 text-sm font-semibold text-foreground">
+													<Shield className="h-4 w-4 text-muted-foreground" aria-hidden />
+													Store risk
+												</h2>
+												<p className="mt-0.5 text-[13px] text-muted-foreground">From the deployment risk engine</p>
+											</div>
+											<span className={cn('font-display text-2xl font-semibold capitalize leading-none', riskTone[aiRiskSummary.overallLevel])}>
+												{aiRiskSummary.overallLevel}
+											</span>
+										</div>
+										<div className="mt-4 flex h-2.5 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${aiRiskSummary.highCount} high, ${aiRiskSummary.mediumCount} medium and ${aiRiskSummary.lowCount} low risk stores`}>
+											{riskTotal > 0 && (
+												<>
+													<span className="bg-loss" style={{ width: `${(aiRiskSummary.highCount / riskTotal) * 100}%` }} />
+													<span className="bg-warning" style={{ width: `${(aiRiskSummary.mediumCount / riskTotal) * 100}%` }} />
+													<span className="bg-recovered" style={{ width: `${(aiRiskSummary.lowCount / riskTotal) * 100}%` }} />
+												</>
+											)}
+										</div>
+										<dl className="figures mt-3 grid grid-cols-3 gap-2 text-sm">
+											{[
+												{ label: 'High', value: aiRiskSummary.highCount, dot: 'bg-loss' },
+												{ label: 'Medium', value: aiRiskSummary.mediumCount, dot: 'bg-warning' },
+												{ label: 'Low', value: aiRiskSummary.lowCount, dot: 'bg-recovered' },
+											].map((row) => (
+												<div key={row.label}>
+													<dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
+														<span className={cn('h-2 w-2 rounded-full', row.dot)} aria-hidden />
+														{row.label}
+													</dt>
+													<dd className="font-semibold text-foreground">{row.value} {row.value === 1 ? 'store' : 'stores'}</dd>
+												</div>
+											))}
+										</dl>
+										<p className="mt-4 border-t border-border pt-3 text-[13px] text-muted-foreground">
+											Highest risk: <span className="font-semibold text-foreground">{aiRiskSummary.topStoreName}</span>{' '}
+											<span className="text-muted-foreground">({aiRiskSummary.topStoreLevelLabel})</span>
+										</p>
+									</section>
+								)}
+								{recoveryInsights.length > 0 && (
+									<section aria-labelledby="insights-heading" className="rounded-lg border border-border bg-card p-4 sm:p-5">
+										<h2 id="insights-heading" className="text-sm font-semibold text-foreground">What stands out</h2>
+										<ol className="mt-3 divide-y divide-border">
+											{recoveryInsights.map((insight, index) => (
+												<li key={insight} className="flex gap-3 py-2.5 first:pt-0 last:pb-0">
+													<span className="figures mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-accent-foreground">
+														{index + 1}
+													</span>
+													<p className="text-sm leading-6 text-foreground">{insight}</p>
+												</li>
+											))}
+										</ol>
+									</section>
+								)}
+							</div>
+						) : null}
+
+						<Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+							<div className="sticky top-16 z-20 -mx-4 bg-background/95 px-4 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+								<div className="overflow-x-auto">
+									<TabsList className="h-auto w-full min-w-max justify-start gap-1 rounded-none border-0 border-b border-border bg-transparent p-0 sm:min-w-0">
+										{tabs.map((tab) => (
+											<TabsTrigger
+												key={tab.value}
+												value={tab.value}
+												className="-mb-px rounded-none border-0 border-b-2 border-transparent px-3 py-3 text-sm font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:font-semibold data-[state=active]:text-foreground data-[state=active]:shadow-none"
+											>
+												{tab.label}
+											</TabsTrigger>
+										))}
 									</TabsList>
 								</div>
-
-								<TabsContent value="crime-trends" className="mt-3 sm:mt-4 overflow-x-hidden">
-									<ErrorBoundary>
-										<CrimeTrendExplorer data={data.crimeTrends} loading={loading} />
-									</ErrorBoundary>
-								</TabsContent>
-
-								<TabsContent value="deployment" className="mt-3 sm:mt-4 overflow-x-hidden">
-									<ErrorBoundary>
-										<ResourceDeploymentEngine
-											data={data.deploymentRecommendations}
-											loading={loading}
-										/>
-									</ErrorBoundary>
-								</TabsContent>
-
-								<TabsContent value="hot-products" className="mt-3 sm:mt-4 overflow-x-hidden">
-									<ErrorBoundary>
-										<HotProductsDashboard data={data.hotProducts} loading={loading} />
-									</ErrorBoundary>
-								</TabsContent>
-
-								<TabsContent value="recovery-performance" className="mt-3 sm:mt-4 overflow-x-hidden">
-									<Card className="border-border">
-										<CardHeader className="p-4 sm:p-6 pb-3">
-											<CardTitle className="text-base sm:text-lg">Saved vs Lost by Store</CardTitle>
-											<CardDescription>
-												Compare recovered value, unrecovered loss, and recovery efficiency across the selected stores.
-											</CardDescription>
-										</CardHeader>
-										<CardContent className="p-4 sm:p-6 pt-0">
-											<div className="rounded-lg border border-border overflow-hidden">
-												<Table>
-													<TableHeader>
-														<TableRow>
-															<TableHead>Store</TableHead>
-															<TableHead>Incidents</TableHead>
-															<TableHead className="text-right">Stolen</TableHead>
-															<TableHead className="text-right">Saved</TableHead>
-															<TableHead className="text-right">Lost</TableHead>
-															<TableHead className="text-right">Recovery Rate</TableHead>
-														</TableRow>
-													</TableHeader>
-													<TableBody>
-														{data.storeRecoveryComparisons.slice(0, 12).map((store) => (
-															<TableRow key={`${store.storeId}-${store.storeName}`}>
-																<TableCell className="font-medium">{store.storeName}</TableCell>
-																<TableCell>{store.incidentCount}</TableCell>
-																<TableCell className="text-right">
-																	£{formatCurrencyExact(store.totalStolenValue)}
-																</TableCell>
-																<TableCell className="text-right text-emerald-700 dark:text-emerald-300">
-																	£{formatCurrencyExact(store.totalRecoveredValue)}
-																</TableCell>
-																<TableCell className="text-right text-rose-700 dark:text-rose-300">
-																	£{formatCurrencyExact(store.totalLostValue)}
-																</TableCell>
-																<TableCell className="text-right">
-																	<Badge variant="outline">{store.recoveryRate.toFixed(1)}%</Badge>
-																</TableCell>
-															</TableRow>
-														))}
-													</TableBody>
-												</Table>
-											</div>
-										</CardContent>
-									</Card>
-								</TabsContent>
-
-								<TabsContent value="repeat-offenders" className="mt-3 sm:mt-4 overflow-x-hidden">
-									<ErrorBoundary>
-										<RepeatOffenderAnalysis
-											data={data.repeatOffenders}
-											loading={loading}
-										/>
-									</ErrorBoundary>
-								</TabsContent>
-
-								<TabsContent value="crime-linking" className="mt-3 sm:mt-4 overflow-x-hidden">
-									<ErrorBoundary>
-										<CrimeLinkingPanel data={data.crimeLinking} loading={loading} />
-									</ErrorBoundary>
-								</TabsContent>
-							</Tabs>
-						</CardContent>
-					</Card>
-				)}
-
-				{/* Error State (partial data) */}
-				{error && data && (
-					<Card className="border-yellow-200 bg-yellow-50 overflow-hidden dark:border-yellow-900 dark:bg-yellow-950/30">
-						<CardContent className="p-3 sm:p-4">
-							<div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 text-yellow-800 dark:text-yellow-200">
-								<div className="flex items-center gap-2 flex-1 min-w-0">
-									<AlertCircle className="h-4 w-4 flex-shrink-0" />
-									<span className="text-xs sm:text-sm break-words">
-										Some data may be outdated. Error: {error}
-									</span>
-								</div>
-								<Button
-									variant="ghost"
-									size="sm"
-									onClick={handleRefresh}
-									className="w-full sm:w-auto text-xs sm:text-sm flex-shrink-0"
-								>
-									<RefreshCw className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5" />
-									Retry
-								</Button>
 							</div>
-						</CardContent>
-					</Card>
+
+							<TabsContent value="crime-trends" className="mt-5 overflow-x-hidden">
+								<ErrorBoundary>
+									<CrimeTrendExplorer data={data.crimeTrends} loading={loading} />
+								</ErrorBoundary>
+							</TabsContent>
+
+							<TabsContent value="deployment" className="mt-5 overflow-x-hidden">
+								<ErrorBoundary>
+									<ResourceDeploymentEngine data={data.deploymentRecommendations} loading={loading} />
+								</ErrorBoundary>
+							</TabsContent>
+
+							<TabsContent value="hot-products" className="mt-5 overflow-x-hidden">
+								<ErrorBoundary>
+									<HotProductsDashboard data={data.hotProducts} loading={loading} sites={filteredSites} />
+								</ErrorBoundary>
+							</TabsContent>
+
+							<TabsContent value="recovery-performance" className="mt-5 overflow-x-hidden">
+								<section className="rounded-lg border border-border bg-card">
+									<div className="p-4 sm:p-5">
+										<h2 className="text-base font-semibold text-foreground">Recovered and lost by store</h2>
+										<p className="mt-0.5 text-[13px] text-muted-foreground">
+											Stores ordered as the engine ranks them. The bar shows how much of the stolen value each store got back.
+										</p>
+									</div>
+									{/* Phones: one row per store */}
+									<ul className="divide-y divide-border border-t border-border sm:hidden">
+										{data.storeRecoveryComparisons.slice(0, 12).map((store) => (
+											<li key={`${store.storeId}-${store.storeName}`} className="px-4 py-3">
+												<div className="flex items-baseline justify-between gap-3">
+													<span className="truncate text-sm font-medium text-foreground">{store.storeName}</span>
+													<span className="figures text-sm font-semibold text-foreground">{store.recoveryRate.toFixed(1)}%</span>
+												</div>
+												<RecoveryMeter rate={store.recoveryRate} className="mt-2" />
+												<div className="figures mt-2 flex justify-between text-xs text-muted-foreground">
+													<span>{store.incidentCount} incidents</span>
+													<span>
+														<span className="text-recovered">£{formatCurrencyExact(store.totalRecoveredValue)}</span> back ·{' '}
+														<span className="text-loss">£{formatCurrencyExact(store.totalLostValue)}</span> lost
+													</span>
+												</div>
+											</li>
+										))}
+									</ul>
+									<div className="hidden border-t border-border sm:block">
+										<Table>
+											<TableHeader>
+												<TableRow>
+													<TableHead>Store</TableHead>
+													<TableHead className="text-right">Incidents</TableHead>
+													<TableHead className="text-right">Stolen</TableHead>
+													<TableHead className="text-right">Recovered</TableHead>
+													<TableHead className="text-right">Lost</TableHead>
+													<TableHead className="w-[28%]">Recovery rate</TableHead>
+												</TableRow>
+											</TableHeader>
+											<TableBody>
+												{data.storeRecoveryComparisons.slice(0, 12).map((store) => (
+													<TableRow key={`${store.storeId}-${store.storeName}`}>
+														<TableCell className="font-medium">{store.storeName}</TableCell>
+														<TableCell className="figures text-right">{store.incidentCount}</TableCell>
+														<TableCell className="figures text-right">£{formatCurrencyExact(store.totalStolenValue)}</TableCell>
+														<TableCell className="figures text-right text-recovered">£{formatCurrencyExact(store.totalRecoveredValue)}</TableCell>
+														<TableCell className="figures text-right text-loss">£{formatCurrencyExact(store.totalLostValue)}</TableCell>
+														<TableCell>
+															<div className="flex items-center gap-3">
+																<RecoveryMeter rate={store.recoveryRate} className="flex-1" />
+																<span className="figures w-12 text-right text-sm font-semibold">{store.recoveryRate.toFixed(1)}%</span>
+															</div>
+														</TableCell>
+													</TableRow>
+												))}
+											</TableBody>
+										</Table>
+									</div>
+								</section>
+							</TabsContent>
+
+							<TabsContent value="repeat-offenders" className="mt-5 overflow-x-hidden">
+								<ErrorBoundary>
+									<RepeatOffenderAnalysis data={data.repeatOffenders} loading={loading} />
+								</ErrorBoundary>
+							</TabsContent>
+
+							<TabsContent value="crime-linking" className="mt-5 overflow-x-hidden">
+								<ErrorBoundary>
+									<CrimeLinkingPanel data={data.crimeLinking} loading={loading} />
+								</ErrorBoundary>
+							</TabsContent>
+						</Tabs>
+					</>
 				)}
-				</div>
+
+				{error && data && (
+					<div role="status" className="flex flex-col gap-2 rounded-lg border border-warning/30 bg-warning-soft px-4 py-3 text-sm text-warning sm:flex-row sm:items-center">
+						<AlertCircle className="h-4 w-4 shrink-0" aria-hidden />
+						<span className="flex-1">These figures may be out of date: {error}</span>
+						<Button variant="ghost" size="sm" onClick={handleRefresh}>
+							<RefreshCw className="h-4 w-4" />
+							Retry
+						</Button>
+					</div>
+				)}
 			</div>
 		</ErrorBoundary>
 	)
 }
 
-export default DataAnalyticsHub
+function RecoveryMeter({ rate, className }: { rate: number; className?: string }) {
+	const width = Math.max(0, Math.min(100, rate))
+	return (
+		<div className={cn('h-1.5 overflow-hidden rounded-full bg-loss/20', className)} aria-hidden>
+			<div className="h-full rounded-full bg-recovered" style={{ width: `${width}%` }} />
+		</div>
+	)
+}
 
+export default DataAnalyticsHub

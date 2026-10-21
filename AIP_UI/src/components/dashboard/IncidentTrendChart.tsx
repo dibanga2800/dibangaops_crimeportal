@@ -27,7 +27,7 @@ export const IncidentTrendChart = () => {
                 bottom: 0
               }}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" className="stroke-border" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#DCE0D8" className="stroke-border" />
               <XAxis 
                 dataKey="name" 
                 className="text-muted-foreground" 

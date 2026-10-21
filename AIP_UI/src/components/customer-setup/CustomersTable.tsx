@@ -266,16 +266,16 @@ export function CustomersTable({ onCustomerSelect, selectedCustomerId, onDataCha
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-        <h2 className="text-base sm:text-lg font-semibold text-foreground">Customers</h2>
+        <h2 className="text-base sm:text-lg font-semibold text-foreground">Companies</h2>
         <Button 
           onClick={() => {
             setSelectedCustomer(undefined)
             setDialogOpen(true)
           }}
-          className="bg-purple-600 hover:bg-purple-700 w-full sm:w-auto"
+          className="bg-primary hover:bg-primary/90 w-full sm:w-auto"
         >
           <Plus className="h-4 w-4 mr-2" />
-          Add Customer
+          Add company
         </Button>
       </div>
 
@@ -294,7 +294,7 @@ export function CustomersTable({ onCustomerSelect, selectedCustomerId, onDataCha
       {isLoadingCustomers && (
         <div className="flex items-center justify-center py-8">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-2"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
             <p className="text-sm text-muted-foreground">Loading companies...</p>
           </div>
         </div>
@@ -335,7 +335,7 @@ export function CustomersTable({ onCustomerSelect, selectedCustomerId, onDataCha
                 <div 
                   key={customer.id} 
                   className={`rounded-lg border border-border bg-card/80 text-card-foreground backdrop-blur-lg shadow-sm p-4 space-y-3 cursor-pointer transition-colors ${
-                    isSelected ? 'border-purple-500 bg-purple-50/80 dark:bg-purple-950/30' : 'hover:bg-accent/40'
+                    isSelected ? 'border-primary bg-accent/80' : 'hover:bg-accent/40'
                   }`}
                   onClick={() => toggleRowSelection(String(customer.id))}
                 >
@@ -348,8 +348,8 @@ export function CustomersTable({ onCustomerSelect, selectedCustomerId, onDataCha
                     <div className="flex gap-1.5 flex-shrink-0">
                       <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
                         status === 'active' 
-                          ? 'bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-200' 
-                          : 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-200'
+                          ? 'bg-recovered-soft text-recovered' 
+                          : 'bg-loss-soft text-loss'
                       }`}>
                         {status === 'active' ? 'Active' : 'Inactive'}
                       </span>
@@ -368,7 +368,7 @@ export function CustomersTable({ onCustomerSelect, selectedCustomerId, onDataCha
                     </div>
                     <div className="col-span-2">
                       <span className="text-muted-foreground block mb-0.5">Company Type</span>
-                      <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-200">
+                      <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium bg-info-soft text-primary">
                         {typeLabel}
                       </span>
                     </div>
@@ -395,7 +395,7 @@ export function CustomersTable({ onCustomerSelect, selectedCustomerId, onDataCha
                         e.stopPropagation()
                         handleDelete(customer)
                       }}
-                      className="h-9 px-3 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:text-red-200 dark:hover:bg-red-950/40"
+                      className="h-9 px-3 text-xs text-loss hover:bg-loss-soft hover:text-loss"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
@@ -496,7 +496,7 @@ export function CustomersTable({ onCustomerSelect, selectedCustomerId, onDataCha
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700">
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive hover:bg-destructive/90">
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

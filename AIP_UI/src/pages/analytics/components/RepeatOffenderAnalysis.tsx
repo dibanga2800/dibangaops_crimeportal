@@ -24,6 +24,7 @@ import {
 	TableRow,
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { SUBTABS_LIST, SUBTABS_TRIGGER, RISK_CHIP } from './moduleStyles'
 import type { RepeatOffenderData } from '@/types/analytics'
 import { formatOffenderDisplayName } from '../offenderDisplay'
 import { LinkedIncidentProducts } from './LinkedIncidentProducts'
@@ -42,10 +43,10 @@ interface RepeatOffenderAnalysisProps {
 }
 
 const RISK_COLORS = {
-	low: '#10b981',
-	medium: '#f59e0b',
-	high: '#ef4444',
-	critical: '#dc2626',
+	low: '#0E7C66',
+	medium: '#C4680F',
+	high: '#B42318',
+	critical: '#8F1D14',
 }
 
 const getRiskColor = (riskLevel: string) => {
@@ -85,47 +86,39 @@ export const RepeatOffenderAnalysis = ({
 	}
 
 	return (
-		<Card className="w-full shadow-sm border-2">
-			<CardHeader className="pb-4">
-				<CardTitle className="flex items-center gap-2">
-					<Users className="h-5 w-5" />
-					Repeat Offender Analysis
+		<Card className="w-full">
+			<CardHeader className="p-4 pb-3 sm:p-5 sm:pb-3">
+				<CardTitle className="flex items-center gap-2 text-base">
+					<Users className="h-4 w-4 text-muted-foreground" aria-hidden />
+					Repeat offenders
 				</CardTitle>
 				<CardDescription>
-					Track most active offenders, cross-store movements, and network patterns
+					The most active offenders, who moves between stores, and who is seen together.
 				</CardDescription>
 			</CardHeader>
-			<CardContent className="pt-6">
+			<CardContent className="p-4 pt-0 sm:p-5 sm:pt-0">
 				<Tabs defaultValue="offenders" className="w-full">
-					<TabsList className="grid w-full grid-cols-3">
-						<TabsTrigger value="offenders">Most Active</TabsTrigger>
-						<TabsTrigger value="movements">Cross-Store Movement</TabsTrigger>
-						<TabsTrigger value="network">Network Map</TabsTrigger>
+					<TabsList className={SUBTABS_LIST}>
+						<TabsTrigger className={SUBTABS_TRIGGER} value="offenders">Most active</TabsTrigger>
+						<TabsTrigger className={SUBTABS_TRIGGER} value="movements">Across stores</TabsTrigger>
+						<TabsTrigger className={SUBTABS_TRIGGER} value="network">Network</TabsTrigger>
 					</TabsList>
 
 					<TabsContent value="offenders" className="space-y-4">
-						<div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-							<Card>
-								<CardContent className="p-4">
-									<div className="text-sm text-gray-500">Total Offenders</div>
-									<div className="text-2xl font-bold">{data.totalOffenders}</div>
-								</CardContent>
-							</Card>
-							<Card>
-								<CardContent className="p-4">
-									<div className="text-sm text-gray-500">Repeat (2+ incidents)</div>
-									<div className="text-2xl font-bold">{repeatOffenderCount}</div>
-								</CardContent>
-							</Card>
-							<Card>
-								<CardContent className="p-4">
-									<div className="text-sm text-gray-500">Multi-Store</div>
-									<div className="text-2xl font-bold">
-										{data.crossStoreMovements.length}
-									</div>
-								</CardContent>
-							</Card>
-						</div>
+						<dl className="mb-4 grid grid-cols-3 overflow-hidden rounded-md border border-border">
+	<div className="px-3 py-2.5 shadow-[1px_0_0_0_hsl(var(--border))] sm:px-4">
+		<dt className="truncate text-xs text-muted-foreground">Total offenders</dt>
+		<dd className="figures font-display text-xl font-semibold text-foreground">{data.totalOffenders}</dd>
+	</div>
+	<div className="px-3 py-2.5 shadow-[1px_0_0_0_hsl(var(--border))] sm:px-4">
+		<dt className="truncate text-xs text-muted-foreground">Repeat (2+ incidents)</dt>
+		<dd className="figures font-display text-xl font-semibold text-foreground">{repeatOffenderCount}</dd>
+	</div>
+	<div className="px-3 py-2.5 shadow-[1px_0_0_0_hsl(var(--border))] sm:px-4">
+		<dt className="truncate text-xs text-muted-foreground">Multi-store</dt>
+		<dd className="figures font-display text-xl font-semibold text-foreground">{data.crossStoreMovements.length}</dd>
+	</div>
+</dl>
 
 						<p className="text-xs text-muted-foreground">
 							All identified offenders in the selected period (N/A and placeholders excluded).
@@ -136,13 +129,13 @@ export const RepeatOffenderAnalysis = ({
 							<Table>
 								<TableHeader>
 									<TableRow>
-										<TableHead>Offender Name</TableHead>
+										<TableHead>Offender</TableHead>
 										<TableHead>Incidents</TableHead>
-										<TableHead>Stores Targeted</TableHead>
-										<TableHead>Total Value</TableHead>
-										<TableHead>Risk Level</TableHead>
-										<TableHead>Last Incident</TableHead>
-										<TableHead className="text-right">Actions</TableHead>
+										<TableHead>Stores</TableHead>
+										<TableHead className="text-right">Value</TableHead>
+										<TableHead>Risk</TableHead>
+										<TableHead>Last seen</TableHead>
+										<TableHead><span className="sr-only">Actions</span></TableHead>
 									</TableRow>
 								</TableHeader>
 								<TableBody>
@@ -178,21 +171,13 @@ export const RepeatOffenderAnalysis = ({
 													)}
 												</div>
 											</TableCell>
-											<TableCell>
+											<TableCell className="figures text-right">
 												£{offender.totalValue.toFixed(2)}
 											</TableCell>
 											<TableCell>
-												<Badge
-													variant="outline"
-													style={{
-														borderColor: getRiskColor(offender.riskLevel),
-														color: getRiskColor(offender.riskLevel),
-													}}
-												>
-													{offender.riskLevel.toUpperCase()}
-												</Badge>
+												<span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${RISK_CHIP[offender.riskLevel] ?? RISK_CHIP.low}`}>{offender.riskLevel}</span>
 											</TableCell>
-											<TableCell className="text-sm text-gray-500">
+											<TableCell className="text-sm text-muted-foreground">
 												{new Date(offender.lastIncident).toLocaleDateString()}
 											</TableCell>
 											<TableCell className="text-right">
@@ -224,34 +209,26 @@ export const RepeatOffenderAnalysis = ({
 								<CardContent className="space-y-4">
 									<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
 										<div>
-											<div className="text-sm text-gray-500">Incident Count</div>
+											<div className="text-sm text-muted-foreground">Incident Count</div>
 											<div className="text-xl font-bold">{selectedOffender.incidentCount}</div>
 										</div>
 										<div>
-											<div className="text-sm text-gray-500">Stores Targeted</div>
+											<div className="text-sm text-muted-foreground">Stores Targeted</div>
 											<div className="text-xl font-bold">{selectedOffender.storesTargeted.length}</div>
 										</div>
 										<div>
-											<div className="text-sm text-gray-500">Total Value</div>
+											<div className="text-sm text-muted-foreground">Total Value</div>
 											<div className="text-xl font-bold">
 												£{selectedOffender.totalValue.toFixed(2)}
 											</div>
 										</div>
 										<div>
-											<div className="text-sm text-gray-500">Risk Level</div>
-											<Badge
-												variant="outline"
-												style={{
-													borderColor: getRiskColor(selectedOffender.riskLevel),
-													color: getRiskColor(selectedOffender.riskLevel),
-												}}
-											>
-												{selectedOffender.riskLevel.toUpperCase()}
-											</Badge>
+											<div className="text-sm text-muted-foreground">Risk Level</div>
+											<span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${RISK_CHIP[selectedOffender.riskLevel] ?? RISK_CHIP.low}`}>{selectedOffender.riskLevel}</span>
 										</div>
 									</div>
 									<div>
-										<div className="text-sm text-gray-500 mb-2">Stores Targeted</div>
+										<div className="text-sm text-muted-foreground mb-2">Stores Targeted</div>
 										<div className="flex flex-wrap gap-2">
 											{selectedOffender.storesTargeted.map((store) => (
 												<Badge key={store} variant="secondary">
@@ -262,13 +239,13 @@ export const RepeatOffenderAnalysis = ({
 									</div>
 									<div className="grid grid-cols-2 gap-4">
 										<div>
-											<div className="text-sm text-gray-500">First Incident</div>
+											<div className="text-sm text-muted-foreground">First Incident</div>
 											<div className="font-medium">
 												{new Date(selectedOffender.firstIncident).toLocaleDateString()}
 											</div>
 										</div>
 										<div>
-											<div className="text-sm text-gray-500">Last Incident</div>
+											<div className="text-sm text-muted-foreground">Last Incident</div>
 											<div className="font-medium">
 												{new Date(selectedOffender.lastIncident).toLocaleDateString()}
 											</div>
@@ -276,7 +253,7 @@ export const RepeatOffenderAnalysis = ({
 									</div>
 									{(selectedOffender.incidents?.length ?? 0) > 0 && (
 										<div>
-											<div className="text-sm text-gray-500 mb-2">Linked incidents</div>
+											<div className="text-sm text-muted-foreground mb-2">Linked incidents</div>
 											<div className="border rounded-lg overflow-x-auto">
 												<Table>
 													<TableHeader>
@@ -329,7 +306,7 @@ export const RepeatOffenderAnalysis = ({
 
 					<TabsContent value="movements" className="space-y-6 mt-6">
 						{data.crossStoreMovements.length === 0 && (
-							<div className="rounded-lg border border-dashed p-8 text-center text-sm text-gray-500">
+							<div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
 								No offenders with activity across multiple stores in this period.
 							</div>
 						)}
@@ -359,9 +336,9 @@ export const RepeatOffenderAnalysis = ({
 										return (
 											<div
 												key={move.incidentId || `${movement.offenderId}-${index}`}
-												className="flex flex-col gap-2 p-3 border rounded-lg hover:bg-gray-50 transition-colors sm:flex-row sm:items-start sm:gap-4"
+												className="flex flex-col gap-2 p-3 border rounded-lg hover:bg-muted/50 transition-colors sm:flex-row sm:items-start sm:gap-4"
 											>
-												<div className="text-sm text-gray-500 min-w-[140px] shrink-0">
+												<div className="text-sm text-muted-foreground min-w-[140px] shrink-0">
 													{move.dateTimeLabel ||
 														(move.date
 															? new Date(move.date).toLocaleDateString()
@@ -369,7 +346,7 @@ export const RepeatOffenderAnalysis = ({
 												</div>
 												<div className="flex-1 min-w-0 space-y-1">
 													<div className="flex flex-wrap items-center gap-2">
-														<MapPin className="h-4 w-4 text-gray-400 shrink-0" />
+														<MapPin className="h-4 w-4 text-muted-foreground/80 shrink-0" />
 														<span className="font-medium">{storeLabel}</span>
 														{showTransition && (
 															<Badge variant="outline" className="text-xs">
@@ -383,13 +360,13 @@ export const RepeatOffenderAnalysis = ({
 															{move.incidentType}
 														</Badge>
 														{typeof move.value === 'number' && move.value > 0 && (
-															<span className="text-xs text-gray-500">
+															<span className="text-xs text-muted-foreground">
 																£{move.value.toFixed(2)} lost
 															</span>
 														)}
 													</div>
 													{move.stolenProductsSummary && (
-														<p className="text-xs text-gray-600">
+														<p className="text-xs text-muted-foreground">
 															{move.stolenProductsSummary}
 														</p>
 													)}
@@ -419,24 +396,24 @@ export const RepeatOffenderAnalysis = ({
 							<div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
 								<Card>
 									<CardContent className="p-4">
-										<div className="text-sm text-gray-500">Total Nodes</div>
+										<div className="text-sm text-muted-foreground">Total Nodes</div>
 										<div className="text-2xl font-bold">{data.networkMap.nodes.length}</div>
 									</CardContent>
 								</Card>
 								<Card>
 									<CardContent className="p-4">
-										<div className="text-sm text-gray-500">Total Connections</div>
+										<div className="text-sm text-muted-foreground">Total Connections</div>
 										<div className="text-2xl font-bold">{data.networkMap.links.length}</div>
 									</CardContent>
 								</Card>
 							</div>
-							<div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-sm text-gray-600">
+							<div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-sm text-muted-foreground">
 								<div className="flex items-center gap-2">
-									<div className="h-3 w-3 rounded-full bg-blue-500" />
+									<div className="h-3 w-3 rounded-full bg-primary" />
 									<span>Offenders</span>
 								</div>
 								<div className="flex items-center gap-2">
-									<div className="h-3 w-3 rounded-full bg-green-500" />
+									<div className="h-3 w-3 rounded-full bg-recovered" />
 									<span>Stores</span>
 								</div>
 							</div>

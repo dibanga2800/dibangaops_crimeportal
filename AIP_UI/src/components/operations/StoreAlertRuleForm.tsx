@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { FormActions } from '@/components/common/FormSection'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -196,7 +197,7 @@ export const StoreAlertRuleForm = ({ initialData, onSubmit, onCancel }: StoreAle
 	return (
 		<form onSubmit={handleSubmit} className="space-y-6">
 			<div className="space-y-2">
-				<Label htmlFor="name">Rule Name *</Label>
+				<Label htmlFor="name">Rule name *</Label>
 				<Input
 					id="name"
 					value={name}
@@ -253,7 +254,7 @@ export const StoreAlertRuleForm = ({ initialData, onSubmit, onCancel }: StoreAle
 			</div>
 
 			<div className="space-y-2">
-				<Label>Incident Types *</Label>
+				<Label>Incident types *</Label>
 				<div className="border rounded-md p-4 space-y-2 max-h-48 overflow-y-auto">
 					{incidentTypes.map(type => (
 						<div key={type} className="flex items-center space-x-2">
@@ -275,7 +276,7 @@ export const StoreAlertRuleForm = ({ initialData, onSubmit, onCancel }: StoreAle
 
 			<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 				<div className="space-y-2">
-					<Label htmlFor="region">Stores in Region *</Label>
+					<Label htmlFor="region">Stores in region *</Label>
 					<Select value={storeRegion} onValueChange={setStoreRegion} required disabled={loadingRegions}>
 						<SelectTrigger id="region">
 							{loadingRegions ? (
@@ -307,7 +308,7 @@ export const StoreAlertRuleForm = ({ initialData, onSubmit, onCancel }: StoreAle
 				</div>
 
 				<div className="space-y-2">
-					<Label htmlFor="trigger">Trigger Condition *</Label>
+					<Label htmlFor="trigger">Trigger condition *</Label>
 					<Select
 						value={triggerCondition}
 						onValueChange={(value: TriggerCondition) => setTriggerCondition(value)}
@@ -352,7 +353,7 @@ export const StoreAlertRuleForm = ({ initialData, onSubmit, onCancel }: StoreAle
 
 			{channels.includes('email') && (
 				<div className="space-y-2">
-					<Label>Email Recipients *</Label>
+					<Label>Email recipients *</Label>
 					<div className="flex gap-2">
 						<Input
 							type="email"
@@ -403,14 +404,14 @@ export const StoreAlertRuleForm = ({ initialData, onSubmit, onCancel }: StoreAle
 				</Label>
 			</div>
 
-			<div className="flex justify-end gap-2 pt-4 border-t">
+			<FormActions>
 				<Button type="button" variant="outline" onClick={onCancel}>
 					Cancel
 				</Button>
 				<Button type="submit">
-					{initialData ? 'Update Rule' : 'Create Rule'}
+					{initialData ? 'Save changes' : 'Create rule'}
 				</Button>
-			</div>
+			</FormActions>
 		</form>
 	)
 }

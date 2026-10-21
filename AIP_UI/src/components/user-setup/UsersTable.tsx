@@ -70,11 +70,11 @@ export function UsersTable({ users, onCreateUser, onUpdateUser, onDeleteUser }: 
   // Get random pastel color for avatar background
   const getAvatarColor = (name: string) => {
     const colors = [
-      'bg-blue-100 text-blue-600',
-      'bg-purple-100 text-purple-600',
-      'bg-green-100 text-green-600',
+      'bg-info-soft text-primary',
+      'bg-accent text-primary',
+      'bg-recovered-soft text-recovered',
       'bg-pink-100 text-pink-600',
-      'bg-yellow-100 text-yellow-600',
+      'bg-warning-soft text-warning',
     ]
     const index = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
     return colors[index % colors.length]
@@ -114,15 +114,15 @@ export function UsersTable({ users, onCreateUser, onUpdateUser, onDeleteUser }: 
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-semibold text-purple-600">User Management</h1>
-        <p className="text-gray-500">Manage your team members and their account permissions here</p>
+        <h1 className="text-2xl font-semibold text-primary">User Management</h1>
+        <p className="text-muted-foreground">Manage your team members and their account permissions here</p>
       </div>
 
       {/* Search and Filters */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex flex-1 w-full max-w-md">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+            <Search className="absolute left-3 top-2.5 h-5 w-5 text-muted-foreground/80" />
             <Input 
               placeholder="Search users..."
               className="pl-10 h-10" 
@@ -143,7 +143,7 @@ export function UsersTable({ users, onCreateUser, onUpdateUser, onDeleteUser }: 
         </div>
         <Button 
           onClick={() => setIsDialogOpen(true)}
-          className="bg-[#1e1b4b] hover:bg-[#1e1b4b]/90"
+          className=""
         >
           <User2 className="mr-2 h-4 w-4" />
           Add User
@@ -151,7 +151,7 @@ export function UsersTable({ users, onCreateUser, onUpdateUser, onDeleteUser }: 
       </div>
 
       {/* Users Table */}
-      <div className="rounded-lg border bg-white">
+      <div className="rounded-lg border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
@@ -173,7 +173,7 @@ export function UsersTable({ users, onCreateUser, onUpdateUser, onDeleteUser }: 
                     </div>
                     <div>
                       <div className="font-medium">{user.username}</div>
-                      <div className="text-sm text-gray-500">{user.username.toLowerCase()}</div>
+                      <div className="text-sm text-muted-foreground">{user.username.toLowerCase()}</div>
                     </div>
                   </div>
                 </TableCell>
@@ -181,8 +181,8 @@ export function UsersTable({ users, onCreateUser, onUpdateUser, onDeleteUser }: 
                 <TableCell>
                   <div className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
                     user.status === 'active' 
-                      ? 'bg-green-50 text-green-700'
-                      : 'bg-red-50 text-red-700'
+                      ? 'bg-recovered-soft text-recovered'
+                      : 'bg-loss-soft text-loss'
                   }`}>
                     {user.status === 'active' ? 'Active' : 'Inactive'}
                   </div>
@@ -194,17 +194,17 @@ export function UsersTable({ users, onCreateUser, onUpdateUser, onDeleteUser }: 
                       variant="ghost"
                       size="sm"
                       onClick={() => handleEditUser(user)}
-                      className="h-8 w-8 p-0 hover:bg-blue-50"
+                      className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
                     >
-                      <Pencil className="h-4 w-4 text-blue-600" />
+                      <Pencil className="h-4 w-4" />
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => handleDeleteClick(user.id)}
-                      className="h-8 w-8 p-0 hover:bg-red-50"
+                      className="h-8 w-8 p-0 text-muted-foreground hover:bg-loss-soft hover:text-loss"
                     >
-                      <Trash2 className="h-4 w-4 text-red-600" />
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </TableCell>

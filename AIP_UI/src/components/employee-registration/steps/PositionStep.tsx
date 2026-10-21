@@ -62,7 +62,7 @@ export function PositionStep({ onNext, onBack }: PositionStepProps) {
           <p className="text-sm text-muted-foreground">Loading positions...</p>
         )}
         {error && (
-          <p className="text-sm text-red-600">{error}</p>
+          <p className="text-sm text-loss">{error}</p>
         )}
         <div className="grid grid-cols-2 gap-4">
           {positions.map(position => (

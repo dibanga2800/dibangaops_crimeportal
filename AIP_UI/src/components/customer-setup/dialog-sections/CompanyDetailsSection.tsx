@@ -20,14 +20,14 @@ interface CompanyDetailsSectionProps {
 export function CompanyDetailsSection({ form }: CompanyDetailsSectionProps) {
   return (
     <div className="space-y-4">
-      <h3 className="font-semibold">Company Details</h3>
+      <h3 className="font-semibold">Company details</h3>
       <div className="grid grid-cols-2 gap-4">
         <FormField
           control={form.control}
           name="companyName"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Company Name</FormLabel>
+              <FormLabel>Company name</FormLabel>
               <FormControl>
                 <Input {...field} />
               </FormControl>
@@ -41,7 +41,7 @@ export function CompanyDetailsSection({ form }: CompanyDetailsSectionProps) {
           name="companyNumber"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Company Number</FormLabel>
+              <FormLabel>Company number</FormLabel>
               <FormControl>
                 <Input {...field} />
               </FormControl>
@@ -55,7 +55,7 @@ export function CompanyDetailsSection({ form }: CompanyDetailsSectionProps) {
           name="vatNumber"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>VAT Number</FormLabel>
+              <FormLabel>VAT number</FormLabel>
               <FormControl>
                 <Input {...field} />
               </FormControl>
@@ -69,7 +69,7 @@ export function CompanyDetailsSection({ form }: CompanyDetailsSectionProps) {
           name="customerType"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Company Type</FormLabel>
+              <FormLabel>Company type</FormLabel>
               <Select onValueChange={field.onChange} value={field.value}>
                 <FormControl>
                   <SelectTrigger>

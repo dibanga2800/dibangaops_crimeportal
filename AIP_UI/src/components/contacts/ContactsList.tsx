@@ -10,19 +10,19 @@ interface ContactsListProps {
 export const ContactsList = ({ contacts, onEdit, onDelete }: ContactsListProps) => {
   return (
     <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-        <thead className="bg-gray-50 dark:bg-gray-800">
+      <table className="min-w-full divide-y divide-border">
+        <thead className="bg-muted/50">
           <tr>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+            <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
               Name
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+            <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
               Company
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+            <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
               Status
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+            <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
               Last Contact
             </th>
             <th className="px-6 py-3 relative">
@@ -30,34 +30,34 @@ export const ContactsList = ({ contacts, onEdit, onDelete }: ContactsListProps) 
             </th>
           </tr>
         </thead>
-        <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+        <tbody className="bg-card divide-y divide-border">
           {contacts.map((contact) => (
             <tr key={contact.id}>
               <td className="px-6 py-4 whitespace-nowrap">
                 <div className="flex items-center">
                   <div>
-                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    <div className="text-sm font-medium text-foreground">
                       {contact.firstName} {contact.lastName}
                     </div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                    <div className="text-sm text-muted-foreground">
                       {contact.email}
                     </div>
                   </div>
                 </div>
               </td>
               <td className="px-6 py-4 whitespace-nowrap">
-                <div className="text-sm text-gray-900 dark:text-gray-100">{contact.company}</div>
-                <div className="text-sm text-gray-500 dark:text-gray-400">{contact.position}</div>
+                <div className="text-sm text-foreground">{contact.company}</div>
+                <div className="text-sm text-muted-foreground">{contact.position}</div>
               </td>
               <td className="px-6 py-4 whitespace-nowrap">
                 <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                  ${contact.status === 'active' ? 'bg-green-100 text-green-800' :
-                    contact.status === 'inactive' ? 'bg-red-100 text-red-800' :
-                    'bg-yellow-100 text-yellow-800'}`}>
+                  ${contact.status === 'active' ? 'bg-recovered-soft text-recovered' :
+                    contact.status === 'inactive' ? 'bg-loss-soft text-loss' :
+                    'bg-warning-soft text-warning'}`}>
                   {contact.status}
                 </span>
               </td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+              <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
                 {new Date(contact.lastContactDate).toLocaleDateString()}
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -69,7 +69,7 @@ export const ContactsList = ({ contacts, onEdit, onDelete }: ContactsListProps) 
                 </button>
                 <button
                   onClick={() => onDelete(contact.id)}
-                  className="text-red-600 hover:text-red-900"
+                  className="text-loss hover:text-loss"
                 >
                   <Trash2 className="w-5 h-5" />
                 </button>

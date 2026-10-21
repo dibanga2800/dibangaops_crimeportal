@@ -15,7 +15,7 @@ export function CustomerTableRow({ customer, isSelected, onSelect, onEdit }: Cus
   return (
     <TableRow 
       key={customer.id}
-      className={`cursor-pointer ${isSelected ? "bg-purple-50" : ""}`}
+      className={`cursor-pointer ${isSelected ? "bg-accent" : ""}`}
       onClick={() => onSelect(isSelected ? null : customer.id)}
     >
       <TableCell className="font-medium">{customer.companyName}</TableCell>
@@ -24,7 +24,7 @@ export function CustomerTableRow({ customer, isSelected, onSelect, onEdit }: Cus
       <TableCell>
         <Badge 
           variant={customer.status === "active" ? "default" : "destructive"}
-          className={`capitalize ${customer.status === "active" ? "bg-green-100 text-green-700" : ""}`}
+          className={`capitalize ${customer.status === "active" ? "bg-recovered-soft text-recovered" : ""}`}
         >
           {customer.status}
         </Badge>
