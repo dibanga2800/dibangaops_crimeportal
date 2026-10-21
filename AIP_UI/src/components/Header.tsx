@@ -46,7 +46,7 @@ const UserProfileDropdown = ({ name, email, isAdministrator }: { name: string; e
 			{isAdministrator && (
 				<DropdownMenuItem onClick={() => navigate("/settings")}>
 					<Settings className="mr-2 h-4 w-4" />
-					<span>Settings</span>
+					<span>Role access</span>
 				</DropdownMenuItem>
 			)}
 			<DropdownMenuSeparator />

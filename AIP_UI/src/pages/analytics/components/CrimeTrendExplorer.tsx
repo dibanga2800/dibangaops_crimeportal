@@ -489,8 +489,8 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 										{dayOfWeekData.map((row) => (
 											<Cell
 												key={row.day}
-												fill={theme.primary}
-												fillOpacity={selectedDay ? (row.day === selectedDay ? 1 : 0.2) : row.day === peakDay?.day ? 1 : 0.5}
+												fill={selectedDay ? (row.day === selectedDay ? theme.primary : theme.grid) : row.day === peakDay?.day ? theme.primary : theme.series[0] ?? theme.primary}
+												fillOpacity={!selectedDay && row.day !== peakDay?.day ? 0.55 : 1}
 											/>
 										))}
 									</Bar>
@@ -516,8 +516,8 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 										{timeOfDayData.map((row) => (
 											<Cell
 												key={row.hour}
-												fill={theme.primary}
-												fillOpacity={selectedHour !== null ? (row.hour === selectedHour ? 1 : 0.2) : row.hour === peakHour?.hour ? 1 : 0.5}
+												fill={selectedHour !== null ? (row.hour === selectedHour ? theme.primary : theme.grid) : row.hour === peakHour?.hour ? theme.primary : theme.series[0] ?? theme.primary}
+												fillOpacity={selectedHour === null && row.hour !== peakHour?.hour ? 0.55 : 1}
 											/>
 										))}
 									</Bar>

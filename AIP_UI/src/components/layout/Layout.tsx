@@ -76,7 +76,7 @@ export const Layout = ({ children }: LayoutProps) => {
       </a>
 
       {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-sidebar text-sidebar-foreground lg:flex">
+      <aside className="fixed inset-y-0 left-0 z-30 sidebar-gloss hidden w-64 flex-col text-sidebar-foreground lg:flex">
         {sidebarBody}
       </aside>
 
@@ -96,7 +96,7 @@ export const Layout = ({ children }: LayoutProps) => {
             />
             <motion.aside
               key="drawer"
-              className="fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-sidebar text-sidebar-foreground shadow-float lg:hidden"
+              className="fixed inset-y-0 left-0 z-50 sidebar-gloss flex w-72 max-w-[85vw] flex-col text-sidebar-foreground shadow-float lg:hidden"
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}

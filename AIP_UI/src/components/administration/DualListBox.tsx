@@ -22,7 +22,7 @@ export const DualListBox = ({
       {/* Available Customers */}
       <div className="flex-1 border rounded-lg">
         <div className="p-2 bg-muted/50 border-b rounded-t-lg">
-          <h3 className="font-medium text-sm">Available customers</h3>
+          <h3 className="font-medium text-sm">Available companies</h3>
         </div>
         <ScrollArea className="h-[200px] w-full">
           <div className="p-2">
@@ -78,7 +78,7 @@ export const DualListBox = ({
       {/* Selected Customers */}
       <div className="flex-1 border rounded-lg">
         <div className="p-2 bg-muted/50 border-b rounded-t-lg">
-          <h3 className="font-medium text-sm">Assigned customers</h3>
+          <h3 className="font-medium text-sm">Assigned companies</h3>
         </div>
         <ScrollArea className="h-[200px] w-full">
           <div className="p-2">

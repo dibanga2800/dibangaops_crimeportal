@@ -33,12 +33,12 @@ interface NavItemProps {
 /** Shared look for sidebar links: quiet by default, leaf marker when active. */
 const sidebarLinkClass = (isActive: boolean) =>
 	cn(
-		'relative flex items-center gap-3 rounded-md px-3 py-2 text-sm text-sidebar-foreground transition-colors',
-		'hover:bg-sidebar-accent hover:text-white',
+		'relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-sidebar-foreground transition-all duration-150',
+		'hover:bg-white/[0.08] hover:text-white hover:[&>svg]:opacity-100',
 		'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring',
-		'[&>svg]:h-4 [&>svg]:w-4 [&>svg]:shrink-0 [&>svg]:opacity-80',
+		'[&>svg]:h-4 [&>svg]:w-4 [&>svg]:shrink-0 [&>svg]:opacity-100',
 		isActive &&
-			'bg-sidebar-accent font-medium text-white [&>svg]:text-signal [&>svg]:opacity-100 before:absolute before:-left-3 before:top-1.5 before:bottom-1.5 before:w-[3px] before:rounded-r-full before:bg-signal',
+			'sidebar-link-active font-semibold text-white [&>svg]:text-signal [&>svg]:opacity-100 before:absolute before:-left-3 before:top-1.5 before:bottom-1.5 before:w-[3px] before:rounded-r-full before:bg-signal',
 	)
 
 const NavItem = ({ to, icon, label, onClick, className, bypassAccessCheck }: NavItemProps) => {
@@ -362,7 +362,7 @@ export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({ onNavigate
   return (
     <div className="space-y-6 px-3 py-4">
       <div className="space-y-0.5">
-        <p className="px-3 pb-1.5 text-xs font-medium text-sidebar-foreground/60">Overview</p>
+        <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-sidebar-primary/80">Overview</p>
         {hasAccess('/dashboard') && (
           <a
             href="/dashboard"
@@ -393,7 +393,7 @@ export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({ onNavigate
 
         {visibleSections.map((section) => (
           <div key={section.id} className="space-y-0.5" role="group" aria-labelledby={`nav-${section.id}`}>
-            <p id={`nav-${section.id}`} className="px-3 pb-1.5 text-xs font-medium text-sidebar-foreground/60">
+            <p id={`nav-${section.id}`} className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-sidebar-primary/80">
               {section.label}
             </p>
             {section.showCustomerSelector && isAdmin && (
@@ -425,7 +425,7 @@ export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({ onNavigate
             <NavItem
               to="/settings"
               icon={<SettingsIcon />}
-              label="Settings"
+              label="Role access"
               onClick={onNavigate}
             />
           </div>

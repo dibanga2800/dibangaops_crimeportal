@@ -3,7 +3,7 @@ import { useLayoutEffect } from 'react'
 /**
  * Marks the document as rendering inside the redesigned app chrome
  * (`<html data-ui="app">`). Global styles that change the base look of the
- * document — the IBM Plex typeface and form-control defaults — are scoped to
+ * document — the Inter and Plus Jakarta Sans typefaces and form-control defaults — are scoped to
  * this attribute so the login page, which never mounts this hook, keeps its
  * original appearance.
  *

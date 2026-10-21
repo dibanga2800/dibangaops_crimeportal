@@ -292,8 +292,8 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
                     if (!isNaN(id)) setSelectedCustomerId(id)
                   }}
                 >
-                  <SelectTrigger className="w-full sm:w-[220px] h-11" aria-label="Select customer">
-                    <SelectValue placeholder="Select customer" />
+                  <SelectTrigger className="w-full sm:w-[220px] h-11" aria-label="Company">
+                    <SelectValue placeholder="Select company" />
                   </SelectTrigger>
                   <SelectContent>
                     {assignedCustomers.map((c) => (
@@ -309,7 +309,7 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
                   <SelectValue placeholder="Select Region" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Regions</SelectItem>
+                  <SelectItem value="all">All regions</SelectItem>
                   {regions.map((region) => (
                     <SelectItem key={region.id} value={region.id}>
                       {region.name}
@@ -319,11 +319,11 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
               </Select>
 
               <Select value={selectedSite} onValueChange={setSelectedSite}>
-                <SelectTrigger className="w-full sm:w-[250px] h-11" aria-label="Select site">
-                  <SelectValue placeholder="Select Site" />
+                <SelectTrigger className="w-full sm:w-[250px] h-11" aria-label="Store">
+                  <SelectValue placeholder="Select store" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Sites</SelectItem>
+                  <SelectItem value="all">All stores</SelectItem>
                   {filteredSites.map((site) => (
                     <SelectItem key={site.id} value={site.id}>
                       {site.locationName}

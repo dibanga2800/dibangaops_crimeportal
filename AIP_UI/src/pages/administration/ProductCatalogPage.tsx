@@ -123,7 +123,7 @@ export const ProductCatalogPage = () => {
 		<div className="w-full">
 			<div className="space-y-6">
 				<PageHeader
-					title="Product catalog"
+					title="Product catalogue"
 					description={<>Products staff can pick when recording stolen items. Search by barcode (stored as <strong className="font-medium text-foreground">EAN</strong>), department or name.</>}
 					className="pb-0"
 					actions={

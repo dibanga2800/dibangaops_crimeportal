@@ -146,7 +146,7 @@ export default function EmployeeRegistration() {
     <div className="w-full">
       <div className="space-y-6">
         <PageHeader
-          title="Employee registration"
+          title="Employees"
           description="Register store detectives, officers and managers, and keep their details current."
           className="pb-0"
         />
