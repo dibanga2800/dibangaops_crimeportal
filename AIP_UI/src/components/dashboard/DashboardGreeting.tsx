@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -6,11 +6,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 interface DashboardGreetingProps {
   className?: string;
   showLastLogin?: boolean;
+  /** Replaces the default one-line summary under the greeting. */
+  subtitle?: React.ReactNode;
 }
 
 export const DashboardGreeting = ({ 
   className = '',
   showLastLogin = true,
+  subtitle,
 }: DashboardGreetingProps) => {
   const { user, isLoading, error } = useAuth();
   const [greeting, setGreeting] = useState('');
@@ -18,9 +21,9 @@ export const DashboardGreeting = ({
   useEffect(() => {
     const updateGreeting = () => {
       const hour = new Date().getHours();
-      if (hour < 12) setGreeting('Good Morning');
-      else if (hour < 17) setGreeting('Good Afternoon');
-      else setGreeting('Good Evening');
+      if (hour < 12) setGreeting('Good morning');
+      else if (hour < 17) setGreeting('Good afternoon');
+      else setGreeting('Good evening');
     };
 
     updateGreeting();
@@ -30,83 +33,39 @@ export const DashboardGreeting = ({
     return () => clearInterval(timer);
   }, []);
 
+  const today = format(new Date(), 'EEEE d MMMM yyyy');
+
   if (isLoading) {
     return (
-      <div className={`p-6 rounded-lg bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-900 shadow-sm ${className}`}>
-        <Skeleton className="h-8 w-3/4 mb-2" />
-        <Skeleton className="h-4 w-1/2" />
+      <div className={`space-y-2 ${className}`}>
+        <Skeleton className="h-8 w-72" />
+        <Skeleton className="h-4 w-56" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div 
-        className={`p-6 rounded-lg bg-red-50 dark:bg-red-900/10 shadow-sm ${className}`}
-        role="alert"
-      >
-        <div className="text-red-800 dark:text-red-400">
-          <h1 className="text-lg font-semibold">Authentication Error</h1>
-          <p className="text-sm">{error}</p>
-        </div>
-      </div>
-    );
-  }
-
-  // If no user data, show a generic greeting
-  if (!user) {
-    return (
-      <div 
-        className={`p-6 rounded-lg bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-900 shadow-sm ${className}`}
-        role="region"
-        aria-label="Dashboard greeting"
-      >
-        <div>
-          <h1 
-            className="text-2xl md:text-3xl font-semibold text-gray-900 dark:text-white mb-2"
-            tabIndex={0}
-          >
-            {greeting}, Welcome!
-          </h1>
-          <p 
-            className="text-gray-600 dark:text-gray-300 text-base md:text-lg mb-4"
-            tabIndex={0}
-          >
-            Please log in to view your personalized dashboard.
-          </p>
-        </div>
+      <div className={`rounded-lg border border-loss/30 bg-loss-soft p-4 ${className}`} role="alert">
+        <h1 className="text-base font-semibold text-loss">Your session could not be verified</h1>
+        <p className="mt-1 text-sm text-loss/90">{error}</p>
       </div>
     );
   }
 
   return (
-    <div 
-      className={`p-6 rounded-lg bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-900 shadow-sm ${className}`}
-      role="region"
-      aria-label="Dashboard greeting"
-    >
-      <div>
-        <h1 
-          className="text-2xl md:text-3xl font-semibold text-gray-900 dark:text-white mb-2"
-          tabIndex={0}
-        >
-          {greeting}, {user.firstName} {user.lastName}!
-        </h1>
-        <p 
-          className="text-gray-600 dark:text-gray-300 text-base md:text-lg mb-4"
-          tabIndex={0}
-        >
-          Welcome back to your dashboard. Here's what's happening today.
+    <div className={`min-w-0 space-y-1.5 ${className}`} aria-label="Dashboard greeting">
+      <h1 className="text-[1.75rem] font-semibold leading-[1.1] tracking-tight text-foreground sm:text-[2.125rem]">
+        {user ? `${greeting}, ${user.firstName}` : greeting}
+      </h1>
+      <p className="text-sm text-muted-foreground">
+        {subtitle ?? <>Here is where loss and recovery stand on <span className="text-foreground/80">{today}</span>.</>}
+      </p>
+      {showLastLogin && user?.lastLogin && (
+        <p className="text-xs text-muted-foreground">
+          Last signed in {format(new Date(user.lastLogin), 'd MMM yyyy, HH:mm')}
         </p>
-        {showLastLogin && user.lastLogin && (
-          <p 
-            className="text-sm text-gray-500 dark:text-gray-400"
-            tabIndex={0}
-          >
-            Last login: {format(new Date(user.lastLogin), 'MMM d, yyyy h:mm a')}
-          </p>
-        )}
-      </div>
+      )}
     </div>
   );
 };

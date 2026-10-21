@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { formatMoney } from '@/lib/money'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -10,7 +11,6 @@ import {
 	YAxis,
 	CartesianGrid,
 	Tooltip,
-	Legend,
 	ResponsiveContainer,
 	LabelList,
 	Cell,
@@ -19,7 +19,12 @@ import { Button } from '@/components/ui/button'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Building2, Users, BarChart3 } from 'lucide-react'
+import { PageHeader } from '@/components/layout/PageHeader'
+import { FilterBar, DateRangeField } from '@/components/common/FilterBar'
+import { Segmented } from '@/components/common/Segmented'
+import { StatLedger, type StatLedgerItem } from '@/components/common/StatLedger'
+import { EmptyState } from '@/components/common/EmptyState'
 import {
 	startOfWeek,
 	endOfWeek,
@@ -30,6 +35,7 @@ import {
 	subDays,
 } from 'date-fns'
 import { cn } from '@/lib/utils'
+import { useChartTheme, chartTooltipStyle } from '@/lib/chart-theme'
 import { useAuth } from '@/hooks/useAuth'
 import { useCustomerSelection } from '@/contexts/CustomerSelectionContext'
 import { useAvailableCustomers } from '@/hooks/useAvailableCustomers'
@@ -41,6 +47,32 @@ import {
 	type RegionOption,
 } from '@/services/incidentGraphService'
 import { getCustomerNameById } from '@/services/customerMappingService'
+
+/** Bar colours for the incident graph; one per store so neighbouring bars stay distinct. */
+const BAR_PALETTE = ['#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#10b981', '#06b6d4', '#6366f1', '#f43f5e', '#eab308', '#14b8a6']
+
+const MEASURES: ReadonlyArray<{ value: GraphType; label: string; total: string; chartTitle: string }> = [
+	{ value: 'value', label: 'Value recovered', total: 'Value recovered', chartTitle: 'Value recovered by store' },
+	{ value: 'lost', label: 'Value lost', total: 'Value lost', chartTitle: 'Value lost by store' },
+	{ value: 'quantity', label: 'Items recovered', total: 'Items recovered', chartTitle: 'Items recovered by store' },
+	{ value: 'count', label: 'Incidents', total: 'Incidents reported', chartTitle: 'Incidents reported by store' },
+	{ value: 'type', label: 'Incident types', total: 'Incidents', chartTitle: 'Incidents by type' },
+]
+
+const PERIODS: ReadonlyArray<{ value: string; label: string }> = [
+	{ value: 'ytd', label: 'Year to date' },
+	{ value: 'month', label: 'This month' },
+	{ value: 'week', label: 'This week' },
+	{ value: 'today', label: 'Today' },
+	{ value: 'last30', label: '30 days' },
+]
+
+const OFFICERS = [
+	['all', 'All officers'],
+	['uniform', 'Uniform officers'],
+	['detective', 'Store detectives'],
+	['store-user', 'Store users'],
+] as const
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -68,18 +100,6 @@ const fromDateInputValue = (value: string): Date | null => {
 	return Number.isNaN(parsed.getTime()) ? null : parsed
 }
 
-const COLOR_PALETTE = [
-	'#3b82f6',
-	'#8b5cf6',
-	'#ec4899',
-	'#f97316',
-	'#10b981',
-	'#06b6d4',
-	'#6366f1',
-	'#f43f5e',
-	'#facc15',
-	'#14b8a6',
-]
 
 // ── Responsive helpers ────────────────────────────────────────────────────────
 
@@ -173,20 +193,18 @@ const getIncidentLostValue = (inc: any): number => {
 	return typeof raw === 'number' ? raw : parseFloat(raw) || 0
 }
 
-const formatCurrency = (value: number, compact = false): string => {
-	if (value === 0) return '£0'
-	if (compact && value >= 1000) {
-		return value < 1_000_000 ? `£${(value / 1000).toFixed(1)}k` : `£${(value / 1_000_000).toFixed(2)}m`
-	}
-	if (value < 1000) return `£${value.toLocaleString()}`
-	if (value < 1_000_000) return `£${(value / 1000).toFixed(1)}K`
-	return `£${(value / 1_000_000).toFixed(2)}M`
-}
+/** Whole pounds with thousands separators, for headline figures. */
+const formatPounds = (value: number): string => formatMoney(value, 'headline')
+
+/** Chart labels and axis ticks: short pounds (£3.7k); exact values go in tooltips. */
+const formatCurrency = (value: number): string => formatMoney(value, 'axis')
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 	const { user } = useAuth()
+	const chartTheme = useChartTheme()
+	const categoryColors = chartTheme.series
 	const { isAdmin, isManager, selectedCustomerId: contextCustomerId, setSelectedCustomerId, assignedCustomers } = useCustomerSelection()
 	const { availableCustomers, isLoading: loadingCustomers } = useAvailableCustomers()
 	const [searchParams, setSearchParams] = useSearchParams()
@@ -257,14 +275,14 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 	const selectedRegionLabel = useMemo(
 		() =>
 			selectedRegionId === 'all'
-				? 'All Regions'
+				? 'All regions'
 				: (availableRegions.find(r => r.id === selectedRegionId)?.name ?? 'Selected Region'),
 		[selectedRegionId, availableRegions]
 	)
 
 	const regionOptions = useMemo(
 		() => [
-			{ value: 'all', label: 'All Regions' },
+			{ value: 'all', label: 'All regions' },
 			...availableRegions.map(r => ({ value: r.id, label: r.name })),
 		],
 		[availableRegions]
@@ -480,7 +498,7 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 	// ── Chart rendering ───────────────────────────────────────────────────────
 
 	const formatValue = (value: number) =>
-		graphType === 'value' || graphType === 'lost' ? formatCurrency(value, screenSize === 'sm') : value.toString()
+		graphType === 'value' || graphType === 'lost' ? formatCurrency(value) : value.toString()
 
 	const formatTooltipValue = (val: any, _name: string, props: any) => {
 		if (graphType === 'type') {
@@ -508,6 +526,9 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 		}))
 	}, [paginatedData, graphType, screenSize])
 
+	const barColor =
+		graphType === 'lost' ? chartTheme.loss : graphType === 'value' ? chartTheme.recovered : chartTheme.primary
+
 	const barName =
 		graphType === 'type' ? 'Incident Count' :
 		graphType === 'count' ? 'Incidents Reported' :
@@ -519,568 +540,344 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 
 	// ── Main render ───────────────────────────────────────────────────────────
 
-	return (
-		<div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-			<div className="container mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 md:py-8 space-y-4 sm:space-y-6 max-w-screen-2xl">
+	const measureKey: 'count' | 'quantity' | 'value' =
+		graphType === 'type' || graphType === 'count' ? 'count' : graphType === 'quantity' ? 'quantity' : 'value'
+	const isMoney = graphType === 'value' || graphType === 'lost'
+	const measureTone = graphType === 'lost' ? 'loss' : graphType === 'value' ? 'recovered' : 'neutral'
+	const fmtFull = (v: number) => (isMoney ? formatPounds(v) : v.toLocaleString('en-GB'))
+	const unitLabel =
+		graphType === 'type' || graphType === 'count' ? 'incidents' : graphType === 'quantity' ? 'items' : ''
+	const leader = filteredData[0]
+	const leaderValue = leader ? (graphType === 'type' ? leader.value : (leader as any)[measureKey] ?? leader.value) : 0
+	const subjectLabel = graphType === 'type' ? 'incident types' : 'stores'
+	const officerLabel =
+		officerType === 'uniform' ? 'Uniform officers' : officerType === 'detective' ? 'Store detectives' : officerType === 'store-user' ? 'Store users' : 'All officers'
 
-				{/* ── Page Header ── */}
-				<div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 p-4 sm:p-6 md:p-8 border border-white/10">
-					<div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-						<div>
-							<h1 className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-								Incident Analytics Dashboard
-							</h1>
-							<p className="text-slate-400 mt-1 text-sm sm:text-base">
-								Track and analyse security incidents across locations
-							</p>
-							<div className="flex flex-wrap items-center gap-2 mt-3">
-								{isAdmin ? (
-									<Select
-										disabled={loadingCustomers || availableCustomers.length === 0}
-										value={selectedCustomerForAdmin?.toString() ?? ''}
-										onValueChange={value => {
-											const id = parseInt(value, 10)
-											setSelectedCustomerForAdmin(id)
-											setSelectedCustomerId(id)
-											const params = new URLSearchParams(searchParams)
-											params.set('customerId', value)
-											setSearchParams(params, { replace: true })
-											setFiltersVersion(v => v + 1)
-										}}
-									>
-										<SelectTrigger className="h-9 min-w-[200px] bg-slate-900/60 border-slate-700 text-slate-50 text-sm" aria-label="Select customer">
-											<SelectValue placeholder={loadingCustomers ? 'Loading customers…' : 'Select customer'} />
-										</SelectTrigger>
-										<SelectContent className="bg-slate-900 border-slate-700 text-slate-50 text-sm max-h-72">
-											{availableCustomers.map(c => (
-												<SelectItem key={c.id} value={c.id.toString()}>
-													{c.name}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-								) : isManager && assignedCustomers.length > 1 ? (
-									<Select
-										value={selectedCustomerForAdmin?.toString() ?? ''}
-										onValueChange={value => {
-											const id = parseInt(value, 10)
-											setSelectedCustomerForAdmin(id)
-											setSelectedCustomerId(id)
-											const params = new URLSearchParams(searchParams)
-											params.set('customerId', value)
-											setSearchParams(params, { replace: true })
-											setFiltersVersion(v => v + 1)
-										}}
-									>
-										<SelectTrigger className="h-9 min-w-[200px] bg-slate-900/60 border-slate-700 text-slate-50 text-sm" aria-label="Select customer">
-											<SelectValue placeholder="Select customer" />
-										</SelectTrigger>
-										<SelectContent className="bg-slate-900 border-slate-700 text-slate-50 text-sm max-h-72">
-											{assignedCustomers.map(c => (
-												<SelectItem key={c.id} value={c.id.toString()}>
-													{c.name}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-								) : (
-									<>
-										<span className="bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-sm font-medium px-3 py-1 rounded-full">
-											{customerName || 'Loading customer...'}
-										</span>
-										{currentCustomerId && (
-											<span className="bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-sm font-medium px-3 py-1 rounded-full">
-												ID: {currentCustomerId}
-											</span>
-										)}
-									</>
-								)}
-							</div>
-						</div>
-						<div className="bg-slate-800/80 p-4 sm:p-6 rounded-xl border border-white/10 w-full lg:w-auto">
-							<h2 className="text-sm sm:text-base font-semibold text-slate-300 leading-tight">
-								{summaryTitle}
-							</h2>
-							<p className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-emerald-400 to-sky-400 bg-clip-text text-transparent mt-2">
-								{graphType === 'type' || graphType === 'count'
-									? `${filteredTotal.toLocaleString()} Incidents`
-									: graphType === 'quantity'
-										? `${filteredTotal.toLocaleString()} Items`
-										: formatCurrency(filteredTotal)}
-							</p>
-						</div>
+	const ledger: StatLedgerItem[] = [
+		{
+			label: MEASURES.find((m) => m.value === graphType)?.total ?? 'Total',
+			value: isMoney ? formatPounds(filteredTotal) : filteredTotal.toLocaleString('en-GB'),
+			hint: `${format(startDate, 'd MMM')} to ${format(endDate, 'd MMM yyyy')}`,
+			tone: measureTone,
+		},
+		{
+			label: graphType === 'type' ? 'Most common type' : 'Top store',
+			value: leader ? <span className="block truncate text-[1.375rem] sm:text-[1.5rem]">{leader.location}</span> : '—',
+			hint: leader ? `${fmtFull(leaderValue)}${unitLabel ? ` ${unitLabel}` : ''} · ${filteredTotal > 0 ? Math.round((leaderValue / filteredTotal) * 100) : 0}% of total` : undefined,
+		},
+		{
+			label: graphType === 'type' ? 'Incident types' : 'Stores with activity',
+			value: filteredData.length.toLocaleString('en-GB'),
+			hint: selectedRegionLabel,
+		},
+		{
+			label: graphType === 'type' ? 'Average per type' : 'Average per store',
+			value: filteredData.length ? (isMoney ? formatPounds(filteredTotal / filteredData.length) : (filteredTotal / filteredData.length).toFixed(1)) : '—',
+			hint: officerLabel,
+		},
+	]
+
+	const rows = paginatedData.map((item: any) => ({
+		name: item.location,
+		value: graphType === 'type' ? item.value : item[measureKey] ?? item.value,
+	}))
+
+	const companyControl = isAdmin || (isManager && assignedCustomers.length > 1) ? (
+		<Select
+			disabled={isAdmin && (loadingCustomers || availableCustomers.length === 0)}
+			value={selectedCustomerForAdmin?.toString() ?? ''}
+			onValueChange={(value) => {
+				const id = parseInt(value, 10)
+				setSelectedCustomerForAdmin(id)
+				setSelectedCustomerId(id)
+				const params = new URLSearchParams(searchParams)
+				params.set('customerId', value)
+				setSearchParams(params, { replace: true })
+				setFiltersVersion((v) => v + 1)
+			}}
+		>
+			<SelectTrigger className="h-9 w-full gap-2 sm:w-60" aria-label="Company">
+				<Building2 className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+				<SelectValue placeholder={loadingCustomers ? 'Loading companies…' : 'Select company'} />
+			</SelectTrigger>
+			<SelectContent className="max-h-72">
+				{(isAdmin ? availableCustomers : assignedCustomers).map((c) => (
+					<SelectItem key={c.id} value={c.id.toString()}>
+						{c.name}
+					</SelectItem>
+				))}
+			</SelectContent>
+		</Select>
+	) : (
+		<span className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-medium text-foreground">
+			<Building2 className="h-4 w-4 text-muted-foreground" aria-hidden />
+			{customerName || 'Loading company…'}
+		</span>
+	)
+
+	return (
+		<div className="w-full space-y-5">
+			<PageHeader
+				title="Incident graph"
+				description="Compare recoveries, losses and incidents across stores and incident types."
+				className="pb-0"
+				actions={companyControl}
+			/>
+
+			<div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+				<Segmented<GraphType>
+					ariaLabel="What to compare"
+					value={graphType}
+					onChange={(v) => {
+						setGraphType(v)
+						setCurrentPage(1)
+						setFiltersVersion((f) => f + 1)
+					}}
+					options={MEASURES.map((m) => ({ value: m.value, label: m.label }))}
+					className="min-w-max"
+				/>
+			</div>
+
+			<FilterBar
+				label="Graph filters"
+				activeCount={(selectedRegionId !== 'all' ? 1 : 0) + (officerType !== 'all' ? 1 : 0)}
+				primary={
+					<>
+						<Select value={timeFilter} onValueChange={handleTimeFilterChange}>
+							<SelectTrigger className="h-9 w-full sm:hidden" aria-label="Period">
+								<SelectValue placeholder="Custom dates" />
+							</SelectTrigger>
+							<SelectContent>
+								{PERIODS.map((p) => (
+									<SelectItem key={p.value} value={p.value}>
+										{p.label}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+						<Segmented<string>
+							ariaLabel="Period"
+							size="sm"
+							value={timeFilter}
+							onChange={handleTimeFilterChange}
+							options={PERIODS}
+							className="hidden sm:inline-flex"
+						/>
+					</>
+				}
+			>
+				<DateRangeField
+					from={toDateInputValue(startDate)}
+					to={toDateInputValue(endDate)}
+					onFromChange={(value) => {
+						const parsed = fromDateInputValue(value)
+						if (parsed) {
+							setStartDate(parsed)
+							setTimeFilter('custom')
+							setCurrentPage(1)
+						}
+					}}
+					onToChange={(value) => {
+						const parsed = fromDateInputValue(value)
+						if (parsed) {
+							setEndDate(parsed)
+							setTimeFilter('custom')
+							setCurrentPage(1)
+						}
+					}}
+				/>
+				<Select
+					value={selectedRegionId}
+					onValueChange={(v) => {
+						setSelectedRegionId(v)
+						setCurrentPage(1)
+						setFiltersVersion((f) => f + 1)
+					}}
+				>
+					<SelectTrigger className="h-9 w-full sm:w-44" aria-label="Region">
+						<SelectValue placeholder="All regions" />
+					</SelectTrigger>
+					<SelectContent>
+						{regionOptions.map((o) => (
+							<SelectItem key={o.value} value={o.value}>
+								{o.label}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+				<Select
+					value={officerType}
+					onValueChange={(value) => {
+						setOfficerType(value)
+						setCurrentPage(1)
+						setFiltersVersion((f) => f + 1)
+					}}
+				>
+					<SelectTrigger className="h-9 w-full gap-2 sm:w-48" aria-label="Officer role">
+						<Users className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+						<SelectValue />
+					</SelectTrigger>
+					<SelectContent>
+						{OFFICERS.map(([val, label]) => (
+							<SelectItem key={val} value={val}>
+								{label}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+			</FilterBar>
+
+			<StatLedger items={ledger} loading={loading} />
+
+			<section className="rounded-lg border border-border bg-card">
+				<div className="flex flex-wrap items-start justify-between gap-3 p-4 sm:p-5">
+					<div className="min-w-0">
+						<h2 className="text-base font-semibold text-foreground">
+							{MEASURES.find((m) => m.value === graphType)?.chartTitle} · {selectedRegionLabel}
+						</h2>
+						<p className="mt-0.5 text-[13px] text-muted-foreground">
+							{officerLabel} · {format(startDate, 'd MMM yyyy')} to {format(endDate, 'd MMM yyyy')} · ranked highest first
+						</p>
 					</div>
+					{graphType !== 'type' ? (
+						<Select
+							value={storesPerPage.toString()}
+							onValueChange={(v) => {
+								setStoresPerPage(parseInt(v))
+								setCurrentPage(1)
+							}}
+						>
+							<SelectTrigger className="h-8 w-32 text-[13px]" aria-label="Stores per page">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								{['5', '10', '20', '50'].map((n) => (
+									<SelectItem key={n} value={n}>
+										{n} per page
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					) : null}
+				</div>
+				<div className="border-t border-border px-2 py-4 sm:px-4">
+					{loading ? (
+						<div className="flex items-center justify-center text-sm text-muted-foreground" style={{ height: 280 }}>
+							<Loader2 className="mr-2 h-5 w-5 animate-spin" aria-hidden />
+							Loading incident data…
+						</div>
+					) : error ? (
+						<Alert variant="destructive">
+							<AlertDescription>{error}</AlertDescription>
+						</Alert>
+					) : rows.length === 0 ? (
+						<EmptyState
+							icon={<BarChart3 className="h-5 w-5" />}
+							title="Nothing to show for these filters"
+							description="Try a longer period, another region or all officers."
+						/>
+					) : (
+						<ResponsiveContainer width="100%" height={cfg.height}>
+							<BarChart
+								data={chartData}
+								margin={{ top: cfg.marginTop + 8, right: cfg.marginRight, left: cfg.marginLeft, bottom: cfg.marginBottom }}
+								barSize={cfg.barSize}
+								barGap={0}
+								barCategoryGap={cfg.barCategoryGap}
+							>
+								<defs>
+									<filter id="barShadow" filterUnits="userSpaceOnUse">
+										<feDropShadow dx="3" dy="5" stdDeviation="4" floodOpacity="0.18" floodColor="#000" />
+									</filter>
+								</defs>
+								<CartesianGrid stroke={chartTheme.grid} vertical={false} strokeDasharray="3 3" />
+								<XAxis
+									dataKey={graphType === 'type' ? 'name' : 'location'}
+									angle={cfg.xAngle}
+									textAnchor="end"
+									height={cfg.xHeight}
+									interval={0}
+									tick={{ fontSize: cfg.fontSize, fill: chartTheme.foreground }}
+									axisLine={{ stroke: chartTheme.grid }}
+									tickLine={false}
+								/>
+								<YAxis
+									tickFormatter={formatValue}
+									tick={{ fontSize: cfg.fontSize, fill: chartTheme.axis }}
+									axisLine={false}
+									tickLine={false}
+									width={56}
+								/>
+								<Tooltip formatter={formatTooltipValue} {...chartTooltipStyle(chartTheme)} />
+								<Bar
+									dataKey={measureKey}
+									name={barName}
+									minPointSize={0}
+									animationDuration={500}
+									style={{ filter: 'url(#barShadow)' }}
+									shape={(props: { x: number; y: number; width: number; height: number; index: number }) => {
+										const { x, y, width, height, index } = props
+										if (!height || height <= 0) return <g />
+										const colour = BAR_PALETTE[index % BAR_PALETTE.length]
+										const depth = Math.max(4, width * (screenSize === 'sm' ? 0.16 : 0.2))
+										const rise = depth * 0.55
+										const side = `M ${x + width} ${y} l ${depth} ${-rise} l 0 ${height} l ${-depth} ${rise} Z`
+										const top = `M ${x} ${y} l ${width} 0 l ${depth} ${-rise} l ${-width} 0 Z`
+										return (
+											<g>
+												<path d={side} fill={colour} />
+												<path d={side} fill="#000" fillOpacity={0.28} />
+												<path d={top} fill={colour} />
+												<path d={top} fill="#fff" fillOpacity={0.22} />
+												<rect x={x} y={y} width={width} height={height} fill={colour} />
+												<rect x={x} y={y} width={width} height={Math.min(height, 24)} fill="#fff" fillOpacity={0.06} />
+											</g>
+										)
+									}}
+								>
+									<LabelList
+										dataKey={measureKey}
+										position="top"
+										offset={cfg.labelOffset + 6}
+										formatter={formatValue}
+										style={{ fontSize: cfg.fontSize, fill: chartTheme.foreground, fontWeight: 600 }}
+									/>
+								</Bar>
+							</BarChart>
+						</ResponsiveContainer>
+					)}
 				</div>
 
-				{/* ── Filters Card ── */}
-				<Card className="bg-slate-900/90 border-slate-800">
-					<CardHeader className="py-3 px-4 sm:px-6">
-						<CardTitle className="text-base sm:text-lg font-semibold text-slate-200">
-							Filters &amp; Controls
-						</CardTitle>
-					</CardHeader>
-					<CardContent className="px-4 sm:px-6 pb-5">
-						<div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-
-							{/* Region */}
-							<div className="space-y-2">
-								<Label className="text-xs sm:text-sm font-medium text-slate-300">Region</Label>
-								<Select
-									value={selectedRegionId}
-									onValueChange={v => {
-										setSelectedRegionId(v)
-										setCurrentPage(1)
-										setFiltersVersion(f => f + 1)
-									}}
-								>
-									<SelectTrigger className="bg-white border-slate-300 text-slate-900 h-9 text-sm">
-										<SelectValue placeholder="Select region" />
-									</SelectTrigger>
-									<SelectContent className="bg-white border-slate-200 text-sm">
-										{regionOptions.map(o => (
-											<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-							</div>
-
-							{/* Graph Type */}
-							<div className="space-y-2">
-								<Label className="text-xs sm:text-sm font-medium text-slate-300">Graph Type</Label>
-									<RadioGroup
-									value={graphType}
-									onValueChange={(v: GraphType) => {
-										setGraphType(v)
-										setCurrentPage(1)
-										setFiltersVersion(f => f + 1)
-									}}
-									className="flex flex-wrap gap-x-4 gap-y-2"
-								>
-									{([['value', 'Value Recovered'], ['lost', 'Value Lost'], ['quantity', 'Items Recovered'], ['count', 'Incidents per Store'], ['type', 'Action Types']] as const).map(
-										([val, label]) => (
-											<div key={val} className="flex items-center gap-2">
-												<RadioGroupItem value={val} id={`gt-${val}`} className="border-slate-600 text-indigo-500" />
-												<Label htmlFor={`gt-${val}`} className="text-xs sm:text-sm text-slate-300 cursor-pointer">{label}</Label>
-											</div>
-										)
-									)}
-								</RadioGroup>
-							</div>
-
-							{/* Time Period */}
-							<div className="space-y-2">
-								<Label className="text-xs sm:text-sm font-medium text-slate-300">Time Period</Label>
-									<RadioGroup
-									value={timeFilter}
-									onValueChange={handleTimeFilterChange}
-									className="grid grid-cols-2 gap-x-4 gap-y-2"
-								>
-									{([
-										['ytd', 'Year to Date'],
-										['month', 'Current Month'],
-										['week', 'Current Week'],
-										['today', 'Today'],
-										['last30', 'Last 30 Days'],
-									] as const).map(([val, label]) => (
-										<div key={val} className="flex items-center gap-2">
-											<RadioGroupItem value={val} id={`tf-${val}`} className="border-slate-600 text-indigo-500" />
-											<Label htmlFor={`tf-${val}`} className="text-xs sm:text-sm text-slate-300 cursor-pointer">{label}</Label>
-										</div>
-									))}
-								</RadioGroup>
-							</div>
-
-							{/* Officer Role + Items per Page */}
-							<div className="space-y-4">
-								<div className="space-y-2">
-									<Label className="text-xs sm:text-sm font-medium text-slate-300">Officer Role</Label>
-									<RadioGroup
-										value={officerType}
-										onValueChange={value => {
-											setOfficerType(value)
-											setCurrentPage(1)
-											setFiltersVersion(f => f + 1)
-										}}
-										className="flex flex-col gap-2"
-									>
-										{([['all', 'All Officers'], ['uniform', 'Uniform Officers'], ['detective', 'Store Detectives'], ['store-user', 'Store Users']] as const).map(
-											([val, label]) => (
-												<div key={val} className="flex items-center gap-2">
-													<RadioGroupItem value={val} id={`ot-${val}`} className="border-slate-600 text-indigo-500" />
-													<Label htmlFor={`ot-${val}`} className="text-xs sm:text-sm text-slate-300 cursor-pointer">{label}</Label>
-												</div>
-											)
-										)}
-									</RadioGroup>
-								</div>
-
-								<div className="space-y-2">
-									<Label className="text-xs sm:text-sm font-medium text-slate-300">Items per Page</Label>
-									<Select
-										value={storesPerPage.toString()}
-										onValueChange={v => { setStoresPerPage(parseInt(v)); setCurrentPage(1) }}
-									>
-										<SelectTrigger className="bg-white border-slate-300 text-slate-900 h-9 text-sm">
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent className="bg-white border-slate-200 text-sm">
-											{['5', '10', '20', '50'].map(n => (
-												<SelectItem key={n} value={n}>{n} items</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-								</div>
-							</div>
-
-						</div>
-
-						{/* Date range — native HTML date inputs */}
-						<div className="flex flex-col sm:flex-row gap-3 mt-4 pt-4 border-t border-slate-800">
-							<div className="flex-1 space-y-1.5">
-								<Label htmlFor="incident-graph-start-date" className="text-xs sm:text-sm text-slate-300">
-									Start date
-								</Label>
-								<Input
-									id="incident-graph-start-date"
-									type="date"
-									value={toDateInputValue(startDate)}
-									onChange={(e) => {
-										const parsed = fromDateInputValue(e.target.value)
-										if (parsed) {
-											setStartDate(parsed)
-											setCurrentPage(1)
-										}
-									}}
-									className="h-9 w-full bg-white border-slate-300 text-slate-900 text-sm"
-									aria-label="Start date"
-								/>
-							</div>
-							<div className="flex-1 space-y-1.5">
-								<Label htmlFor="incident-graph-end-date" className="text-xs sm:text-sm text-slate-300">
-									End date
-								</Label>
-								<Input
-									id="incident-graph-end-date"
-									type="date"
-									value={toDateInputValue(endDate)}
-									onChange={(e) => {
-										const parsed = fromDateInputValue(e.target.value)
-										if (parsed) {
-											setEndDate(parsed)
-											setCurrentPage(1)
-										}
-									}}
-									className="h-9 w-full bg-white border-slate-300 text-slate-900 text-sm"
-									aria-label="End date"
-								/>
-							</div>
-						</div>
-					</CardContent>
-				</Card>
-
-				{/* ── Chart Card ── */}
-				<Card className="bg-slate-900/90 border-slate-800">
-					<CardHeader className="py-3 px-4 sm:px-6">
-						<CardTitle className="text-base sm:text-lg font-semibold text-slate-200">
-							{graphType === 'type'
-								? `${selectedRegionLabel} — Incident Types Distribution`
-								: graphType === 'count'
-									? `${selectedRegionLabel} — Incidents Reported by Location`
-									: `${selectedRegionLabel} — ${
-										graphType === 'value'
-											? officerType === 'uniform'
-												? 'Recovered Value by Location (Uniform Officers)'
-												: officerType === 'detective'
-													? 'Recovered Value by Location (Store Detectives)'
-													: 'Recovered Value by Location'
-											: graphType === 'lost'
-												? officerType === 'uniform'
-													? 'Lost Value by Location (Uniform Officers)'
-													: officerType === 'detective'
-														? 'Lost Value by Location (Store Detectives)'
-														: 'Lost Value by Location'
-												: officerType === 'uniform'
-													? 'Recovered Items by Location (Uniform Officers)'
-													: officerType === 'detective'
-														? 'Recovered Items by Location (Store Detectives)'
-														: 'Recovered Items by Location'
-									}`}
-						</CardTitle>
-						{startDate && endDate && (
-							<p className="text-xs sm:text-sm text-slate-400 mt-1">
-								Period: {format(startDate, 'PP')} – {format(endDate, 'PP')}
-							</p>
-						)}
-					</CardHeader>
-					<CardContent className="px-3 sm:px-4 pb-5">
-						<div className="bg-slate-800/50 rounded-xl p-3 sm:p-4 md:p-6 border border-slate-700/50">
-							{loading ? (
-								<div className="flex items-center justify-center" style={{ height: cfg.height }}>
-									<Loader2 className="h-7 w-7 animate-spin text-slate-400 mr-2" />
-									<span className="text-slate-400 text-sm">Loading incident data…</span>
-								</div>
-							) : error ? (
-								<Alert className="bg-red-900/20 border-red-700">
-									<AlertDescription className="text-red-300">{error}</AlertDescription>
-								</Alert>
-							) : paginatedData.length === 0 ? (
-								<div
-									className="flex items-center justify-center text-slate-400 text-sm"
-									style={{ height: cfg.height }}
-								>
-									No incident data available for the selected filters.
-								</div>
-							) : (
-								<div className="relative">
-									<div className="absolute inset-0 bg-gradient-to-r from-indigo-500/5 via-purple-500/5 to-pink-500/5 rounded-xl pointer-events-none" />
-									<ResponsiveContainer width="100%" height={cfg.height} className="mt-4">
-										<BarChart
-											data={chartData}
-											margin={{
-												top: cfg.marginTop,
-												right: cfg.marginRight,
-												left: cfg.marginLeft,
-												bottom: cfg.marginBottom,
-											}}
-											barSize={cfg.barSize}
-											barGap={0}
-											barCategoryGap={cfg.barCategoryGap}
-										>
-											<defs>
-												{chartData.map((_, index) => {
-													const color = COLOR_PALETTE[index % COLOR_PALETTE.length]
-													return (
-														<React.Fragment key={index}>
-															<linearGradient id={`frontGrad${index}`} x1="0" y1="0" x2="0" y2="1">
-																<stop offset="0%" stopColor={color} stopOpacity={1} />
-																<stop offset="100%" stopColor={color} stopOpacity={0.85} />
-															</linearGradient>
-															<linearGradient id={`sideGrad${index}`} x1="0" y1="0" x2="1" y2="0">
-																<stop offset="0%" stopColor={color} stopOpacity={0.7} />
-																<stop offset="100%" stopColor={color} stopOpacity={0.3} />
-															</linearGradient>
-															<linearGradient id={`topGrad${index}`} x1="0" y1="1" x2="1" y2="0">
-																<stop offset="0%" stopColor={color} stopOpacity={1} />
-																<stop offset="100%" stopColor={color} stopOpacity={0.95} />
-															</linearGradient>
-															<linearGradient id={`reflGrad${index}`} x1="0" y1="0" x2="0" y2="1">
-																<stop offset="0%" stopColor={color} stopOpacity={0.2} />
-																<stop offset="100%" stopColor={color} stopOpacity={0} />
-															</linearGradient>
-														</React.Fragment>
-													)
-												})}
-												<filter id="barShadow" filterUnits="userSpaceOnUse">
-													<feDropShadow dx="4" dy="6" stdDeviation="5" floodOpacity="0.3" floodColor="#000" />
-												</filter>
-											</defs>
-
-											<CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" vertical={false} />
-
-											<XAxis
-												dataKey={graphType === 'type' ? 'name' : 'location'}
-												angle={cfg.xAngle}
-												textAnchor="end"
-												height={cfg.xHeight}
-												interval={0}
-												tick={{ fontSize: cfg.fontSize, fill: '#E2E8F0', fontWeight: 500 }}
-												axisLine={{ stroke: '#475569' }}
-												tickLine={{ stroke: '#475569' }}
-											/>
-
-											<YAxis
-												label={{
-													value:
-														graphType === 'type' || graphType === 'count' ? 'Number of Incidents' :
-														graphType === 'value' ? 'Amount Recovered (£)' :
-														graphType === 'lost' ? 'Amount Lost (£)' :
-														'Number of Items',
-													angle: -90,
-													position: 'insideLeft',
-													offset: cfg.yLabelOffset,
-													fill: '#94A3B8',
-													fontSize: cfg.fontSize,
-													fontWeight: 500,
-												}}
-												tickFormatter={formatValue}
-												tick={{ fontSize: cfg.fontSize, fill: '#94A3B8', fontWeight: 500 }}
-												axisLine={{ stroke: '#475569' }}
-												tickLine={{ stroke: '#475569' }}
-											/>
-
-											<Tooltip
-												formatter={formatTooltipValue}
-												contentStyle={{
-													backgroundColor: 'rgba(15, 23, 42, 0.9)',
-													backdropFilter: 'blur(8px)',
-													border: '1px solid rgba(148,163,184,0.2)',
-													borderRadius: '8px',
-													padding: '10px 14px',
-													color: '#E2E8F0',
-													boxShadow: '0 4px 20px -1px rgba(0,0,0,0.4)',
-												}}
-												itemStyle={{ padding: '3px 0', color: '#E2E8F0' }}
-												labelStyle={{ fontWeight: 600, marginBottom: '5px', color: '#F8FAFC' }}
-											/>
-
-											<Legend
-												wrapperStyle={{ paddingTop: screenSize === 'sm' ? '10px' : '20px' }}
-												formatter={value => (
-													<span style={{ color: '#94A3B8', fontWeight: 500, fontSize: cfg.fontSize }}>
-														{value}
-													</span>
-												)}
-												iconSize={screenSize === 'sm' ? 8 : 10}
-												iconType="circle"
-											/>
-
-											<Bar
-												dataKey={graphType === 'type' || graphType === 'count' ? 'count' : graphType === 'quantity' ? 'quantity' : 'value'}
-												name={barName}
-												radius={[0, 0, 0, 0]}
-												style={{ filter: 'url(#barShadow)' }}
-												minPointSize={0}
-												shape={(props: any) => {
-													const { x, y, width, height, index } = props
-													const depth = width * (screenSize === 'sm' ? 0.15 : 0.2)
-													const topH = depth * 0.5
-													return (
-														<g>
-															<path
-																d={`M ${x + width} ${y} l ${depth} ${-topH} l 0 ${height} l ${-depth} ${depth * 0.3} Z`}
-																fill={`url(#sideGrad${index})`}
-															/>
-															<path
-																d={`M ${x} ${y} l ${width} 0 l ${depth} ${-topH} l ${-width} 0 Z`}
-																fill={`url(#topGrad${index})`}
-															/>
-															<path
-																d={`M ${x} ${y} l ${width} 0 l 0 ${height} l ${-width} 0 Z`}
-																fill={`url(#frontGrad${index})`}
-															/>
-															<path
-																d={`M ${x} ${y} l ${width} 0 l 0 ${height * 0.3} l ${-width} 0 Z`}
-																fill={`url(#reflGrad${index})`}
-															/>
-														</g>
-													)
-												}}
-											>
-												<LabelList
-													dataKey={graphType === 'type' || graphType === 'count' ? 'count' : graphType === 'quantity' ? 'quantity' : 'value'}
-													position="top"
-													offset={cfg.labelOffset}
-													formatter={formatValue}
-													style={{
-														fontSize: cfg.fontSize,
-														fill: '#FFFFFF',
-														fontWeight: 600,
-														textShadow: '0 1px 2px rgba(0,0,0,0.6)',
-													}}
-												/>
-											</Bar>
-										</BarChart>
-									</ResponsiveContainer>
-								</div>
-							)}
-						</div>
-
-						{/* ── Incident Types Legend ── */}
-						{graphType === 'type' && incidentTypeData.length > 0 && !loading && (
-							<div className="mt-4 rounded-lg bg-slate-800/60 border border-slate-700/50 p-3 sm:p-4">
-								<h3 className="text-sm font-medium text-slate-300 mb-3 text-center">
-									Incident Types Reference
-								</h3>
-								<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
-									{incidentTypeData.map((item, i) => (
-										<div
-											key={item.type}
-											className="flex items-center gap-2 p-2 rounded-md bg-slate-900/50 border border-slate-700/30"
-										>
-											<span
-												className="h-2.5 w-2.5 rounded-sm flex-shrink-0"
-												style={{ backgroundColor: COLOR_PALETTE[i % COLOR_PALETTE.length] }}
-											/>
-											<div className="min-w-0">
-												<span className="text-[10px] sm:text-xs text-slate-100 block truncate">
-													{item.type}
-												</span>
-												<span className="text-[9px] sm:text-[10px] text-slate-400">
-													{item.count.toLocaleString()}
-												</span>
-											</div>
-										</div>
-									))}
-								</div>
-							</div>
-						)}
-					</CardContent>
-				</Card>
-
-				{/* ── Pagination ── */}
 				{graphType !== 'type' && filteredData.length > storesPerPage && (
-					<div className="flex flex-col sm:flex-row justify-between items-center gap-3 px-1">
-						<p className="text-xs sm:text-sm text-slate-400 order-2 sm:order-1">
-							Showing {((currentPage - 1) * storesPerPage) + 1}–{Math.min(currentPage * storesPerPage, filteredData.length)} of {filteredData.length} stores
+					<div className="flex flex-col items-center justify-between gap-3 border-t border-border px-4 py-3 sm:flex-row sm:px-5">
+						<p className="figures text-xs text-muted-foreground">
+							{(currentPage - 1) * storesPerPage + 1}–{Math.min(currentPage * storesPerPage, filteredData.length)} of {filteredData.length} {subjectLabel}
 						</p>
-						<div className="flex items-center gap-1.5 order-1 sm:order-2">
-							<Button
-								variant="outline"
-								size="sm"
-								onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
-								disabled={currentPage === 1}
-								className="border-slate-700 hover:bg-slate-800 text-slate-300 h-8 px-3 text-xs"
-							>
+						<div className="flex items-center gap-1">
+							<Button variant="outline" size="sm" onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))} disabled={currentPage === 1}>
 								Previous
 							</Button>
-							{Array.from({ length: Math.min(5, totalPages) }, (_, i) => i + 1).map(page => (
-								<Button
-									key={page}
-									variant={currentPage === page ? 'default' : 'outline'}
-									size="sm"
-									onClick={() => setCurrentPage(page)}
-									className={cn(
-										'h-8 w-8 p-0 text-xs',
-										currentPage === page
-											? 'bg-indigo-500 hover:bg-indigo-600 text-white border-transparent'
-											: 'border-slate-700 hover:bg-slate-800 text-slate-300'
-									)}
-								>
-									{page}
-								</Button>
-							))}
-							{totalPages > 5 && (
-								<>
-									<span className="text-slate-500 text-xs">…</span>
+							{Array.from({ length: totalPages }, (_, i) => i + 1)
+								.slice(Math.max(0, Math.min(currentPage - 3, totalPages - 5)), Math.max(5, Math.min(currentPage + 2, totalPages)))
+								.map((page) => (
 									<Button
-										variant={currentPage === totalPages ? 'default' : 'outline'}
+										key={page}
+										variant={currentPage === page ? 'default' : 'ghost'}
 										size="sm"
-										onClick={() => setCurrentPage(totalPages)}
-										className={cn(
-											'h-8 w-8 p-0 text-xs',
-											currentPage === totalPages
-												? 'bg-indigo-500 hover:bg-indigo-600 text-white border-transparent'
-												: 'border-slate-700 hover:bg-slate-800 text-slate-300'
-										)}
+										onClick={() => setCurrentPage(page)}
+										className="figures h-8 w-8 p-0"
+										aria-current={currentPage === page ? 'page' : undefined}
 									>
-										{totalPages}
+										{page}
 									</Button>
-								</>
-							)}
-							<Button
-								variant="outline"
-								size="sm"
-								onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
-								disabled={currentPage === totalPages}
-								className="border-slate-700 hover:bg-slate-800 text-slate-300 h-8 px-3 text-xs"
-							>
+								))}
+							<Button variant="outline" size="sm" onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages}>
 								Next
 							</Button>
 						</div>
 					</div>
 				)}
-
-			</div>
+			</section>
 		</div>
 	)
 }

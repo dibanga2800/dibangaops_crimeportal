@@ -53,6 +53,46 @@ module.exports = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // Semantic signals for loss-prevention data
+        loss: {
+          DEFAULT: "hsl(var(--loss) / <alpha-value>)",
+          soft: "hsl(var(--loss-soft) / <alpha-value>)",
+        },
+        recovered: {
+          DEFAULT: "hsl(var(--recovered) / <alpha-value>)",
+          soft: "hsl(var(--recovered-soft) / <alpha-value>)",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning) / <alpha-value>)",
+          soft: "hsl(var(--warning-soft) / <alpha-value>)",
+        },
+        info: {
+          DEFAULT: "hsl(var(--info) / <alpha-value>)",
+          soft: "hsl(var(--info-soft) / <alpha-value>)",
+        },
+        signal: "hsl(var(--signal) / <alpha-value>)",
+        ink: "hsl(var(--ink) / <alpha-value>)",
+        sidebar: {
+          DEFAULT: "hsl(var(--sidebar-background) / <alpha-value>)",
+          foreground: "hsl(var(--sidebar-foreground) / <alpha-value>)",
+          primary: "hsl(var(--sidebar-primary) / <alpha-value>)",
+          "primary-foreground": "hsl(var(--sidebar-primary-foreground) / <alpha-value>)",
+          accent: "hsl(var(--sidebar-accent) / <alpha-value>)",
+          "accent-foreground": "hsl(var(--sidebar-accent-foreground) / <alpha-value>)",
+          border: "hsl(var(--sidebar-border) / <alpha-value>)",
+          ring: "hsl(var(--sidebar-ring) / <alpha-value>)",
+        },
+      },
+      fontFamily: {
+        // Display face for titles and headline figures (app shell only).
+        display: ['"Plus Jakarta Sans"', '"Inter"', "ui-sans-serif", "system-ui", "sans-serif"],
+      },
+      boxShadow: {
+        // One quiet elevation for floating layers; panels stay flat.
+        float: "0 1px 2px hsl(210 30% 13% / 0.06), 0 8px 24px -6px hsl(210 30% 13% / 0.14)",
+      },
+      fontSize: {
+        "2xs": ["0.6875rem", { lineHeight: "1rem" }],
       },
       borderRadius: {
         lg: "var(--radius)",

@@ -21,8 +21,8 @@ export const DualListBox = ({
     <div className="flex gap-4 items-center">
       {/* Available Customers */}
       <div className="flex-1 border rounded-lg">
-        <div className="p-2 bg-gray-50 border-b rounded-t-lg">
-          <h3 className="font-medium text-sm">Available Customers</h3>
+        <div className="p-2 bg-muted/50 border-b rounded-t-lg">
+          <h3 className="font-medium text-sm">Available companies</h3>
         </div>
         <ScrollArea className="h-[200px] w-full">
           <div className="p-2">
@@ -30,14 +30,14 @@ export const DualListBox = ({
               <button
                 key={customer.id}
                 onClick={() => onAdd(customer)}
-                className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded-md text-sm transition-colors flex items-center justify-between group"
+                className="w-full text-left px-3 py-2 hover:bg-muted rounded-md text-sm transition-colors flex items-center justify-between group"
               >
                 <span>{customer.companyName}</span>
-                <ChevronRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-gray-500" />
+                <ChevronRight className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground" />
               </button>
             ))}
             {available.length === 0 && (
-              <div className="text-sm text-gray-500 text-center py-2">
+              <div className="text-sm text-muted-foreground text-center py-2">
                 No available customers
               </div>
             )}
@@ -77,8 +77,8 @@ export const DualListBox = ({
 
       {/* Selected Customers */}
       <div className="flex-1 border rounded-lg">
-        <div className="p-2 bg-gray-50 border-b rounded-t-lg">
-          <h3 className="font-medium text-sm">Assigned Customers</h3>
+        <div className="p-2 bg-muted/50 border-b rounded-t-lg">
+          <h3 className="font-medium text-sm">Assigned companies</h3>
         </div>
         <ScrollArea className="h-[200px] w-full">
           <div className="p-2">
@@ -86,14 +86,14 @@ export const DualListBox = ({
               <button
                 key={customer.id}
                 onClick={() => onRemove(customer)}
-                className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded-md text-sm transition-colors flex items-center justify-between group"
+                className="w-full text-left px-3 py-2 hover:bg-muted rounded-md text-sm transition-colors flex items-center justify-between group"
               >
-                <ChevronLeft className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-gray-500" />
+                <ChevronLeft className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground" />
                 <span>{customer.companyName}</span>
               </button>
             ))}
             {selected.length === 0 && (
-              <div className="text-sm text-gray-500 text-center py-2">
+              <div className="text-sm text-muted-foreground text-center py-2">
                 No assigned customers
               </div>
             )}

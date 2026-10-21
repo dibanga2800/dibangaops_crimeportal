@@ -1,130 +1,143 @@
 import React, { useState, useEffect } from 'react'
-import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { useTheme } from '../theme-provider'
+import { Outlet, useLocation } from 'react-router-dom'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
+import { X } from 'lucide-react'
 import { Footer } from '../Footer'
-import { ThemeToggle } from '../theme-toggle'
 import { SidebarNavigation } from '@/components/dashboard/SidebarNavigation'
-import { Logo } from './Logo'
-import { UserMenu } from './UserMenu'
-import { SearchBar } from './SearchBar'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Cog } from 'lucide-react'
 import { Header } from '../Header'
+import { ProductMark } from './ProductMark'
+import { SidebarUserCard } from './SidebarUserCard'
+import { MobileTabBar } from './MobileTabBar'
+import { useAppChrome } from '@/lib/app-chrome'
 
 interface LayoutProps {
   children?: React.ReactNode
 }
 
 /**
- * Main layout component that provides the application structure
- * Includes sidebar navigation, header, main content area, and footer
+ * Main application shell: ink sidebar, light top bar, paper content area.
  */
 export const Layout = ({ children }: LayoutProps) => {
+  useAppChrome()
   const [isMobileOpen, setIsMobileOpen] = useState(false)
   const location = useLocation()
-  const { theme } = useTheme()
-  const navigate = useNavigate()
+  const prefersReducedMotion = useReducedMotion()
 
   // Close mobile menu on route change
   useEffect(() => {
     setIsMobileOpen(false)
   }, [location.pathname])
 
-  return (
-    <div className="min-h-screen flex flex-col overflow-hidden">
-      <div className="flex flex-1">
-        {/* Desktop Sidebar - hidden on mobile */}
-        <aside className="hidden lg:flex w-64 flex-col fixed h-screen bg-gradient-to-b from-black via-slate-950 to-black text-white border-r border-slate-800 z-30">
-          {/* Logo Section */}
-          <div className="h-[var(--header-height)] border-b border-slate-800 px-6 pt-[27px] flex items-center">
-            <Logo />
-          </div>
+  // Close the mobile drawer with Escape
+  useEffect(() => {
+    if (!isMobileOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsMobileOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [isMobileOpen])
 
-          {/* Navigation */}
-          <div className="flex-1 overflow-y-auto">
-            <nav className="grid gap-1 p-2">
-              <SidebarNavigation
-                onNavigate={() => setIsMobileOpen(false)}
-                isMobileOpen={isMobileOpen}
-                onMobileClose={() => setIsMobileOpen(false)}
-              />
-            </nav>
-          </div>
-        </aside>
-
-        {/* Mobile Sidebar */}
+  const sidebarBody = (
+    <>
+      <div className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-sidebar-border px-5">
+        <ProductMark />
         {isMobileOpen && (
-          <aside className="fixed inset-y-0 left-0 z-50 lg:hidden w-64 flex flex-col bg-gradient-to-b from-black via-slate-950 to-black text-white border-r border-slate-800">
-            {/* Logo Section */}
-            <div className="h-[var(--header-height)] border-b border-slate-800 px-6 pt-[27px] flex items-center justify-between">
-              <Logo />
-              <button
-                onClick={() => setIsMobileOpen(false)}
-                className="p-1 rounded-md hover:bg-gray-600 transition-colors"
-                aria-label="Close sidebar"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Navigation */}
-            <div className="flex-1 overflow-y-auto">
-              <nav className="grid gap-1 p-2">
-                <SidebarNavigation
-                  onNavigate={() => setIsMobileOpen(false)}
-                  isMobileOpen={isMobileOpen}
-                  onMobileClose={() => setIsMobileOpen(false)}
-                />
-              </nav>
-            </div>
-          </aside>
-        )}
-
-        {/* Mobile Overlay */}
-        {isMobileOpen && (
-          <div 
-            className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          <button
+            type="button"
             onClick={() => setIsMobileOpen(false)}
-          />
+            className="!p-1.5 text-sidebar-foreground hover:bg-sidebar-accent hover:text-white lg:hidden"
+            aria-label="Close navigation"
+          >
+            <X className="h-5 w-5" />
+          </button>
         )}
+      </div>
 
-        {/* Main Content Area - full width on mobile, adjusted on desktop. min-w-0 allows flex child to shrink and prevent overflow. */}
-        <div className="flex-1 flex flex-col min-w-0 w-full lg:ml-64 overflow-x-hidden">
-          {/* Header */}
-          <Header onMobileMenuClick={() => setIsMobileOpen(!isMobileOpen)} />
+      <nav aria-label="Main" className="flex-1 overflow-y-auto overscroll-contain [scrollbar-color:hsl(var(--sidebar-accent))_transparent]">
+        <SidebarNavigation
+          onNavigate={() => setIsMobileOpen(false)}
+          isMobileOpen={isMobileOpen}
+          onMobileClose={() => setIsMobileOpen(false)}
+        />
+      </nav>
 
-          {/* Mobile Search */}
-          <SearchBar 
-            isOpen={false}
-            onClose={() => {}}
-          />
+      <SidebarUserCard />
+    </>
+  )
 
-          {/* Page Content */}
-          <main className="flex-1 bg-background text-foreground flex flex-col min-w-0 overflow-x-hidden">
-            <div className="flex-1 w-full min-w-0 max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 md:py-8">
-              <div className="grid gap-4 sm:gap-6 md:gap-8 min-w-0">
-                <AnimatePresence mode="wait" initial={false}>
-                  <motion.div
-                    key={location.pathname}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.15 }}
-                    className="h-full min-w-0"
-                  >
-                    {children || <Outlet />}
-                  </motion.div>
-                </AnimatePresence>
-              </div>
-            </div>
-          </main>
-          
-          {/* Footer - full width across all screen sizes */}
+  return (
+    <div className="min-h-screen bg-background">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[60] focus:rounded-md focus:bg-card focus:px-3 focus:py-2 focus:text-sm focus:shadow-float"
+      >
+        Skip to content
+      </a>
+
+      {/* Desktop sidebar */}
+      <aside className="fixed inset-y-0 left-0 z-30 sidebar-gloss hidden w-64 flex-col text-sidebar-foreground lg:flex">
+        {sidebarBody}
+      </aside>
+
+      {/* Mobile sidebar */}
+      <AnimatePresence>
+        {isMobileOpen && (
+          <>
+            <motion.div
+              key="scrim"
+              className="fixed inset-0 z-40 bg-ink/55 backdrop-blur-[2px] lg:hidden"
+              onClick={() => setIsMobileOpen(false)}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: prefersReducedMotion ? 0 : 0.15 }}
+              aria-hidden
+            />
+            <motion.aside
+              key="drawer"
+              className="fixed inset-y-0 left-0 z-50 sidebar-gloss flex w-72 max-w-[85vw] flex-col text-sidebar-foreground shadow-float lg:hidden"
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ duration: prefersReducedMotion ? 0 : 0.2, ease: [0.2, 0.8, 0.2, 1] }}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Navigation"
+            >
+              {sidebarBody}
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Main column. min-w-0 lets wide tables scroll inside their own containers. */}
+      <div className="flex min-h-screen min-w-0 flex-col overflow-x-clip lg:pl-64">
+        <Header />
+
+        <main id="main-content" tabIndex={-1} className="flex min-w-0 flex-1 flex-col outline-none">
+          <div className="mx-auto w-full min-w-0 max-w-[1480px] flex-1 px-4 pb-8 pt-6 sm:px-6 lg:px-8 lg:py-8">
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={location.pathname}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: prefersReducedMotion ? 0 : 0.12 }}
+                className="min-w-0"
+              >
+                {children || <Outlet />}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </main>
+
+        <div className="pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0">
           <Footer />
         </div>
       </div>
+
+      <MobileTabBar onOpenMenu={() => setIsMobileOpen(true)} />
     </div>
   )
 }

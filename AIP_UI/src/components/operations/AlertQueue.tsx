@@ -13,9 +13,9 @@ interface AlertQueueProps {
 }
 
 const severityColors: Record<string, string> = {
-	'high': 'bg-red-100 text-red-800 border-red-200',
-	'medium': 'bg-amber-100 text-amber-800 border-amber-200',
-	'low': 'bg-blue-100 text-blue-800 border-blue-200'
+	'high': 'bg-loss-soft text-loss border-loss/30',
+	'medium': 'bg-warning-soft text-warning border-warning/30',
+	'low': 'bg-info-soft text-info border-info/25'
 }
 
 const statusIcons: Record<AlertStatus, typeof Clock> = {
@@ -80,7 +80,7 @@ export const AlertQueue = ({ customerId, maxItems = 10 }: AlertQueueProps) => {
 			<CardHeader className="p-3 pb-2">
 				<div className="flex items-center justify-between">
 					<CardTitle className="text-sm flex items-center gap-1.5">
-						<Bell className="h-4 w-4 text-amber-500" />
+						<Bell className="h-4 w-4 text-warning" />
 						Alert Queue
 						{alerts.length > 0 && (
 							<Badge variant="destructive" className="text-xs ml-1">{alerts.length}</Badge>
@@ -104,7 +104,7 @@ export const AlertQueue = ({ customerId, maxItems = 10 }: AlertQueueProps) => {
 			<CardContent className="p-0">
 				{loading && (
 					<div className="flex items-center gap-2 text-sm text-muted-foreground p-4">
-						<div className="animate-spin h-4 w-4 border-2 border-amber-500 border-t-transparent rounded-full" />
+						<div className="animate-spin h-4 w-4 border-2 border-warning border-t-transparent rounded-full" />
 						Loading alerts...
 					</div>
 				)}
@@ -123,15 +123,15 @@ export const AlertQueue = ({ customerId, maxItems = 10 }: AlertQueueProps) => {
 								key={alert.alertInstanceId}
 								className={cn(
 									'p-3 hover:bg-muted/50 transition-colors',
-									alert.severity === 'high' && alert.status === 'new' && 'bg-red-50/50'
+									alert.severity === 'high' && alert.status === 'new' && 'bg-loss-soft/50'
 								)}
 							>
 								<div className="flex items-start gap-2">
 									<div className={cn(
 										'mt-0.5 flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full',
-										alert.severity === 'high' ? 'bg-red-500 text-white' :
-										alert.severity === 'medium' ? 'bg-amber-500 text-white' :
-										'bg-blue-500 text-white'
+										alert.severity === 'high' ? 'bg-destructive text-white' :
+										alert.severity === 'medium' ? 'bg-warning text-white' :
+										'bg-primary text-white'
 									)}>
 										<StatusIcon className="h-3 w-3" />
 									</div>
@@ -155,7 +155,7 @@ export const AlertQueue = ({ customerId, maxItems = 10 }: AlertQueueProps) => {
 												})}
 											</span>
 											{alert.incidentId && (
-												<span className="text-xs text-blue-600">
+												<span className="text-xs text-primary">
 													Incident #{alert.incidentId}
 												</span>
 											)}

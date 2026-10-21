@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { ShieldCheck } from 'lucide-react'
+import { ProductMark } from './ProductMark'
+import { useAppChrome } from '@/lib/app-chrome'
+import { cn } from '@/lib/utils'
 
 interface PublicPageShellProps {
 	title: string
@@ -14,49 +16,23 @@ const NAV_LINKS = [
 	{ to: '/terms', label: 'Terms' },
 ] as const
 
+/**
+ * Shell for the public, signed-out pages (About, Privacy, Terms).
+ * Reads like a short document: product mark, a left rail of sibling pages,
+ * and a single readable column.
+ */
 export const PublicPageShell = ({ title, description, children }: PublicPageShellProps) => {
+	useAppChrome()
 	const location = useLocation()
 
 	return (
-		<div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
-			<header className="border-b border-slate-200 bg-white">
+		<div className="flex min-h-screen flex-col bg-background text-foreground">
+			<header className="border-b border-border bg-card">
 				<div className="mx-auto flex h-16 max-w-5xl items-center justify-between gap-4 px-4 sm:px-6">
+					<ProductMark tone="light" to="/login" />
 					<Link
 						to="/login"
-						className="flex min-w-0 items-center gap-2.5 text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
-					>
-						<span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-slate-900">
-							<ShieldCheck className="h-4 w-4 text-brand-400" aria-hidden="true" />
-						</span>
-						<span className="truncate text-sm font-semibold tracking-tight">
-							DibangOps Crime Portal
-						</span>
-					</Link>
-
-					<nav
-						aria-label="Legal"
-						className="hidden items-center gap-5 text-[13px] text-slate-600 sm:flex"
-					>
-						{NAV_LINKS.map(({ to, label }) => {
-							const isActive = location.pathname === to
-							return (
-								<Link
-									key={to}
-									to={to}
-									aria-current={isActive ? 'page' : undefined}
-									className={`underline-offset-4 hover:text-slate-900 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
-										isActive ? 'font-semibold text-slate-900' : ''
-									}`}
-								>
-									{label}
-								</Link>
-							)
-						})}
-					</nav>
-
-					<Link
-						to="/login"
-						className="shrink-0 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-[13px] font-medium text-slate-800 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+						className="shrink-0 rounded-md border border-input bg-card px-3 py-1.5 text-[13px] font-medium text-foreground shadow-sm transition-colors hover:bg-muted"
 					>
 						Sign in
 					</Link>
@@ -64,43 +40,55 @@ export const PublicPageShell = ({ title, description, children }: PublicPageShel
 			</header>
 
 			<main className="flex-1">
-				<div className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 sm:py-14">
-					<div className="border border-slate-200 bg-white px-6 py-8 sm:px-10 sm:py-10">
-						<p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-							DibangOps Crime Portal
-						</p>
-						<h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 sm:text-[1.65rem]">
+				<div className="mx-auto grid w-full max-w-5xl gap-8 px-4 py-10 sm:px-6 sm:py-14 md:grid-cols-[10rem_minmax(0,1fr)]">
+					<nav aria-label="Legal" className="md:pt-1.5">
+						<ul className="flex gap-1 md:flex-col">
+							{NAV_LINKS.map(({ to, label }) => {
+								const isActive = location.pathname === to
+								return (
+									<li key={to}>
+										<Link
+											to={to}
+											aria-current={isActive ? 'page' : undefined}
+											className={cn(
+												'relative block rounded-md px-3 py-1.5 text-sm transition-colors',
+												isActive
+													? 'bg-card font-medium text-foreground shadow-[0_0_0_1px_hsl(var(--border))]'
+													: 'text-muted-foreground hover:text-foreground',
+											)}
+										>
+											{label}
+										</Link>
+									</li>
+								)
+							})}
+						</ul>
+					</nav>
+
+					<article className="min-w-0 max-w-[68ch]">
+						<h1 className="text-3xl font-semibold leading-tight tracking-tight text-foreground sm:text-[2.25rem]">
 							{title}
 						</h1>
 						{description ? (
-							<p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600">
-								{description}
-							</p>
+							<p className="mt-3 text-base leading-relaxed text-muted-foreground">{description}</p>
 						) : null}
-						<div className="mt-8 space-y-6 text-sm leading-relaxed text-slate-700">
+						<div
+							className={cn(
+								'mt-10 space-y-6 border-t border-border pt-8 text-[15px] leading-7 text-foreground/85',
+								'[&_h2]:text-base [&_h2]:font-semibold [&_h2]:text-foreground',
+								'[&_ul.divide-y]:overflow-hidden [&_ul.divide-y]:rounded-lg [&_ul.divide-y]:bg-card',
+							)}
+						>
 							{children}
 						</div>
-					</div>
+					</article>
 				</div>
 			</main>
 
-			<footer className="border-t border-slate-200 bg-white">
-				<div className="mx-auto flex max-w-5xl flex-col gap-2 px-4 py-5 text-[12px] text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-					<p>
-						&copy; {new Date().getFullYear()} DibangOps. Developed by David Ibanga.
-						{' '}Proprietary and confidential.
-					</p>
-					<nav className="flex items-center gap-4 sm:hidden" aria-label="Legal">
-						{NAV_LINKS.map(({ to, label }) => (
-							<Link
-								key={to}
-								to={to}
-								className="hover:text-slate-800 underline-offset-4 hover:underline"
-							>
-								{label}
-							</Link>
-						))}
-					</nav>
+			<footer className="border-t border-border">
+				<div className="mx-auto flex max-w-5xl flex-col gap-1 px-4 py-5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6">
+					<p>&copy; {new Date().getFullYear()} DibangOps. Developed by David Ibanga.</p>
+					<p>Proprietary and confidential.</p>
 				</div>
 			</footer>
 		</div>

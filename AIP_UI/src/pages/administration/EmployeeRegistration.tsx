@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import { PageHeader } from '@/components/layout/PageHeader'
 import { Card, CardContent } from "@/components/ui/card"
 import { EmployeeForm } from "@/components/employee-registration/EmployeeForm"
 import { EmployeesTable } from "@/components/employee-registration/EmployeesTable"
@@ -142,16 +143,13 @@ export default function EmployeeRegistration() {
   }
 
   return (
-    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gradient-to-br from-background via-muted/30 to-background">
-      <div className="container mx-auto px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12 py-3 sm:py-4 md:py-6 lg:py-8 xl:py-10 2xl:py-12 space-y-3 sm:space-y-4 md:space-y-6 xl:space-y-8 max-w-screen-2xl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-4">
-          <div className="space-y-1">
-            <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl 2xl:text-5xl font-bold text-foreground">
-              Employee Registration
-            </h1>
-            <p className="text-xs sm:text-sm md:text-base text-muted-foreground">Register and manage employee information</p>
-          </div>
-        </div>
+    <div className="w-full">
+      <div className="space-y-6">
+        <PageHeader
+          title="Employees"
+          description="Register store detectives, officers and managers, and keep their details current."
+          className="pb-0"
+        />
 
         {/* Employee Stats - Responsive Grid */}
         <div className="w-full overflow-hidden">
@@ -160,13 +158,13 @@ export default function EmployeeRegistration() {
 
         {/* Main Content - Responsive Container */}
         <div className="w-full">
-            <Card className="bg-card/95 backdrop-blur-lg border border-border shadow-md">
-            <CardContent className="p-3 sm:p-4 md:p-6">
+            <Card>
+            <CardContent className="p-4 sm:p-5">
                 {isInitialLoading ? (
                   <div className="flex items-center justify-center py-8">
                     <div className="text-center">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
-                      <p className="mt-2 text-sm text-muted-foreground">Loading employees...</p>
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                      <p className="mt-2 text-sm text-muted-foreground">Loading employees…</p>
                     </div>
                   </div>
                 ) : (
@@ -200,8 +198,8 @@ export default function EmployeeRegistration() {
         }}>
           <DialogContent className="max-w-[95vw] sm:max-w-[500px] xl:max-w-[800px] p-4 sm:p-6 xl:p-8 max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="text-base sm:text-lg md:text-xl">
-                {selectedEmployee ? "Edit Employee" : "New Employee"}
+              <DialogTitle>
+                {selectedEmployee ? "Edit employee" : "New employee"}
               </DialogTitle>
               <DialogDescription className="text-xs sm:text-sm">
                 {selectedEmployee

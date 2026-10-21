@@ -6,13 +6,6 @@
  */
 
 import { Fragment, useMemo, useState, useCallback } from 'react'
-import {
-	Card,
-	CardContent,
-	CardDescription,
-	CardHeader,
-	CardTitle,
-} from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
 	Table,
@@ -22,7 +15,7 @@ import {
 	TableHeader,
 	TableRow,
 } from '@/components/ui/table'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Segmented } from '@/components/common/Segmented'
 import type { DeploymentRecommendation, StoreRiskRanking } from '@/types/analytics'
 import { cn } from '@/lib/utils'
 import {
@@ -43,42 +36,18 @@ interface ResourceDeploymentEngineProps {
 	loading?: boolean
 }
 
-const PRIORITY_COLORS = {
-	low: '#10b981',
-	medium: '#f59e0b',
-	high: '#ef4444',
-	critical: '#dc2626',
-}
-
-const RISK_COLORS = {
-	low: '#10b981',
-	medium: '#f59e0b',
-	high: '#ef4444',
-	critical: '#dc2626',
-}
-
-const OFFICER_TYPE_COLORS = {
-	'store detectives': '#8b5cf6',
-}
-
-const LPM_COLOR = '#3b82f6'
-
-const getPriorityColor = (priority: string) => {
-	return PRIORITY_COLORS[priority as keyof typeof PRIORITY_COLORS] || PRIORITY_COLORS.low
-}
-
-const getRiskColor = (riskLevel: string) => {
-	return RISK_COLORS[riskLevel as keyof typeof RISK_COLORS] || RISK_COLORS.low
-}
+const RISK_BG: Record<string, string> = { low: 'bg-recovered', medium: 'bg-warning', high: 'bg-loss', critical: 'bg-loss' }
+const RISK_TEXT: Record<string, string> = { low: 'text-recovered', medium: 'text-warning', high: 'text-loss', critical: 'text-loss' }
+const PRIORITY_BG = RISK_BG
 
 const getTrendIcon = (trend: string) => {
 	switch (trend) {
 		case 'increasing':
-			return <TrendingUp className="h-4 w-4 text-red-500" />
+			return <TrendingUp className="h-4 w-4 text-loss" />
 		case 'decreasing':
-			return <TrendingDown className="h-4 w-4 text-green-500" />
+			return <TrendingDown className="h-4 w-4 text-recovered" />
 		default:
-			return <Minus className="h-4 w-4 text-gray-500" />
+			return <Minus className="h-4 w-4 text-muted-foreground" />
 	}
 }
 
@@ -107,7 +76,7 @@ const StoreRiskDetailPanel = ({ store, rank }: StoreRiskDetailPanelProps) => {
 	return (
 		<div
 			id={`store-risk-detail-${rank}`}
-			className="rounded-lg border border-border bg-muted/30 p-4 sm:p-5 space-y-4"
+			className="space-y-4 rounded-md border border-border bg-card p-4 sm:p-5"
 			role="region"
 			aria-label={`Risk details for ${store.storeName}`}
 		>
@@ -122,20 +91,14 @@ const StoreRiskDetailPanel = ({ store, rank }: StoreRiskDetailPanelProps) => {
 						{store.incidentCount !== 1 ? 's' : ''} in period
 					</p>
 				</div>
-				<Badge
-					variant="outline"
-					style={{
-						borderColor: getRiskColor(store.riskLevel),
-						color: getRiskColor(store.riskLevel),
-					}}
-				>
-					{store.riskLevel.toUpperCase()} · {riskPercent}/100
-				</Badge>
+				<span className={cn('figures text-sm font-semibold capitalize', RISK_TEXT[store.riskLevel] ?? 'text-foreground')}>
+					{store.riskLevel} · {riskPercent}/100
+				</span>
 			</div>
 
 			{store.reason && (
 				<div>
-					<p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">
+					<p className="text-xs font-medium text-muted-foreground mb-1">
 						Summary
 					</p>
 					<p className="text-sm text-foreground leading-relaxed">{store.reason}</p>
@@ -144,7 +107,7 @@ const StoreRiskDetailPanel = ({ store, rank }: StoreRiskDetailPanelProps) => {
 
 			{store.riskFactors && store.riskFactors.length > 0 && (
 				<div>
-					<p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
+					<p className="text-xs font-medium text-muted-foreground mb-2">
 						How the risk score was calculated
 					</p>
 					<div className="rounded-md border border-border overflow-hidden">
@@ -252,374 +215,212 @@ export const ResourceDeploymentEngine = ({
 		[handleStoreRowClick]
 	)
 
+	const [view, setView] = useState<'schedule' | 'ranking' | 'by-day'>('schedule')
+	const scheduled = useMemo(
+		() => [...criticalRecommendations.slice(0, 5), ...highPriorityRecommendations.slice(0, 10)],
+		[criticalRecommendations, highPriorityRecommendations],
+	)
+
 	if (loading) {
-		return (
-			<Card>
-				<CardHeader>
-					<CardTitle>Resource Deployment Engine</CardTitle>
-					<CardDescription>Loading deployment recommendations...</CardDescription>
-				</CardHeader>
-			</Card>
-		)
+		return <div className="h-[420px] animate-pulse rounded-lg border border-border bg-card" aria-busy="true" aria-label="Loading deployment recommendations" />
 	}
 
+	const officerChips = (type: string, lpm?: boolean) => (
+		<span className="flex flex-wrap items-center gap-1.5">
+			<span className="rounded border border-border px-1.5 py-0.5 text-xs font-medium capitalize text-foreground">{type}</span>
+			{lpm ? <span className="rounded border border-border px-1.5 py-0.5 text-xs font-medium text-foreground">LPM</span> : null}
+		</span>
+	)
+
 	return (
-		<Card className="w-full shadow-sm border-2">
-			<CardHeader className="pb-4">
-				<CardTitle className="flex items-center gap-2">
-					<Shield className="h-5 w-5" />
-					Resource Deployment Engine
-				</CardTitle>
-				<CardDescription>
-					Deployment times and store risk from incidents in the selected date range
-				</CardDescription>
-			</CardHeader>
-			<CardContent className="pt-6">
-				{/* Strategy Summary */}
-				<Card className="mb-6 bg-blue-50 border-blue-200">
-					<CardHeader>
-						<CardTitle className="text-base flex items-center gap-2">
-							<AlertTriangle className="h-4 w-4 text-blue-600" />
-							Overall Strategy
-						</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<p className="text-sm text-gray-700">{data.overallStrategy}</p>
-						<p className="text-xs text-gray-500 mt-2">
-							Last updated: {new Date(data.lastUpdated).toLocaleString()}
-						</p>
-					</CardContent>
-				</Card>
+		<section className="rounded-lg border border-border bg-card">
+			<div className="flex flex-wrap items-start justify-between gap-3 p-4 sm:p-5">
+				<div>
+					<h3 className="flex items-center gap-2 text-base font-semibold text-foreground">
+						<Shield className="h-4 w-4 text-muted-foreground" aria-hidden />
+						Where and when to deploy
+					</h3>
+					<p className="mt-0.5 text-[13px] text-muted-foreground">Store detective cover and store risk, from incidents in the selected period.</p>
+				</div>
+				<Segmented<'schedule' | 'ranking' | 'by-day'>
+					ariaLabel="Deployment view"
+					size="sm"
+					value={view}
+					onChange={setView}
+					options={[
+						{ value: 'schedule', label: 'Priority times' },
+						{ value: 'ranking', label: 'Store ranking' },
+						{ value: 'by-day', label: 'By day' },
+					]}
+				/>
+			</div>
 
-				<Tabs defaultValue="recommendations" className="w-full">
-					<TabsList className="grid w-full grid-cols-3">
-						<TabsTrigger value="recommendations">Time Recommendations</TabsTrigger>
-						<TabsTrigger value="risk-ranking">Store Risk Ranking</TabsTrigger>
-						<TabsTrigger value="by-day">Recommendations by Day</TabsTrigger>
-					</TabsList>
+			{data.overallStrategy ? (
+				<figure className="mx-4 mb-4 border-l-2 border-primary pl-4 sm:mx-5">
+					<blockquote className="text-[15px] leading-relaxed text-foreground">{data.overallStrategy}</blockquote>
+					<figcaption className="mt-1 text-xs text-muted-foreground">
+						Recommended strategy · updated {new Date(data.lastUpdated).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}
+					</figcaption>
+				</figure>
+			) : null}
 
-					<TabsContent value="recommendations" className="space-y-4">
-						{/* Critical Priority */}
-						{criticalRecommendations.length > 0 && (
-							<div>
-								<h3 className="font-semibold mb-3 flex items-center gap-2 text-red-600">
-									<AlertTriangle className="h-4 w-4" />
-									Critical Priority Deployments
-								</h3>
-								<div className="space-y-2">
-									{criticalRecommendations.slice(0, 5).map((rec, index) => (
-										<Card key={index} className="border-red-200 bg-red-50">
-											<CardContent className="p-4">
-												<div className="flex items-center justify-between">
-													<div className="flex items-center gap-4">
-													<div>
-														<div className="font-semibold">{rec.day}</div>
-														<div className="text-sm text-gray-600">{rec.hourLabel}</div>
-													</div>
-													<div className="flex gap-2">
-														<Badge
-															style={{
-																backgroundColor: OFFICER_TYPE_COLORS[rec.officerType],
-																color: 'white',
-															}}
-														>
-															{rec.officerType}
-														</Badge>
-														{rec.recommendedLPM && (
-															<Badge
-																style={{
-																	backgroundColor: LPM_COLOR,
-																	color: 'white',
-																}}
-															>
-																LPM
-															</Badge>
-														)}
-													</div>
-													<div className="text-sm">
-														<span className="font-medium">{rec.recommendedOfficers}</span>{' '}
-														officers
-													</div>
-													<p
-														className="text-sm text-gray-600 max-w-md line-clamp-2"
-														title={rec.reason}
-													>
-														{rec.reason}
-													</p>
-													</div>
-													<div className="text-right">
-														<div className="text-sm font-semibold text-red-600">
-															~{rec.expectedIncidents} incidents expected
-														</div>
-													</div>
-												</div>
-											</CardContent>
-										</Card>
-									))}
-								</div>
-							</div>
-						)}
-
-						{/* High Priority */}
-						{highPriorityRecommendations.length > 0 && (
-							<div>
-								<h3 className="font-semibold mb-3 flex items-center gap-2 text-orange-600">
-									<Clock className="h-4 w-4" />
-									High Priority Deployments
-								</h3>
-								<div className="border rounded-lg">
-									<Table>
-										<TableHeader>
-											<TableRow>
-												<TableHead>Day</TableHead>
-												<TableHead>Time</TableHead>
-												<TableHead>Officer Type</TableHead>
-												<TableHead>Recommended</TableHead>
-												<TableHead>Expected Incidents</TableHead>
-												<TableHead>Reason</TableHead>
-											</TableRow>
-										</TableHeader>
-										<TableBody>
-											{highPriorityRecommendations.slice(0, 10).map((rec, index) => (
-												<TableRow key={index}>
-													<TableCell className="font-medium">{rec.day}</TableCell>
-													<TableCell>{rec.hourLabel}</TableCell>
-													<TableCell>
-														<div className="flex gap-2 flex-wrap">
-															<Badge
-																variant="outline"
-																style={{
-																	borderColor: OFFICER_TYPE_COLORS[rec.officerType],
-																	color: OFFICER_TYPE_COLORS[rec.officerType],
-																}}
-															>
-																{rec.officerType}
-															</Badge>
-															{rec.recommendedLPM && (
-																<Badge
-																	variant="outline"
-																	style={{
-																		borderColor: LPM_COLOR,
-																		color: LPM_COLOR,
-																	}}
-																>
-																	LPM
-																</Badge>
-															)}
-														</div>
-													</TableCell>
-													<TableCell>
-														<div className="flex items-center gap-1">
-															<Users className="h-4 w-4" />
-															{rec.recommendedOfficers}
-														</div>
-													</TableCell>
-													<TableCell>{rec.expectedIncidents}</TableCell>
-													<TableCell className="text-sm text-gray-600">
-														{rec.reason}
-													</TableCell>
-												</TableRow>
-											))}
-										</TableBody>
-									</Table>
-								</div>
-							</div>
-						)}
-					</TabsContent>
-
-					<TabsContent value="risk-ranking" className="space-y-6 mt-6">
-						<p className="text-sm text-muted-foreground">
-							Click a store for risk breakdown and deployment detail.
-						</p>
-						<div className="border rounded-lg overflow-hidden">
-							<Table>
-								<TableHeader>
-									<TableRow>
-										<TableHead className="w-10" aria-label="Expand" />
-										<TableHead>Rank</TableHead>
-										<TableHead>Store</TableHead>
-										<TableHead>Risk Score</TableHead>
-										<TableHead>Risk Level</TableHead>
-										<TableHead>Incidents</TableHead>
-										<TableHead>Trend</TableHead>
-										<TableHead>Officer Type</TableHead>
-										<TableHead>Recommended Hours</TableHead>
-									</TableRow>
-								</TableHeader>
-								<TableBody>
-									{data.storeRankings.map((store, index) => {
-										const rowKey = getStoreRowKey(store, index)
-										const isExpanded = expandedStoreKey === rowKey
-										const rank = index + 1
-
-										return (
-											<Fragment key={rowKey}>
-												<TableRow
-													tabIndex={0}
-													role="button"
-													aria-expanded={isExpanded}
-													aria-controls={`store-risk-detail-${rank}`}
-													onClick={() => handleStoreRowClick(rowKey)}
-													onKeyDown={(event) => handleStoreRowKeyDown(event, rowKey)}
+			{view === 'schedule' && (
+				<div className="border-t border-border">
+					{scheduled.length === 0 ? (
+						<p className="px-4 py-8 text-center text-sm text-muted-foreground sm:px-5">No critical or high priority times in this period.</p>
+					) : (
+						<ul className="divide-y divide-border">
+							{scheduled.map((rec, index) => {
+								const critical = rec.priority === 'critical'
+								return (
+									<li key={`${rec.day}-${rec.hourLabel}-${index}`} className="grid gap-x-6 gap-y-2 px-4 py-3.5 sm:px-5 md:grid-cols-[9rem_minmax(0,1fr)_auto] md:items-center">
+										<div className="flex items-center gap-3 md:block">
+											<p className="text-sm font-semibold text-foreground">{rec.day}</p>
+											<p className="figures text-sm text-muted-foreground">{rec.hourLabel}</p>
+										</div>
+										<div className="min-w-0 space-y-1.5">
+											<div className="flex flex-wrap items-center gap-2">
+												<span
 													className={cn(
-														'cursor-pointer transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-														isExpanded && 'bg-muted/40'
+														'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold',
+														critical ? 'bg-loss-soft text-loss' : 'bg-warning-soft text-warning',
 													)}
 												>
-													<TableCell className="text-muted-foreground">
-														{isExpanded ? (
-															<ChevronDown className="h-4 w-4" aria-hidden />
-														) : (
-															<ChevronRight className="h-4 w-4" aria-hidden />
-														)}
-													</TableCell>
-													<TableCell className="font-bold">#{rank}</TableCell>
-													<TableCell className="font-medium">{store.storeName}</TableCell>
-											<TableCell>
-												<div className="flex items-center gap-2">
-													<div className="w-24 bg-gray-200 rounded-full h-2">
-														<div
-															className="h-2 rounded-full"
-															style={{
-																width: `${Math.min(store.riskScore * 100, 100)}%`,
-																backgroundColor: getRiskColor(store.riskLevel),
-															}}
-														/>
-													</div>
-													<span className="text-sm font-medium">{(store.riskScore * 100).toFixed(0)}</span>
-												</div>
-											</TableCell>
-											<TableCell>
-												<Badge
-													variant="outline"
-													style={{
-														borderColor: getRiskColor(store.riskLevel),
-														color: getRiskColor(store.riskLevel),
-													}}
-												>
-													{store.riskLevel.toUpperCase()}
-												</Badge>
-											</TableCell>
-											<TableCell>{store.incidentCount}</TableCell>
-											<TableCell>{getTrendIcon(store.trend)}</TableCell>
-											<TableCell>
-												<div className="flex gap-2 flex-wrap">
-													<Badge
-														variant="outline"
-														style={{
-															borderColor: OFFICER_TYPE_COLORS[store.recommendedOfficerType],
-															color: OFFICER_TYPE_COLORS[store.recommendedOfficerType],
-														}}
-													>
-														{store.recommendedOfficerType}
-													</Badge>
-													{store.recommendedLPM && (
-														<Badge
-															variant="outline"
-															style={{
-																borderColor: LPM_COLOR,
-																color: LPM_COLOR,
-															}}
-														>
-															LPM
-														</Badge>
-													)}
-												</div>
-											</TableCell>
-											<TableCell>
-												<div className="flex flex-wrap gap-1">
-													{store.recommendedHours.slice(0, 3).map((hour) => (
-														<Badge key={hour} variant="secondary" className="text-xs">
-															{hour}
-														</Badge>
-													))}
-													{store.recommendedHours.length > 3 && (
-														<Badge variant="secondary" className="text-xs">
-															+{store.recommendedHours.length - 3}
-														</Badge>
-													)}
-												</div>
-											</TableCell>
-												</TableRow>
-												{isExpanded && (
-													<TableRow key={`${rowKey}-detail`} className="hover:bg-transparent">
-														<TableCell colSpan={9} className="p-3 sm:p-4 bg-muted/20">
-															<StoreRiskDetailPanel store={store} rank={rank} />
-														</TableCell>
-													</TableRow>
-												)}
-											</Fragment>
-										)
-									})}
-								</TableBody>
-							</Table>
-						</div>
-					</TabsContent>
+													<span className={cn('h-1.5 w-1.5 rounded-full', critical ? 'bg-loss' : 'bg-warning')} aria-hidden />
+													{critical ? 'Critical' : 'High'}
+												</span>
+												{officerChips(rec.officerType, rec.recommendedLPM)}
+												<span className="figures flex items-center gap-1 text-xs text-muted-foreground">
+													<Users className="h-3.5 w-3.5" aria-hidden />
+													{rec.recommendedOfficers} {rec.recommendedOfficers === 1 ? 'officer' : 'officers'}
+												</span>
+											</div>
+											<p className="text-[13px] leading-5 text-muted-foreground">{rec.reason}</p>
+										</div>
+										<p className="figures text-sm md:text-right">
+											<span className={cn('font-display text-xl font-semibold', critical ? 'text-loss' : 'text-foreground')}>~{rec.expectedIncidents}</span>
+											<span className="ml-1 text-xs text-muted-foreground">incidents expected</span>
+										</p>
+									</li>
+								)
+							})}
+						</ul>
+					)}
+				</div>
+			)}
 
-					<TabsContent value="by-day" className="space-y-6 mt-6">
-						{Object.entries(recommendationsByDay).map(([day, recommendations]) => (
-							<Card key={day}>
-								<CardHeader>
-									<CardTitle className="text-base">{day}</CardTitle>
-									<CardDescription>
-										{recommendations.length} deployment recommendations
-									</CardDescription>
-								</CardHeader>
-								<CardContent>
-									<div className="space-y-2">
-										{recommendations
-											.sort((a, b) => b.priority.localeCompare(a.priority))
-											.map((rec, index) => (
-												<div
-													key={index}
-													className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors"
-												>
-													<div className="flex items-center gap-4">
-														<div className="text-sm font-medium">{rec.hourLabel}</div>
-														<div className="flex gap-2">
-															<Badge
-																style={{
-																	backgroundColor: OFFICER_TYPE_COLORS[rec.officerType],
-																	color: 'white',
-																}}
-															>
-																{rec.officerType}
-															</Badge>
-															{rec.recommendedLPM && (
-																<Badge
-																	style={{
-																		backgroundColor: LPM_COLOR,
-																		color: 'white',
-																	}}
-																>
-																	LPM
-																</Badge>
-															)}
+			{view === 'ranking' && (
+				<div className="border-t border-border">
+					<p className="px-4 pt-3 text-[13px] text-muted-foreground sm:px-5">Select a store to see what drives its score.</p>
+					<div className="mt-2 overflow-x-auto">
+						<Table>
+							<TableHeader>
+								<TableRow>
+									<TableHead className="w-8" aria-label="Expand" />
+									<TableHead className="w-12">Rank</TableHead>
+									<TableHead>Store</TableHead>
+									<TableHead className="min-w-[10rem]">Risk</TableHead>
+									<TableHead className="text-right">Incidents</TableHead>
+									<TableHead>Trend</TableHead>
+									<TableHead>Cover</TableHead>
+									<TableHead>Hours</TableHead>
+								</TableRow>
+							</TableHeader>
+							<TableBody>
+								{data.storeRankings.map((store, index) => {
+									const rowKey = getStoreRowKey(store, index)
+									const isExpanded = expandedStoreKey === rowKey
+									const rank = index + 1
+									return (
+										<Fragment key={rowKey}>
+											<TableRow
+												tabIndex={0}
+												role="button"
+												aria-expanded={isExpanded}
+												aria-controls={`store-risk-detail-${rank}`}
+												onClick={() => handleStoreRowClick(rowKey)}
+												onKeyDown={(event) => handleStoreRowKeyDown(event, rowKey)}
+												className={cn(
+													'cursor-pointer transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+													isExpanded && 'bg-muted/40',
+												)}
+											>
+												<TableCell className="text-muted-foreground">
+													{isExpanded ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronRight className="h-4 w-4" aria-hidden />}
+												</TableCell>
+												<TableCell className="figures text-muted-foreground">{rank}</TableCell>
+												<TableCell className="font-medium">{store.storeName}</TableCell>
+												<TableCell>
+													<div className="flex items-center gap-2.5">
+														<div className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
+															<div className={cn('h-full rounded-full', RISK_BG[store.riskLevel] ?? 'bg-recovered')} style={{ width: `${Math.min(store.riskScore * 100, 100)}%` }} />
 														</div>
-														<div className="text-sm">
-															{rec.recommendedOfficers} officers
-														</div>
-														<div className="text-xs text-gray-600">{rec.reason}</div>
+														<span className="figures w-7 text-right text-sm font-semibold">{(store.riskScore * 100).toFixed(0)}</span>
+														<span className={cn('text-xs font-semibold capitalize', RISK_TEXT[store.riskLevel] ?? 'text-muted-foreground')}>{store.riskLevel}</span>
 													</div>
-													<Badge
-														variant="outline"
-														style={{
-															borderColor: getPriorityColor(rec.priority),
-															color: getPriorityColor(rec.priority),
-														}}
-													>
-														{rec.priority}
-													</Badge>
+												</TableCell>
+												<TableCell className="figures text-right">{store.incidentCount}</TableCell>
+												<TableCell>
+													<span className="flex items-center gap-1.5" title={getTrendLabel(store.trend)}>
+														{getTrendIcon(store.trend)}
+														<span className="sr-only">{getTrendLabel(store.trend)}</span>
+													</span>
+												</TableCell>
+												<TableCell>{officerChips(store.recommendedOfficerType, store.recommendedLPM)}</TableCell>
+												<TableCell>
+													<span className="figures text-sm text-muted-foreground">
+														{store.recommendedHours.slice(0, 3).join(', ')}
+														{store.recommendedHours.length > 3 ? ` +${store.recommendedHours.length - 3}` : ''}
+													</span>
+												</TableCell>
+											</TableRow>
+											{isExpanded && (
+												<TableRow className="hover:bg-transparent">
+													<TableCell colSpan={8} className="bg-muted/20 p-3 sm:p-4">
+														<StoreRiskDetailPanel store={store} rank={rank} />
+													</TableCell>
+												</TableRow>
+											)}
+										</Fragment>
+									)
+								})}
+							</TableBody>
+						</Table>
+					</div>
+				</div>
+			)}
+
+			{view === 'by-day' && (
+				<div className="grid gap-3 border-t border-border p-4 sm:p-5 md:grid-cols-2">
+					{Object.entries(recommendationsByDay).map(([day, recommendations]) => (
+						<div key={day} className="rounded-md border border-border">
+							<div className="flex items-baseline justify-between border-b border-border bg-muted/40 px-3 py-2">
+								<p className="text-sm font-semibold text-foreground">{day}</p>
+								<p className="figures text-xs text-muted-foreground">
+									{recommendations.length} {recommendations.length === 1 ? 'slot' : 'slots'}
+								</p>
+							</div>
+							<ul className="divide-y divide-border">
+								{[...recommendations]
+									.sort((a, b) => b.priority.localeCompare(a.priority))
+									.map((rec, index) => (
+										<li key={index} className="flex items-start gap-3 px-3 py-2.5">
+											<span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', PRIORITY_BG[rec.priority] ?? 'bg-muted-foreground')} title={`${rec.priority} priority`} />
+											<div className="min-w-0 flex-1">
+												<div className="flex flex-wrap items-center gap-2">
+													<span className="figures text-sm font-medium text-foreground">{rec.hourLabel}</span>
+													{officerChips(rec.officerType, rec.recommendedLPM)}
+													<span className="figures text-xs text-muted-foreground">{rec.recommendedOfficers} officers</span>
 												</div>
-											))}
-									</div>
-								</CardContent>
-							</Card>
-						))}
-					</TabsContent>
-				</Tabs>
-			</CardContent>
-		</Card>
+												<p className="mt-0.5 text-xs text-muted-foreground">{rec.reason}</p>
+											</div>
+										</li>
+									))}
+							</ul>
+						</div>
+					))}
+				</div>
+			)}
+		</section>
 	)
 }
-

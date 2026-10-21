@@ -14,7 +14,7 @@ export function ContactSearchBar({ searchQuery, setSearchQuery }: ContactSearchB
         placeholder="Search contacts by name, company, or email..."
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
-        className="pl-12 h-12 text-lg bg-white shadow-sm border-2 border-border/50 hover:border-primary/50 focus-visible:ring-primary"
+        className="pl-12 h-12 text-lg bg-card shadow-sm border-2 border-border/50 hover:border-primary/50 focus-visible:ring-primary"
       />
     </div>
   )

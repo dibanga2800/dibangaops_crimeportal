@@ -12,17 +12,17 @@ export function AddressStep({ onNext, onBack }: AddressStepProps) {
     <div className="space-y-6">
       <div className="space-y-4">
         <div>
-          <Label>House Name</Label>
+          <Label>House name</Label>
           <Input />
         </div>
 
         <div>
-          <Label>Number And Street</Label>
+          <Label>Number and street</Label>
           <Input />
         </div>
 
         <div>
-          <Label>Village Or Suburb</Label>
+          <Label>Village or suburb</Label>
           <Input />
         </div>
 
@@ -37,7 +37,7 @@ export function AddressStep({ onNext, onBack }: AddressStepProps) {
         </div>
 
         <div>
-          <Label>Post Code</Label>
+          <Label>Post code</Label>
           <Input />
         </div>
 

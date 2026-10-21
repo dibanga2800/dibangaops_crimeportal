@@ -85,8 +85,8 @@ export function EmployeesTable({
                 </div>
                 <span className={`flex-shrink-0 px-2 py-1 rounded-full text-xs font-medium ${
                   employee.employeeStatus === 'Active' 
-                    ? 'bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-200'
-                    : 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-200'
+                    ? 'bg-recovered-soft text-recovered'
+                    : 'bg-loss-soft text-loss'
                 }`}>
                   {employee.employeeStatus}
                 </span>
@@ -121,7 +121,7 @@ export function EmployeesTable({
                   variant="outline"
                   size="sm"
                   onClick={() => setEmployeeToDelete(employee)}
-                  className="h-9 px-3 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:text-red-200 dark:hover:bg-red-950/40"
+                  className="h-9 px-3 text-xs text-loss hover:bg-loss-soft hover:text-loss"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
@@ -162,8 +162,8 @@ export function EmployeesTable({
                     <TableCell className="py-3">
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                         employee.employeeStatus === 'Active' 
-                          ? 'bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-200'
-                          : 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-200'
+                          ? 'bg-recovered-soft text-recovered'
+                          : 'bg-loss-soft text-loss'
                       }`}>
                         {employee.employeeStatus}
                       </span>
@@ -174,18 +174,18 @@ export function EmployeesTable({
                           variant="ghost"
                           size="icon"
                           onClick={() => onEditEmployee(employee)}
-                          className="h-8 w-8 p-0 hover:bg-purple-100 dark:hover:bg-purple-950/40"
+                          className="h-8 w-8 p-0 hover:bg-accent"
                         >
-                          <Pencil className="h-4 w-4 text-purple-600" />
+                          <Pencil className="h-4 w-4" />
                           <span className="sr-only">Edit</span>
                         </Button>
                         <Button
                           variant="ghost"
                           size="icon"
                           onClick={() => setEmployeeToDelete(employee)}
-                          className="h-8 w-8 p-0 hover:bg-red-100 dark:hover:bg-red-950/40"
+                          className="h-8 w-8 p-0 text-muted-foreground hover:bg-loss-soft hover:text-loss"
                         >
-                          <Trash2 className="h-4 w-4 text-red-600" />
+                          <Trash2 className="h-4 w-4" />
                           <span className="sr-only">Delete</span>
                         </Button>
                       </div>
@@ -233,7 +233,7 @@ export function EmployeesTable({
                   setEmployeeToDelete(null)
                 }
               }}
-              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+              className="bg-destructive hover:bg-destructive/90 focus:ring-red-600"
             >
               Delete Employee
             </AlertDialogAction>

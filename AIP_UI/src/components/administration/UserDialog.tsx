@@ -28,7 +28,7 @@ export const UserDialog = ({
         <div className="max-h-[80vh] overflow-y-auto pr-2">
           <DialogHeader>
             <DialogTitle>
-              {user ? 'Edit User' : 'Create New User'}
+              {user ? 'Edit user' : 'New user'}
             </DialogTitle>
             <DialogDescription>
               Enter the user details below. All required fields must be completed.

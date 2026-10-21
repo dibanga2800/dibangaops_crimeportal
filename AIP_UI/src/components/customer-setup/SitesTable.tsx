@@ -147,7 +147,7 @@ export function SitesTable({ customerId, onEdit, onDataChange, updateTrigger }: 
     return (
       <div className="space-y-4">
         <div className="flex justify-between items-center">
-          <h2 className="text-lg font-semibold">Sites</h2>
+          <h2 className="text-lg font-semibold">Stores</h2>
         </div>
         <div className="text-center py-8 text-muted-foreground">
           Please select a customer to view sites
@@ -163,7 +163,7 @@ export function SitesTable({ customerId, onEdit, onDataChange, updateTrigger }: 
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search sites by name, SIN number, address..."
+            placeholder="Search stores by name, SIN or address"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-8"
@@ -173,7 +173,7 @@ export function SitesTable({ customerId, onEdit, onDataChange, updateTrigger }: 
 
       {safeSites.length === 0 ? (
         <div className="text-center py-8 text-sm text-muted-foreground">
-          No sites found for this company. Click "Add Site" to create one.
+          No stores yet. Use Add store to create one.
         </div>
       ) : filteredSites.length === 0 ? (
         <div className="text-center py-8 text-sm text-muted-foreground">
@@ -193,7 +193,7 @@ export function SitesTable({ customerId, onEdit, onDataChange, updateTrigger }: 
                     )}
                   </div>
                   <div className="flex gap-1.5 flex-shrink-0">
-                    <Badge variant={site.coreSiteYN ? "default" : "secondary"} className={`text-xs ${site.coreSiteYN ? "bg-purple-600" : ""}`}>
+                    <Badge variant={site.coreSiteYN ? "default" : "secondary"} className={`text-xs ${site.coreSiteYN ? "bg-primary" : ""}`}>
                       {site.coreSiteYN ? "Core" : "Site"}
                     </Badge>
                   </div>
@@ -206,7 +206,7 @@ export function SitesTable({ customerId, onEdit, onDataChange, updateTrigger }: 
                   </div>
                   <div>
                     <span className="text-muted-foreground block mb-0.5">Status</span>
-                    <Badge variant={site.recordIsDeletedYN ? "destructive" : "default"} className={`text-xs ${site.recordIsDeletedYN ? "bg-red-600" : "bg-green-600"}`}>
+                    <Badge variant={site.recordIsDeletedYN ? "destructive" : "default"} className={`text-xs ${site.recordIsDeletedYN ? "bg-destructive" : "bg-recovered"}`}>
                       {site.recordIsDeletedYN ? "Inactive" : "Active"}
                     </Badge>
                   </div>
@@ -245,7 +245,7 @@ export function SitesTable({ customerId, onEdit, onDataChange, updateTrigger }: 
                     variant="outline"
                     size="sm"
                     onClick={() => handleDeleteClick(site)}
-                    className="h-9 px-3 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:text-red-200 dark:hover:bg-red-950/40"
+                    className="h-9 px-3 text-xs text-loss hover:bg-loss-soft hover:text-loss"
                     disabled={isLoading}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -298,12 +298,12 @@ export function SitesTable({ customerId, onEdit, onDataChange, updateTrigger }: 
                       <span className="text-sm">{site.telephoneNumber || "No telephone"}</span>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={site.coreSiteYN ? "default" : "secondary"} className={site.coreSiteYN ? "bg-purple-600" : ""}>
+                      <Badge variant={site.coreSiteYN ? "default" : "secondary"} className={site.coreSiteYN ? "bg-primary" : ""}>
                         {site.coreSiteYN ? "Core Site" : "Site"}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={site.recordIsDeletedYN ? "destructive" : "default"} className={site.recordIsDeletedYN ? "bg-red-600" : "bg-green-600"}>
+                      <Badge variant={site.recordIsDeletedYN ? "destructive" : "default"} className={site.recordIsDeletedYN ? "bg-destructive" : "bg-recovered"}>
                         {site.recordIsDeletedYN ? "Inactive" : "Active"}
                       </Badge>
                     </TableCell>
@@ -324,7 +324,7 @@ export function SitesTable({ customerId, onEdit, onDataChange, updateTrigger }: 
                           variant="outline"
                           size="sm"
                           onClick={() => handleDeleteClick(site)}
-                          className="text-red-600 hover:text-red-700 dark:text-red-300 dark:hover:text-red-200"
+                          className="text-loss hover:text-loss"
                           disabled={isLoading}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -377,7 +377,7 @@ export function SitesTable({ customerId, onEdit, onDataChange, updateTrigger }: 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Site</AlertDialogTitle>
+            <AlertDialogTitle>Delete store</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete "{siteToDelete?.locationName}"? This action cannot be undone.
             </AlertDialogDescription>
@@ -386,7 +386,7 @@ export function SitesTable({ customerId, onEdit, onDataChange, updateTrigger }: 
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteConfirm}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-destructive hover:bg-destructive/90"
               disabled={isLoading}
             >
               {isLoading ? "Deleting..." : "Delete"}

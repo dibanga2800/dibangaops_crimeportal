@@ -1,434 +1,149 @@
-import { Link, useNavigate } from "react-router-dom"
 import React, { useState } from "react"
-import { 
-	DropdownMenu, 
-	DropdownMenuContent, 
-	DropdownMenuItem, 
-	DropdownMenuLabel, 
-	DropdownMenuSeparator, 
-	DropdownMenuTrigger
+import { useNavigate } from "react-router-dom"
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuLabel,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
-import { 
-  Bell, 
-  LogOut, 
-  Settings, 
-  User, 
-  ChevronDown, 
-  Search, 
-  Menu,
-  Home,
-  Calendar,
-  FileText,
-  AlertTriangle,
-  Users,
-  ClipboardCheck,
-  Building,
-  PieChart,
-  BarChart4,
-  Radio,
-  UserCog,
-  FileWarning,
-  FileSearch,
-  Building2,
-  Store,
-  CalendarRange,
-  BadgeCheck,
-  Key,
-  HelpCircle,
-  Wallet,
-  FileTextIcon,
-  BarChart3,
-	ShieldCheck,
-	Boxes,
-	GraduationCap,
-	BookOpen,
-	LayoutGrid,
-	BarChart2,
-	LayoutDashboard,
-	UserPlus,
-	DollarSign,
-	GitBranch,
-	CheckSquare,
-	TrendingUp,
-	Brain,
-	ScanBarcode,
-	Package,
-} from "lucide-react"
-import { usePageAccess, PageAccessContext } from "@/contexts/PageAccessContext"
-import { Input } from "@/components/ui/input"
+import { LogOut, Settings, User, ChevronDown, Search, X } from "lucide-react"
+import { PageAccessContext } from "@/contexts/PageAccessContext"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from "@/components/ui/sheet"
-import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion"
-import { BUTTON_STYLES, COMMON_CLASSES, MOBILE_HEADER } from "@/constants/header";
-import { NotificationBell } from "./header/NotificationBell";
-import { Logo } from "./header/Logo";
-import { SearchInput } from "./header/SearchInput";
-import { UserAvatar } from "./common/UserAvatar";
+import { NotificationBell } from "./header/NotificationBell"
+import { Logo } from "./header/Logo"
+import { SearchInput } from "./header/SearchInput"
+import { UserAvatar } from "./common/UserAvatar"
+import { formatRole } from "./layout/SidebarUserCard"
 import { useAuth } from "@/contexts/AuthContext"
 import { useCustomerSelection } from "@/contexts/CustomerSelectionContext"
 import { useAlertCount } from "@/hooks/useAlertCount"
 import { setAlertCountCustomerScope } from "@/lib/alert-count/alert-count-store"
 
-// Define navigation items structure
-interface NavItem {
-  title: string;
-  href: string;
-  icon: React.ReactNode;
-  roles: string[]; // Kept for compatibility, but visibility is driven by PageAccessContext.hasAccess
+
+const UserProfileDropdown = ({ name, email, isAdministrator }: { name: string; email?: string; isAdministrator: boolean }) => {
+	const navigate = useNavigate()
+	const { logout } = useAuth()
+
+	const handleLogout = () => {
+		logout()
+		navigate("/login")
+	}
+
+	return (
+		<DropdownMenuContent align="end" className="w-60">
+			<DropdownMenuLabel className="py-2">
+				<span className="block truncate text-sm font-medium text-foreground">{name}</span>
+				{email ? <span className="block truncate text-xs font-normal text-muted-foreground">{email}</span> : null}
+			</DropdownMenuLabel>
+			<DropdownMenuSeparator />
+			<DropdownMenuItem onClick={() => navigate("/profile")}>
+				<User className="mr-2 h-4 w-4" />
+				<span>Profile</span>
+			</DropdownMenuItem>
+			{isAdministrator && (
+				<DropdownMenuItem onClick={() => navigate("/settings")}>
+					<Settings className="mr-2 h-4 w-4" />
+					<span>Role access</span>
+				</DropdownMenuItem>
+			)}
+			<DropdownMenuSeparator />
+			<DropdownMenuItem onClick={handleLogout}>
+				<LogOut className="mr-2 h-4 w-4" />
+				<span>Sign out</span>
+			</DropdownMenuItem>
+		</DropdownMenuContent>
+	)
 }
 
-// Header props interface
-interface HeaderProps {
-  onMobileMenuClick?: () => void;
-}
+const iconButton =
+	"!h-9 !w-9 !p-0 text-muted-foreground hover:bg-muted hover:text-foreground"
 
-// UserProfileDropdown component
-const UserProfileDropdown = () => {
-  const navigate = useNavigate();
-  const { logout } = useAuth();
-  
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
+/** Top bar. On phones, navigation lives in the bottom tab bar (see MobileTabBar). */
+export function Header() {
+	const [isSearchExpanded, setIsSearchExpanded] = useState(false)
+	const pageAccessContext = React.useContext(PageAccessContext)
+	const { user: authenticatedUser } = useAuth()
+	const { selectedCustomerId } = useCustomerSelection()
 
-  return (
-    <DropdownMenuContent align="end" className="w-56">
-      <DropdownMenuLabel>My Account</DropdownMenuLabel>
-      <DropdownMenuSeparator />
-      <DropdownMenuItem onClick={() => navigate('/profile')}>
-        <User className="mr-2 h-4 w-4" />
-        <span>Profile</span>
-      </DropdownMenuItem>
-      <DropdownMenuItem onClick={() => navigate('/settings')}>
-        <Settings className="mr-2 h-4 w-4" />
-        <span>Settings</span>
-      </DropdownMenuItem>
-      <DropdownMenuSeparator />
-      <DropdownMenuItem onClick={handleLogout}>
-        <LogOut className="mr-2 h-4 w-4" />
-        <span>Log out</span>
-      </DropdownMenuItem>
-    </DropdownMenuContent>
-  );
-};
+	React.useEffect(() => {
+		setAlertCountCustomerScope(selectedCustomerId)
+	}, [selectedCustomerId])
 
-// NavigationMenu component
-const NavigationMenu = ({ 
-  navigationItems, 
-  hasAccess, 
-  handleNavigate 
-}: {
-  navigationItems: Array<{
-    section: string;
-    items: NavItem[];
-  }>;
-  hasAccess: (item: NavItem) => boolean;
-  handleNavigate: () => void;
-}) => (
-  <Accordion type="multiple" defaultValue={navigationItems.map(section => section.section)} className="w-full">
-    {navigationItems.map((section) => {
-      const accessibleItems = section.items.filter(hasAccess);
-      if (accessibleItems.length === 0) return null;
-      
-      return (
-        <AccordionItem key={section.section} value={section.section} className="border-blue-900">
-          <AccordionTrigger className="text-white hover:text-blue-200 hover:no-underline py-3">
-            {section.section}
-          </AccordionTrigger>
-          <AccordionContent className="space-y-1 pt-2">
-            {accessibleItems.map((item) => (
-              <Link
-                key={item.href}
-                to={item.href}
-                onClick={handleNavigate}
-                className="flex items-center gap-3 px-3 py-2 text-blue-200 hover:text-white hover:bg-blue-800 rounded-md transition-colors"
-              >
-                {item.icon}
-                <span className="text-sm">{item.title}</span>
-              </Link>
-            ))}
-          </AccordionContent>
-        </AccordionItem>
-      );
-    })}
-  </Accordion>
-);
+	const { alertCount, isLoading: alertCountLoading } = useAlertCount()
 
-export function Header({ onMobileMenuClick }: HeaderProps) {
-  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
-  const pageAccessContext = React.useContext(PageAccessContext);
-  const { user: authenticatedUser } = useAuth();
-  const { selectedCustomerId } = useCustomerSelection();
+	if (!pageAccessContext) {
+		return (
+			<header className="sticky top-0 z-30 h-16 border-b border-border bg-card">
+				<div className="flex h-full items-center px-4 text-sm text-muted-foreground">Loading…</div>
+			</header>
+		)
+	}
 
-  React.useEffect(() => {
-    setAlertCountCustomerScope(selectedCustomerId);
-  }, [selectedCustomerId]);
+	const displayName = authenticatedUser
+		? `${authenticatedUser.firstName ?? ""} ${authenticatedUser.lastName ?? ""}`.trim()
+		: ""
+	const roleLabel = formatRole(authenticatedUser?.role)
+	const isAdministrator = authenticatedUser?.role?.toLowerCase() === "administrator"
 
-  const { alertCount, isLoading: alertCountLoading } = useAlertCount();
+	return (
+		<header className="sticky top-0 z-30 w-full border-b border-border bg-card/90 backdrop-blur supports-[backdrop-filter]:bg-card/80">
+			<div className="flex h-16 items-center gap-2 px-3 sm:px-6 lg:gap-4 lg:px-8">
+				{/* Client brand */}
+				<div className={`flex min-w-0 items-center ${isSearchExpanded ? "hidden sm:flex" : ""}`}>
+					<Logo variant="desktop" />
+				</div>
 
-  const isAuthenticated = !!authenticatedUser;
-  
-  // If context is not available, return minimal header
-  if (!pageAccessContext) {
-    return (
-      <header className="h-[var(--header-height)] border-b border-gray-200 dark:border-gray-800 bg-header-bg dark:bg-gray-900 text-header-text dark:text-white">
-        <div className="flex items-center justify-between h-full px-4">
-          <div className="text-sm text-gray-500 dark:text-gray-300">Loading...</div>
-        </div>
-      </header>
-    );
-  }
-  
-	const { currentRole, hasAccess: hasPageAccess } = pageAccessContext;
+				{/* Search */}
+				<div className="hidden flex-1 justify-center md:flex">
+					<div className="w-full max-w-md">
+						<SearchInput />
+					</div>
+				</div>
+				<div className={`flex-1 md:hidden ${isSearchExpanded ? "" : "hidden"}`}>
+					{isSearchExpanded && <SearchInput autoFocus />}
+				</div>
+				<div className={`flex-1 md:hidden ${isSearchExpanded ? "hidden" : ""}`} />
 
-  // Define navigation sections to match SidebarNavigation
-  const navigationItems = [
-    {
-      section: "Quick Access",
-      items: [
-        {
-          title: "Dashboard",
-          href: "/",
-          icon: <LayoutGrid className="h-4 w-4" />,
-          roles: ['administrator', 'manager', 'security-officer', 'store'],
-        },
-        {
-          title: "Data Analytics Hub",
-          href: "/analytics/data-analytics-hub",
-          icon: <Brain className="h-4 w-4" />,
-          roles: ['administrator', 'manager', 'security-officer', 'store'],
-        },
-        {
-          title: "Alert Rules",
-          href: "/operations/alert-rules",
-          icon: <Bell className="h-4 w-4" />,
-          roles: ['administrator', 'manager', 'security-officer', 'store'],
-        }
-      ]
-    },
-    {
-      section: "Administration",
-      items: [
-        {
-          title: "User Setup",
-          href: "/administration/user-setup",
-          icon: <User className="h-4 w-4" />,
-          roles: ['administrator'],
-        },
-        {
-          title: "Employee Registration",
-          href: "/administration/employee-registration",
-          icon: <Users className="h-4 w-4" />,
-          roles: ['administrator'],
-        },
-        {
-          title: "Company Setup",
-          href: "/administration/customer-setup",
-          icon: <Building2 className="h-4 w-4" />,
-          roles: ['administrator'],
-        },
-        {
-          title: "Barcode catalog import",
-          href: "/administration/barcode-catalog-import",
-          icon: <ScanBarcode className="h-4 w-4" />,
-          roles: ['administrator', 'manager'],
-        },
-        {
-          title: "Product catalog",
-          href: "/administration/product-catalog",
-          icon: <Package className="h-4 w-4" />,
-          roles: ['administrator', 'manager'],
-        }
-      ]
-    },
-    {
-      section: "Operations",
-      items: [
-        {
-          title: "Incident Report",
-          href: "/operations/incident-report",
-          icon: <FileWarning className="h-4 w-4" />,
-          roles: ['administrator', 'manager', 'security-officer', 'store'],
-        },
-        {
-          title: "Incident Graph",
-          href: "/operations/incident-graph",
-          icon: <BarChart2 className="h-4 w-4" />,
-          roles: ['administrator', 'manager', 'security-officer', 'store'],
-        },
-        {
-          title: "Crime Intelligence",
-          href: "/operations/crime-intelligence",
-          icon: <TrendingUp className="h-4 w-4" />,
-          roles: ['administrator', 'manager', 'security-officer', 'store'],
-        }
-      ]
-    }
-  ];
+				{/* Actions */}
+				<div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+					<Button
+						type="button"
+						variant="ghost"
+						size="icon"
+						onClick={() => setIsSearchExpanded((v) => !v)}
+						className={`${iconButton} md:hidden`}
+						aria-label={isSearchExpanded ? "Close search" : "Search"}
+						aria-expanded={isSearchExpanded}
+					>
+						{isSearchExpanded ? <X className="h-5 w-5" /> : <Search className="h-5 w-5" />}
+					</Button>
+					<ThemeToggle />
+					<NotificationBell alertCount={alertCount} isLoading={alertCountLoading} alertCustomerId={selectedCustomerId} />
 
-  // Toggle mobile search
-  const toggleSearch = () => {
-    setIsSearchExpanded(!isSearchExpanded);
-  };
-  
-  // Check if user has access to a navigation item
-  const hasAccess = (item: NavItem) => {
-		// Use centralized PageAccessContext.hasAccess so behavior matches sidebar
-		// Normalize "/" to "/dashboard" for access checks
-		const path = item.href === '/' ? '/dashboard' : item.href;
-		return hasPageAccess(path);
-  };
+					<span aria-hidden className="mx-1 hidden h-6 w-px bg-border sm:block" />
 
-  // Handle navigation and close sheet
-  const handleNavigate = () => {
-    setIsSheetOpen(false);
-  };
-
-  return (
-    <header className="sticky top-0 z-50 w-full bg-header-bg dark:bg-gray-900 border-b border-header-border dark:border-gray-800 shadow-sm text-header-text dark:text-white">
-      {/* Mobile Header */}
-      <div className={`w-full bg-header-bg dark:bg-gray-900 flex lg:hidden justify-between items-center ${MOBILE_HEADER.bar}`}>
-        {/* Left: Hamburger Menu */}
-        <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-          <SheetTrigger asChild>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className={`${MOBILE_HEADER.iconButton} text-header-text dark:text-white hover:bg-white/10`}
-              aria-label="Menu"
-            >
-              <Menu className={MOBILE_HEADER.icon} />
-            </Button>
-          </SheetTrigger>
-          
-          <SheetContent side="left" className={COMMON_CLASSES.sheetContent}>
-            <SheetHeader className="p-6 border-b border-blue-900 shrink-0">
-              <SheetTitle className="text-left flex items-center justify-center text-white">
-                <img 
-                  src="/HOEnbg.png" 
-                  alt="Heart of England Co-operative"
-                  className="h-17 w-auto" 
-                />
-              </SheetTitle>
-              <SheetDescription className="sr-only">
-                Navigation menu for accessing different sections of the Security Management application
-              </SheetDescription>
-            </SheetHeader>
-            
-						<div className="flex-1 overflow-y-auto">
-              <div className="px-5 py-4">
-                <NavigationMenu 
-                  navigationItems={navigationItems}
-                  hasAccess={hasAccess}
-                  handleNavigate={handleNavigate}
-                />
-              </div>
-            </div>
-            
-            {/* User profile section at bottom of menu */}
-            <div className="p-6 border-t border-blue-900 shrink-0">
-              <div className="flex items-center gap-3">
-                <UserAvatar size="md" showBorder={true} />
-                <div className="text-sm">
-                  <p className="font-medium text-white">
-                    {isAuthenticated ? `${authenticatedUser.firstName} ${authenticatedUser.lastName}` : 'David Ibanga'}
-                  </p>
-                  <p className="text-xs text-blue-200">
-                    {isAuthenticated ? authenticatedUser.role : 'IT manager'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </SheetContent>
-        </Sheet>
-
-        {/* Center: Logo and Search Toggle */}
-        <div className="flex min-w-0 flex-1 items-center justify-center gap-1.5 px-1">
-          {!isSearchExpanded && (
-            <img 
-              src="/HOEnbg.png" 
-              alt="Heart of England Co-operative"
-              className={MOBILE_HEADER.logo}
-            />
-          )}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleSearch}
-            className={`${MOBILE_HEADER.iconButton} text-header-text dark:text-white hover:bg-white/10`}
-            aria-label="Search"
-          >
-            <Search className={MOBILE_HEADER.icon} />
-          </Button>
-        </div>
-
-        {/* Right: Theme, notifications and user profile */}
-        <div className={`flex items-center ${MOBILE_HEADER.actions} text-header-text dark:text-white`}>
-          <ThemeToggle size="compact" />
-          <NotificationBell alertCount={alertCount} isLoading={alertCountLoading} alertCustomerId={selectedCustomerId} />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
+					<DropdownMenu>
+						<DropdownMenuTrigger asChild>
+							<button
 								type="button"
-								className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+								className="!flex items-center gap-2.5 !rounded-md !px-1.5 !py-1 text-left hover:bg-muted"
 								aria-label="Account menu"
 							>
-                <UserAvatar size="sm" showBorder={true} className="h-8 w-8" />
-              </button>
-            </DropdownMenuTrigger>
-            <UserProfileDropdown />
-          </DropdownMenu>
-        </div>
-      </div>
-
-      {/* Desktop Header */}
-      <div className={COMMON_CLASSES.desktopHeader}>
-        {/* Left: Logo */}
-        <div className="flex items-center text-header-text dark:text-white">
-          <Logo variant="desktop" />
-        </div>
-        
-        {/* Center: Search */}
-        <div className="flex-1 flex justify-center items-center">
-          <div className="relative max-w-md w-full">
-            <SearchInput />
-          </div>
-        </div>
-        
-		{/* Right: Theme, notifications and user profile */}
-				<div className="flex items-center gap-4 text-header-text dark:text-white">
-          <ThemeToggle />
-          <NotificationBell alertCount={alertCount} isLoading={alertCountLoading} alertCustomerId={selectedCustomerId} />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <div className="flex items-center gap-2 cursor-pointer">
-                <UserAvatar size="md" showBorder={true} />
-                <div className="text-sm">
-                  <p className="font-medium text-header-text dark:text-white">
-                    {isAuthenticated ? `${authenticatedUser.firstName} ${authenticatedUser.lastName}` : 'David Ibanga'}
-                  </p>
-                  <p className="text-xs text-header-text/70 dark:text-white/70">
-                    {isAuthenticated ? authenticatedUser.role : 'IT manager'}
-                  </p>
-                </div>
-								<ChevronDown className="h-4 w-4 text-header-text/70 dark:text-white/70" />
-              </div>
-            </DropdownMenuTrigger>
-            <UserProfileDropdown />
-          </DropdownMenu>
-        </div>
-      </div>
-
-      {/* Mobile Search Overlay */}
-      {isSearchExpanded && (
-        <div className="lg:hidden absolute top-full left-0 right-0 bg-header-bg dark:bg-gray-900 border-b border-header-border dark:border-gray-800 p-4 z-40">
-          <SearchInput />
-        </div>
-      )}
-    </header>
-  )
-} 
+								<UserAvatar size="sm" />
+								<span className="hidden min-w-0 leading-tight sm:block">
+									<span className="block max-w-[11rem] truncate text-sm font-medium text-foreground">{displayName}</span>
+									<span className="block max-w-[11rem] truncate text-xs font-normal text-muted-foreground">{roleLabel}</span>
+								</span>
+								<ChevronDown className="hidden h-4 w-4 text-muted-foreground sm:block" />
+							</button>
+						</DropdownMenuTrigger>
+						<UserProfileDropdown name={displayName} email={authenticatedUser?.email} isAdministrator={isAdministrator} />
+					</DropdownMenu>
+				</div>
+			</div>
+		</header>
+	)
+}

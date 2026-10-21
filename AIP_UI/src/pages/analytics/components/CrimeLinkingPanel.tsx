@@ -24,6 +24,7 @@ import {
 	TableRow,
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { SUBTABS_LIST, SUBTABS_TRIGGER } from './moduleStyles'
 import type { CrimeLinkingData } from '@/types/analytics'
 import { formatOffenderDisplayName } from '../offenderDisplay'
 import { formatConfidencePercent, getClusterTitle } from '../crimeLinkingDisplay'
@@ -91,48 +92,42 @@ export const CrimeLinkingPanel = ({
 	}
 
 	return (
-		<Card className="w-full shadow-sm border-2">
-			<CardHeader className="pb-4">
-				<CardTitle className="flex items-center gap-2">
-					<LinkIcon className="h-5 w-5" />
-					Crime Linking Panel
+		<Card className="w-full">
+			<CardHeader className="p-4 pb-3 sm:p-5 sm:pb-3">
+				<CardTitle className="flex items-center gap-2 text-base">
+					<LinkIcon className="h-4 w-4 text-muted-foreground" aria-hidden />
+					Linked incidents
 				</CardTitle>
 				<CardDescription>
-					Cluster incidents linked to same offender/features and see chains of incidents
+					Incidents that look connected by offender, description or products, and the chains they form.
 				</CardDescription>
 			</CardHeader>
-			<CardContent className="pt-6">
+			<CardContent className="p-4 pt-0 sm:p-5 sm:pt-0">
 				{/* Summary */}
-				<div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-					<Card>
-						<CardContent className="p-4">
-							<div className="text-sm text-gray-500">Total Clusters</div>
-							<div className="text-2xl font-bold">{data.clusters.length}</div>
-						</CardContent>
-					</Card>
-					<Card>
-						<CardContent className="p-4">
-							<div className="text-sm text-gray-500">Offender Chains</div>
-							<div className="text-2xl font-bold">{data.offenderChains.length}</div>
-						</CardContent>
-					</Card>
-					<Card>
-						<CardContent className="p-4">
-							<div className="text-sm text-gray-500">Linked Incidents</div>
-							<div className="text-2xl font-bold">{data.totalLinkedIncidents}</div>
-						</CardContent>
-					</Card>
-				</div>
+				<dl className="mb-4 grid grid-cols-3 overflow-hidden rounded-md border border-border">
+	<div className="px-3 py-2.5 shadow-[1px_0_0_0_hsl(var(--border))] sm:px-4">
+		<dt className="truncate text-xs text-muted-foreground">Total clusters</dt>
+		<dd className="figures font-display text-xl font-semibold text-foreground">{data.clusters.length}</dd>
+	</div>
+	<div className="px-3 py-2.5 shadow-[1px_0_0_0_hsl(var(--border))] sm:px-4">
+		<dt className="truncate text-xs text-muted-foreground">Offender chains</dt>
+		<dd className="figures font-display text-xl font-semibold text-foreground">{data.offenderChains.length}</dd>
+	</div>
+	<div className="px-3 py-2.5 shadow-[1px_0_0_0_hsl(var(--border))] sm:px-4">
+		<dt className="truncate text-xs text-muted-foreground">Linked incidents</dt>
+		<dd className="figures font-display text-xl font-semibold text-foreground">{data.totalLinkedIncidents}</dd>
+	</div>
+</dl>
 
 				<Tabs defaultValue="clusters" className="w-full">
-					<TabsList className="grid w-full grid-cols-2">
-						<TabsTrigger value="clusters">Incident Clusters</TabsTrigger>
-						<TabsTrigger value="chains">Offender Chains</TabsTrigger>
+					<TabsList className={SUBTABS_LIST}>
+						<TabsTrigger className={SUBTABS_TRIGGER} value="clusters">Clusters</TabsTrigger>
+						<TabsTrigger className={SUBTABS_TRIGGER} value="chains">Offender chains</TabsTrigger>
 					</TabsList>
 
 					<TabsContent value="clusters" className="space-y-4">
 						{sortedClusters.length === 0 && (
-							<div className="rounded-lg border border-dashed p-8 text-center text-sm text-gray-500">
+							<div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
 								No incident clusters in the selected period.
 							</div>
 						)}
@@ -151,7 +146,7 @@ export const CrimeLinkingPanel = ({
 													{new Date(cluster.dateRange.end).toLocaleDateString()}
 												</CardDescription>
 												{cluster.reason && (
-													<p className="text-sm text-gray-600 mt-2">{cluster.reason}</p>
+													<p className="text-sm text-muted-foreground mt-2">{cluster.reason}</p>
 												)}
 											</div>
 											<div className="flex items-center gap-2">
@@ -190,7 +185,7 @@ export const CrimeLinkingPanel = ({
 									{isExpanded && (
 										<CardContent className="space-y-4">
 											<div>
-												<h4 className="font-semibold mb-2">Common Features</h4>
+												<h4 className="font-semibold mb-2">Common features</h4>
 												<div className="flex flex-wrap gap-2">
 													{cluster.commonFeatures.map((feature) => (
 														<Badge key={feature} variant="outline">
@@ -200,7 +195,7 @@ export const CrimeLinkingPanel = ({
 												</div>
 											</div>
 											<div>
-												<h4 className="font-semibold mb-2">Linked Incidents</h4>
+												<h4 className="font-semibold mb-2">Linked incidents</h4>
 												<div className="border rounded-lg">
 													<Table>
 														<TableHeader>
@@ -256,7 +251,7 @@ export const CrimeLinkingPanel = ({
 
 					<TabsContent value="chains" className="space-y-6 mt-6">
 						{sortedChains.length === 0 && (
-							<div className="rounded-lg border border-dashed p-8 text-center text-sm text-gray-500">
+							<div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
 								No offender chains (repeat offenders with 2+ incidents) in this period.
 							</div>
 						)}
@@ -304,21 +299,21 @@ export const CrimeLinkingPanel = ({
 										<CardContent className="space-y-4">
 											{/* Timeline */}
 											<div>
-												<h4 className="font-semibold mb-3">Incident Timeline</h4>
+												<h4 className="font-semibold mb-3">Incident timeline</h4>
 												<div className="space-y-2">
 													{chain.timeline.map((event, index) => (
 														<div
 															key={index}
-															className="flex items-start gap-4 p-3 border rounded-lg hover:bg-gray-50 transition-colors"
+															className="flex items-start gap-4 p-3 border rounded-lg hover:bg-muted/50 transition-colors"
 														>
-															<div className="flex items-center gap-2 text-sm text-gray-500 min-w-[140px] shrink-0">
+															<div className="flex items-center gap-2 text-sm text-muted-foreground min-w-[140px] shrink-0">
 																<Calendar className="h-4 w-4" />
 																<span>{event.dateTimeLabel || event.date}</span>
 															</div>
-															<ArrowRight className="h-4 w-4 text-gray-400 shrink-0 mt-0.5" />
+															<ArrowRight className="h-4 w-4 text-muted-foreground/80 shrink-0 mt-0.5" />
 															<div className="flex-1 min-w-0 space-y-1">
 																<div className="flex items-center gap-2 flex-wrap">
-																	<MapPin className="h-4 w-4 text-gray-400 shrink-0" />
+																	<MapPin className="h-4 w-4 text-muted-foreground/80 shrink-0" />
 																	<span className="font-medium">{event.store || '—'}</span>
 																	<Badge variant="outline" className="text-xs">
 																		{event.incidentType}
@@ -336,7 +331,7 @@ export const CrimeLinkingPanel = ({
 
 											{/* Detailed Incidents */}
 											<div>
-												<h4 className="font-semibold mb-2">All Incidents</h4>
+												<h4 className="font-semibold mb-2">All incidents</h4>
 												<div className="border rounded-lg">
 													<Table>
 														<TableHeader>

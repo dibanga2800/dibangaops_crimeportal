@@ -33,7 +33,7 @@ export function UserDialog({ open, onOpenChange, user, onSubmit }: UserDialogPro
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[95vw] sm:max-w-[500px] p-4 sm:p-6">
         <DialogHeader>
-          <DialogTitle className="text-lg md:text-xl">{user ? 'Edit User' : 'Create New User'}</DialogTitle>
+          <DialogTitle>{user ? 'Edit user' : 'New user'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6 py-2 sm:py-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
