@@ -145,6 +145,12 @@ interface AdminDashboardProps {
   viewRole?: 'administrator' | 'manager' | 'security-officer' | 'store'
 }
 
+// Incident list paging. The API returns at most 100 rows per page; the
+// dashboard reads up to MAX_PAGES so its panels cover the whole filter.
+const PAGE_SIZE = 100
+const PARALLEL_PAGES = 5
+const MAX_PAGES = 100
+
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrator' }) => {
   const navigate = useNavigate();
   const chartTheme = useChartTheme();
@@ -293,7 +299,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
           toDate?: string
         } = {
           page: 1,
-          pageSize: 1000
+          // The API caps pages at 100, so the dashboard reads every page below.
+          pageSize: PAGE_SIZE
         }
         if (effectiveCustomerId != null) {
           incidentQueryParams.customerId = String(effectiveCustomerId)
@@ -311,21 +318,42 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
           incidentQueryParams.toDate = toDate
         }
 
+        // Every panel (stores, times, trends, risk) is built from these rows,
+        // so read all pages for the filters rather than just the newest 100.
+        // Otherwise the panels disagree with the totals and the incident graph.
+        type ResWithAlternates = IncidentsResponse & { Data?: unknown[]; items?: unknown[] }
+        const rowsOf = (r: unknown): unknown[] => {
+          if (Array.isArray(r)) return r
+          const res = r as ResWithAlternates
+          if (Array.isArray(res?.data)) return res.data
+          if (Array.isArray(res?.Data)) return res.Data
+          if (Array.isArray(res?.items)) return res.items
+          return []
+        }
         const response = await incidentsApi.getIncidents(incidentQueryParams);
         const typed = response as IncidentsResponse
-        
-        // Extract incidents from response (handle data, Data, items formats)
-        type ResWithAlternates = IncidentsResponse & { Data?: unknown[]; items?: unknown[] }
-        const res = response as ResWithAlternates
-        let incidents: unknown[] = []
-        if (Array.isArray(response)) {
-          incidents = response
-        } else if (res.data && Array.isArray(res.data)) {
-          incidents = res.data
-        } else if (res.Data && Array.isArray(res.Data)) {
-          incidents = res.Data
-        } else if (res.items && Array.isArray(res.items)) {
-          incidents = res.items
+        let incidents: unknown[] = rowsOf(response)
+        const totalCount = typed.pagination?.totalCount ?? incidents.length
+        const pageCount = Math.min(MAX_PAGES, Math.ceil(totalCount / PAGE_SIZE))
+        if (pageCount > 1 && incidents.length >= PAGE_SIZE) {
+          const rest: unknown[][] = []
+          for (let start = 2; start <= pageCount; start += PARALLEL_PAGES) {
+            if (!isActive) return
+            const batch = Array.from({ length: Math.min(PARALLEL_PAGES, pageCount - start + 1) }, (_, k) =>
+              incidentsApi.getIncidents({ ...incidentQueryParams, page: start + k }).then(rowsOf),
+            )
+            rest.push(...(await Promise.all(batch)))
+          }
+          // Drop duplicates if a new incident shifted the pages while reading.
+          const seen = new Set<string>()
+          incidents = [incidents, ...rest].flat().filter((row) => {
+            const r = row as Record<string, unknown>
+            const id = String(r.Id ?? r.id ?? '')
+            if (!id) return true
+            if (seen.has(id)) return false
+            seen.add(id)
+            return true
+          })
         }
 
         // Log the first raw incident to see actual backend field names
@@ -1729,7 +1757,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
 
       {incidentsPagination && incidentsPagination.totalCount > filteredIncidents.length && filteredIncidents.length > 0 && (
         <p className="text-xs text-muted-foreground">
-          Totals cover all {incidentsPagination.totalCount.toLocaleString('en-GB')} incidents in view. Trends, stores and times use the latest {filteredIncidents.length.toLocaleString('en-GB')}.
+          Totals cover all {incidentsPagination.totalCount.toLocaleString('en-GB')} incidents in view, but the panels above only include the latest {filteredIncidents.length.toLocaleString('en-GB')}. Narrow the dates to see the rest in full.
         </p>
       )}
     </div>

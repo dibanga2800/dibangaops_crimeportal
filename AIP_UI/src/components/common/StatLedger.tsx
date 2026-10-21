@@ -180,14 +180,21 @@ export function StatLedger({ items, className, size = 'default', loading = false
 								</span>
 							) : null}
 						</span>
-						<span className="flex items-end justify-between gap-3">
+						<span className="flex flex-wrap items-end justify-between gap-x-3 gap-y-2">
 							{loading ? (
 								<span className="mt-1 h-8 w-24 animate-pulse rounded bg-muted" />
 							) : (
 								<span
 									className={cn(
-										'figures min-w-0 truncate font-display font-semibold leading-none tracking-tight',
-										size === 'compact' ? 'text-2xl' : dense ? 'text-[1.75rem] sm:text-[2rem]' : 'text-[1.75rem] sm:text-[2.25rem]',
+										'figures whitespace-nowrap font-display font-semibold leading-none tracking-tight',
+										// Long figures (e.g. £164,868) step down a size instead of being cut off.
+										size === 'compact'
+											? 'text-2xl'
+											: String(item.value).length >= 7
+												? 'text-[1.5rem] sm:text-[1.75rem]'
+												: dense
+													? 'text-[1.75rem] sm:text-[2rem]'
+													: 'text-[1.75rem] sm:text-[2.25rem]',
 										toneValue[tone],
 									)}
 								>
@@ -195,7 +202,7 @@ export function StatLedger({ items, className, size = 'default', loading = false
 								</span>
 							)}
 							{!loading && item.trend && !dense ? (
-								<span className="hidden sm:block">
+								<span className="hidden shrink-0 sm:block">
 									<Sparkline values={item.trend} tone={tone} />
 								</span>
 							) : null}
