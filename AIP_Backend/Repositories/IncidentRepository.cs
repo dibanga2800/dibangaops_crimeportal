@@ -51,8 +51,10 @@ namespace AIPBackend.Repositories
 			DateTime? toDate = null,
 			string? createdByUserId = null)
 		{
+			// Read-only list: no change tracking, and stolen items load in a
+			// second query so each wide incident row is not repeated per item.
 			var query = ApplyListFilters(
-				_context.Incidents
+				ReadOnlyIncidents()
 					.Include(i => i.StolenItems)
 					.Include(i => i.Customer)
 					.Where(i => !i.RecordIsDeletedYN),
@@ -72,6 +74,7 @@ namespace AIPBackend.Repositories
 			var incidents = await query
 				.OrderByDescending(i => i.DateOfIncident)
 				.ThenByDescending(i => i.DateInputted)
+				.ThenByDescending(i => i.IncidentId)
 				.Skip((page - 1) * pageSize)
 				.Take(pageSize)
 				.ToListAsync();
@@ -104,9 +107,27 @@ namespace AIPBackend.Repositories
 				toDate,
 				createdByUserId);
 
+			// Only the columns the totals need. Loading full incidents (every text
+			// column plus stolen items) here made every list request read the whole
+			// filtered table.
 			var incidents = await query
 				.AsNoTracking()
-				.Include(i => i.StolenItems)
+				.Select(i => new SummaryRow
+				{
+					SiteId = i.SiteId,
+					StoreName = i.StoreName,
+					IncidentType = i.IncidentType,
+					DateOfIncident = i.DateOfIncident,
+					Priority = i.Priority,
+					Status = i.Status,
+					TotalRecoveredValue = i.TotalRecoveredValue,
+					TotalValueRecovered = i.TotalValueRecovered,
+					TotalLostValue = i.TotalLostValue,
+					TotalStolenValue = i.TotalStolenValue,
+					HasItems = i.StolenItems.Any(),
+					ItemsRecovered = i.StolenItems.Sum(s => (decimal?)s.RecoveredAmount) ?? 0m,
+					ItemsTotal = i.StolenItems.Sum(s => (decimal?)s.TotalAmount) ?? 0m,
+				})
 				.ToListAsync();
 
 			var uniqueSiteKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -121,8 +142,13 @@ namespace AIPBackend.Repositories
 
 			foreach (var incident in incidents)
 			{
-				totalRecovered += IncidentFinancials.GetRecoveredValue(incident);
-				totalLost += IncidentFinancials.GetLostValue(incident);
+				// Same rules as IncidentFinancials.GetRecoveredValue / GetLostValue.
+				var recovered = incident.TotalRecoveredValue
+					?? incident.TotalValueRecovered
+					?? (incident.HasItems ? incident.ItemsRecovered : 0m);
+				var stolen = incident.TotalStolenValue ?? (incident.HasItems ? incident.ItemsTotal : 0m);
+				totalRecovered += recovered;
+				totalLost += incident.TotalLostValue ?? Math.Max(stolen - recovered, 0m);
 
 				var siteKey = !string.IsNullOrWhiteSpace(incident.SiteId)
 					? incident.SiteId
@@ -169,6 +195,137 @@ namespace AIPBackend.Repositories
 				PendingIncidents = pendingCount,
 				ResolvedIncidents = resolvedCount,
 			};
+		}
+
+		public async Task<(List<IncidentLiteDto> Rows, int TotalCount)> GetLiteAsync(
+			int maxRows,
+			string? search = null,
+			int? customerId = null,
+			IReadOnlyCollection<int>? customerIds = null,
+			string? siteId = null,
+			string? regionId = null,
+			string? incidentType = null,
+			string? status = null,
+			DateTime? fromDate = null,
+			DateTime? toDate = null)
+		{
+			var query = ApplyListFilters(
+				_context.Incidents.AsNoTracking().Where(i => !i.RecordIsDeletedYN),
+				search,
+				customerId,
+				customerIds,
+				siteId,
+				regionId,
+				incidentType,
+				status,
+				fromDate,
+				toDate,
+				createdByUserId: null);
+
+			var totalCount = await query.CountAsync();
+
+			// One query, only the columns dashboards use. Stolen-item totals are
+			// summed in SQL so no item rows are loaded.
+			var rows = await query
+				.OrderByDescending(i => i.DateOfIncident)
+				.ThenByDescending(i => i.DateInputted)
+				.ThenByDescending(i => i.IncidentId)
+				.Take(maxRows)
+				.Select(i => new
+				{
+					i.IncidentId,
+					i.CustomerId,
+					CustomerName = i.Customer != null ? i.Customer.CompanyName : null,
+					i.StoreName,
+					i.SiteId,
+					i.RegionId,
+					i.RegionName,
+					i.StaffMemberName,
+					i.DateOfIncident,
+					i.TimeOfIncident,
+					i.DateInputted,
+					i.IncidentType,
+					i.TotalStolenValue,
+					i.TotalRecoveredValue,
+					i.TotalValueRecovered,
+					i.TotalLostValue,
+					HasItems = i.StolenItems.Any(),
+					ItemsRecovered = i.StolenItems.Sum(s => (decimal?)s.RecoveredAmount) ?? 0m,
+					ItemsTotal = i.StolenItems.Sum(s => (decimal?)s.TotalAmount) ?? 0m,
+					i.PoliceInvolvement,
+					i.OffenderName,
+					i.Status,
+					i.Priority,
+					i.IncidentCategory,
+					i.IncidentCategoryConfidence,
+					i.RiskLevel,
+					i.RiskScore,
+				})
+				.ToListAsync();
+
+			var result = rows.Select(r =>
+			{
+				// Same rules as IncidentFinancials.
+				var recovered = r.TotalRecoveredValue ?? r.TotalValueRecovered ?? (r.HasItems ? r.ItemsRecovered : 0m);
+				var stolen = r.TotalStolenValue ?? (r.HasItems ? r.ItemsTotal : 0m);
+				var lost = r.TotalLostValue ?? Math.Max(stolen - recovered, 0m);
+				return new IncidentLiteDto
+				{
+					Id = r.IncidentId.ToString(),
+					CustomerId = r.CustomerId,
+					CustomerName = r.CustomerName ?? string.Empty,
+					SiteName = r.StoreName,
+					SiteId = r.SiteId,
+					RegionId = r.RegionId,
+					RegionName = r.RegionName,
+					OfficerName = r.StaffMemberName,
+					DateOfIncident = r.DateOfIncident.ToString("yyyy-MM-dd"),
+					TimeOfIncident = r.TimeOfIncident,
+					DateInputted = r.DateInputted.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+					IncidentType = r.IncidentType,
+					TotalStolenValue = stolen,
+					TotalRecoveredValue = recovered,
+					TotalLostValue = lost,
+					PoliceInvolvement = r.PoliceInvolvement,
+					OffenderName = r.OffenderName,
+					Status = r.Status,
+					Priority = r.Priority,
+					IncidentCategory = r.IncidentCategory,
+					IncidentCategoryConfidence = r.IncidentCategoryConfidence,
+					RiskLevel = r.RiskLevel,
+					RiskScore = r.RiskScore,
+				};
+			}).ToList();
+
+			return (result, totalCount);
+		}
+
+		/// <summary>
+		/// Incidents for read-only queries: no change tracking, and on SQL Server
+		/// included collections load in separate queries so each wide incident
+		/// row is not repeated once per stolen item.
+		/// </summary>
+		private IQueryable<Incident> ReadOnlyIncidents()
+		{
+			var query = _context.Incidents.AsNoTracking();
+			return _context.Database.IsRelational() ? query.AsSplitQuery() : query;
+		}
+
+		private sealed class SummaryRow
+		{
+			public string? SiteId { get; set; }
+			public string? StoreName { get; set; }
+			public string? IncidentType { get; set; }
+			public DateTime DateOfIncident { get; set; }
+			public string? Priority { get; set; }
+			public string? Status { get; set; }
+			public decimal? TotalRecoveredValue { get; set; }
+			public decimal? TotalValueRecovered { get; set; }
+			public decimal? TotalLostValue { get; set; }
+			public decimal? TotalStolenValue { get; set; }
+			public bool HasItems { get; set; }
+			public decimal ItemsRecovered { get; set; }
+			public decimal ItemsTotal { get; set; }
 		}
 
 		/// <summary>
@@ -378,7 +535,7 @@ namespace AIPBackend.Repositories
 			DateTime? startDate = null,
 			DateTime? endDate = null)
 		{
-			var query = _context.Incidents
+			var query = ReadOnlyIncidents()
 				.Include(i => i.StolenItems)
 				.Include(i => i.Customer)
 				.Where(i => !i.RecordIsDeletedYN)
@@ -502,7 +659,7 @@ namespace AIPBackend.Repositories
 
 		public async Task<List<Incident>> GetIncidentsWithDetailsAsync(CrimeIntelligenceQueryDto queryDto)
 		{
-			var query = _context.Incidents
+			var query = ReadOnlyIncidents()
 				.Include(i => i.StolenItems)
 				.Where(i => !i.RecordIsDeletedYN && i.CustomerId == queryDto.CustomerId)
 				.AsQueryable();

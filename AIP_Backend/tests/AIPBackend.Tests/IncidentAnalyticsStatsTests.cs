@@ -138,6 +138,67 @@ public class IncidentAnalyticsStatsTests
 	}
 
 	[Fact]
+	public async Task GetLiteAsync_returns_every_matching_incident_with_resolved_totals()
+	{
+		const int customerId = 9;
+		const int seedCount = 150;
+
+		await using var context = CreateDbContext();
+		SeedCustomer(context, customerId);
+		for (var i = 0; i < seedCount; i++)
+		{
+			context.Incidents.Add(new Incident
+			{
+				CustomerId = customerId,
+				StoreName = $"Store {i % 5}",
+				StaffMemberName = "Officer",
+				DateOfIncident = DateTime.UtcNow.AddDays(-(i % 30)),
+				DateInputted = DateTime.UtcNow,
+				IncidentType = "Shoplifting",
+				CreatedBy = "test-user",
+				// Line items only: totals must come from the stolen items.
+				StolenItems = new List<StolenItem>
+				{
+					new() { ProductName = "Steak", Cost = 10m, Quantity = 3, TotalAmount = 30m, RecoveredAmount = 10m, RecoveredQuantity = 1 },
+				},
+			});
+		}
+
+		// Deleted incidents are excluded.
+		context.Incidents.Add(new Incident
+		{
+			CustomerId = customerId,
+			StoreName = "Store 0",
+			StaffMemberName = "Officer",
+			DateOfIncident = DateTime.UtcNow,
+			DateInputted = DateTime.UtcNow,
+			IncidentType = "Shoplifting",
+			CreatedBy = "test-user",
+			RecordIsDeletedYN = true,
+		});
+
+		await context.SaveChangesAsync();
+
+		var service = CreateIncidentService(context);
+		var lite = await service.GetLiteAsync(new GetIncidentsQueryDto { CustomerId = customerId.ToString() }, maxRows: 10000);
+
+		Assert.Equal(seedCount, lite.TotalCount);
+		Assert.Equal(seedCount, lite.Data.Count);
+		Assert.False(lite.Truncated);
+		Assert.All(lite.Data, row =>
+		{
+			Assert.Equal(30m, row.TotalStolenValue);
+			Assert.Equal(10m, row.TotalRecoveredValue);
+			Assert.Equal(20m, row.TotalLostValue);
+		});
+
+		var capped = await service.GetLiteAsync(new GetIncidentsQueryDto { CustomerId = customerId.ToString() }, maxRows: 40);
+		Assert.Equal(40, capped.Data.Count);
+		Assert.Equal(seedCount, capped.TotalCount);
+		Assert.True(capped.Truncated);
+	}
+
+	[Fact]
 	public async Task GetIncidentsAsync_clamps_page_size_while_insights_return_full_count()
 	{
 		const int customerId = 7;

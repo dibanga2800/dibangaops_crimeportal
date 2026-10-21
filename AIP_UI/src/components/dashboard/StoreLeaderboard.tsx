@@ -39,7 +39,7 @@ export function StoreLeaderboard({ rows, className }: { rows: StoreLeaderboardRo
 						<th scope="col" className="px-2 py-2 text-right font-medium">Incidents</th>
 						<th scope="col" className="hidden px-2 py-2 font-medium sm:table-cell">Lost</th>
 						<th scope="col" className="hidden px-2 py-2 text-right font-medium md:table-cell">Recovered</th>
-						<th scope="col" className="py-2 pl-2 pr-4 font-medium sm:pr-5">8 weeks</th>
+						<th scope="col" className="py-2 pl-2 pr-4 font-medium sm:pr-5">Trend</th>
 					</tr>
 				</thead>
 				<tbody className="divide-y divide-border">

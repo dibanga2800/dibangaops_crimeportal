@@ -1,5 +1,6 @@
 ﻿import React from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { formatMoney } from '@/lib/money'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -145,8 +146,24 @@ interface AdminDashboardProps {
   viewRole?: 'administrator' | 'manager' | 'security-officer' | 'store'
 }
 
+// Incident list paging. The API returns at most 100 rows per page; the
+// dashboard reads up to MAX_PAGES so its panels cover the whole filter.
+const PAGE_SIZE = 100
+const PARALLEL_PAGES = 5
+const MAX_PAGES = 100
+// Dashboard data is cached in the shared QueryClient so returning to the page
+// shows the last result at once and refreshes in the background.
+const DASHBOARD_CACHE_FRESH_MS = 2 * 60 * 1000
+interface CachedIncidents {
+  incidents: Incident[]
+  pagination: PaginationInfo | null
+  summary: IncidentListSummary | null
+  at: number
+}
+
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrator' }) => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const chartTheme = useChartTheme();
   const { currentRole, isTestMode, testRole, isLoading } = usePageAccess();
   const effectiveRole = isTestMode && testRole ? testRole : currentRole;
@@ -267,15 +284,26 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
 
   // Load incidents from API
   React.useEffect(() => {
-    console.log('ðŸŽ¯ Incident loading useEffect triggered');
     const abortController = new AbortController();
     let isActive = true;
 
+    const cacheKey = ['dashboard', 'incidents', effectiveCustomerId, effectiveSiteId, selectedRegion, fromDate, toDate, assignedSiteIdsKey, isScopedRole, hasAssignedSites]
+    const cached = queryClient.getQueryData<CachedIncidents>(cacheKey)
+    if (cached) {
+      // Show the cached result immediately; skip the refetch while it is fresh.
+      setLoadedIncidents(cached.incidents)
+      setIncidentsPagination(cached.pagination)
+      setIncidentsSummary(cached.summary)
+      setIncidentsLoading(false)
+      if (Date.now() - cached.at < DASHBOARD_CACHE_FRESH_MS) {
+        return () => { isActive = false }
+      }
+    }
+
     const loadIncidents = async () => {
-      console.log('ðŸš€ Starting loadIncidents function');
       try {
-        setIncidentsLoading(true);
-        
+        if (!cached) setIncidentsLoading(true);
+
         console.log('ðŸ”„ Loading incidents using incidentsApi service');
         
         // Pass every active filter to the API so the server-side summary
@@ -293,7 +321,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
           toDate?: string
         } = {
           page: 1,
-          pageSize: 1000
+          // The API caps pages at 100, so the dashboard reads every page below.
+          pageSize: PAGE_SIZE
         }
         if (effectiveCustomerId != null) {
           incidentQueryParams.customerId = String(effectiveCustomerId)
@@ -311,21 +340,71 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
           incidentQueryParams.toDate = toDate
         }
 
-        const response = await incidentsApi.getIncidents(incidentQueryParams);
-        const typed = response as IncidentsResponse
-        
-        // Extract incidents from response (handle data, Data, items formats)
+        // Every panel (stores, times, trends, risk) is built from these rows,
+        // so read all pages for the filters rather than just the newest 100.
+        // Otherwise the panels disagree with the totals and the incident graph.
         type ResWithAlternates = IncidentsResponse & { Data?: unknown[]; items?: unknown[] }
-        const res = response as ResWithAlternates
+        const rowsOf = (r: unknown): unknown[] => {
+          if (Array.isArray(r)) return r
+          const res = r as ResWithAlternates
+          if (Array.isArray(res?.data)) return res.data
+          if (Array.isArray(res?.Data)) return res.Data
+          if (Array.isArray(res?.items)) return res.items
+          return []
+        }
+        // Preferred: one request for slim rows of every matching incident.
+        // Falls back to reading the full list page by page (older backend).
         let incidents: unknown[] = []
-        if (Array.isArray(response)) {
-          incidents = response
-        } else if (res.data && Array.isArray(res.data)) {
-          incidents = res.data
-        } else if (res.Data && Array.isArray(res.Data)) {
-          incidents = res.Data
-        } else if (res.items && Array.isArray(res.items)) {
-          incidents = res.items
+        let paginationInfo: PaginationInfo | null = null
+        let summaryInfo: IncidentListSummary | null = null
+        let usedLite = false
+        try {
+          const { page: _page, pageSize: _pageSize, ...filters } = incidentQueryParams
+          const lite = await incidentsApi.getIncidentsLite(filters)
+          if (lite && Array.isArray(lite.data)) {
+            incidents = lite.data
+            usedLite = true
+            // Totals come from these rows unless the server capped them, in
+            // which case one tiny list request supplies the full-set totals.
+            paginationInfo = { currentPage: 1, totalPages: 1, pageSize: lite.data.length, totalCount: lite.totalCount, hasPrevious: false, hasNext: false } as PaginationInfo
+            if (lite.truncated) {
+              const head = await incidentsApi.getIncidents({ ...filters, page: 1, pageSize: 1 })
+              summaryInfo = (head as IncidentsResponse).summary ?? null
+            }
+          }
+        } catch (liteError) {
+          if (!isActive) return
+          if (import.meta.env.DEV) console.warn('Lite incidents unavailable, reading pages instead:', liteError)
+        }
+
+        const response = usedLite ? null : await incidentsApi.getIncidents(incidentQueryParams);
+        const typed = (response ?? {}) as IncidentsResponse
+        if (!usedLite) {
+          incidents = rowsOf(response)
+          paginationInfo = typed.pagination ?? null
+          summaryInfo = typed.summary ?? null
+        }
+        const totalCount = typed.pagination?.totalCount ?? incidents.length
+        const pageCount = usedLite ? 1 : Math.min(MAX_PAGES, Math.ceil(totalCount / PAGE_SIZE))
+        if (pageCount > 1 && incidents.length >= PAGE_SIZE) {
+          const rest: unknown[][] = []
+          for (let start = 2; start <= pageCount; start += PARALLEL_PAGES) {
+            if (!isActive) return
+            const batch = Array.from({ length: Math.min(PARALLEL_PAGES, pageCount - start + 1) }, (_, k) =>
+              incidentsApi.getIncidents({ ...incidentQueryParams, page: start + k, includeSummary: false }).then(rowsOf),
+            )
+            rest.push(...(await Promise.all(batch)))
+          }
+          // Drop duplicates if a new incident shifted the pages while reading.
+          const seen = new Set<string>()
+          incidents = [incidents, ...rest].flat().filter((row) => {
+            const r = row as Record<string, unknown>
+            const id = String(r.Id ?? r.id ?? '')
+            if (!id) return true
+            if (seen.has(id)) return false
+            seen.add(id)
+            return true
+          })
         }
 
         // Log the first raw incident to see actual backend field names
@@ -431,8 +510,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
 
         if (isActive) {
           setLoadedIncidents(scopedTransformedIncidents);
-          setIncidentsPagination(typed.pagination ?? null)
-          setIncidentsSummary(typed.summary ?? null)
+          setIncidentsPagination(paginationInfo)
+          setIncidentsSummary(summaryInfo)
+          queryClient.setQueryData<CachedIncidents>(cacheKey, {
+            incidents: scopedTransformedIncidents,
+            pagination: paginationInfo,
+            summary: summaryInfo,
+            at: Date.now(),
+          })
           console.log('âœ… Loaded incidents:', scopedTransformedIncidents.length);
           
           if (scopedTransformedIncidents.length > 0) {
@@ -514,9 +599,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
         setAnalyticsError(null);
 
         // Manager/scoped roles: pass assigned customer so API returns constrained regions/sites; Admin: no override
+        // Regions and sites rarely change, so reuse them for 10 minutes.
         const [regions, sites] = await Promise.all([
-          customerDashboardService.getRegions(abortController.signal, effectiveCustomerId ?? undefined),
-          customerDashboardService.getSites(abortController.signal, effectiveCustomerId ?? undefined),
+          queryClient.fetchQuery({
+            queryKey: ['dashboard', 'regions', effectiveCustomerId ?? null],
+            queryFn: () => customerDashboardService.getRegions(abortController.signal, effectiveCustomerId ?? undefined),
+            staleTime: 10 * 60 * 1000,
+          }),
+          queryClient.fetchQuery({
+            queryKey: ['dashboard', 'sites', effectiveCustomerId ?? null],
+            queryFn: () => customerDashboardService.getSites(abortController.signal, effectiveCustomerId ?? undefined),
+            staleTime: 10 * 60 * 1000,
+          }),
         ]);
 
         const allStoreOptions = (sites as any[]).map((site: any) => ({
@@ -546,13 +640,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
 
         setSiteOptions(storeOptions);
         setRegionOptions(regionOpts);
-
-        const data = await analyticsService.getAnalyticsHub({
-          stores: storeOptions,
-          regions: regionOpts,
-        });
-
-        setAnalyticsData(data);
+        // The dashboard builds every panel from its own incident rows, so it no
+        // longer calls the analytics hub endpoint (the heaviest query in the app).
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') return;
         console.error('Failed to load admin analytics overview:', err);
@@ -572,32 +661,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
   React.useEffect(() => {
     const loadEnhancedData = async () => {
       try {
-        const analyticsParams = {
-          customerId: effectiveCustomerId ?? undefined,
-          siteId: effectiveSiteId ?? undefined,
-          regionId: selectedRegion !== 'all' ? selectedRegion : undefined,
-          from: fromDate || undefined,
-          to: toDate || undefined
-        }
-
-        const [alertData, analyticsData] = await Promise.allSettled([
-          alertInstancesApi.getSummary(effectiveCustomerId ?? undefined),
-          classificationApi.getAnalyticsSummary(analyticsParams)
-        ])
-
-        if (alertData.status === 'fulfilled') {
-          setAlertSummary(alertData.value)
-        }
-        if (analyticsData.status === 'fulfilled') {
-          setAiAnalytics(analyticsData.value)
-        }
+        // Risk signals are computed from the incidents in view, so only the
+        // alert summary (which depends on the company alone) is fetched here.
+        const alertData = await queryClient.fetchQuery({
+          queryKey: ['dashboard', 'alert-summary', effectiveCustomerId ?? null],
+          queryFn: () => alertInstancesApi.getSummary(effectiveCustomerId ?? undefined),
+          staleTime: 60 * 1000,
+        })
+        setAlertSummary(alertData)
       } catch (err) {
         console.warn('Enhanced dashboard data not available:', err)
       }
     }
 
     loadEnhancedData()
-  }, [effectiveCustomerId, effectiveSiteId, selectedRegion, fromDate, toDate])
+  }, [effectiveCustomerId])
 
   // Get regions for dropdown â€“ use ONLY real regions from API for the current customer
   const regions = React.useMemo(() => {
@@ -1121,7 +1199,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
   const ledgerTrends = React.useMemo(() => {
     const WEEKS = 8
     const weekMs = 7 * 24 * 60 * 60 * 1000
-    const end = Date.now()
+    // Anchor on the end of the chosen date range (or today) so the 4-week comparison follows the filter.
+    const end = toDate ? Math.min(new Date(`${toDate}T23:59:59`).getTime(), Date.now()) : Date.now()
     const buckets = Array.from({ length: WEEKS }, () => ({ count: 0, lost: 0, recovered: 0, shoplifting: 0 }))
     filteredIncidents.forEach((incident) => {
       const t = new Date(incident.dateOfIncident || (incident as any).date || '').getTime()
@@ -1153,8 +1232,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
         recovered: change(series.recovered),
         shoplifting: change(series.shoplifting),
       },
+      endsToday: end >= Date.now() - 24 * 60 * 60 * 1000,
+      end,
     }
-  }, [filteredIncidents])
+  }, [filteredIncidents, toDate])
 
 
   // When incidents happen (day × time) and per-store league table, both from the incidents in view.
@@ -1176,25 +1257,86 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
     [filteredIncidents],
   )
 
+  // The window the filters describe. With no dates chosen it runs from the
+  // earliest incident in view to today, so every panel reads the same span.
+  const viewWindow = React.useMemo(() => {
+    const times = filteredIncidents
+      .map((i) => new Date(i.dateOfIncident || (i as any).date || '').getTime())
+      .filter((t) => Number.isFinite(t))
+    const end = toDate ? new Date(`${toDate}T23:59:59`).getTime() : Date.now()
+    const start = fromDate
+      ? new Date(`${fromDate}T00:00:00`).getTime()
+      : times.length ? Math.min(...times) : end - 56 * 24 * 60 * 60 * 1000
+    return { start, end: Math.max(end, start + 1) }
+  }, [filteredIncidents, fromDate, toDate])
+
+  const scopeLabel = React.useMemo(() => {
+    if (!fromDate && !toDate) return 'all time'
+    const f = (d: string) => format(new Date(d), 'd MMM yyyy')
+    if (fromDate && toDate) return `${f(fromDate)} to ${f(toDate)}`
+    return fromDate ? `since ${f(fromDate)}` : `up to ${f(toDate)}`
+  }, [fromDate, toDate])
+
   const storeRows = React.useMemo(() => {
-    const WEEKS = 8
-    const weekMs = 7 * 24 * 60 * 60 * 1000
-    const now = Date.now()
+    const BUCKETS = 8
+    const span = viewWindow.end - viewWindow.start
     const byStore = new Map<string, { store: string; incidents: number; lost: number; recovered: number; trend: number[] }>()
     filteredIncidents.forEach((incident) => {
       const store = incident.siteName || (incident as any).storeName || 'Unknown store'
-      const row = byStore.get(store) ?? { store, incidents: 0, lost: 0, recovered: 0, trend: Array(WEEKS).fill(0) }
+      const row = byStore.get(store) ?? { store, incidents: 0, lost: 0, recovered: 0, trend: Array(BUCKETS).fill(0) }
       const f = getIncidentFinancials(incident)
       row.incidents += 1
       row.lost += f.totalLostValue
       row.recovered += f.totalRecoveredValue
       const t = new Date(incident.dateOfIncident || (incident as any).date || '').getTime()
-      const age = Math.floor((now - t) / weekMs)
-      if (Number.isFinite(age) && age >= 0 && age < WEEKS) row.trend[WEEKS - 1 - age] += 1
+      if (Number.isFinite(t) && t >= viewWindow.start && t <= viewWindow.end) {
+        const b = Math.min(BUCKETS - 1, Math.floor(((t - viewWindow.start) / span) * BUCKETS))
+        row.trend[b] += 1
+      }
       byStore.set(store, row)
     })
     return [...byStore.values()].sort((a, b) => b.incidents - a.incidents || b.lost - a.lost).slice(0, 8)
-  }, [filteredIncidents])
+  }, [filteredIncidents, viewWindow])
+
+  // Risk signals from the same incidents as every other panel, so they follow
+  // the region and date filters. Thresholds match the classifier service.
+  const riskSignals = React.useMemo(() => {
+    if (filteredIncidents.length === 0) return []
+    const day = 24 * 60 * 60 * 1000
+    const end = Math.min(viewWindow.end, Date.now())
+    const at = (i: Incident) => new Date(i.dateOfIncident || (i as any).date || '').getTime()
+    const recent = filteredIncidents.filter((i) => at(i) > end - 7 * day && at(i) <= end).length
+    const prior = filteredIncidents.filter((i) => at(i) > end - 14 * day && at(i) <= end - 7 * day).length
+    const velocity = prior > 0 ? Math.min(recent / prior, 2) / 2 : recent > 0 ? 0.5 : 0
+    const endLabel = toDate && new Date(`${toDate}T23:59:59`).getTime() < Date.now() ? `the week to ${format(new Date(toDate), 'd MMM')}` : 'the last 7 days'
+
+    const offenderCounts = new Map<string, number>()
+    filteredIncidents.forEach((i) => {
+      const name = (i.offenderName || '').trim().toLowerCase()
+      if (name && !['unknown', 'n/a', 'n/k', 'not known'].includes(name)) offenderCounts.set(name, (offenderCounts.get(name) ?? 0) + 1)
+    })
+    const repeat = [...offenderCounts.values()].filter((n) => n > 1).length
+    const repeatScore = Math.min(repeat / 5, 1)
+
+    let lost = 0
+    let total = 0
+    filteredIncidents.forEach((i) => {
+      const f = getIncidentFinancials(i)
+      lost += f.totalLostValue
+      total += f.totalLostValue + f.totalRecoveredValue
+    })
+    const valueScore = total >= 10000 ? 1 : total >= 5000 ? 0.7 : total >= 1000 ? 0.4 : 0.1
+
+    const police = filteredIncidents.filter((i) => i.policeInvolvement).length / filteredIncidents.length
+    const level = (score: number, high: number, medium: number) => (score >= high ? 'high' : score >= medium ? 'medium' : 'low')
+
+    return [
+      { indicator: 'Incident velocity', level: level(velocity, 0.7, 0.4), score: velocity, description: `${recent} ${recent === 1 ? 'incident' : 'incidents'} in ${endLabel}, ${prior} the week before` },
+      { indicator: 'Repeat offenders', level: level(repeatScore, 0.6, 0.3), score: repeatScore, description: repeat === 0 ? 'No named offender appears more than once' : `${repeat} named ${repeat === 1 ? 'offender appears' : 'offenders appear'} more than once` },
+      { indicator: 'Value at risk', level: level(valueScore, 0.7, 0.4), score: valueScore, description: `${formatMoney(total, 'headline')} taken, ${formatMoney(lost, 'headline')} of it not recovered` },
+      { indicator: 'Police involvement', level: level(police, 0.3, 0.1), score: police, description: `Police involved in ${Math.round(police * 100)}% of incidents` },
+    ]
+  }, [filteredIncidents, viewWindow, toDate])
 
   // One-sentence briefing under the greeting: the change that matters most right now.
   const briefing = React.useMemo(() => {
@@ -1205,7 +1347,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
     if (ledgerTrends.hasHistory && recent4Lost > 0) {
       const direction =
         lostChange === undefined ? '' : Math.abs(lostChange) < 5 ? ', about the same as the 4 weeks before' : lostChange > 0 ? `, up ${Math.round(lostChange)}% on the 4 weeks before` : `, down ${Math.abs(Math.round(lostChange))}% on the 4 weeks before`
-      parts.push(`${formatMoney(recent4Lost, 'headline')} lost in the last 4 weeks${direction}.`)
+      const window = ledgerTrends.endsToday ? 'in the last 4 weeks' : `in the 4 weeks to ${format(new Date(ledgerTrends.end), 'd MMM yyyy')}`
+      parts.push(`${formatMoney(recent4Lost, 'headline')} lost ${window}${direction}.`)
     }
     if (topStore && storeRows.length > 1) {
       const share = Math.round((topStore.incidents / Math.max(1, filteredIncidents.length)) * 100)
@@ -1569,7 +1712,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
                 <MapPin className="h-4 w-4 text-muted-foreground" />
                 Stores to watch
               </CardTitle>
-              <p className="text-[13px] text-muted-foreground">Ranked by incidents, with what each is losing and its direction over 8 weeks</p>
+              <p className="text-[13px] text-muted-foreground">Ranked by incidents for {scopeLabel}, with losses and how each moved across the period</p>
             </div>
             <Button variant="ghost" size="sm" asChild>
               <Link to="/analytics/data-analytics-hub">
@@ -1594,7 +1737,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
               <Clock className="h-4 w-4 text-muted-foreground" />
               When incidents happen
             </CardTitle>
-            <p className="text-[13px] text-muted-foreground">Day of week against time of day. Plan cover around the darkest cells.</p>
+            <p className="text-[13px] text-muted-foreground">Day of week against time of day for {scopeLabel}. Plan cover around the darkest cells.</p>
           </CardHeader>
           <CardContent>
             {incidentTimes.length === 0 ? (
@@ -1607,17 +1750,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
       </div>
 
       {/* Risk signals */}
-      {aiAnalytics && aiAnalytics.riskIndicators.length > 0 && (
+      {riskSignals.length > 0 && (
         <section aria-labelledby="risk-signals-title" className="rounded-xl border border-border bg-card">
           <div className="flex flex-wrap items-baseline justify-between gap-2 px-5 pb-3 pt-4">
             <h2 id="risk-signals-title" className="flex items-center gap-2 text-base font-semibold text-foreground">
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
               Risk signals
             </h2>
-            <p className="text-[13px] text-muted-foreground">Scored by the incident classifier</p>
+            <p className="text-[13px] text-muted-foreground">Based on the incidents in view ({scopeLabel})</p>
           </div>
           <ul className="grid grid-cols-1 divide-y divide-border border-t border-border sm:grid-cols-2 sm:divide-y-0 xl:grid-cols-4">
-            {aiAnalytics.riskIndicators.slice(0, 4).map((indicator, idx) => (
+            {riskSignals.map((indicator, idx) => (
               <li
                 key={idx}
                 className={cn(
@@ -1664,7 +1807,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
 
       {incidentsPagination && incidentsPagination.totalCount > filteredIncidents.length && filteredIncidents.length > 0 && (
         <p className="text-xs text-muted-foreground">
-          Totals cover all {incidentsPagination.totalCount.toLocaleString('en-GB')} incidents in view. Trends, stores and times use the latest {filteredIncidents.length.toLocaleString('en-GB')}.
+          Totals cover all {incidentsPagination.totalCount.toLocaleString('en-GB')} incidents in view, but the panels above only include the latest {filteredIncidents.length.toLocaleString('en-GB')}. Narrow the dates to see the rest in full.
         </p>
       )}
     </div>

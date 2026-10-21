@@ -17,7 +17,7 @@ namespace AIPBackend.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.15")
+                .HasAnnotation("ProductVersion", "10.0.9")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -697,7 +697,6 @@ namespace AIPBackend.Migrations
                     b.ToTable("CustomerPageAccesses");
                 });
 
-
             modelBuilder.Entity("AIPBackend.Models.Employee", b =>
                 {
                     b.Property<int>("EmployeeId")
@@ -1259,6 +1258,16 @@ namespace AIPBackend.Migrations
                     b.HasIndex("Status");
 
                     b.HasIndex("UpdatedBy");
+
+                    b.HasIndex("RecordIsDeletedYN", "DateOfIncident")
+                        .HasDatabaseName("IX_Incidents_Active_Date");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("RecordIsDeletedYN", "DateOfIncident"), new[] { "CustomerId", "SiteId", "IncidentType", "Status", "Priority", "TotalStolenValue", "TotalRecoveredValue", "TotalLostValue", "TotalValueRecovered" });
+
+                    b.HasIndex("CustomerId", "RecordIsDeletedYN", "DateOfIncident")
+                        .HasDatabaseName("IX_Incidents_Customer_Active_Date");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("CustomerId", "RecordIsDeletedYN", "DateOfIncident"), new[] { "SiteId", "IncidentType", "Status", "Priority", "TotalStolenValue", "TotalRecoveredValue", "TotalLostValue", "TotalValueRecovered" });
 
                     b.ToTable("Incidents");
                 });
@@ -1886,6 +1895,8 @@ namespace AIPBackend.Migrations
 
                     b.HasIndex("IncidentId");
 
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("IncidentId"), new[] { "TotalAmount", "RecoveredAmount" });
+
                     b.ToTable("StolenItems");
                 });
 
@@ -2228,7 +2239,6 @@ namespace AIPBackend.Migrations
                     b.Navigation("PageAccess");
                 });
 
-
             modelBuilder.Entity("AIPBackend.Models.Employee", b =>
                 {
                     b.HasOne("AIPBackend.Models.ApplicationUser", "CreatedByUser")
@@ -2533,7 +2543,6 @@ namespace AIPBackend.Migrations
 
                     b.Navigation("UserCustomerAssignments");
                 });
-
 
             modelBuilder.Entity("AIPBackend.Models.EvidenceItem", b =>
                 {

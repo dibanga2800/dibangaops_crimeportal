@@ -327,8 +327,21 @@ namespace AIPBackend.Data
             modelBuilder.Entity<Incident>()
                 .HasIndex(i => i.Status);
 
+            // Dashboard/list queries filter on customer + not-deleted + date range and read
+            // only these columns, so the covering indexes avoid key lookups on a small DB tier.
+            modelBuilder.Entity<Incident>()
+                .HasIndex(i => new { i.CustomerId, i.RecordIsDeletedYN, i.DateOfIncident })
+                .HasDatabaseName("IX_Incidents_Customer_Active_Date")
+                .IncludeProperties(i => new { i.SiteId, i.IncidentType, i.Status, i.Priority, i.TotalStolenValue, i.TotalRecoveredValue, i.TotalLostValue, i.TotalValueRecovered });
+
+            modelBuilder.Entity<Incident>()
+                .HasIndex(i => new { i.RecordIsDeletedYN, i.DateOfIncident })
+                .HasDatabaseName("IX_Incidents_Active_Date")
+                .IncludeProperties(i => new { i.CustomerId, i.SiteId, i.IncidentType, i.Status, i.Priority, i.TotalStolenValue, i.TotalRecoveredValue, i.TotalLostValue, i.TotalValueRecovered });
+
             modelBuilder.Entity<StolenItem>()
-                .HasIndex(si => si.IncidentId);
+                .HasIndex(si => si.IncidentId)
+                .IncludeProperties(si => new { si.TotalAmount, si.RecoveredAmount });
 
             // Configure Product indexes
             modelBuilder.Entity<Product>()

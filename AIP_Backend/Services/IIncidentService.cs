@@ -11,6 +11,7 @@ namespace AIPBackend.Services
 	{
 		Task<IncidentResponseDto> GetByIdAsync(string id);
 		Task<IncidentsResponseDto> GetIncidentsAsync(GetIncidentsQueryDto query);
+		Task<IncidentLiteResponseDto> GetLiteAsync(GetIncidentsQueryDto query, int maxRows);
 		Task<IncidentResponseDto> CreateAsync(UpsertIncidentDto dto, string? userId = null);
 		Task<IncidentResponseDto> UpdateAsync(string id, UpsertIncidentDto dto, string? userId = null);
 		Task<bool> DeleteAsync(string id);

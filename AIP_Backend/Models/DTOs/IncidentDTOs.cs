@@ -389,6 +389,51 @@ namespace AIPBackend.Models.DTOs
 		public string? Status { get; set; }
 		public string? CustomerId { get; set; }
 		public string? RegionId { get; set; }
+		/// <summary>
+		/// When false the list skips the summary totals. Callers reading
+		/// pages 2..n of the same filter already have them from page 1.
+		/// </summary>
+		public bool IncludeSummary { get; set; } = true;
+	}
+
+	/// <summary>
+	/// Slim incident row for dashboards: only the fields the panels use, with
+	/// lost/recovered/stolen already resolved (same rules as IncidentFinancials).
+	/// </summary>
+	public class IncidentLiteDto
+	{
+		public string Id { get; set; } = string.Empty;
+		public int CustomerId { get; set; }
+		public string CustomerName { get; set; } = string.Empty;
+		public string SiteName { get; set; } = string.Empty;
+		public string? SiteId { get; set; }
+		public string? RegionId { get; set; }
+		public string? RegionName { get; set; }
+		public string OfficerName { get; set; } = string.Empty;
+		public string DateOfIncident { get; set; } = string.Empty;
+		public string? TimeOfIncident { get; set; }
+		public string DateInputted { get; set; } = string.Empty;
+		public string IncidentType { get; set; } = string.Empty;
+		public decimal TotalStolenValue { get; set; }
+		public decimal TotalRecoveredValue { get; set; }
+		public decimal TotalLostValue { get; set; }
+		public bool PoliceInvolvement { get; set; }
+		public string? OffenderName { get; set; }
+		public string Status { get; set; } = string.Empty;
+		public string? Priority { get; set; }
+		public string? IncidentCategory { get; set; }
+		public double? IncidentCategoryConfidence { get; set; }
+		public string? RiskLevel { get; set; }
+		public double? RiskScore { get; set; }
+	}
+
+	public class IncidentLiteResponseDto
+	{
+		public List<IncidentLiteDto> Data { get; set; } = new();
+		/// <summary>All incidents matching the filters.</summary>
+		public int TotalCount { get; set; }
+		/// <summary>True when TotalCount is above the row cap and only the newest rows were returned.</summary>
+		public bool Truncated { get; set; }
 	}
 
 	public class RepeatOffenderIncidentSummaryDto
