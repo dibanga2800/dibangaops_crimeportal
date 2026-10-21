@@ -29,7 +29,7 @@ export const OfficerPerformanceChart = () => {
                 bottom: 0,
               }}
             >
-              <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#e5e7eb" />
+              <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#DCE0D8" />
               <XAxis 
                 type="number" 
                 domain={[0, 100]}
@@ -69,14 +69,14 @@ export const OfficerPerformanceChart = () => {
               <Bar 
                 dataKey="performance" 
                 name="Performance" 
-                fill="#3b82f6" 
+                fill="#1F6FA8" 
                 radius={[0, 3, 3, 0]}
                 barSize={8}
               />
               <Bar 
                 dataKey="incidents" 
                 name="Incidents" 
-                fill="#10b981" 
+                fill="#0E7C66" 
                 radius={[0, 3, 3, 0]}
                 barSize={8}
               />
@@ -84,15 +84,15 @@ export const OfficerPerformanceChart = () => {
           </ResponsiveContainer>
         </div>
         <div className="grid grid-cols-2 gap-1 sm:gap-2 mt-1 sm:mt-2 md:mt-3">
-          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-1 sm:p-2 md:p-3">
-            <p className="text-[8px] xs:text-[10px] sm:text-xs text-gray-600 dark:text-gray-400">Avg. Performance</p>
-            <p className="text-xs sm:text-sm md:text-base font-semibold text-blue-600 dark:text-blue-400">
+          <div className="bg-info-soft rounded-lg p-1 sm:p-2 md:p-3">
+            <p className="text-[8px] xs:text-[10px] sm:text-xs text-muted-foreground">Avg. Performance</p>
+            <p className="text-xs sm:text-sm md:text-base font-semibold text-primary">
               {(officerData.reduce((acc, curr) => acc + curr.performance, 0) / officerData.length).toFixed(1)}%
             </p>
           </div>
-          <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-1 sm:p-2 md:p-3">
-            <p className="text-[8px] xs:text-[10px] sm:text-xs text-gray-600 dark:text-gray-400">Total Incidents</p>
-            <p className="text-xs sm:text-sm md:text-base font-semibold text-green-600 dark:text-green-400">
+          <div className="bg-recovered-soft rounded-lg p-1 sm:p-2 md:p-3">
+            <p className="text-[8px] xs:text-[10px] sm:text-xs text-muted-foreground">Total Incidents</p>
+            <p className="text-xs sm:text-sm md:text-base font-semibold text-recovered">
               {officerData.reduce((acc, curr) => acc + curr.incidents, 0)}
             </p>
           </div>

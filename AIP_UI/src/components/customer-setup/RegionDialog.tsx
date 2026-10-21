@@ -232,7 +232,7 @@ export function RegionDialog({ open, onOpenChange, region, selectedCustomerId, o
               name="regionName"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Region Name *</FormLabel>
+                  <FormLabel>Region name *</FormLabel>
                   <FormControl>
                     <Input {...field} disabled={isLoading} placeholder="Enter region name" />
                   </FormControl>
@@ -271,7 +271,7 @@ export function RegionDialog({ open, onOpenChange, region, selectedCustomerId, o
               </Button>
               <Button 
                 type="submit" 
-                className="bg-purple-600 hover:bg-purple-700"
+                className="bg-primary hover:bg-primary/90"
                 disabled={isLoading}
               >
                 {isLoading ? "Saving..." : (region ? "Update Region" : "Create Region")}

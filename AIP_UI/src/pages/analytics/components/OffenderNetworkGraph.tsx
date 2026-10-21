@@ -6,9 +6,9 @@ interface OffenderNetworkGraphProps {
 }
 
 const VIEW_SIZE = 600
-const OFFENDER_COLOR = '#3b82f6'
-const STORE_COLOR = '#22c55e'
-const LINK_COLOR = '#94a3b8'
+const OFFENDER_COLOR = '#1F6FA8'
+const STORE_COLOR = '#0E7C66'
+const LINK_COLOR = '#5E6773'
 
 export const OffenderNetworkGraph = ({ data }: OffenderNetworkGraphProps) => {
 	const { nodes, links } = data
@@ -20,7 +20,7 @@ export const OffenderNetworkGraph = ({ data }: OffenderNetworkGraphProps) => {
 
 	if (nodes.length === 0) {
 		return (
-			<p className="flex min-h-[320px] items-center justify-center rounded-lg border bg-gray-50 text-sm text-gray-500">
+			<p className="flex min-h-[320px] items-center justify-center rounded-lg border bg-muted/50 text-sm text-muted-foreground">
 				No repeat offenders with store links in this period.
 			</p>
 		)
@@ -30,7 +30,7 @@ export const OffenderNetworkGraph = ({ data }: OffenderNetworkGraphProps) => {
 		<div className="w-full overflow-x-auto">
 			<svg
 				viewBox={`0 0 ${VIEW_SIZE} ${VIEW_SIZE}`}
-				className="mx-auto h-auto w-full max-w-3xl rounded-lg border bg-white"
+				className="mx-auto h-auto w-full max-w-3xl rounded-lg border bg-card"
 				role="img"
 				aria-label="Offender and store network graph"
 			>

@@ -1,6 +1,8 @@
 import { useState, useCallback } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
+import { Plus } from "lucide-react"
+import { PageHeader } from "@/components/layout/PageHeader"
 import { CustomersTable } from "@/components/customer-setup/CustomersTable"
 import { RegionsTable } from "@/components/customer-setup/RegionsTable"
 import { SitesTable } from "@/components/customer-setup/SitesTable"
@@ -57,11 +59,13 @@ export default function CustomerSetup() {
   }
 
   return (
-    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gradient-to-br from-background via-muted/30 to-background">
-      <div className="container mx-auto px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12 py-3 sm:py-4 md:py-6 lg:py-8 xl:py-10 2xl:py-12 space-y-3 sm:space-y-4 md:space-y-6 xl:space-y-8 max-w-screen-2xl">
-        <div className="flex items-center justify-between">
-          <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl 2xl:text-5xl font-bold text-foreground">Company Setup</h1>
-        </div>
+    <div className="w-full">
+      <div className="space-y-6">
+        <PageHeader
+          title="Company setup"
+          description="Companies, their regions and the store sites incidents are reported against."
+          className="pb-0"
+        />
 
         <CustomerStats 
         selectedCustomerId={selectedCustomerId} 
@@ -69,12 +73,12 @@ export default function CustomerSetup() {
       />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="w-full grid grid-cols-3 h-auto">
-          <TabsTrigger value="customers" className="text-xs sm:text-sm py-2">Companies</TabsTrigger>
-          <TabsTrigger value="regions" disabled={!selectedCustomerId} className="text-xs sm:text-sm py-2">
+        <TabsList>
+          <TabsTrigger value="customers">Companies</TabsTrigger>
+          <TabsTrigger value="regions" disabled={!selectedCustomerId} title={!selectedCustomerId ? "Select a company first" : undefined}>
             Regions
           </TabsTrigger>
-          <TabsTrigger value="sites" disabled={!selectedCustomerId} className="text-xs sm:text-sm py-2">
+          <TabsTrigger value="sites" disabled={!selectedCustomerId} title={!selectedCustomerId ? "Select a company first" : undefined}>
             Sites
           </TabsTrigger>
         </TabsList>
@@ -92,15 +96,16 @@ export default function CustomerSetup() {
             selectedCustomerId ? (
               <div className="space-y-4">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                  <h2 className="text-base sm:text-lg font-semibold text-foreground">Regions</h2>
+                  <h2 className="text-base font-semibold text-foreground">Regions</h2>
                   <Button
                     onClick={() => {
                       setSelectedRegion(undefined)
                       setRegionDialogOpen(true)
                     }}
-                    className="bg-purple-600 hover:bg-purple-700 w-full sm:w-auto"
+                    className="w-full sm:w-auto"
                   >
-                    Add Region
+                    <Plus className="h-4 w-4" />
+                    Add region
                   </Button>
                 </div>
                 <RegionsTable 
@@ -112,7 +117,7 @@ export default function CustomerSetup() {
               </div>
             ) : (
               <div className="text-center py-8 text-sm text-muted-foreground">
-                Please select a company to view regions
+                Select a company on the Companies tab to see its regions.
               </div>
             )
           )}
@@ -123,15 +128,16 @@ export default function CustomerSetup() {
             selectedCustomerId ? (
               <div className="space-y-4">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                  <h2 className="text-base sm:text-lg font-semibold text-foreground">Sites</h2>
+                  <h2 className="text-base font-semibold text-foreground">Sites</h2>
                   <Button
                     onClick={() => {
                       setSelectedSite(undefined)
                       setSiteDialogOpen(true)
                     }}
-                    className="bg-purple-600 hover:bg-purple-700 w-full sm:w-auto"
+                    className="w-full sm:w-auto"
                   >
-                    Add Site
+                    <Plus className="h-4 w-4" />
+                    Add site
                   </Button>
                 </div>
                 <SitesTable 
@@ -143,7 +149,7 @@ export default function CustomerSetup() {
               </div>
             ) : (
               <div className="text-center py-8 text-sm text-muted-foreground">
-                Please select a company to view sites
+                Select a company on the Companies tab to see its sites.
               </div>
             )
           )}

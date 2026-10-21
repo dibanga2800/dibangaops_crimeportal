@@ -100,7 +100,7 @@ export const StockItemForm = ({ item, onSubmit }: StockItemFormProps) => {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
         <div className="space-y-1 sm:space-y-2">
-          <Label htmlFor="issuedBy" className="text-sm sm:text-base">Issued By</Label>
+          <Label htmlFor="issuedBy" className="text-sm sm:text-base">Issued by</Label>
           <select
             id="issuedBy"
             name="issuedBy"
@@ -134,7 +134,7 @@ export const StockItemForm = ({ item, onSubmit }: StockItemFormProps) => {
           />
         </div>
         <div className="space-y-1 sm:space-y-2">
-          <Label htmlFor="minimumStock" className="text-sm sm:text-base">Min Stock</Label>
+          <Label htmlFor="minimumStock" className="text-sm sm:text-base">Min stock</Label>
           <Input 
             id="minimumStock" 
             name="minimumStock" 
@@ -145,7 +145,7 @@ export const StockItemForm = ({ item, onSubmit }: StockItemFormProps) => {
           />
         </div>
         <div className="space-y-1 sm:space-y-2">
-          <Label htmlFor="numberAdded" className="text-sm sm:text-base">Number Added</Label>
+          <Label htmlFor="numberAdded" className="text-sm sm:text-base">Number added</Label>
           <Input 
             id="numberAdded" 
             name="numberAdded" 
@@ -159,7 +159,7 @@ export const StockItemForm = ({ item, onSubmit }: StockItemFormProps) => {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
         <div className="space-y-1 sm:space-y-2">
-          <Label htmlFor="numberIssued" className="text-sm sm:text-base">Number Issued</Label>
+          <Label htmlFor="numberIssued" className="text-sm sm:text-base">Number issued</Label>
           <Input 
             id="numberIssued" 
             name="numberIssued" 

@@ -45,13 +45,13 @@ export const NotificationBell = ({
 					type="button"
 					variant="ghost"
 					size="icon"
-					className={`relative shrink-0 p-1 h-9 w-9 rounded-md ${className}`}
+					className={`relative !h-9 !w-9 shrink-0 !p-0 text-muted-foreground hover:bg-muted hover:text-foreground ${className}`}
 					aria-label={`Notifications menu — ${alertCount} ${alertCount === 1 ? 'alert' : 'alerts'}`}
 					aria-haspopup="menu"
 				>
 					<Bell className="h-5 w-5" />
 					{showBadge && !isLoading && (
-						<span className="absolute -top-0.5 -right-0.5 min-w-[20px] h-5 px-1 rounded-full bg-red-500 flex items-center justify-center text-[11px] font-medium text-white">
+						<span className="figures absolute right-0.5 top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-loss px-1 text-[10px] font-semibold leading-none text-white ring-2 ring-card">
 							{alertCount > 99 ? '99+' : alertCount}
 						</span>
 					)}

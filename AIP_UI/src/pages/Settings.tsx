@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { Switch } from "@/components/ui/switch"
-import { UserCog, Search, Check, X, Save, AlertCircle, Eye } from 'lucide-react'
+import { Search, Check, X, Save, AlertCircle, Eye, Lock } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -372,6 +373,46 @@ const Settings = () => {
   const mobileRoleGroup1 = userRoles.slice(0, rolesPerRowMobile);
   const mobileRoleGroup2 = userRoles.slice(rolesPerRowMobile);
 
+  /** One cell of the matrix: a switch, or a locked label when the rule cannot be changed. */
+  const renderAccessCell = (page: Page, roleId: string) => {
+    const roleName = userRoles.find((r) => r.id === roleId)?.name ?? roleId
+    const locked =
+      roleId === 'administrator'
+        ? 'Always'
+        : roleId === 'manager' && administratorOnlyPageIdSet.has(page.id)
+          ? 'Admins only'
+          : roleId === 'manager' && mandatoryManagerPageIds.includes(page.id)
+            ? 'Required'
+            : null
+    if (locked) {
+      const granted = locked !== 'Admins only'
+      return (
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${granted ? 'bg-accent text-accent-foreground' : 'bg-muted text-muted-foreground'}`}
+          title={
+            locked === 'Always'
+              ? 'Administrators always have access to every page'
+              : locked === 'Required'
+                ? 'Managers always need this page'
+                : 'Only administrators can open this page'
+          }
+        >
+          <Lock className="h-3 w-3" aria-hidden />
+          {locked}
+        </span>
+      )
+    }
+    const checked = (pageAccessByRole[roleId] || []).includes(page.id)
+    return (
+      <Switch
+        checked={checked}
+        onCheckedChange={() => handleToggle(page.id, roleId)}
+        aria-label={`${roleName} can open ${page.title}`}
+        className="data-[state=checked]:bg-primary"
+      />
+    )
+  }
+
   const updateRoleAccess = (roleId: string, updater: (pages: Set<string>) => void) => {
     setPageAccessByRole(prev => {
       const next = { ...prev };
@@ -489,14 +530,14 @@ const Settings = () => {
   const selectedMobileRoleObject = userRoles.find(role => role.id === selectedRoleForMobile);
 
   return (
-    <div className="w-full px-2 sm:px-3 md:px-4 lg:px-6 2xl:px-8 py-2 sm:py-3 md:py-4 lg:py-6 space-y-2 sm:space-y-3 md:space-y-4">
+    <div className="w-full space-y-6">
       {/* Test Mode Banner */}
       {isTestMode && currentRole === 'administrator' && (
-        <Alert className="bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-950/40 dark:border-blue-900 dark:text-blue-100 mb-2 sm:mb-3 md:mb-4">
+        <Alert className="bg-info-soft border-info/25 text-info mb-2 sm:mb-3 md:mb-4">
           <Eye className="h-4 w-4" />
           <AlertTitle className="flex flex-wrap items-center gap-2">
             Admin Test Mode
-            <Badge variant="outline" className="ml-2 bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/50 dark:text-blue-100 dark:border-blue-800">
+            <Badge variant="outline" className="ml-2 bg-info-soft text-primary border-info/25">
               {userRoles.find(r => r.id === testRole)?.name || testRole}
             </Badge>
           </AlertTitle>
@@ -507,18 +548,11 @@ const Settings = () => {
         </Alert>
       )}
 
-      <div className="bg-card text-card-foreground rounded-lg shadow-sm border border-border">
-        {/* Header Section */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between p-2 sm:p-3 md:p-4 border-b border-border">
-          <div className="mb-2 md:mb-0">
-            <h1 className="text-base sm:text-lg md:text-xl font-semibold flex items-center gap-1.5 sm:gap-2">
-              <UserCog className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-              Configure User Role Access
-            </h1>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">
-              Manage which pages each user role can access in the application
-            </p>
-          </div>
+      <PageHeader
+        title="Role access"
+        description="Choose which pages each role can open. Administrators always keep full access."
+        className="pb-0"
+        actions={
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
             {adminAccessModified && (
               <Button
@@ -533,27 +567,29 @@ const Settings = () => {
                 ) : (
                   <AlertCircle className="h-3.5 w-3.5" />
                 )}
-                Reset Admin
+                Reset admin access
               </Button>
             )}
             <Button
               size="sm"
               onClick={handleSave}
               disabled={isSaving}
-              className="w-full sm:w-auto flex items-center justify-center gap-1.5 text-xs"
+              className="w-full sm:w-auto"
             >
               {isSaving ? (
                 <LoadingSpinner size="sm" />
               ) : (
                 <Save className="h-3.5 w-3.5" />
               )}
-              Save Changes
+              Save changes
             </Button>
           </div>
-        </div>
+        }
+      />
 
+      <div className="rounded-lg border border-border bg-card text-card-foreground">
         {/* Content Section */}
-        <div className="p-2 sm:p-3 md:p-4">
+        <div className="p-4 sm:p-5">
           {adminAccessModified && (
             <Alert variant="destructive" className="mb-2 sm:mb-3 md:mb-4">
               <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
@@ -568,12 +604,13 @@ const Settings = () => {
           {/* Search and Filter */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 sm:gap-3 mb-2 sm:mb-3 md:mb-4">
             <div className="relative w-full md:max-w-xs">
-              <Search className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search pages..."
+                placeholder="Search pages…"
+                aria-label="Search pages"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-7 sm:pl-9 w-full text-xs sm:text-sm h-8 sm:h-9"
+                className="w-full pl-9"
               />
             </div>
             
@@ -600,20 +637,23 @@ const Settings = () => {
           </div>
 
           {/* Table Container */}
-          <div className="border border-border rounded-md shadow-sm bg-card/50">
+          <div className="overflow-hidden rounded-md border border-border">
             {/* Table for Larger Screens */}
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full min-w-[900px] 2xl:min-w-[1200px] 3xl:min-w-[1600px]">
                 <thead className="bg-muted/60 sticky top-0 z-10">
                   <tr>
-                    <th className="text-left py-2.5 px-3 sm:py-3 sm:px-4 font-medium text-xs sm:text-sm w-1/4">Page</th>
+                    <th className="w-1/4 px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Page</th>
                     {userRoles.map((role) => (
-                      <th key={role.id} className="text-center py-2.5 px-2 sm:py-3 sm:px-3 font-medium text-xs whitespace-nowrap">
+                      <th key={role.id} className="whitespace-nowrap px-3 py-2.5 text-center text-xs font-medium text-muted-foreground">
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <span className="inline-block px-2 py-1 rounded-full bg-secondary/50">
-                                {role.name}
+                              <span className="inline-flex cursor-help flex-col items-center leading-tight">
+                                <span className="font-semibold text-foreground">{role.name}</span>
+                                <span className="figures text-[11px] font-normal text-muted-foreground">
+                                  {role.id === 'administrator' ? 'All pages' : `${filteredPages.filter((pg) => (pageAccessByRole[role.id] || []).includes(pg.id)).length} of ${filteredPages.length}`}
+                                </span>
                               </span>
                             </TooltipTrigger>
                             <TooltipContent>
@@ -629,14 +669,14 @@ const Settings = () => {
                   const pagesInSubcategory = pagesBySubcategory[subcategory] || [];
                   if (pagesInSubcategory.length === 0) return null;
                   return (<React.Fragment key={subcategory + '-lg'}>
-                    <tr className="bg-muted/30 border-t">
-                      <td colSpan={userRoles.length + 1} className="py-2 px-4 font-semibold text-sm text-foreground">
+                    <tr className="border-t bg-muted/40">
+                      <td colSpan={userRoles.length + 1} className="px-4 py-2 text-xs font-medium text-muted-foreground">
                         {subcategory}
                       </td>
                     </tr>
                     {pagesInSubcategory.map(page => (
-                      <tr key={page.id + '-lg'} className="border-t hover:bg-muted/20 transition-colors">
-                        <td className="py-3 px-4 border-l-2 border-l-transparent hover:border-l-primary">
+                      <tr key={page.id + '-lg'} className="border-t border-border transition-colors hover:bg-muted/30">
+                        <td className="px-4 py-3">
                           <div>
                             <div className="font-medium text-sm">{page.title}</div>
                             <div className="text-xs text-muted-foreground mt-0.5">{page.path}</div>
@@ -644,24 +684,7 @@ const Settings = () => {
                         </td>
                         {userRoles.map(role => (
                           <td key={`${page.id}-${role.id}-lg`} className="text-center py-3 px-2">
-                            <div className="flex justify-center">
-                              <Switch
-                                checked={(pageAccessByRole[role.id] || []).includes(page.id)}
-                                onCheckedChange={() => handleToggle(page.id, role.id)}
-                                disabled={
-                                  role.id === 'administrator' ||
-                                  (role.id === 'manager' && mandatoryManagerPageIds.includes(page.id))
-                                }
-                                className="data-[state=checked]:bg-primary h-5 w-9"
-                                title={
-                                  role.id === 'administrator'
-                                    ? 'Admin access cannot be modified'
-                                    : role.id === 'manager' && mandatoryManagerPageIds.includes(page.id)
-                                    ? 'This page is mandatory for managers and cannot be disabled'
-                                    : ''
-                                }
-                              />
-                            </div>
+                            <div className="flex justify-center">{renderAccessCell(page, role.id)}</div>
                           </td>))}
                       </tr>))}
                   </React.Fragment>);
@@ -675,7 +698,7 @@ const Settings = () => {
                 <thead className="bg-muted/60 sticky top-0 z-10">
                   <tr>
                     <th className="text-left py-2.5 px-3 sm:py-3 sm:px-4 font-medium text-xs sm:text-sm w-3/5">Page</th>
-                    <th className="text-center py-2.5 px-2 sm:py-3 sm:px-3 font-medium text-xs whitespace-nowrap w-2/5">
+                    <th className="w-2/5 whitespace-nowrap px-3 py-2.5 text-right text-xs font-medium">
                       {selectedMobileRoleObject ? (
                         <TooltipProvider>
                           <Tooltip>
@@ -697,29 +720,19 @@ const Settings = () => {
                   const pagesInSubcategory = pagesBySubcategory[subcategory] || [];
                   if (pagesInSubcategory.length === 0) return null;
                   return (<React.Fragment key={subcategory + '-sm'}>
-                    <tr className="bg-muted/30 border-t">
-                      <td colSpan={2} className="py-2 px-4 font-semibold text-sm text-foreground">{subcategory}</td>
+                    <tr className="border-t bg-muted/40">
+                      <td colSpan={2} className="px-4 py-2 text-xs font-medium text-muted-foreground">{subcategory}</td>
                     </tr>
                     {pagesInSubcategory.map(page => (
                       <tr key={page.id + '-sm'} className="border-t hover:bg-muted/20 transition-colors">
-                        <td className="py-3 px-4 border-l-2 border-l-transparent hover:border-l-primary">
+                        <td className="px-4 py-3">
                           <div>
                             <div className="font-medium text-sm">{page.title}</div>
                             <div className="text-xs text-muted-foreground mt-0.5">{page.path}</div>
                           </div>
                         </td>
                         <td className="text-center py-3 px-2">
-                          <div className="flex justify-center">
-                            <Switch
-                              checked={(pageAccessByRole[selectedRoleForMobile] || []).includes(page.id)}
-                              onCheckedChange={() => handleToggle(page.id, selectedRoleForMobile)}
-                              disabled={
-                                selectedRoleForMobile === 'administrator' ||
-                                (selectedRoleForMobile === 'manager' && mandatoryManagerPageIds.includes(page.id))
-                              }
-                              className="data-[state=checked]:bg-primary h-5 w-9"
-                            />
-                          </div>
+                          <div className="flex justify-end">{renderAccessCell(page, selectedRoleForMobile)}</div>
                         </td>
                       </tr>))}
                   </React.Fragment>);

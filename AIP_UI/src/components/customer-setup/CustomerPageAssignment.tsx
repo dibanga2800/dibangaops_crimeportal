@@ -157,7 +157,7 @@ export function CustomerPageAssignment({
                   <div
                     key={page.key}
                     className={`flex items-start space-x-3 p-3 rounded-lg border ${
-                      enabled ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'
+                      enabled ? 'bg-info-soft border-info/25' : 'bg-muted/50 border-border'
                     }`}
                   >
                     <Checkbox
@@ -195,14 +195,14 @@ export function CustomerPageAssignment({
           </div>
         ))}
         
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+        <div className="bg-info-soft border border-info/25 rounded-lg p-3">
           <div className="flex items-center gap-2 mb-2">
-            <Info className="h-4 w-4 text-blue-600" />
-            <span className="text-sm font-medium text-blue-800">
+            <Info className="h-4 w-4 text-primary" />
+            <span className="text-sm font-medium text-info">
               Assignment Summary
             </span>
           </div>
-          <div className="text-xs text-blue-700 space-y-1">
+          <div className="text-xs text-primary space-y-1">
             <p>• Total pages enabled: {Object.keys(assignments).length}</p>
             <p>• Available pages: {Object.keys(CUSTOMER_PAGES).length} pages</p>
             <p>• Customer needs vary - select pages that fit their specific requirements</p>
