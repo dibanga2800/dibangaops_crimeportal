@@ -917,7 +917,7 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
                             </span>
                             <span className="figures truncate text-xs text-muted-foreground">
                               {when ? formatIncidentDate(when) : 'No date'}
-                              {incident.timeOfIncident ? `, ${incident.timeOfIncident}` : ''}
+                              {incident.timeOfIncident ? <>, <span className="font-medium text-blue-600 dark:text-blue-400">{incident.timeOfIncident}</span></> : ''}
                             </span>
                           </span>
                           {f.totalRecoveredValue > 0 && (
@@ -959,7 +959,7 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
                         >
                           <TableCell className="whitespace-nowrap">
                             <span className="block text-foreground">{when ? formatIncidentDate(when) : 'No date'}</span>
-                            <span className="block text-xs text-muted-foreground">
+                            <span className="figures block text-xs font-medium text-blue-600 dark:text-blue-400">
                               {incident.timeOfIncident || (when ? new Date(when).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '')}
                             </span>
                           </TableCell>

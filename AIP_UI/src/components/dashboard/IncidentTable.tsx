@@ -187,7 +187,7 @@ export function IncidentTable({ data }: DataTableProps) {
                         {report.incidentType}
                       </span>
                       <span className="figures truncate text-xs text-muted-foreground">
-                        {new Date(report.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}, {getDisplayTime(report)}
+                        {new Date(report.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}, <span className="font-medium text-blue-600 dark:text-blue-400">{getDisplayTime(report)}</span>
                       </span>
                     </div>
                     {recovered > 0 && (
@@ -295,7 +295,7 @@ export function IncidentTable({ data }: DataTableProps) {
                     <td className="whitespace-nowrap px-4 py-3 align-middle text-foreground/80">
                     <div className="flex items-center gap-2">
                       <span>{new Date(report.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
                         {getDisplayTime(report)}
                       </span>
                     </div>
