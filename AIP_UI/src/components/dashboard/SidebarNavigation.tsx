@@ -33,10 +33,10 @@ interface NavItemProps {
 /** Shared look for sidebar links: quiet by default, leaf marker when active. */
 const sidebarLinkClass = (isActive: boolean) =>
 	cn(
-		'relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-sidebar-foreground/90 transition-all duration-150',
+		'relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-sidebar-foreground transition-all duration-150',
 		'hover:bg-white/[0.08] hover:text-white hover:[&>svg]:opacity-100',
 		'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring',
-		'[&>svg]:h-4 [&>svg]:w-4 [&>svg]:shrink-0 [&>svg]:opacity-90',
+		'[&>svg]:h-4 [&>svg]:w-4 [&>svg]:shrink-0 [&>svg]:opacity-100',
 		isActive &&
 			'sidebar-link-active font-semibold text-white [&>svg]:text-signal [&>svg]:opacity-100 before:absolute before:-left-3 before:top-1.5 before:bottom-1.5 before:w-[3px] before:rounded-r-full before:bg-signal',
 	)

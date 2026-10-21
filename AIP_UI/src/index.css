@@ -83,8 +83,8 @@
     --ink: 224 45% 13%;
 
     /* Sidebar (ink) */
-    --sidebar-background: 224 62% 16%;
-    --sidebar-foreground: 220 40% 93%;
+    --sidebar-background: 224 62% 12%;
+    --sidebar-foreground: 220 40% 98%;
     --sidebar-primary: 43 70% 55%;
     --sidebar-primary-foreground: 224 45% 10%;
     --sidebar-accent: 222 50% 26%;
@@ -133,8 +133,8 @@
     --info: 210 80% 68%;
     --info-soft: 210 45% 17%;
 
-    --sidebar-background: 224 55% 10%;
-    --sidebar-foreground: 220 32% 90%;
+    --sidebar-background: 224 55% 7%;
+    --sidebar-foreground: 220 32% 96%;
     --sidebar-accent: 222 45% 19%;
     --sidebar-border: 222 40% 18%;
   }
@@ -349,16 +349,16 @@ html[data-ui="app"] .maplibregl-ctrl-group button { padding: 0 !important; justi
   background-color: hsl(var(--sidebar-background));
   background-image:
     linear-gradient(180deg, hsl(0 0% 100% / 0.07), transparent 9rem),
-    radial-gradient(120% 55% at 0% 0%, hsl(220 85% 62% / 0.30), transparent 60%),
+    radial-gradient(120% 55% at 0% 0%, hsl(220 85% 62% / 0.22), transparent 60%),
     radial-gradient(90% 40% at 100% 100%, hsl(43 80% 55% / 0.12), transparent 65%),
-    linear-gradient(180deg, hsl(222 62% 24%) 0%, hsl(var(--sidebar-background)) 45%, hsl(225 65% 11%) 100%);
+    linear-gradient(180deg, hsl(222 62% 18%) 0%, hsl(var(--sidebar-background)) 45%, hsl(225 65% 8%) 100%);
   box-shadow: inset -1px 0 0 hsl(0 0% 100% / 0.08), 4px 0 24px -12px hsl(224 70% 8% / 0.6);
 }
 .dark .sidebar-gloss {
   background-image:
     radial-gradient(120% 55% at 0% 0%, hsl(220 85% 60% / 0.20), transparent 60%),
     radial-gradient(90% 40% at 100% 100%, hsl(43 80% 55% / 0.08), transparent 65%),
-    linear-gradient(180deg, hsl(222 55% 16%) 0%, hsl(var(--sidebar-background)) 45%, hsl(225 60% 6%) 100%);
+    linear-gradient(180deg, hsl(222 55% 12%) 0%, hsl(var(--sidebar-background)) 45%, hsl(225 60% 4%) 100%);
 }
 .sidebar-link-active {
   background-image: linear-gradient(180deg, hsl(0 0% 100% / 0.16), hsl(0 0% 100% / 0.06));
