@@ -1,5 +1,6 @@
 ﻿import React from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { formatMoney } from '@/lib/money'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -47,6 +48,8 @@ import { cn } from '@/lib/utils'
 import { usePageAccess } from "@/contexts/PageAccessContext"
 import { useCustomerSelection } from '@/contexts/CustomerSelectionContext'
 import { DashboardGreeting } from '@/components/dashboard/DashboardGreeting'
+import { WeekHourGrid } from '@/components/dashboard/WeekHourGrid'
+import { StoreLeaderboard } from '@/components/dashboard/StoreLeaderboard'
 import { StatLedger } from '@/components/common/StatLedger'
 import { FilterBar, FilterChip, DateRangeField } from '@/components/common/FilterBar'
 import { Segmented } from '@/components/common/Segmented'
@@ -78,26 +81,6 @@ import {
 	NOTIFICATIONS_DISMISSED_EVENT,
 } from '@/lib/notifications/dismissed-notifications'
 
-const gbpFormatter = new Intl.NumberFormat('en-GB', {
-	style: 'currency',
-	currency: 'GBP',
-	maximumFractionDigits: 0,
-})
-
-const gbpCompactFormatter = new Intl.NumberFormat('en-GB', {
-	style: 'currency',
-	currency: 'GBP',
-	notation: 'compact',
-	maximumFractionDigits: 1,
-})
-
-/** Formats GBP for dashboard stat cards (e.g. £42, £1.2K). */
-const formatCurrency = (value: number): string => {
-	if (value >= 1_000) {
-		return gbpCompactFormatter.format(value)
-	}
-	return gbpFormatter.format(value)
-}
 
 const getIncidentFinancials = (incident: any) => {
   const stolenItems = Array.isArray(incident?.StolenItems)
@@ -936,7 +919,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
 
   // Log region selection and filtered data for debugging
   React.useEffect(() => {
-    const selectedRegionName = selectedRegion === 'all' ? 'All Regions' : regions.find(r => r.id === selectedRegion)?.name || selectedRegion;
+    const selectedRegionName = selectedRegion === 'all' ? 'All regions' : regions.find(r => r.id === selectedRegion)?.name || selectedRegion;
     
     console.log('ðŸ—ºï¸ Selected region:', selectedRegionName, `(ID: ${selectedRegion})`);
     console.log('ðŸ“Š Total loaded incidents:', loadedIncidents.length);
@@ -1173,6 +1156,64 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
     }
   }, [filteredIncidents])
 
+
+  // When incidents happen (day × time) and per-store league table, both from the incidents in view.
+  const incidentTimes = React.useMemo(
+    () =>
+      filteredIncidents
+        .map((incident) => {
+          const raw = incident.dateOfIncident || (incident as any).date
+          if (!raw) return null
+          const d = new Date(raw)
+          const time = (incident as any).timeOfIncident as string | undefined
+          if (time && /^\d{1,2}:\d{2}/.test(time)) {
+            const [h, m] = time.split(':').map(Number)
+            d.setHours(h, m)
+          }
+          return d
+        })
+        .filter((d): d is Date => d instanceof Date && !Number.isNaN(d.getTime())),
+    [filteredIncidents],
+  )
+
+  const storeRows = React.useMemo(() => {
+    const WEEKS = 8
+    const weekMs = 7 * 24 * 60 * 60 * 1000
+    const now = Date.now()
+    const byStore = new Map<string, { store: string; incidents: number; lost: number; recovered: number; trend: number[] }>()
+    filteredIncidents.forEach((incident) => {
+      const store = incident.siteName || (incident as any).storeName || 'Unknown store'
+      const row = byStore.get(store) ?? { store, incidents: 0, lost: 0, recovered: 0, trend: Array(WEEKS).fill(0) }
+      const f = getIncidentFinancials(incident)
+      row.incidents += 1
+      row.lost += f.totalLostValue
+      row.recovered += f.totalRecoveredValue
+      const t = new Date(incident.dateOfIncident || (incident as any).date || '').getTime()
+      const age = Math.floor((now - t) / weekMs)
+      if (Number.isFinite(age) && age >= 0 && age < WEEKS) row.trend[WEEKS - 1 - age] += 1
+      byStore.set(store, row)
+    })
+    return [...byStore.values()].sort((a, b) => b.incidents - a.incidents || b.lost - a.lost).slice(0, 8)
+  }, [filteredIncidents])
+
+  // One-sentence briefing under the greeting: the change that matters most right now.
+  const briefing = React.useMemo(() => {
+    const lostChange = ledgerTrends.change.lost
+    const recent4Lost = ledgerTrends.series.lost.slice(-4).reduce((a, v) => a + v, 0)
+    const topStore = storeRows[0]
+    const parts: string[] = []
+    if (ledgerTrends.hasHistory && recent4Lost > 0) {
+      const direction =
+        lostChange === undefined ? '' : Math.abs(lostChange) < 5 ? ', about the same as the 4 weeks before' : lostChange > 0 ? `, up ${Math.round(lostChange)}% on the 4 weeks before` : `, down ${Math.abs(Math.round(lostChange))}% on the 4 weeks before`
+      parts.push(`${formatMoney(recent4Lost, 'headline')} lost in the last 4 weeks${direction}.`)
+    }
+    if (topStore && storeRows.length > 1) {
+      const share = Math.round((topStore.incidents / Math.max(1, filteredIncidents.length)) * 100)
+      parts.push(`${topStore.store} accounts for ${share}% of incidents.`)
+    }
+    return parts.join(' ')
+  }, [ledgerTrends, storeRows, filteredIncidents.length])
+
   // Define background colors for each stat card based on type
   const getStatCardColor = (color: string) => {
     switch(color) {
@@ -1216,7 +1257,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <DashboardGreeting showLastLogin={false} />
+        <DashboardGreeting showLastLogin={false} subtitle={briefing || undefined} />
         {showIncidentReportCta && (
           <Button asChild className="self-start sm:self-auto">
             <Link to="/operations/incident-report?open=new">
@@ -1246,9 +1287,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
         label="Dashboard filters"
         actions={
           <>
-            <Button variant="outline" onClick={handleApplyDateRange} className="flex-1 sm:flex-none">
-              Apply dates
-            </Button>
             <Button
               variant="ghost"
               onClick={handleClearDateRange}
@@ -1298,23 +1336,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
           fromLabel="Filter incidents from date"
           toLabel="Filter incidents to date"
           onFromChange={(nextFrom) => {
-            setFromDateInput(nextFrom)
-            if (nextFrom && toDateInput && new Date(nextFrom) > new Date(toDateInput)) {
-              setDateRangeError('Start date must be before end date.')
-              return
-            }
             setDateRangeError(null)
+            setFromDateInput(nextFrom)
             setFromDate(nextFrom)
-            setToDate(toDateInput)
           }}
           onToChange={(nextTo) => {
-            setToDateInput(nextTo)
-            if (fromDateInput && nextTo && new Date(fromDateInput) > new Date(nextTo)) {
-              setDateRangeError('Start date must be before end date.')
-              return
-            }
             setDateRangeError(null)
-            setFromDate(fromDateInput)
+            setToDateInput(nextTo)
             setToDate(nextTo)
           }}
         />
@@ -1339,7 +1367,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
           },
           {
             label: 'Value lost',
-            value: formatCurrency(quickStats.totalLostValue || 0),
+            value: formatMoney(quickStats.totalLostValue || 0, 'headline'),
             hint: filtersActive ? 'Within selected filters' : 'All time',
             tone: 'loss',
             trend: ledgerTrends.hasHistory ? ledgerTrends.series.lost : undefined,
@@ -1349,7 +1377,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
           },
           {
             label: 'Value recovered',
-            value: formatCurrency(quickStats.totalValue),
+            value: formatMoney(quickStats.totalValue, 'headline'),
             hint: 'Returned to stock or paid for',
             tone: 'recovered',
             trend: ledgerTrends.hasHistory ? ledgerTrends.series.recovered : undefined,
@@ -1370,7 +1398,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
       />
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
-        <div className="min-w-0 space-y-6 xl:col-span-8">
+        <div className="min-w-0 xl:col-span-8">
           {/* Loss vs recovery over time */}
           <Card>
             <CardHeader className="flex flex-col gap-3 space-y-0 pb-2 sm:flex-row sm:items-start sm:justify-between">
@@ -1438,11 +1466,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
                           axisLine={false}
                           tickLine={false}
                           width={56}
-                          tickFormatter={(value) => formatCurrency(Number(value))}
+                          tickFormatter={(value) => formatMoney(Number(value), 'axis')}
                         />
                         <Tooltip
                           {...chartTooltipStyle(chartTheme)}
-                          formatter={(value, name) => [formatCurrency(Number(value)), name]}
+                          formatter={(value, name) => [formatMoney(Number(value), 'exact'), name]}
                         />
                         <Area
                           type="monotone"
@@ -1470,32 +1498,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
             </CardContent>
           </Card>
 
-          {/* Recent incidents */}
-          <Card className="overflow-hidden">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-              <div className="space-y-0.5">
-                <CardTitle>Recent incidents</CardTitle>
-                <p className="text-[13px] text-muted-foreground">Latest reports in the current view</p>
-              </div>
-              <Button variant="outline" size="sm" asChild>
-                <Link to="/operations/incident-report">
-                  View all
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </Link>
-              </Button>
-            </CardHeader>
-            <CardContent className="p-0">
-              <IncidentTable data={recentIncidents} />
-            </CardContent>
-          </Card>
         </div>
-
-        <aside className="min-w-0 space-y-6 xl:col-span-4" aria-label="Alerts and risk">
+        <aside className="flex min-w-0 flex-col xl:col-span-4" aria-label="Needs attention">
           {/* Alerts */}
-          <Card>
+          <Card className="flex flex-1 flex-col">
             <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-3">
               <CardTitle className="flex items-center gap-2">
-                Alerts
+                <Bell className="h-4 w-4 text-muted-foreground" />
+                Needs attention
                 {alerts.length > 0 && newAlertCount > 0 && (
                   <Badge variant="destructive" className="figures">{newAlertCount} new</Badge>
                 )}
@@ -1516,7 +1526,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
                 <EmptyState icon={<Bell />} title="No alerts" description="Alerts appear here when an alert rule matches a new incident." className="py-8" />
               ) : (
                 <ul className="divide-y divide-border border-t border-border">
-                  {alerts.map((alert) => (
+                  {alerts.slice(0, 5).map((alert) => (
                     <li key={alert.id} className="flex gap-3 px-5 py-3.5">
                       <span
                         aria-hidden
@@ -1539,85 +1549,124 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
                   ))}
                 </ul>
               )}
-            </CardContent>
-          </Card>
-
-          {/* AI risk indicators */}
-          {aiAnalytics && aiAnalytics.riskIndicators.length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                  Risk indicators
-                </CardTitle>
-                <p className="text-[13px] text-muted-foreground">Scored by the incident classifier</p>
-              </CardHeader>
-              <CardContent className="p-0">
-                <ul className="divide-y divide-border border-t border-border">
-                  {aiAnalytics.riskIndicators.map((indicator, idx) => (
-                    <li key={idx} className="space-y-2 px-5 py-3.5">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm font-medium text-foreground">{indicator.indicator}</span>
-                        <Badge variant={riskBadge(indicator.level)} className="capitalize">{indicator.level}</Badge>
-                      </div>
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted" aria-hidden>
-                        <div
-                          className={cn('h-full rounded-full', riskTone(indicator.level))}
-                          style={{ width: riskWidth(indicator.score) }}
-                        />
-                      </div>
-                      {indicator.description && (
-                        <p className="text-xs leading-5 text-muted-foreground">{indicator.description}</p>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Incident frequency by store */}
-          <Card>
-            <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-3">
-              <div className="space-y-0.5">
-                <CardTitle className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-muted-foreground" />
-                  Busiest stores
-                </CardTitle>
-                <p className="text-[13px] text-muted-foreground">Incidents per store in the current view</p>
-              </div>
-              <Button variant="ghost" size="sm" asChild>
-                <Link to="/analytics/data-analytics-hub">
-                  Analytics
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </Link>
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {heatmapData.length === 0 ? (
-                <EmptyState icon={<MapPin />} title="No store activity yet" className="py-6" />
-              ) : (
-                <ol className="space-y-3">
-                  {heatmapData.map((row, idx) => (
-                    <li key={row.store} className="grid grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5">
-                      <span className="figures text-xs text-muted-foreground">{idx + 1}</span>
-                      <span className="truncate text-sm text-foreground">{row.store}</span>
-                      <span className="figures text-sm font-medium text-foreground">{row.incidents}</span>
-                      <span aria-hidden />
-                      <span className="col-span-2 h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden>
-                        <span
-                          className="block h-full rounded-full bg-foreground/70"
-                          style={{ width: `${Math.max(3, Math.round((row.incidents / maxHeat) * 100))}%` }}
-                        />
-                      </span>
-                    </li>
-                  ))}
-                </ol>
+              {alerts.length > 5 && (
+                <p className="border-t border-border px-5 py-2.5 text-xs text-muted-foreground">
+                  {alerts.length - 5} more {alerts.length - 5 === 1 ? 'alert' : 'alerts'} in the notification bell
+                </p>
               )}
             </CardContent>
           </Card>
+
         </aside>
       </div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+        {/* Store league table */}
+        <Card className="overflow-hidden xl:col-span-7">
+          <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-3">
+            <div className="space-y-0.5">
+              <CardTitle className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                Stores to watch
+              </CardTitle>
+              <p className="text-[13px] text-muted-foreground">Ranked by incidents, with what each is losing and its direction over 8 weeks</p>
+            </div>
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/analytics/data-analytics-hub">
+                Analytics
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          </CardHeader>
+          <CardContent className="p-0">
+            {storeRows.length === 0 ? (
+              <EmptyState icon={<MapPin />} title="No store activity yet" className="py-8" />
+            ) : (
+              <StoreLeaderboard rows={storeRows} />
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Day and time pattern */}
+        <Card className="xl:col-span-5">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              When incidents happen
+            </CardTitle>
+            <p className="text-[13px] text-muted-foreground">Day of week against time of day. Plan cover around the darkest cells.</p>
+          </CardHeader>
+          <CardContent>
+            {incidentTimes.length === 0 ? (
+              <EmptyState icon={<Clock />} title="No incidents in view" className="py-8" />
+            ) : (
+              <WeekHourGrid times={incidentTimes} />
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Risk signals */}
+      {aiAnalytics && aiAnalytics.riskIndicators.length > 0 && (
+        <section aria-labelledby="risk-signals-title" className="rounded-xl border border-border bg-card">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 px-5 pb-3 pt-4">
+            <h2 id="risk-signals-title" className="flex items-center gap-2 text-base font-semibold text-foreground">
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              Risk signals
+            </h2>
+            <p className="text-[13px] text-muted-foreground">Scored by the incident classifier</p>
+          </div>
+          <ul className="grid grid-cols-1 divide-y divide-border border-t border-border sm:grid-cols-2 sm:divide-y-0 xl:grid-cols-4">
+            {aiAnalytics.riskIndicators.slice(0, 4).map((indicator, idx) => (
+              <li
+                key={idx}
+                className={cn(
+                  'space-y-2 px-5 py-4',
+                  idx > 0 && 'sm:border-l sm:border-border',
+                  idx === 2 && 'sm:border-l-0 sm:border-t xl:border-l xl:border-t-0',
+                  idx === 3 && 'sm:border-t xl:border-t-0'
+                )}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium text-foreground">{indicator.indicator}</span>
+                  <Badge variant={riskBadge(indicator.level)} className="shrink-0 first-letter:uppercase">{indicator.level} risk</Badge>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted" aria-hidden>
+                  <div className={cn('h-full rounded-full', riskTone(indicator.level))} style={{ width: riskWidth(indicator.score) }} />
+                </div>
+                {indicator.description && (
+                  <p className="text-xs leading-5 text-muted-foreground">{indicator.description}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+        {/* Recent incidents */}
+        <Card className="overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <div className="space-y-0.5">
+              <CardTitle>Recent incidents</CardTitle>
+              <p className="text-[13px] text-muted-foreground">Latest reports in the current view</p>
+            </div>
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/operations/incident-report">
+                View all
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          </CardHeader>
+          <CardContent className="p-0">
+            <IncidentTable data={recentIncidents} />
+          </CardContent>
+        </Card>
+
+      {incidentsPagination && incidentsPagination.totalCount > filteredIncidents.length && filteredIncidents.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          Totals cover all {incidentsPagination.totalCount.toLocaleString('en-GB')} incidents in view. Trends, stores and times use the latest {filteredIncidents.length.toLocaleString('en-GB')}.
+        </p>
+      )}
     </div>
   )
 }

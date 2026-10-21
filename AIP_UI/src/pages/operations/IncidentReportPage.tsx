@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef, Suspense, lazy } from "react"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { formatMoney } from '@/lib/money'
 import { EmptyState } from '@/components/common/EmptyState'
 import { Segmented } from '@/components/common/Segmented'
 import { FilterBar, FilterChip, DateRangeField } from '@/components/common/FilterBar'
@@ -258,6 +259,8 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
     const incidentTypeParam = searchParams.get('incidentType')
     const fromDateParam = searchParams.get('fromDate')
     const toDateParam = searchParams.get('toDate')
+    const searchParam = searchParams.get('search')
+    if (searchParam) setSearchTerm(searchParam)
 
     if (!presetParam && !incidentTypeParam && !fromDateParam && !toDateParam) {
       return
@@ -621,7 +624,6 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
     setToDateInput("")
     setCurrentPage(1)
   }
-  const formatMoney = (value: number) => `£${value.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   const formatIncidentDate = (value: string) => new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
   const incidentTypeOptions = Array.from(
     new Set([...(incidentsResponse.data ?? []).map((incident: Incident) => incident.incidentType).filter(Boolean), ...(incidentTypeFilter ? [incidentTypeFilter] : [])])
@@ -715,8 +717,8 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
           <StatLedger
             items={[
               { label: 'Incidents', value: stats.totalIncidents.toLocaleString('en-GB'), hint: 'In the current filter', icon: <AlertCircle />, tone: 'neutral' },
-              { label: 'Value lost', value: `£${stats.totalAmountLost.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, hint: 'Not recovered', icon: <PoundSterling />, tone: 'loss' },
-              { label: 'Value recovered', value: `£${stats.totalAmountRecovered.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, hint: 'Returned or paid for', icon: <PoundSterling />, tone: 'recovered' },
+              { label: 'Value lost', value: formatMoney(stats.totalAmountLost, 'headline'), hint: 'Not recovered', icon: <PoundSterling />, tone: 'loss' },
+              { label: 'Value recovered', value: formatMoney(stats.totalAmountRecovered, 'headline'), hint: 'Returned or paid for', icon: <PoundSterling />, tone: 'recovered' },
               { label: 'Stores affected', value: stats.uniqueSites, hint: 'With at least one incident', icon: <Store />, tone: 'info' },
             ]}
           />
@@ -741,9 +743,6 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
             }
             actions={
               <>
-                <Button variant="outline" onClick={handleApplyDateRange} className="flex-1 sm:flex-none">
-                  Apply dates
-                </Button>
                 <Button
                   variant="ghost"
                   onClick={handleClearFilters}
@@ -794,8 +793,17 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
             <DateRangeField
               from={fromDateInput}
               to={toDateInput}
-              onFromChange={setFromDateInput}
-              onToChange={setToDateInput}
+              onFromChange={(value) => {
+                setFromDateInput(value)
+                setFromDate(value)
+                setDatePreset(value ? 'custom' : null)
+                setCurrentPage(1)
+              }}
+              onToChange={(value) => {
+                setToDateInput(value)
+                setToDate(value)
+                setCurrentPage(1)
+              }}
               fromLabel="Filter from date"
               toLabel="Filter to date"
             />

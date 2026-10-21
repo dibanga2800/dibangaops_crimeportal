@@ -228,7 +228,7 @@ const IncidentTable: React.FC<{ incidents: RecentIncident[] }> = ({ incidents })
                 <TableRow>
                   <TableHead className="w-[120px] sm:w-[150px]">Officer</TableHead>
                   <TableHead className="w-[80px] sm:w-[100px]">Date</TableHead>
-                  <TableHead className="w-[160px] sm:w-[200px]">Site Name</TableHead>
+                  <TableHead className="w-[160px] sm:w-[200px]">Store</TableHead>
                   <TableHead className="w-[120px] sm:w-[150px]">Type</TableHead>
                   <TableHead className="text-right w-[90px] sm:w-[120px]">Recovered</TableHead>
                   <TableHead className="text-right w-[90px] sm:w-[120px]">Lost</TableHead>
@@ -583,7 +583,7 @@ export default function OfficerDashboard() {
           {/* Stats Grid */}
           <section aria-label="Dashboard Statistics" className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <StatCard
-              title="Incidents in Range"
+              title="Incidents in range"
               value={computedStats.incidentsThisMonth}
               icon={Shield}
               gradient="bg-gradient-to-br from-blue-500 to-blue-700"
@@ -591,7 +591,7 @@ export default function OfficerDashboard() {
               link="/operations/incident-report"
             />
             <StatCard
-              title="Value Lost"
+              title="Value lost"
               value={formatCurrency(computedStats.lostValueThisMonth)}
               icon={AlertTriangle}
               gradient="bg-gradient-to-br from-rose-500 to-rose-700"
@@ -599,7 +599,7 @@ export default function OfficerDashboard() {
               link="/operations/incident-report"
             />
             <StatCard
-              title="Value Recovered"
+              title="Value recovered"
               value={formatCurrency(computedStats.recoveredValueThisMonth)}
               icon={Wallet}
               gradient="bg-gradient-to-br from-emerald-500 to-green-700"
@@ -607,7 +607,7 @@ export default function OfficerDashboard() {
               link="/operations/incident-report"
             />
             <StatCard
-              title="Incidents in Scope"
+              title="Incidents in scope"
               value={computedStats.incidentsThisMonth}
               icon={Calendar}
               gradient="bg-gradient-to-br from-amber-500 to-orange-600"
@@ -627,14 +627,14 @@ export default function OfficerDashboard() {
                 </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <ProgressCard
-                    title="Operational Target: Incidents Handled"
+                    title="Operational target: incidents handled"
                     current={computedStats.incidentsThisMonth}
                     target={dashboardData.monthlyTarget.incidents}
                     unit="incidents"
                     color="blue"
                   />
                   <ProgressCard
-                    title="Financial Target: Value Recovered"
+                    title="Financial target: value recovered"
                     current={computedStats.recoveredValueThisMonth}
                     target={dashboardData.monthlyTarget.valueSaved}
                     unit="£"

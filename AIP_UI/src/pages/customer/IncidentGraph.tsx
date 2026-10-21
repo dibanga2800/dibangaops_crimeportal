@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { formatMoney } from '@/lib/money'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -193,17 +194,10 @@ const getIncidentLostValue = (inc: any): number => {
 }
 
 /** Whole pounds with thousands separators, for headline figures. */
-const formatPounds = (value: number): string => `£${Math.round(value).toLocaleString('en-GB')}`
+const formatPounds = (value: number): string => formatMoney(value, 'headline')
 
-const formatCurrency = (value: number, compact = false): string => {
-	if (value === 0) return '£0'
-	if (compact && value >= 1000) {
-		return value < 1_000_000 ? `£${(value / 1000).toFixed(1)}k` : `£${(value / 1_000_000).toFixed(2)}m`
-	}
-	if (value < 1000) return `£${value.toLocaleString('en-GB', { maximumFractionDigits: 2 })}`
-	if (value < 1_000_000) return `£${(value / 1000).toFixed(1)}K`
-	return `£${(value / 1_000_000).toFixed(2)}M`
-}
+/** Chart labels and axis ticks: short pounds (£3.7k); exact values go in tooltips. */
+const formatCurrency = (value: number): string => formatMoney(value, 'axis')
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -281,14 +275,14 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 	const selectedRegionLabel = useMemo(
 		() =>
 			selectedRegionId === 'all'
-				? 'All Regions'
+				? 'All regions'
 				: (availableRegions.find(r => r.id === selectedRegionId)?.name ?? 'Selected Region'),
 		[selectedRegionId, availableRegions]
 	)
 
 	const regionOptions = useMemo(
 		() => [
-			{ value: 'all', label: 'All Regions' },
+			{ value: 'all', label: 'All regions' },
 			...availableRegions.map(r => ({ value: r.id, label: r.name })),
 		],
 		[availableRegions]
@@ -504,7 +498,7 @@ const IncidentGraph: React.FC<IncidentGraphProps> = ({ customerId }) => {
 	// ── Chart rendering ───────────────────────────────────────────────────────
 
 	const formatValue = (value: number) =>
-		graphType === 'value' || graphType === 'lost' ? formatCurrency(value, screenSize === 'sm') : value.toString()
+		graphType === 'value' || graphType === 'lost' ? formatCurrency(value) : value.toString()
 
 	const formatTooltipValue = (val: any, _name: string, props: any) => {
 		if (graphType === 'type') {

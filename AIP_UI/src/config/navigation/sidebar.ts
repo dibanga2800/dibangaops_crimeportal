@@ -67,12 +67,12 @@ export interface SidebarSection {
 export const SIDEBAR_TOP_LINKS: SidebarNavLink[] = [
 	{
 		path: '/analytics/data-analytics-hub',
-		label: 'Data Analytics Hub',
+		label: 'Analytics hub',
 		icon: Brain,
 	},
 	{
 		path: '/operations/alert-rules',
-		label: 'Alert Rules',
+		label: 'Alert rules',
 		icon: Bell,
 	},
 ]
@@ -87,31 +87,31 @@ export const SIDEBAR_SECTIONS: SidebarSection[] = [
 		links: [
 			{
 				path: '/administration/user-setup',
-				label: 'User Setup',
+				label: 'Users',
 				icon: User,
 				guard: (ctx) => ctx.isAdministrator,
 			},
 			{
 				path: '/administration/employee-registration',
-				label: 'Employee Registration',
+				label: 'Employees',
 				icon: UserPlus,
 				guard: (ctx) => ctx.isAdministrator,
 			},
 			{
 				path: '/administration/customer-setup',
-				label: 'Company Setup',
+				label: 'Companies',
 				icon: Building,
 				guard: (ctx) => ctx.isAdministrator,
 			},
 			{
 				path: '/administration/barcode-catalog-import',
-				label: 'Barcode catalog import',
+				label: 'Barcode import',
 				icon: ScanBarcode,
 				// Visibility controlled by Settings page access (same as User Setup / Company Setup)
 			},
 			{
 				path: '/administration/product-catalog',
-				label: 'Product catalog',
+				label: 'Product catalogue',
 				icon: Package,
 			},
 		],
@@ -123,17 +123,17 @@ export const SIDEBAR_SECTIONS: SidebarSection[] = [
 		links: [
 			{
 				path: '/operations/incident-report',
-				label: 'Incident Report',
+				label: 'Incident reports',
 				icon: AlertTriangle,
 			},
 			{
 				path: '/operations/incident-graph',
-				label: 'Incident Graph',
+				label: 'Incident graph',
 				icon: BarChart2,
 			},
 			{
 				path: '/operations/crime-intelligence',
-				label: 'Crime Intelligence',
+				label: 'Crime intelligence',
 				icon: TrendingUp,
 			},
 		],

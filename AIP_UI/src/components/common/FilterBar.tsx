@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
-import { CalendarRange, SlidersHorizontal, X } from 'lucide-react'
+import { SlidersHorizontal, X } from 'lucide-react'
+import { DateRangePicker } from './DateRangePicker'
 import { cn } from '@/lib/utils'
 
 interface FilterBarProps {
@@ -76,66 +77,8 @@ export function FilterBar({ children, actions, summary, primary, activeCount = 0
 	)
 }
 
-interface DateRangeFieldProps {
-	from: string
-	to: string
-	onFromChange: (value: string) => void
-	onToChange: (value: string) => void
-	className?: string
-	fromLabel?: string
-	toLabel?: string
-	min?: string
-	max?: string
-}
-
-/** Two native date inputs joined into one control, so a range reads as one thing. */
-export function DateRangeField({
-	from,
-	to,
-	onFromChange,
-	onToChange,
-	className,
-	fromLabel = 'From date',
-	toLabel = 'To date',
-	min,
-	max,
-}: DateRangeFieldProps) {
-	const input =
-		'h-[34px] min-w-0 flex-1 rounded-none border-0 bg-transparent px-2 text-sm shadow-none focus:outline-none focus:ring-0 [color-scheme:inherit]'
-	return (
-		<div
-			className={cn(
-				'flex h-9 w-full items-center rounded-md border border-input bg-card pl-2.5 transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 hover:border-foreground/30 sm:w-auto',
-				className,
-			)}
-		>
-			<CalendarRange className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-			<input
-				type="date"
-				value={from}
-				min={min}
-				max={to || max}
-				onChange={(e) => onFromChange(e.target.value)}
-				aria-label={fromLabel}
-				className={cn(input, 'sm:w-[8.75rem] sm:flex-none')}
-				style={{ borderWidth: 0, boxShadow: 'none' }}
-			/>
-			<span className="px-0.5 text-xs text-muted-foreground" aria-hidden>
-				to
-			</span>
-			<input
-				type="date"
-				value={to}
-				min={from || min}
-				max={max}
-				onChange={(e) => onToChange(e.target.value)}
-				aria-label={toLabel}
-				className={cn(input, 'sm:w-[8.75rem] sm:flex-none')}
-				style={{ borderWidth: 0, boxShadow: 'none' }}
-			/>
-		</div>
-	)
-}
+/** Date range control used by every filter bar (see DateRangePicker). */
+export const DateRangeField = DateRangePicker
 
 interface FilterChipProps {
 	children: ReactNode

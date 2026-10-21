@@ -84,8 +84,8 @@ module.exports = {
         },
       },
       fontFamily: {
-        // Condensed display face for titles and headline figures (app shell only).
-        display: ['"IBM Plex Sans Condensed"', '"IBM Plex Sans"', "ui-sans-serif", "system-ui", "sans-serif"],
+        // Display face for titles and headline figures (app shell only).
+        display: ['"Plus Jakarta Sans"', '"Inter"', "ui-sans-serif", "system-ui", "sans-serif"],
       },
       boxShadow: {
         // One quiet elevation for floating layers; panels stay flat.

@@ -67,7 +67,7 @@ export function CustomerTableRow({
             className="h-8 w-8 p-0"
           >
             <Pencil className="h-4 w-4" />
-            <span className="sr-only">Edit customer</span>
+            <span className="sr-only">Edit company</span>
           </Button>
           <Button
             variant="ghost"
@@ -79,7 +79,7 @@ export function CustomerTableRow({
             className="h-8 w-8 p-0 text-muted-foreground hover:bg-loss-soft hover:text-loss"
           >
             <Trash2 className="h-4 w-4" />
-            <span className="sr-only">Delete customer</span>
+            <span className="sr-only">Delete company</span>
           </Button>
         </div>
       </TableCell>

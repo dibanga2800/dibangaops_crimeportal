@@ -62,8 +62,8 @@ export default function CustomerSetup() {
     <div className="w-full">
       <div className="space-y-6">
         <PageHeader
-          title="Company setup"
-          description="Companies, their regions and the store sites incidents are reported against."
+          title="Companies"
+          description="Companies, their regions and the stores incidents are reported against."
           className="pb-0"
         />
 
@@ -128,7 +128,7 @@ export default function CustomerSetup() {
             selectedCustomerId ? (
               <div className="space-y-4">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                  <h2 className="text-base font-semibold text-foreground">Sites</h2>
+                  <h2 className="text-base font-semibold text-foreground">Stores</h2>
                   <Button
                     onClick={() => {
                       setSelectedSite(undefined)

@@ -119,6 +119,11 @@ export function IncidentTable({ data }: DataTableProps) {
     setCurrentPage(Math.max(1, Math.min(page, totalPages)))
   }
 
+  // Hide columns that carry no information for this data set
+  const showCompany = useMemo(() => new Set(data.map(d => d.customerName)).size > 1, [data])
+  const showInsight = useMemo(() => data.some(d => d.incidentCategory || d.riskLevel), [data])
+  const columnCount = 6 + (showCompany ? 1 : 0) + (showInsight ? 1 : 0)
+
   const getSortIcon = (key: keyof IncidentReport) => {
     if (sortConfig.key !== key) return '↕'
     return sortConfig.direction === 'asc' ? '↑' : '↓'
@@ -207,6 +212,7 @@ export function IncidentTable({ data }: DataTableProps) {
           <table className="figures w-full caption-bottom text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/60">
+              {showCompany && (
               <th 
                   className="h-10 cursor-pointer select-none whitespace-nowrap px-4 text-left align-middle text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                 onClick={() => sortData('customerName')}
@@ -215,6 +221,7 @@ export function IncidentTable({ data }: DataTableProps) {
                   Company {getSortIcon('customerName')}
                 </div>
               </th>
+              )}
               <th 
                   className="h-10 cursor-pointer select-none whitespace-nowrap px-4 text-left align-middle text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                 onClick={() => sortData('store')}
@@ -263,15 +270,17 @@ export function IncidentTable({ data }: DataTableProps) {
                   Type {getSortIcon('incidentType')}
                 </div>
               </th>
+              {showInsight && (
               <th className="h-10 whitespace-nowrap px-4 text-left align-middle text-xs font-medium text-muted-foreground">
                 AI insight
               </th>
+              )}
             </tr>
           </thead>
           <tbody className="tracking-normal">
             {filteredAndSortedData.length === 0 && data.length > 0 && (
               <tr>
-                <td colSpan={8} className="h-12 text-center text-sm text-warning">
+                <td colSpan={columnCount} className="h-12 text-center text-sm text-warning">
                   None of the {data.length} incidents match your search
                 </td>
               </tr>
@@ -280,8 +289,8 @@ export function IncidentTable({ data }: DataTableProps) {
             {currentPageData.length > 0 ? (
               currentPageData.map((report) => (
                 <tr key={report.id} className="border-b border-border/70 transition-colors last:border-0 hover:bg-muted/40">
-                    <td className="whitespace-nowrap px-4 py-3 align-middle font-medium text-foreground">{report.customerName}</td>
-                    <td className="whitespace-nowrap px-4 py-3 align-middle text-foreground/80">{report.store || report.siteName}</td>
+                    {showCompany && <td className="whitespace-nowrap px-4 py-3 align-middle font-medium text-foreground">{report.customerName}</td>}
+                    <td className={`whitespace-nowrap px-4 py-3 align-middle ${showCompany ? 'text-foreground/80' : 'font-medium text-foreground'}`}>{report.store || report.siteName}</td>
                     <td className="whitespace-nowrap px-4 py-3 align-middle text-foreground/80">{report.officerName}</td>
                     <td className="whitespace-nowrap px-4 py-3 align-middle text-foreground/80">
                     <div className="flex items-center gap-2">
@@ -308,6 +317,7 @@ export function IncidentTable({ data }: DataTableProps) {
                         {report.incidentType}
                       </span>
                     </td>
+                    {showInsight && (
                     <td className="space-y-1 whitespace-nowrap px-4 py-3 align-middle text-xs">
                       {report.incidentCategory && (
                         <div className="mr-1 inline-flex items-center rounded-full bg-info-soft px-2 py-0.5 text-[11px] font-medium text-info">
@@ -338,11 +348,12 @@ export function IncidentTable({ data }: DataTableProps) {
                         </div>
                       )}
                     </td>
+                    )}
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan={8} className="h-24 text-center text-sm text-muted-foreground">
+                <td colSpan={columnCount} className="h-24 text-center text-sm text-muted-foreground">
                   No incidents to show yet.
                 </td>
               </tr>

@@ -283,7 +283,7 @@ export function CustomersTable({ onCustomerSelect, selectedCustomerId, onDataCha
       <div className="relative">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
         <Input
-          placeholder="Search customers..."
+          placeholder="Search companies"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="pl-10"
@@ -303,7 +303,7 @@ export function CustomersTable({ onCustomerSelect, selectedCustomerId, onDataCha
       {/* Error State */}
       {!isLoadingCustomers && allCustomers.length === 0 && (
         <div className="text-center py-8">
-          <p className="text-sm text-muted-foreground mb-4">No customers found.</p>
+          <p className="text-sm text-muted-foreground mb-4">No companies found.</p>
           <Button 
             onClick={() => forceUpdate()}
             variant="outline"
@@ -489,7 +489,7 @@ export function CustomersTable({ onCustomerSelect, selectedCustomerId, onDataCha
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Customer</AlertDialogTitle>
+            <AlertDialogTitle>Delete company</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete "{customerToDelete?.companyName}"? This action cannot be undone.
             </AlertDialogDescription>

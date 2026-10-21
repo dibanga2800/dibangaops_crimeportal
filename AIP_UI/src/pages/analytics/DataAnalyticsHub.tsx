@@ -44,13 +44,13 @@ import { HotProductsDashboard } from './components/HotProductsDashboard'
 import { RepeatOffenderAnalysis } from './components/RepeatOffenderAnalysis'
 import { ResourceDeploymentEngine } from './components/ResourceDeploymentEngine'
 import { CrimeLinkingPanel } from './components/CrimeLinkingPanel'
+import { HubBriefing } from './components/HubBriefing'
 import {
 	RefreshCw,
 	Calendar as CalendarIcon,
 	Download,
 	Filter,
 	AlertCircle,
-	Shield,
 } from 'lucide-react'
 import { format, subDays, subMonths, startOfDay } from 'date-fns'
 import type { DateRange } from 'react-day-picker'
@@ -1110,7 +1110,7 @@ const DataAnalyticsHub = () => {
 	if (error && !data) {
 		return (
 			<div className="space-y-6">
-				<PageHeader title="Data analytics hub" className="pb-0" />
+				<PageHeader title="Analytics hub" className="pb-0" />
 				<div className="rounded-lg border border-border bg-card">
 					<EmptyState
 						icon={<AlertCircle className="h-5 w-5 text-loss" />}
@@ -1176,23 +1176,28 @@ const DataAnalyticsHub = () => {
 			]
 		: []
 
-	const riskTotal = aiRiskSummary ? aiRiskSummary.highCount + aiRiskSummary.mediumCount + aiRiskSummary.lowCount : 0
-	const riskTone: Record<string, string> = { high: 'text-loss', critical: 'text-loss', medium: 'text-warning', low: 'text-recovered' }
 
 	const tabs = [
-		{ value: 'crime-trends', label: 'Crime trends' },
-		{ value: 'deployment', label: 'Deployment' },
-		{ value: 'hot-products', label: 'Hot products' },
-		{ value: 'recovery-performance', label: 'Recovery by store' },
-		{ value: 'repeat-offenders', label: 'Offenders' },
-		{ value: 'crime-linking', label: 'Crime linking' },
+		{ value: 'crime-trends', label: 'When it happens', description: 'How losses and incidents move over time, by day of week and hour, and by type.' },
+		{ value: 'deployment', label: 'Where to deploy', description: 'When and where store detectives will prevent the most loss.' },
+		{ value: 'hot-products', label: "What's taken", description: 'The products thieves target, and a map of where it happens.' },
+		{ value: 'recovery-performance', label: 'Recovery by store', description: 'How much each store gets back, against the network average.' },
+		{ value: 'repeat-offenders', label: "Who's offending", description: 'Repeat offenders, how often they strike and where.' },
+		{ value: 'crime-linking', label: 'Linked incidents', description: 'Incidents that look like the same person or group.' },
 	]
+	const activeTabMeta = tabs.find((t) => t.value === activeTab) ?? tabs[0]
+	const periodLabel =
+		activePreset !== 'custom'
+			? `last ${PERIOD_PRESETS.find((p) => p.value === activePreset)?.label ?? '30 days'}`
+			: dateRange?.from && dateRange?.to
+				? `${format(dateRange.from, 'd MMM')} to ${format(dateRange.to, 'd MMM yyyy')}`
+				: 'all dates'
 
 	return (
 		<ErrorBoundary>
 			<div className="w-full space-y-5">
 				<PageHeader
-					title="Data analytics hub"
+					title="Analytics hub"
 					description="Crime trends, hot products, repeat offenders and where to deploy store detectives, for the dates and stores you choose."
 					className="pb-0"
 					actions={
@@ -1358,69 +1363,15 @@ const DataAnalyticsHub = () => {
 									}
 								/>
 							</div>
-						) : (aiRiskSummary || recoveryInsights.length > 0) ? (
-							<div className="grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-								{aiRiskSummary && (
-									<section aria-labelledby="risk-heading" className="rounded-lg border border-border bg-card p-4 sm:p-5">
-										<div className="flex items-start justify-between gap-3">
-											<div>
-												<h2 id="risk-heading" className="flex items-center gap-2 text-sm font-semibold text-foreground">
-													<Shield className="h-4 w-4 text-muted-foreground" aria-hidden />
-													Store risk
-												</h2>
-												<p className="mt-0.5 text-[13px] text-muted-foreground">From the deployment risk engine</p>
-											</div>
-											<span className={cn('font-display text-2xl font-semibold capitalize leading-none', riskTone[aiRiskSummary.overallLevel])}>
-												{aiRiskSummary.overallLevel}
-											</span>
-										</div>
-										<div className="mt-4 flex h-2.5 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${aiRiskSummary.highCount} high, ${aiRiskSummary.mediumCount} medium and ${aiRiskSummary.lowCount} low risk stores`}>
-											{riskTotal > 0 && (
-												<>
-													<span className="bg-loss" style={{ width: `${(aiRiskSummary.highCount / riskTotal) * 100}%` }} />
-													<span className="bg-warning" style={{ width: `${(aiRiskSummary.mediumCount / riskTotal) * 100}%` }} />
-													<span className="bg-recovered" style={{ width: `${(aiRiskSummary.lowCount / riskTotal) * 100}%` }} />
-												</>
-											)}
-										</div>
-										<dl className="figures mt-3 grid grid-cols-3 gap-2 text-sm">
-											{[
-												{ label: 'High', value: aiRiskSummary.highCount, dot: 'bg-loss' },
-												{ label: 'Medium', value: aiRiskSummary.mediumCount, dot: 'bg-warning' },
-												{ label: 'Low', value: aiRiskSummary.lowCount, dot: 'bg-recovered' },
-											].map((row) => (
-												<div key={row.label}>
-													<dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
-														<span className={cn('h-2 w-2 rounded-full', row.dot)} aria-hidden />
-														{row.label}
-													</dt>
-													<dd className="font-semibold text-foreground">{row.value} {row.value === 1 ? 'store' : 'stores'}</dd>
-												</div>
-											))}
-										</dl>
-										<p className="mt-4 border-t border-border pt-3 text-[13px] text-muted-foreground">
-											Highest risk: <span className="font-semibold text-foreground">{aiRiskSummary.topStoreName}</span>{' '}
-											<span className="text-muted-foreground">({aiRiskSummary.topStoreLevelLabel})</span>
-										</p>
-									</section>
-								)}
-								{recoveryInsights.length > 0 && (
-									<section aria-labelledby="insights-heading" className="rounded-lg border border-border bg-card p-4 sm:p-5">
-										<h2 id="insights-heading" className="text-sm font-semibold text-foreground">What stands out</h2>
-										<ol className="mt-3 divide-y divide-border">
-											{recoveryInsights.map((insight, index) => (
-												<li key={insight} className="flex gap-3 py-2.5 first:pt-0 last:pb-0">
-													<span className="figures mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-accent-foreground">
-														{index + 1}
-													</span>
-													<p className="text-sm leading-6 text-foreground">{insight}</p>
-												</li>
-											))}
-										</ol>
-									</section>
-								)}
-							</div>
-						) : null}
+						) : (
+							<HubBriefing
+								data={data}
+								risk={aiRiskSummary}
+								insights={recoveryInsights}
+								periodLabel={periodLabel}
+								onOpenTab={setActiveTab}
+							/>
+						)}
 
 						<Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
 							<div className="sticky top-16 z-20 -mx-4 bg-background/95 px-4 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
@@ -1438,26 +1389,27 @@ const DataAnalyticsHub = () => {
 									</TabsList>
 								</div>
 							</div>
+							<p className="mt-3 text-[13px] text-muted-foreground" aria-live="polite">{activeTabMeta.description}</p>
 
-							<TabsContent value="crime-trends" className="mt-5 overflow-x-hidden">
+							<TabsContent value="crime-trends" className="mt-4 overflow-x-hidden">
 								<ErrorBoundary>
 									<CrimeTrendExplorer data={data.crimeTrends} loading={loading} />
 								</ErrorBoundary>
 							</TabsContent>
 
-							<TabsContent value="deployment" className="mt-5 overflow-x-hidden">
+							<TabsContent value="deployment" className="mt-4 overflow-x-hidden">
 								<ErrorBoundary>
 									<ResourceDeploymentEngine data={data.deploymentRecommendations} loading={loading} />
 								</ErrorBoundary>
 							</TabsContent>
 
-							<TabsContent value="hot-products" className="mt-5 overflow-x-hidden">
+							<TabsContent value="hot-products" className="mt-4 overflow-x-hidden">
 								<ErrorBoundary>
 									<HotProductsDashboard data={data.hotProducts} loading={loading} sites={filteredSites} />
 								</ErrorBoundary>
 							</TabsContent>
 
-							<TabsContent value="recovery-performance" className="mt-5 overflow-x-hidden">
+							<TabsContent value="recovery-performance" className="mt-4 overflow-x-hidden">
 								<section className="rounded-lg border border-border bg-card">
 									<div className="p-4 sm:p-5">
 										<h2 className="text-base font-semibold text-foreground">Recovered and lost by store</h2>
@@ -1518,13 +1470,13 @@ const DataAnalyticsHub = () => {
 								</section>
 							</TabsContent>
 
-							<TabsContent value="repeat-offenders" className="mt-5 overflow-x-hidden">
+							<TabsContent value="repeat-offenders" className="mt-4 overflow-x-hidden">
 								<ErrorBoundary>
 									<RepeatOffenderAnalysis data={data.repeatOffenders} loading={loading} />
 								</ErrorBoundary>
 							</TabsContent>
 
-							<TabsContent value="crime-linking" className="mt-5 overflow-x-hidden">
+							<TabsContent value="crime-linking" className="mt-4 overflow-x-hidden">
 								<ErrorBoundary>
 									<CrimeLinkingPanel data={data.crimeLinking} loading={loading} />
 								</ErrorBoundary>

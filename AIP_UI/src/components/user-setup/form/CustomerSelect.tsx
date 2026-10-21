@@ -42,7 +42,7 @@ export function CustomerSelect({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       <div className="space-y-2">
-        <Label className="text-foreground/80">Available customers</Label>
+        <Label className="text-foreground/80">Available companies</Label>
         <select 
           multiple 
           className="w-full h-48 bg-card/50 border border-primary/25 rounded-lg p-2 focus:border-primary focus:ring-ring"
@@ -63,7 +63,7 @@ export function CustomerSelect({
       </div>
 
       <div className="space-y-2">
-        <Label className="text-foreground/80">Assigned customers</Label>
+        <Label className="text-foreground/80">Assigned companies</Label>
         <div className="flex flex-col gap-2">
           <select 
             multiple 
