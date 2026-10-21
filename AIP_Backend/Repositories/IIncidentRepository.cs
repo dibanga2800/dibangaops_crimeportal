@@ -38,6 +38,17 @@ namespace AIPBackend.Repositories
 			DateTime? fromDate = null,
 			DateTime? toDate = null,
 			string? createdByUserId = null);
+		Task<(List<IncidentLiteDto> Rows, int TotalCount)> GetLiteAsync(
+			int maxRows,
+			string? search = null,
+			int? customerId = null,
+			IReadOnlyCollection<int>? customerIds = null,
+			string? siteId = null,
+			string? regionId = null,
+			string? incidentType = null,
+			string? status = null,
+			DateTime? fromDate = null,
+			DateTime? toDate = null);
 		Task<Incident> CreateAsync(Incident incident);
 		Task<Incident> UpdateAsync(Incident incident);
 		Task<bool> DeleteAsync(int incidentId);

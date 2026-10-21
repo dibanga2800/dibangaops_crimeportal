@@ -339,7 +339,7 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
   }, [searchTerm])
 
   // Fetch incidents using the API service
-  const { data: incidentsResponse = { data: [], pagination: { currentPage: 1, totalPages: 1, pageSize: 10, totalCount: 0, hasPrevious: false, hasNext: false } }, isLoading, error } = useQuery({
+  const { data: incidentsResponse = { data: [], pagination: { currentPage: 1, totalPages: 1, pageSize: 10, totalCount: 0, hasPrevious: false, hasNext: false } } as import('@/types/api').IncidentsResponse, isLoading, error } = useQuery({
     queryKey: ['incidents', pageForApi, pageSizeForApi, debouncedSearch, customerId, siteId, fromDate, toDate, incidentTypeFilter, regionFilter],
     queryFn: () => incidentsApi.getIncidents({
       page: pageForApi,

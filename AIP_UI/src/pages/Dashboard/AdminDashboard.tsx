@@ -1,5 +1,6 @@
 ﻿import React from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { formatMoney } from '@/lib/money'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -150,9 +151,19 @@ interface AdminDashboardProps {
 const PAGE_SIZE = 100
 const PARALLEL_PAGES = 5
 const MAX_PAGES = 100
+// Dashboard data is cached in the shared QueryClient so returning to the page
+// shows the last result at once and refreshes in the background.
+const DASHBOARD_CACHE_FRESH_MS = 2 * 60 * 1000
+interface CachedIncidents {
+  incidents: Incident[]
+  pagination: PaginationInfo | null
+  summary: IncidentListSummary | null
+  at: number
+}
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrator' }) => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const chartTheme = useChartTheme();
   const { currentRole, isTestMode, testRole, isLoading } = usePageAccess();
   const effectiveRole = isTestMode && testRole ? testRole : currentRole;
@@ -273,15 +284,26 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
 
   // Load incidents from API
   React.useEffect(() => {
-    console.log('ðŸŽ¯ Incident loading useEffect triggered');
     const abortController = new AbortController();
     let isActive = true;
 
+    const cacheKey = ['dashboard', 'incidents', effectiveCustomerId, effectiveSiteId, selectedRegion, fromDate, toDate, assignedSiteIdsKey, isScopedRole, hasAssignedSites]
+    const cached = queryClient.getQueryData<CachedIncidents>(cacheKey)
+    if (cached) {
+      // Show the cached result immediately; skip the refetch while it is fresh.
+      setLoadedIncidents(cached.incidents)
+      setIncidentsPagination(cached.pagination)
+      setIncidentsSummary(cached.summary)
+      setIncidentsLoading(false)
+      if (Date.now() - cached.at < DASHBOARD_CACHE_FRESH_MS) {
+        return () => { isActive = false }
+      }
+    }
+
     const loadIncidents = async () => {
-      console.log('ðŸš€ Starting loadIncidents function');
       try {
-        setIncidentsLoading(true);
-        
+        if (!cached) setIncidentsLoading(true);
+
         console.log('ðŸ”„ Loading incidents using incidentsApi service');
         
         // Pass every active filter to the API so the server-side summary
@@ -330,11 +352,40 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
           if (Array.isArray(res?.items)) return res.items
           return []
         }
-        const response = await incidentsApi.getIncidents(incidentQueryParams);
-        const typed = response as IncidentsResponse
-        let incidents: unknown[] = rowsOf(response)
+        // Preferred: one request for slim rows of every matching incident.
+        // Falls back to reading the full list page by page (older backend).
+        let incidents: unknown[] = []
+        let paginationInfo: PaginationInfo | null = null
+        let summaryInfo: IncidentListSummary | null = null
+        let usedLite = false
+        try {
+          const { page: _page, pageSize: _pageSize, ...filters } = incidentQueryParams
+          const lite = await incidentsApi.getIncidentsLite(filters)
+          if (lite && Array.isArray(lite.data)) {
+            incidents = lite.data
+            usedLite = true
+            // Totals come from these rows unless the server capped them, in
+            // which case one tiny list request supplies the full-set totals.
+            paginationInfo = { currentPage: 1, totalPages: 1, pageSize: lite.data.length, totalCount: lite.totalCount, hasPrevious: false, hasNext: false } as PaginationInfo
+            if (lite.truncated) {
+              const head = await incidentsApi.getIncidents({ ...filters, page: 1, pageSize: 1 })
+              summaryInfo = (head as IncidentsResponse).summary ?? null
+            }
+          }
+        } catch (liteError) {
+          if (!isActive) return
+          if (import.meta.env.DEV) console.warn('Lite incidents unavailable, reading pages instead:', liteError)
+        }
+
+        const response = usedLite ? null : await incidentsApi.getIncidents(incidentQueryParams);
+        const typed = (response ?? {}) as IncidentsResponse
+        if (!usedLite) {
+          incidents = rowsOf(response)
+          paginationInfo = typed.pagination ?? null
+          summaryInfo = typed.summary ?? null
+        }
         const totalCount = typed.pagination?.totalCount ?? incidents.length
-        const pageCount = Math.min(MAX_PAGES, Math.ceil(totalCount / PAGE_SIZE))
+        const pageCount = usedLite ? 1 : Math.min(MAX_PAGES, Math.ceil(totalCount / PAGE_SIZE))
         if (pageCount > 1 && incidents.length >= PAGE_SIZE) {
           const rest: unknown[][] = []
           for (let start = 2; start <= pageCount; start += PARALLEL_PAGES) {
@@ -459,8 +510,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
 
         if (isActive) {
           setLoadedIncidents(scopedTransformedIncidents);
-          setIncidentsPagination(typed.pagination ?? null)
-          setIncidentsSummary(typed.summary ?? null)
+          setIncidentsPagination(paginationInfo)
+          setIncidentsSummary(summaryInfo)
+          queryClient.setQueryData<CachedIncidents>(cacheKey, {
+            incidents: scopedTransformedIncidents,
+            pagination: paginationInfo,
+            summary: summaryInfo,
+            at: Date.now(),
+          })
           console.log('âœ… Loaded incidents:', scopedTransformedIncidents.length);
           
           if (scopedTransformedIncidents.length > 0) {
@@ -542,9 +599,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
         setAnalyticsError(null);
 
         // Manager/scoped roles: pass assigned customer so API returns constrained regions/sites; Admin: no override
+        // Regions and sites rarely change, so reuse them for 10 minutes.
         const [regions, sites] = await Promise.all([
-          customerDashboardService.getRegions(abortController.signal, effectiveCustomerId ?? undefined),
-          customerDashboardService.getSites(abortController.signal, effectiveCustomerId ?? undefined),
+          queryClient.fetchQuery({
+            queryKey: ['dashboard', 'regions', effectiveCustomerId ?? null],
+            queryFn: () => customerDashboardService.getRegions(abortController.signal, effectiveCustomerId ?? undefined),
+            staleTime: 10 * 60 * 1000,
+          }),
+          queryClient.fetchQuery({
+            queryKey: ['dashboard', 'sites', effectiveCustomerId ?? null],
+            queryFn: () => customerDashboardService.getSites(abortController.signal, effectiveCustomerId ?? undefined),
+            staleTime: 10 * 60 * 1000,
+          }),
         ]);
 
         const allStoreOptions = (sites as any[]).map((site: any) => ({
@@ -597,7 +663,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
       try {
         // Risk signals are computed from the incidents in view, so only the
         // alert summary (which depends on the company alone) is fetched here.
-        const alertData = await alertInstancesApi.getSummary(effectiveCustomerId ?? undefined)
+        const alertData = await queryClient.fetchQuery({
+          queryKey: ['dashboard', 'alert-summary', effectiveCustomerId ?? null],
+          queryFn: () => alertInstancesApi.getSummary(effectiveCustomerId ?? undefined),
+          staleTime: 60 * 1000,
+        })
         setAlertSummary(alertData)
       } catch (err) {
         console.warn('Enhanced dashboard data not available:', err)

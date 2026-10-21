@@ -178,6 +178,58 @@ namespace AIPBackend.Services
 			};
 		}
 
+		/// <summary>
+		/// Slim rows for every incident matching the filters (newest first, up to
+		/// maxRows), in one query. Applies the same customer and site access rules
+		/// as GetIncidentsAsync.
+		/// </summary>
+		public async Task<IncidentLiteResponseDto> GetLiteAsync(GetIncidentsQueryDto query, int maxRows)
+		{
+			DateTime? fromDate = null;
+			DateTime? toDate = null;
+			if (!string.IsNullOrWhiteSpace(query.FromDate) && DateTime.TryParse(query.FromDate, out var parsedFrom))
+			{
+				fromDate = parsedFrom;
+			}
+			if (!string.IsNullOrWhiteSpace(query.ToDate) && DateTime.TryParse(query.ToDate, out var parsedTo))
+			{
+				toDate = parsedTo;
+			}
+
+			int? requestedCustomerId = null;
+			if (!string.IsNullOrWhiteSpace(query.CustomerId) && int.TryParse(query.CustomerId, out var parsedCustomerId))
+			{
+				requestedCustomerId = parsedCustomerId;
+			}
+
+			var customerFilter = _userContext.ResolveCustomerFilter(requestedCustomerId);
+			int? customerId = customerFilter.SingleCustomerId;
+			IReadOnlyCollection<int>? customerIds = customerFilter.Unrestricted
+				? null
+				: customerFilter.CustomerIds.Count > 0 ? customerFilter.CustomerIds : null;
+			var siteIdFilter = _userContext.ResolveSiteFilter(query.SiteId);
+			var regionIdFilter = string.IsNullOrWhiteSpace(query.RegionId) ? null : query.RegionId;
+
+			var (rows, totalCount) = await _repository.GetLiteAsync(
+				maxRows: maxRows,
+				search: query.Search,
+				customerId: customerId,
+				customerIds: customerIds,
+				siteId: siteIdFilter,
+				regionId: regionIdFilter,
+				incidentType: query.IncidentType,
+				status: query.Status,
+				fromDate: fromDate,
+				toDate: toDate);
+
+			return new IncidentLiteResponseDto
+			{
+				Data = rows,
+				TotalCount = totalCount,
+				Truncated = totalCount > rows.Count,
+			};
+		}
+
 		public async Task<IncidentResponseDto> CreateAsync(UpsertIncidentDto dto, string? userId = null)
 		{
 			_userContext.EnsureCanAccessCustomer(dto.CustomerId);

@@ -86,6 +86,50 @@ namespace AIPBackend.Controllers
 		/// <summary>
 		/// Get a single incident by ID
 		/// </summary>
+		/// <summary>
+		/// Slim incident rows for dashboards: every incident matching the filters
+		/// (newest first, capped), only the fields dashboard panels use, in one query.
+		/// </summary>
+		[HttpGet("lite")]
+		public async Task<ActionResult<IncidentLiteResponseDto>> GetIncidentsLite(
+			[FromQuery] string? search = null,
+			[FromQuery] string? fromDate = null,
+			[FromQuery] string? toDate = null,
+			[FromQuery] string? incidentType = null,
+			[FromQuery] string? siteId = null,
+			[FromQuery] string? status = null,
+			[FromQuery] string? customerId = null,
+			[FromQuery] string? regionId = null)
+		{
+			const int maxRows = 10000;
+			try
+			{
+				var query = new GetIncidentsQueryDto
+				{
+					Search = search,
+					FromDate = fromDate,
+					ToDate = toDate,
+					IncidentType = incidentType,
+					SiteId = siteId,
+					Status = status,
+					CustomerId = customerId,
+					RegionId = regionId,
+				};
+
+				return Ok(await _incidentService.GetLiteAsync(query, maxRows));
+			}
+			catch (ForbiddenAccessException ex)
+			{
+				_logger.LogWarning(ex, "Forbidden incidents lite request");
+				return Forbid();
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error retrieving incidents (lite)");
+				return StatusCode(500, new { success = false, message = "Failed to load incidents" });
+			}
+		}
+
 		[HttpGet("{id}")]
 		public async Task<ActionResult<IncidentResponseDto>> GetIncident(string id)
 		{

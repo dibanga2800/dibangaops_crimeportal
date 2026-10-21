@@ -31,6 +31,18 @@ export const incidentsApi = {
     }
   },
 
+  // Slim rows for every incident matching the filters, in one request
+  // (dashboards). Only the fields the panels use; totals already resolved.
+  getIncidentsLite: async (
+    params?: Omit<GetIncidentsParams, 'page' | 'pageSize' | 'includeSummary'>,
+  ): Promise<{ data: unknown[]; totalCount: number; truncated: boolean }> => {
+    const response = await api.get('/incidents/lite', {
+      params,
+      headers: getAdditionalHeaders()
+    })
+    return response.data
+  },
+
   // Get single incident
   getIncident: async (id: string): Promise<IncidentResponse> => {
     try {
