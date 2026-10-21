@@ -1,13 +1,6 @@
 import React from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Settings as SettingsIcon, LayoutGrid } from 'lucide-react'
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion'
-import { Button } from '../ui/button'
 import { cn } from '@/lib/utils'
 import { usePageAccess } from '@/contexts/PageAccessContext'
 import { PageAccessContext } from '@/contexts/PageAccessContext'
@@ -36,6 +29,17 @@ interface NavItemProps {
   className?: string
 	bypassAccessCheck?: boolean
 }
+
+/** Shared look for sidebar links: quiet by default, leaf marker when active. */
+const sidebarLinkClass = (isActive: boolean) =>
+	cn(
+		'relative flex items-center gap-3 rounded-md px-3 py-2 text-sm text-sidebar-foreground transition-colors',
+		'hover:bg-sidebar-accent hover:text-white',
+		'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring',
+		'[&>svg]:h-4 [&>svg]:w-4 [&>svg]:shrink-0 [&>svg]:opacity-80',
+		isActive &&
+			'bg-sidebar-accent font-medium text-white [&>svg]:text-signal [&>svg]:opacity-100 before:absolute before:-left-3 before:top-1.5 before:bottom-1.5 before:w-[3px] before:rounded-r-full before:bg-signal',
+	)
 
 const NavItem = ({ to, icon, label, onClick, className, bypassAccessCheck }: NavItemProps) => {
 	const { hasAccess } = usePageAccess()
@@ -125,21 +129,15 @@ const NavItem = ({ to, icon, label, onClick, className, bypassAccessCheck }: Nav
 
   return (
     <a
-      href="#"
-      className={cn(
-				'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-				'hover:bg-accent hover:text-accent-foreground',
-				'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
-				isActive && 'bg-accent text-accent-foreground',
-				className,
-      )}
+      href={finalTo}
+      className={cn(sidebarLinkClass(isActive), className)}
       onClick={handleClick}
       tabIndex={0}
       onKeyDown={handleKeyDown}
-      aria-label={`Navigate to ${label}`}
+      aria-current={isActive ? 'page' : undefined}
     >
       {icon}
-      <span>{label}</span>
+      <span className="truncate">{label}</span>
     </a>
   )
 }
@@ -301,17 +299,10 @@ export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({ onNavigate
   
   if (!pageAccessContext || isLoading) {
     return (
-      <div className="px-3 py-2">
-        <div className="space-y-4">
-          <div className="pl-5">
-            <div className="w-[180px] h-9 bg-gray-200 dark:bg-gray-700 animate-pulse rounded-[20px]" />
-          </div>
-          <div className="space-y-2">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="h-10 bg-gray-200 dark:bg-gray-700 animate-pulse rounded-lg" />
-            ))}
-          </div>
-        </div>
+      <div className="space-y-1.5 px-3 py-4" aria-busy="true" aria-label="Loading navigation">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="h-9 animate-pulse rounded-md bg-sidebar-accent" />
+        ))}
       </div>
 		)
   }
@@ -320,7 +311,7 @@ export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({ onNavigate
   if (!user) {
     return (
       <div className="px-3 py-2">
-				<div className="text-sm text-gray-500 dark:text-gray-400">Please log in to view navigation</div>
+				<div className="text-sm text-sidebar-foreground">Sign in to see navigation</div>
         </div>
 		)
   }
@@ -329,7 +320,7 @@ export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({ onNavigate
   if (!effectiveRole) {
     return (
       <div className="px-3 py-2">
-				<div className="text-sm text-gray-500 dark:text-gray-400">Loading navigation...</div>
+				<div className="text-sm text-sidebar-foreground">Loading navigation…</div>
         </div>
 		)
   }
@@ -366,31 +357,23 @@ export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({ onNavigate
 		onMobileClose?.()
   }
 
+  const isDashboardActive = location.pathname === '/' || location.pathname === '/dashboard'
+
   return (
-    <div className="px-3 py-2">
-      <div className="space-y-4">
+    <div className="space-y-6 px-3 py-4">
+      <div className="space-y-0.5">
+        <p className="px-3 pb-1.5 text-xs font-medium text-sidebar-foreground/60">Overview</p>
         {hasAccess('/dashboard') && (
-          <div className="pl-5">
-            <Button
-              asChild
-              className={cn(
-								'w-[180px] rounded-[20px] bg-white px-3 text-black hover:bg-white/90 flex h-9 items-center justify-start gap-2',
-								(location.pathname === '/' || location.pathname === '/dashboard') && 'bg-white/90',
-              )}
-            >
-              <a 
-                href="/dashboard" 
-								onClick={handleNavigation('/dashboard')}
-								onKeyDown={handleKeyDown('/dashboard')}
-                className="flex items-center gap-2"
-              >
-								<div className="rounded-lg bg-red-500/10 p-1.5">
-                  <LayoutGrid className="h-[18px] w-[18px] text-red-500" />
-                </div>
-                <span className="text-xs font-medium">Dashboard</span>
-              </a>
-            </Button>
-          </div>
+          <a
+            href="/dashboard"
+            onClick={handleNavigation('/dashboard')}
+            onKeyDown={handleKeyDown('/dashboard')}
+            className={sidebarLinkClass(isDashboardActive)}
+            aria-current={isDashboardActive ? 'page' : undefined}
+          >
+            <LayoutGrid />
+            <span>Dashboard</span>
+          </a>
         )}
 
 				{topLevelLinks.map((link) => {
@@ -399,66 +382,54 @@ export const SidebarNavigation: React.FC<SidebarNavigationProps> = ({ onNavigate
           <NavItem
 							key={link.path}
 							to={link.path}
-							icon={<Icon className="h-4 w-4" />}
+							icon={<Icon />}
 							label={link.label}
             onClick={onNavigate}
 							bypassAccessCheck={link.bypassAccessCheck}
           />
 					)
 				})}
+      </div>
 
-        <Accordion type="multiple" className="space-y-2" key={settingsKey}>
-					{visibleSections.map((section) => {
-						const SectionIcon = section.icon
-						return (
-							<AccordionItem value={section.id} key={section.id}>
-              <AccordionTrigger className="text-sm">
-                <div className="flex items-center gap-2">
-										<SectionIcon className="h-4 w-4" />
-										<span>{section.label}</span>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent className="space-y-1 pt-1">
-									{section.showCustomerSelector && isAdmin && (
-                  <div className="px-3 pb-2">
-                    <CustomerSelector />
-                    {!selectedCustomerId && (
-												<p className="mt-2 text-xs text-amber-600 dark:text-amber-500">
-                        Please select a company to access company pages
-                      </p>
-                    )}
-                  </div>
+        {visibleSections.map((section) => (
+          <div key={section.id} className="space-y-0.5" role="group" aria-labelledby={`nav-${section.id}`}>
+            <p id={`nav-${section.id}`} className="px-3 pb-1.5 text-xs font-medium text-sidebar-foreground/60">
+              {section.label}
+            </p>
+            {section.showCustomerSelector && isAdmin && (
+              <div className="pb-2">
+                <CustomerSelector />
+                {!selectedCustomerId && (
+                  <p className="px-3 pt-1 text-xs text-warning">Select a company to open company pages</p>
                 )}
-                
-									{section.links.map((link) => {
-										const Icon = link.icon
-										return (
-                  <NavItem
-												key={link.path}
-												to={link.path}
-												icon={<Icon className="h-4 w-4" />}
-												label={link.label}
-                    onClick={onNavigate}
-												bypassAccessCheck={link.bypassAccessCheck}
-                  />
-										)
-									})}
-              </AccordionContent>
-            </AccordionItem>
-						)
-					})}
-        </Accordion>
+              </div>
+            )}
+            {section.links.map((link) => {
+              const Icon = link.icon
+              return (
+                <NavItem
+                  key={link.path}
+                  to={link.path}
+                  icon={<Icon />}
+                  label={link.label}
+                  onClick={onNavigate}
+                  bypassAccessCheck={link.bypassAccessCheck}
+                />
+              )
+            })}
+          </div>
+        ))}
 
         {isAdministrator && hasAccess('/settings') && (
-          <NavItem
-            to="/settings"
-            icon={<SettingsIcon className="h-4 w-4" />}
-            label="Settings"
-            onClick={onNavigate}
-            className="mt-4"
-          />
+          <div className="space-y-0.5 border-t border-sidebar-border pt-4">
+            <NavItem
+              to="/settings"
+              icon={<SettingsIcon />}
+              label="Settings"
+              onClick={onNavigate}
+            />
+          </div>
         )}
-      </div>
     </div>
 	)
 }

@@ -5,7 +5,7 @@
  * and store-level heatmaps for stolen items.
  */
 
-import { useMemo, useState, useEffect, Fragment } from 'react'
+import { useMemo, useState, useEffect, Fragment, Suspense, lazy } from 'react'
 import {
 	BarChart,
 	Bar,
@@ -13,7 +13,6 @@ import {
 	YAxis,
 	CartesianGrid,
 	Tooltip,
-	Legend,
 	ResponsiveContainer,
 	Cell,
 } from 'recharts'
@@ -43,31 +42,41 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useChartTheme, chartTooltipStyle, axisTick } from '@/lib/chart-theme'
+import { RISK_CHIP, SUBTABS_LIST, SUBTABS_TRIGGER } from './moduleStyles'
+import type { Site } from '@/types/dashboard'
+import { useStoreLocations, type StoreLocationInput } from '@/lib/store-locations'
+
+// The map library is large; load it only when the map is shown.
+const StoreRiskMap = lazy(() => import('./StoreRiskMap'))
 import { Package, TrendingUp, AlertTriangle, PoundSterling, Search, Filter, ChevronDown, ChevronUp, MapPin, Eye, EyeOff, ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface HotProductsDashboardProps {
+	/** Sites for the selected company; their postcodes place stores on the map. */
+	sites?: Site[]
 	data: HotProductsData
 	loading?: boolean
 }
 
 const RISK_COLORS = {
-	low: '#10b981', // green
-	medium: '#f59e0b', // amber
-	high: '#ef4444', // red
-	critical: '#dc2626', // dark red
+	low: '#0E7C66', // green
+	medium: '#C4680F', // amber
+	high: '#B42318', // red
+	critical: '#8F1D14', // dark red
 }
 
 const CHART_COLORS = [
-	'#3b82f6',
-	'#10b981',
-	'#f59e0b',
-	'#ef4444',
-	'#8b5cf6',
-	'#ec4899',
-	'#14b8a6',
-	'#f97316',
+	'#1F6FA8',
+	'#0E7C66',
+	'#C4680F',
+	'#B42318',
+	'#5B4A8B',
+	'#A3365E',
+	'#1C7C78',
+	'#B54708',
 ]
 
+const HEAT_BG: Record<string, string> = { low: 'bg-recovered', medium: 'bg-warning', high: 'bg-loss', critical: 'bg-loss' }
 const getRiskColor = (riskLevel: string) => {
 	return RISK_COLORS[riskLevel as keyof typeof RISK_COLORS] || RISK_COLORS.low
 }
@@ -179,7 +188,7 @@ const ProductStoreBreakdownPanel = ({ stores }: ProductStoreBreakdownPanelProps)
 					<TableRow>
 						<TableHead>Store</TableHead>
 						<TableHead>Line items</TableHead>
-						<TableHead className="text-right">Saved</TableHead>
+						<TableHead className="text-right">Recovered</TableHead>
 						<TableHead className="text-right">Lost</TableHead>
 						<TableHead className="text-right">Recovery</TableHead>
 					</TableRow>
@@ -189,10 +198,10 @@ const ProductStoreBreakdownPanel = ({ stores }: ProductStoreBreakdownPanelProps)
 						<TableRow key={`${store.storeId}-${store.storeName}`}>
 							<TableCell className="font-medium">{store.storeName}</TableCell>
 							<TableCell>{store.frequency}</TableCell>
-							<TableCell className="text-right text-emerald-600 dark:text-emerald-300">
+							<TableCell className="text-right text-recovered">
 								£{formatCurrencyExact(store.recoveredValue)}
 							</TableCell>
-							<TableCell className="text-right text-rose-600 dark:text-rose-300">
+							<TableCell className="text-right text-loss">
 								£{formatCurrencyExact(store.lostValue)}
 							</TableCell>
 							<TableCell className="text-right">{store.recoveryRate.toFixed(1)}%</TableCell>
@@ -202,6 +211,11 @@ const ProductStoreBreakdownPanel = ({ stores }: ProductStoreBreakdownPanelProps)
 			</Table>
 		</div>
 	)
+}
+
+const riskPct = (score?: number) => {
+	const v = score ?? 0
+	return Math.round(v > 1 ? v : v * 100)
 }
 
 const RISK_LEVEL_HELP =
@@ -218,9 +232,10 @@ const StoreHeatmapDetail = ({ store }: StoreHeatmapDetailProps) => {
 
 	return (
 		<div className="space-y-4">
-			<div className="rounded-md border border-border bg-muted/30 p-3 text-xs space-y-2">
-				<p className="font-semibold text-foreground">
-					{store.riskLevel.toUpperCase()} risk · {Math.round((store.riskScore ?? 0) * 100)}/100
+			<div className="space-y-2 rounded-md border border-border bg-muted/30 p-3 text-xs">
+				<p className="flex items-center gap-2 font-semibold text-foreground">
+					<span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold first-letter:uppercase ${RISK_CHIP[store.riskLevel] ?? RISK_CHIP.low}`}>{store.riskLevel} risk</span>
+					<span className="figures text-muted-foreground">score {riskPct(store.riskScore)}/100</span>
 				</p>
 				{store.riskSummary ? (
 					<p className="text-muted-foreground leading-relaxed">{store.riskSummary}</p>
@@ -233,24 +248,19 @@ const StoreHeatmapDetail = ({ store }: StoreHeatmapDetailProps) => {
 					</ul>
 				)}
 			</div>
-			<div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-				<div className="rounded border p-2">
-					<div className="text-muted-foreground">All incidents</div>
-					<div className="font-semibold">{store.totalIncidents}</div>
-				</div>
-				<div className="rounded border p-2">
-					<div className="text-muted-foreground">With stolen items</div>
-					<div className="font-semibold">{store.incidentsWithStolenItems ?? 0}</div>
-				</div>
-				<div className="rounded border p-2">
-					<div className="text-muted-foreground">Product lines</div>
-					<div className="font-semibold">{store.productLineCount ?? 0}</div>
-				</div>
-				<div className="rounded border p-2">
-					<div className="text-muted-foreground">Product groups</div>
-					<div className="font-semibold">{store.productGroupCount ?? sortedProducts.length}</div>
-				</div>
-			</div>
+			<dl className="figures grid grid-cols-2 overflow-hidden rounded-md border border-border text-xs">
+				{[
+					{ label: 'All incidents', value: store.totalIncidents },
+					{ label: 'With stolen items', value: store.incidentsWithStolenItems ?? 0 },
+					{ label: 'Product lines', value: store.productLineCount ?? 0 },
+					{ label: 'Product groups', value: store.productGroupCount ?? sortedProducts.length },
+				].map((cell) => (
+					<div key={cell.label} className="px-3 py-2 shadow-[1px_1px_0_0_hsl(var(--border))]">
+						<dt className="text-muted-foreground">{cell.label}</dt>
+						<dd className="text-sm font-semibold text-foreground">{cell.value}</dd>
+					</div>
+				))}
+			</dl>
 			<div>
 				<p className="text-xs font-semibold text-muted-foreground mb-2">
 					Stolen products ({sortedProducts.length})
@@ -262,17 +272,17 @@ const StoreHeatmapDetail = ({ store }: StoreHeatmapDetailProps) => {
 						{sortedProducts.map((product, productIndex) => (
 							<div
 								key={getProductKey(product, productIndex, `detail-${getStoreCardKey(store)}`)}
-								className="flex items-center justify-between p-2 bg-gray-50 dark:bg-muted/40 rounded text-xs"
+								className="flex items-center justify-between rounded border border-border p-2 text-xs"
 							>
 								<div className="flex-1 min-w-0">
 									<div className="font-medium truncate">{product.productName}</div>
 									{product.barcode ? (
-										<div className="text-gray-500 truncate font-mono">{product.barcode}</div>
+										<div className="text-muted-foreground truncate font-mono">{product.barcode}</div>
 									) : null}
 								</div>
 								<div className="text-right ml-2 shrink-0">
 									<div className="font-semibold">{product.frequency} lines</div>
-									<div className="text-gray-600">£{formatCurrencyExact(product.lostValue)} lost</div>
+									<div className="text-muted-foreground">£{formatCurrencyExact(product.lostValue)} lost</div>
 								</div>
 							</div>
 						))}
@@ -286,12 +296,43 @@ const StoreHeatmapDetail = ({ store }: StoreHeatmapDetailProps) => {
 export const HotProductsDashboard = ({
 	data,
 	loading = false,
+	sites = [],
 }: HotProductsDashboardProps) => {
+	const theme = useChartTheme()
+	const [selectedMapStoreId, setSelectedMapStoreId] = useState<string | null>(null)
+	const locationInputs = useMemo<StoreLocationInput[]>(
+		() =>
+			data.storeHeatmap.map((store) => {
+				const site = sites.find((s) => {
+					const anySite = s as Site & { siteID?: string | number }
+					return String(anySite.siteID ?? anySite.id) === String(store.storeId)
+				}) ?? sites.find((s) => s.locationName === store.storeName)
+				const geo = site as (Site & { latitude?: number; longitude?: number }) | undefined
+				return {
+					id: String(store.storeId),
+					name: store.storeName,
+					street: site?.street,
+					postcode: site?.postcode,
+					town: site?.town,
+					latitude: geo?.latitude,
+					longitude: geo?.longitude,
+				}
+			}),
+		[data.storeHeatmap, sites],
+	)
+	const storeLocations = useStoreLocations(locationInputs)
+	const storeAddresses = useMemo(
+		() =>
+			Object.fromEntries(
+				locationInputs.map((l) => [l.id, [l.street, l.town, l.postcode].filter((part) => part && String(part).trim()).join(', ')]),
+			) as Record<string, string>,
+		[locationInputs],
+	)
 	const [searchTerm, setSearchTerm] = useState('')
 	const [riskFilter, setRiskFilter] = useState<string>('all')
 	const [expandedStores, setExpandedStores] = useState<Set<string>>(new Set())
 	const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set())
-	const [viewMode, setViewMode] = useState<'grid' | 'table' | 'heatmap'>('heatmap')
+	const [viewMode, setViewMode] = useState<'map' | 'grid' | 'table' | 'heatmap'>('map')
 	const [currentPage, setCurrentPage] = useState(1)
 	const STORES_PER_PAGE = 12
 
@@ -353,6 +394,7 @@ export const HotProductsDashboard = ({
 	const startIndex = (currentPage - 1) * STORES_PER_PAGE
 	const endIndex = startIndex + STORES_PER_PAGE
 	const paginatedStores = filteredStores.slice(startIndex, endIndex)
+	const selectedMapStore = selectedMapStoreId ? data.storeHeatmap.find((s) => String(s.storeId) === selectedMapStoreId) ?? null : null
 
 	// Reset to page 1 when filters change
 	useEffect(() => {
@@ -382,139 +424,87 @@ export const HotProductsDashboard = ({
 	}
 
 	if (loading) {
-		return (
-			<Card>
-				<CardHeader>
-					<CardTitle>Hot Products Dashboard</CardTitle>
-					<CardDescription>Loading product analytics...</CardDescription>
-				</CardHeader>
-			</Card>
-		)
+		return <div className="h-[420px] animate-pulse rounded-lg border border-border bg-card" aria-busy="true" aria-label="Loading product analytics" />
 	}
 
-	return (
-		<Card className="w-full shadow-sm border-2">
-			<CardHeader className="pb-4">
-				<CardTitle className="flex items-center gap-2">
-					<Package className="h-5 w-5" />
-					Hot Products Dashboard
-				</CardTitle>
-				<CardDescription>
-					Barcode frequency, saved vs lost value, and store-level recovery heatmap
-				</CardDescription>
-			</CardHeader>
-			<CardContent className="pt-6 space-y-8">
-				{/* Summary Cards */}
-				<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
-					<Card>
-						<CardContent className="p-4">
-							<div className="flex items-center justify-between">
-								<div>
-									<p className="text-sm text-gray-500">Total Value Stolen</p>
-									<p className="text-2xl font-bold">
-										£{data.totalValueStolen.toLocaleString('en-GB', {
-											minimumFractionDigits: 2,
-											maximumFractionDigits: 2,
-										})}
-									</p>
-								</div>
-								<PoundSterling className="h-8 w-8 text-gray-400" />
-							</div>
-						</CardContent>
-					</Card>
-					<Card>
-						<CardContent className="p-4">
-							<div className="flex items-center justify-between">
-								<div>
-									<p className="text-sm text-gray-500">Value Saved</p>
-									<p className="text-2xl font-bold text-emerald-600 dark:text-emerald-300">
-										£{data.totalValueRecovered.toLocaleString('en-GB', {
-											minimumFractionDigits: 2,
-											maximumFractionDigits: 2,
-										})}
-									</p>
-								</div>
-								<TrendingUp className="h-8 w-8 text-gray-400" />
-							</div>
-						</CardContent>
-					</Card>
-					<Card>
-						<CardContent className="p-4">
-							<div className="flex items-center justify-between">
-								<div>
-									<p className="text-sm text-gray-500">Value Lost</p>
-									<p className="text-2xl font-bold text-rose-600 dark:text-rose-300">
-										£{data.totalValueLost.toLocaleString('en-GB', {
-											minimumFractionDigits: 2,
-											maximumFractionDigits: 2,
-										})}
-									</p>
-								</div>
-								<AlertTriangle className="h-8 w-8 text-gray-400" />
-							</div>
-						</CardContent>
-					</Card>
-					<Card>
-						<CardContent className="p-4">
-							<div className="flex items-center justify-between">
-								<div>
-									<p className="text-sm text-gray-500">Recovery Rate</p>
-									<p className="text-2xl font-bold">{data.recoveryRate.toFixed(1)}%</p>
-								</div>
-								<Package className="h-8 w-8 text-gray-400" />
-							</div>
-						</CardContent>
-					</Card>
-				</div>
 
-				{/* Barcode Frequency Chart */}
-				<div>
-					<h3 className="font-semibold mb-4">Top 10 Products by Frequency</h3>
-					<div className="h-[400px] w-full">
+	return (
+		<div className="space-y-5">
+			<div className="grid gap-5 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+				<section className="rounded-lg border border-border bg-card">
+					<div className="p-4 sm:p-5">
+						<h3 className="flex items-center gap-2 text-base font-semibold text-foreground">
+							<Package className="h-4 w-4 text-muted-foreground" aria-hidden />
+							Most stolen products
+						</h3>
+						<p className="mt-0.5 text-[13px] text-muted-foreground">Top 10 by number of incidents they appear in.</p>
+					</div>
+					<div className="w-full px-2 pb-4 sm:px-4" style={{ height: Math.max(220, topProductsChartData.length * 36 + 40) }}>
 						<ResponsiveContainer width="100%" height="100%">
-							<BarChart data={topProductsChartData} layout="vertical">
-								<CartesianGrid strokeDasharray="3 3" className="stroke-gray-200" />
-								<XAxis type="number" className="text-xs" tick={{ fill: '#6b7280' }} />
-								<YAxis
-									type="category"
-									dataKey="productName"
-									className="text-xs"
-									tick={{ fill: '#6b7280' }}
-									width={200}
-								/>
-								<Tooltip
-									contentStyle={{
-										backgroundColor: '#fff',
-										border: '1px solid #e5e7eb',
-										borderRadius: '0.5rem',
-									}}
-								/>
-								<Legend />
-								<Bar dataKey="frequency" name="Incidents" radius={[0, 8, 8, 0]}>
+							<BarChart data={topProductsChartData} layout="vertical" margin={{ top: 0, right: 28, left: 0, bottom: 0 }} barCategoryGap={8}>
+								<CartesianGrid horizontal={false} stroke={theme.grid} />
+								<XAxis type="number" tick={axisTick(theme)} tickLine={false} axisLine={false} allowDecimals={false} />
+								<YAxis type="category" dataKey="productName" tick={{ ...axisTick(theme), fill: theme.foreground }} tickLine={false} axisLine={false} width={150} />
+								<Tooltip {...chartTooltipStyle(theme)} />
+								<Bar dataKey="frequency" name="Incidents" radius={[0, 3, 3, 0]} maxBarSize={22} label={{ position: 'right', fontSize: 11, fill: theme.muted }}>
 									{topProductsChartData.map((entry, index) => (
-										<Cell key={`cell-${index}`} fill={entry.fill} />
+										<Cell key={`cell-${index}`} fill={index === 0 ? theme.primary : theme.series[0] ?? theme.primary} fillOpacity={index === 0 ? 1 : 0.55} />
 									))}
 								</Bar>
 							</BarChart>
 						</ResponsiveContainer>
 					</div>
-				</div>
+				</section>
+
+				<section className="rounded-lg border border-border bg-card">
+					<div className="grid divide-y divide-border">
+						{[
+							{ title: 'Best recovered', hint: 'Most value got back', items: data.topRecoveredProducts.slice(0, 5), value: (p: ProductFrequencyData) => p.recoveredValue, tone: 'text-recovered', key: 'recovered' },
+							{ title: 'Worst recovered', hint: 'Most value still lost', items: data.worstRecoveryProducts.slice(0, 5), value: (p: ProductFrequencyData) => p.lostValue, tone: 'text-loss', key: 'worst' },
+						].map((group) => (
+							<div key={group.key} className="p-4 sm:p-5">
+								<div className="mb-2 flex items-baseline justify-between">
+									<h3 className="text-sm font-semibold text-foreground">{group.title}</h3>
+									<span className="text-xs text-muted-foreground">{group.hint}</span>
+								</div>
+								<ol className="divide-y divide-border">
+									{group.items.map((product, index) => (
+										<li key={getProductKey(product, index, group.key)} className="flex items-center gap-3 py-2">
+											<span className="figures w-4 text-xs text-muted-foreground">{index + 1}</span>
+											<span className="min-w-0 flex-1">
+												<span className="block truncate text-sm font-medium text-foreground">{product.productName}</span>
+												<span className="figures block text-xs text-muted-foreground">
+													{product.frequency} incidents · {product.recoveryRate.toFixed(1)}% recovered
+												</span>
+											</span>
+											<span className={`figures text-sm font-semibold ${group.tone}`}>£{formatCurrencyExact(group.value(product))}</span>
+										</li>
+									))}
+								</ol>
+							</div>
+						))}
+					</div>
+				</section>
+			</div>
 
 				{/* Product Recovery Table */}
-				<div className="pt-4">
-					<h3 className="font-semibold mb-6">Saved vs Lost per Product</h3>
-					<div className="border rounded-lg">
+				<section className="rounded-lg border border-border bg-card">
+					<div className="p-4 sm:p-5">
+						<h3 className="text-base font-semibold text-foreground">Recovered and lost by product</h3>
+						<p className="mt-0.5 text-[13px] text-muted-foreground">Ordered by value lost. Open a product to see which stores it was taken from.</p>
+					</div>
+					<div className="overflow-x-auto border-t border-border">
 						<Table>
 							<TableHeader>
 								<TableRow>
-									<TableHead>Product Name</TableHead>
+									<TableHead>Product</TableHead>
 									<TableHead>Barcode</TableHead>
-									<TableHead>Frequency</TableHead>
-									<TableHead>Stores Affected</TableHead>
+									<TableHead className="text-right">Incidents</TableHead>
+									<TableHead className="text-right">Stores</TableHead>
 									<TableHead className="text-right">Saved</TableHead>
 									<TableHead className="text-right">Lost</TableHead>
-									<TableHead className="text-right">Recovery Rate</TableHead>
-									<TableHead className="text-right w-[100px]">Details</TableHead>
+									<TableHead className="text-right">Rate</TableHead>
+									<TableHead className="w-[90px]"><span className="sr-only">Stores</span></TableHead>
 								</TableRow>
 							</TableHeader>
 							<TableBody>
@@ -529,26 +519,24 @@ export const HotProductsDashboard = ({
 												<TableCell className="font-medium">
 													{product.productName}
 												</TableCell>
-												<TableCell className="font-mono text-xs">
+												<TableCell className="figures text-xs text-muted-foreground">
 													{product.barcode || '—'}
 												</TableCell>
-												<TableCell>
-													<Badge variant="outline">{product.frequency}</Badge>
-												</TableCell>
-												<TableCell>{productStores.length || product.storesAffected}</TableCell>
-												<TableCell className="text-right font-semibold text-emerald-600 dark:text-emerald-300">
+												<TableCell className="figures text-right">{product.frequency}</TableCell>
+												<TableCell className="figures text-right">{productStores.length || product.storesAffected}</TableCell>
+												<TableCell className="figures text-right font-semibold text-recovered">
 													£{product.recoveredValue.toLocaleString('en-GB', {
 														minimumFractionDigits: 2,
 														maximumFractionDigits: 2,
 													})}
 												</TableCell>
-												<TableCell className="text-right font-semibold text-rose-600 dark:text-rose-300">
+												<TableCell className="figures text-right font-semibold text-loss">
 													£{product.lostValue.toLocaleString('en-GB', {
 														minimumFractionDigits: 2,
 														maximumFractionDigits: 2,
 													})}
 												</TableCell>
-												<TableCell className="text-right">
+												<TableCell className="figures text-right">
 													{product.recoveryRate.toFixed(1)}%
 												</TableCell>
 												<TableCell className="text-right">
@@ -590,79 +578,34 @@ export const HotProductsDashboard = ({
 							</TableBody>
 						</Table>
 					</div>
-				</div>
-
-				<div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-					<Card>
-						<CardHeader>
-							<CardTitle className="text-base">Top Recovered Products</CardTitle>
-							<CardDescription>Products generating the most saved value.</CardDescription>
-						</CardHeader>
-						<CardContent className="space-y-3">
-							{data.topRecoveredProducts.slice(0, 5).map((product, index) => (
-								<div key={getProductKey(product, index, 'recovered')} className="flex items-center justify-between rounded-lg border p-3">
-									<div>
-										<div className="font-medium">{product.productName}</div>
-										<div className="text-xs text-muted-foreground">{product.frequency} incidents</div>
-									</div>
-									<div className="text-right">
-										<div className="font-semibold text-emerald-600 dark:text-emerald-300">
-											£{product.recoveredValue.toFixed(2)}
-										</div>
-										<div className="text-xs text-muted-foreground">{product.recoveryRate.toFixed(1)}%</div>
-									</div>
-								</div>
-							))}
-						</CardContent>
-					</Card>
-					<Card>
-						<CardHeader>
-							<CardTitle className="text-base">Worst Recovery Products</CardTitle>
-							<CardDescription>Products with the highest unrecovered value exposure.</CardDescription>
-						</CardHeader>
-						<CardContent className="space-y-3">
-							{data.worstRecoveryProducts.slice(0, 5).map((product, index) => (
-								<div key={getProductKey(product, index, 'worst')} className="flex items-center justify-between rounded-lg border p-3">
-									<div>
-										<div className="font-medium">{product.productName}</div>
-										<div className="text-xs text-muted-foreground">{product.frequency} incidents</div>
-									</div>
-									<div className="text-right">
-										<div className="font-semibold text-rose-600 dark:text-rose-300">
-											£{product.lostValue.toFixed(2)}
-										</div>
-										<div className="text-xs text-muted-foreground">{product.recoveryRate.toFixed(1)}%</div>
-									</div>
-								</div>
-							))}
-						</CardContent>
-					</Card>
-				</div>
+				</section>
 
 				{/* Store Heatmap */}
-				<div className="pt-4 border-t mt-8">
-					<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-						<h3 className="font-semibold flex items-center gap-2">
-							<MapPin className="h-5 w-5" />
-							Store-Level Heatmap
-						</h3>
+				<section className="rounded-lg border border-border bg-card p-4 sm:p-5">
+					<div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+						<div>
+							<h3 className="flex items-center gap-2 text-base font-semibold text-foreground">
+								<MapPin className="h-4 w-4 text-muted-foreground" aria-hidden />
+								Stores by product theft
+							</h3>
+							<p className="mt-0.5 max-w-xl text-[13px] text-muted-foreground">{RISK_LEVEL_HELP}</p>
+						</div>
 						<div className="flex flex-col sm:flex-row gap-2">
 							<div className="relative">
-								<Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+								<Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
 								<Input
-									placeholder="Search stores or products..."
+									placeholder="Search stores or products"
 									value={searchTerm}
 									onChange={(e) => setSearchTerm(e.target.value)}
-									className="pl-10 w-full sm:w-64"
+									className="h-9 w-full pl-9 sm:w-60"
 								/>
 							</div>
 							<Select value={riskFilter} onValueChange={setRiskFilter}>
-								<SelectTrigger className="w-full sm:w-40">
-									<Filter className="h-4 w-4 mr-2" />
-									<SelectValue placeholder="All Risk Levels" />
+								<SelectTrigger className="h-9 w-full sm:w-40" aria-label="Risk level">
+									<SelectValue placeholder="All risk levels" />
 								</SelectTrigger>
 								<SelectContent>
-									<SelectItem value="all">All Risk Levels</SelectItem>
+									<SelectItem value="all">All risk levels</SelectItem>
 									<SelectItem value="critical">Critical</SelectItem>
 									<SelectItem value="high">High</SelectItem>
 									<SelectItem value="medium">Medium</SelectItem>
@@ -671,14 +614,90 @@ export const HotProductsDashboard = ({
 							</Select>
 						</div>
 					</div>
-					<p className="text-xs text-muted-foreground mb-4">{RISK_LEVEL_HELP}</p>
+					
 
 					<Tabs value={viewMode} onValueChange={(v) => setViewMode(v as typeof viewMode)} className="w-full">
-						<TabsList className="grid w-full grid-cols-3">
-							<TabsTrigger value="heatmap">Heatmap View</TabsTrigger>
-							<TabsTrigger value="grid">Grid View</TabsTrigger>
-							<TabsTrigger value="table">Table View</TabsTrigger>
+						<TabsList className={SUBTABS_LIST}>
+							<TabsTrigger className={SUBTABS_TRIGGER} value="map">Map</TabsTrigger>
+							<TabsTrigger className={SUBTABS_TRIGGER} value="heatmap">Cards</TabsTrigger>
+							<TabsTrigger className={SUBTABS_TRIGGER} value="grid">List</TabsTrigger>
+							<TabsTrigger className={SUBTABS_TRIGGER} value="table">Table</TabsTrigger>
 						</TabsList>
+
+						<TabsContent value="map" className="mt-0">
+							<div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+								<div className="relative h-[360px] overflow-hidden rounded-md border border-border bg-muted/40 sm:h-[460px] lg:h-[540px]">
+									<Suspense fallback={<div className="h-full w-full animate-pulse bg-muted" />}>
+											<StoreRiskMap
+												stores={filteredStores}
+												locations={storeLocations.locations}
+												addresses={storeAddresses}
+												selectedId={selectedMapStoreId}
+												onSelect={setSelectedMapStoreId}
+												className="h-full w-full"
+											/>
+										</Suspense>
+									{!storeLocations.loading && storeLocations.unplaced.length > 0 && (
+										<p className="absolute left-2 top-12 z-10 max-w-[70%] rounded-md border border-border bg-card/95 px-2.5 py-1.5 text-[11px] text-muted-foreground shadow-sm">
+											{storeLocations.unplaced.length} {storeLocations.unplaced.length === 1 ? 'store has' : 'stores have'} no postcode we could find, so {storeLocations.unplaced.length === 1 ? 'it is' : 'they are'} not on the map.
+										</p>
+									)}
+								</div>
+
+								<div className="flex min-h-0 flex-col rounded-md border border-border lg:h-[540px]">
+									{selectedMapStore ? (
+										<div className="flex min-h-0 flex-1 flex-col">
+											<div className="flex items-start justify-between gap-2 border-b border-border px-4 py-3">
+												<div className="min-w-0">
+													<p className="truncate text-sm font-semibold text-foreground">{selectedMapStore.storeName}</p>
+													{storeAddresses[String(selectedMapStore.storeId)] ? (
+														<p className="text-xs text-muted-foreground">{storeAddresses[String(selectedMapStore.storeId)]}</p>
+													) : null}
+													<p className="figures text-xs text-muted-foreground">
+														£{formatCurrencyExact(selectedMapStore.totalValueLost)} lost · {selectedMapStore.recoveryRate.toFixed(1)}% recovered
+													</p>
+												</div>
+												<Button variant="ghost" size="sm" className="h-8 shrink-0 px-2" onClick={() => setSelectedMapStoreId(null)}>
+													<ChevronLeft className="h-4 w-4" />
+													All stores
+												</Button>
+											</div>
+											<div className="min-h-0 flex-1 overflow-y-auto p-4">
+												<StoreHeatmapDetail store={selectedMapStore} />
+											</div>
+										</div>
+									) : (
+										<>
+											<p className="border-b border-border px-4 py-3 text-xs font-medium text-muted-foreground">
+												{filteredStores.length} {filteredStores.length === 1 ? 'store' : 'stores'} by value lost
+											</p>
+											<ol className="min-h-0 flex-1 divide-y divide-border overflow-y-auto">
+												{filteredStores.map((store, index) => (
+													<li key={getStoreCardKey(store)}>
+														<button
+															type="button"
+															onClick={() => setSelectedMapStoreId(String(store.storeId))}
+															className="!flex w-full !items-center gap-3 !rounded-none !border-0 !px-4 !py-2.5 text-left hover:bg-muted/50"
+														>
+															<span className="figures w-4 text-xs text-muted-foreground">{index + 1}</span>
+															<span className={`h-2.5 w-2.5 shrink-0 rounded-full ${HEAT_BG[store.riskLevel] ?? 'bg-recovered'}`} aria-hidden />
+															<span className="min-w-0 flex-1">
+																<span className="block truncate text-sm font-medium text-foreground">{store.storeName}</span>
+																<span className="sr-only">{store.riskLevel} risk. </span>
+																<span className="block truncate text-xs text-muted-foreground">
+																	{storeAddresses[String(store.storeId)] || <span className="capitalize">{store.riskLevel} risk</span>}
+																</span>
+															</span>
+															<span className="figures text-sm font-semibold text-loss">£{Math.round(store.totalValueLost).toLocaleString('en-GB')}</span>
+														</button>
+													</li>
+												))}
+											</ol>
+										</>
+									)}
+								</div>
+							</div>
+						</TabsContent>
 
 						<TabsContent value="heatmap" className="space-y-4">
 							{/* Visual Heatmap Grid */}
@@ -692,51 +711,41 @@ export const HotProductsDashboard = ({
 									return (
 										<Card
 											key={storeKey}
-											className="overflow-hidden transition-all hover:shadow-lg cursor-pointer"
+											className="cursor-pointer overflow-hidden transition-colors hover:border-foreground/25"
 											onClick={() => toggleStoreExpansion(storeKey)}
 										>
-											<div
-												className="relative p-4 text-white"
-												style={{
-													backgroundColor: heatmapColor,
-													backgroundImage: `linear-gradient(135deg, ${heatmapColor} 0%, ${heatmapColor.replace(')', ', 0.9)').replace('rgba', 'rgba')} 100%)`,
-												}}
-											>
-												<div className="relative z-10">
-													<div className="flex items-start justify-between mb-2">
-														<CardTitle className="text-base text-white">
-															{store.storeName}
-														</CardTitle>
-														<Badge
-															variant="secondary"
-															className="bg-white/20 text-white border-white/30"
-															title={store.riskSummary || RISK_LEVEL_HELP}
-														>
-															{store.riskLevel.toUpperCase()}
-															{(store.riskScore ?? 0) > 0
-																? ` ${Math.round((store.riskScore ?? 0) * 100)}%`
-																: ''}
-														</Badge>
-													</div>
-													<div className="grid grid-cols-2 gap-2 text-sm">
-														<div>
-															<div className="text-white/80 text-xs">Theft incidents</div>
-															<div className="font-bold">{store.incidentsWithStolenItems ?? 0}</div>
-														</div>
-														<div>
-															<div className="text-white/80 text-xs">Value Lost</div>
-															<div className="font-bold">£{formatCurrencyExact(store.totalValueLost)}</div>
-														</div>
-														<div>
-															<div className="text-white/80 text-xs">Product lines</div>
-															<div className="font-bold">{store.productLineCount ?? 0}</div>
-														</div>
-														<div>
-															<div className="text-white/80 text-xs">Recovery</div>
-															<div className="font-bold">{store.recoveryRate.toFixed(1)}%</div>
-														</div>
-													</div>
+											<div className="h-1 bg-muted" aria-hidden>
+												<div className={`h-full ${HEAT_BG[store.riskLevel] ?? 'bg-recovered'}`} style={{ width: `${Math.max(6, intensity)}%` }} />
+											</div>
+											<div className="p-4">
+												<div className="mb-3 flex items-start justify-between gap-2">
+													<p className="min-w-0 text-sm font-semibold leading-5 text-foreground">{store.storeName}</p>
+													<span
+														className={`figures shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${RISK_CHIP[store.riskLevel] ?? RISK_CHIP.low}`}
+														title={store.riskSummary || RISK_LEVEL_HELP}
+													>
+														{store.riskLevel}
+														{(store.riskScore ?? 0) > 0 ? ` · ${riskPct(store.riskScore)}` : ''}
+													</span>
 												</div>
+												<dl className="figures grid grid-cols-2 gap-x-3 gap-y-2.5 text-sm">
+													<div>
+														<dt className="text-xs text-muted-foreground">Lost</dt>
+														<dd className="font-display text-lg font-semibold leading-tight text-loss">£{formatCurrencyExact(store.totalValueLost)}</dd>
+													</div>
+													<div>
+														<dt className="text-xs text-muted-foreground">Recovery</dt>
+														<dd className="font-display text-lg font-semibold leading-tight text-foreground">{store.recoveryRate.toFixed(1)}%</dd>
+													</div>
+													<div>
+														<dt className="text-xs text-muted-foreground">Theft incidents</dt>
+														<dd className="font-semibold text-foreground">{store.incidentsWithStolenItems ?? 0}</dd>
+													</div>
+													<div>
+														<dt className="text-xs text-muted-foreground">Product lines</dt>
+														<dd className="font-semibold text-foreground">{store.productLineCount ?? 0}</dd>
+													</div>
+												</dl>
 											</div>
 											{isExpanded && (
 												<CardContent
@@ -759,11 +768,9 @@ export const HotProductsDashboard = ({
 												</CardContent>
 											)}
 											{!isExpanded && (
-												<div className="p-2 text-center border-t">
-													<Button variant="ghost" size="sm" className="text-xs">
-														<Eye className="h-4 w-4 mr-1" />
-														View Details
-													</Button>
+												<div className="flex items-center justify-center gap-1.5 border-t border-border py-2 text-xs font-medium text-muted-foreground">
+													<Eye className="h-3.5 w-3.5" aria-hidden />
+													Details
 												</div>
 											)}
 										</Card>
@@ -771,7 +778,7 @@ export const HotProductsDashboard = ({
 								})}
 							</div>
 							{filteredStores.length === 0 && (
-								<div className="text-center py-12 text-gray-500">
+								<div className="text-center py-12 text-muted-foreground">
 									<MapPin className="h-12 w-12 mx-auto mb-3 text-gray-300" />
 									<p>No stores found matching your filters</p>
 								</div>
@@ -779,7 +786,7 @@ export const HotProductsDashboard = ({
 							{/* Pagination */}
 							{totalPages > 1 && (
 								<div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t">
-									<div className="text-sm text-gray-600">
+									<div className="text-sm text-muted-foreground">
 										Showing {startIndex + 1} to {Math.min(endIndex, filteredStores.length)} of {filteredStores.length} stores
 									</div>
 									<div className="flex items-center gap-2">
@@ -845,19 +852,11 @@ export const HotProductsDashboard = ({
 													<div className="flex items-center gap-3">
 														<div className="text-right">
 															<div className="text-sm font-semibold">{store.incidentsWithStolenItems ?? 0} theft incidents</div>
-															<div className="text-xs text-gray-500">
+															<div className="text-xs text-muted-foreground">
 																£{totalValue.toFixed(2)} lost, {store.recoveryRate.toFixed(1)}% recovered
 															</div>
 														</div>
-														<Badge
-															variant="outline"
-															style={{
-																borderColor: getRiskColor(store.riskLevel),
-																color: getRiskColor(store.riskLevel),
-															}}
-														>
-															{store.riskLevel.toUpperCase()}
-														</Badge>
+														<span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${RISK_CHIP[store.riskLevel] ?? RISK_CHIP.low}`}>{store.riskLevel}</span>
 														<Button
 															variant="ghost"
 															size="sm"
@@ -882,7 +881,7 @@ export const HotProductsDashboard = ({
 								})}
 							</div>
 							{filteredStores.length === 0 && (
-								<div className="text-center py-12 text-gray-500">
+								<div className="text-center py-12 text-muted-foreground">
 									<MapPin className="h-12 w-12 mx-auto mb-3 text-gray-300" />
 									<p>No stores found matching your filters</p>
 								</div>
@@ -890,7 +889,7 @@ export const HotProductsDashboard = ({
 							{/* Pagination */}
 							{totalPages > 1 && (
 								<div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t">
-									<div className="text-sm text-gray-600">
+									<div className="text-sm text-muted-foreground">
 										Showing {startIndex + 1} to {Math.min(endIndex, filteredStores.length)} of {filteredStores.length} stores
 									</div>
 									<div className="flex items-center gap-2">
@@ -966,15 +965,7 @@ export const HotProductsDashboard = ({
 													<TableRow>
 														<TableCell className="font-medium">{store.storeName}</TableCell>
 														<TableCell>
-															<Badge
-																variant="outline"
-																style={{
-																	borderColor: getRiskColor(store.riskLevel),
-																	color: getRiskColor(store.riskLevel),
-																}}
-															>
-																{store.riskLevel.toUpperCase()}
-															</Badge>
+															<span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${RISK_CHIP[store.riskLevel] ?? RISK_CHIP.low}`}>{store.riskLevel}</span>
 														</TableCell>
 														<TableCell>{store.incidentsWithStolenItems ?? 0}</TableCell>
 														<TableCell>{store.productGroupCount ?? store.products.length}</TableCell>
@@ -1007,7 +998,7 @@ export const HotProductsDashboard = ({
 													</TableRow>
 													{isExpanded && (
 														<TableRow>
-															<TableCell colSpan={7} className="bg-gray-50">
+															<TableCell colSpan={7} className="bg-muted/50">
 																<div className="p-4">
 																	<StoreHeatmapDetail store={store} />
 																</div>
@@ -1021,7 +1012,7 @@ export const HotProductsDashboard = ({
 								</Table>
 							</div>
 							{filteredStores.length === 0 && (
-								<div className="text-center py-12 text-gray-500">
+								<div className="text-center py-12 text-muted-foreground">
 									<MapPin className="h-12 w-12 mx-auto mb-3 text-gray-300" />
 									<p>No stores found matching your filters</p>
 								</div>
@@ -1029,7 +1020,7 @@ export const HotProductsDashboard = ({
 							{/* Pagination */}
 							{totalPages > 1 && (
 								<div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t">
-									<div className="text-sm text-gray-600">
+									<div className="text-sm text-muted-foreground">
 										Showing {startIndex + 1} to {Math.min(endIndex, filteredStores.length)} of {filteredStores.length} stores
 									</div>
 									<div className="flex items-center gap-2">
@@ -1081,9 +1072,7 @@ export const HotProductsDashboard = ({
 							)}
 						</TabsContent>
 					</Tabs>
-				</div>
-			</CardContent>
-		</Card>
+				</section>
+		</div>
 	)
 }
-

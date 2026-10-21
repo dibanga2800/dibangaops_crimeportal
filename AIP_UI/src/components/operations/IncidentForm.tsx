@@ -1,4 +1,5 @@
 import { useState, useCallback, memo, useEffect, useRef, useMemo } from "react"
+import { FormSectionNav, type FormSection } from './FormSectionNav'
 import { Incident, StolenItem, RepeatOffenderMatch } from "@/types/incidents"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,7 +23,7 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { format } from "date-fns"
-import { CalendarIcon, PlusCircle, Trash2, Package, QrCode, Hash, Loader2, User, Search } from "lucide-react"
+import { CalendarIcon, PlusCircle, Trash2, Package, QrCode, Hash, Loader2, User, Search, Clock, FileText, Siren, UserRound, Tag, PoundSterling } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Calendar } from "@/components/ui/calendar"
 import {
@@ -211,6 +212,16 @@ export interface IncidentFormProps {
   customerId?: string
   siteId?: string | null
 }
+
+const FORM_SECTIONS: FormSection[] = [
+  { id: 'sec-where', label: 'Where and who', hint: 'Store and colleague' },
+  { id: 'sec-when', label: 'When and what', hint: 'Date, time and type' },
+  { id: 'sec-what', label: 'What happened', hint: 'Description' },
+  { id: 'sec-police', label: 'Police', hint: 'Involvement and reference' },
+  { id: 'sec-offender', label: 'Offender', hint: 'Description and records' },
+  { id: 'sec-categories', label: 'Categories' },
+  { id: 'sec-stolen', label: 'Stolen items', hint: 'Products and value' },
+]
 
 const IncidentForm: React.FC<IncidentFormProps> = memo(({
   initialData,
@@ -1268,7 +1279,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="bg-gradient-to-br from-blue-50 via-slate-50 to-blue-50 min-h-screen">
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="bg-background">
         {zoomedEvidenceImage && (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
@@ -1283,7 +1294,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
             >
               <button
                 type="button"
-                className="absolute -top-3 -right-3 rounded-full bg-white px-2 py-1 text-xs font-semibold text-gray-700 shadow"
+                className="absolute -top-3 -right-3 rounded-full bg-card px-2 py-1 text-xs font-semibold text-foreground/80 shadow"
                 onClick={() => setZoomedEvidenceImage(null)}
                 aria-label="Close preview"
               >
@@ -1292,54 +1303,41 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
               <img
                 src={zoomedEvidenceImage}
                 alt="Verification evidence enlarged view"
-                className="max-h-[90vh] w-full rounded-lg bg-white object-contain"
+                className="max-h-[90vh] w-full rounded-lg bg-card object-contain"
               />
             </div>
           </div>
         )}
-        <div className="w-full max-w-none px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
-          {/* Header */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-            <div className="flex items-center gap-4">
-              <div className="bg-blue-100 p-3 rounded-lg">
-                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">Incident Report</h1>
-                <p className="text-gray-600 mt-1">Complete all required fields to submit your incident report. Fields marked with * are mandatory.</p>
-              </div>
-            </div>
-          </div>
-
+        <div className="mx-auto flex w-full max-w-6xl gap-10 px-4 pt-0 sm:px-6 xl:pt-6">
+          <FormSectionNav variant="rail" sections={FORM_SECTIONS} />
           {/* Form Content */}
-          <div className="space-y-6">
+          <div className="min-w-0 flex-1 space-y-6">
+            <FormSectionNav variant="strip" sections={FORM_SECTIONS} />
             {/* Main Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 gap-6">
               {/* Basic Information */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow duration-200">
+              <div id="sec-where" className="scroll-mt-16 xl:scroll-mt-6 rounded-lg border border-border bg-card p-5 sm:p-6">
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="bg-blue-100 p-2 rounded-lg">
-                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-foreground/70">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                   </div>
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900">Basic Information</h2>
-                    <p className="text-sm text-gray-500">Essential incident details</p>
+                    <h2 className="text-base font-semibold text-foreground">Where and who</h2>
+                    <p className="text-sm text-muted-foreground">The store, and the colleague making this report</p>
                   </div>
                 </div>
 
-                <div className="space-y-3 sm:space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
                   <FormField
                     control={form.control}
                     name="customerId"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Company Name *</FormLabel>
+                        <FormLabel className="text-sm font-semibold text-foreground/80 mb-2">Company name *</FormLabel>
                         {!isAdmin && propCustomerId ? (
-                          <div className="flex h-11 w-full rounded-md border border-input bg-gray-50 px-3 py-2 text-sm">
+                          <div className="flex h-11 w-full rounded-md border border-input bg-muted/50 px-3 py-2 text-sm">
                             {form.watch('customerName') || 'Loading...'}
                           </div>
                         ) : (
@@ -1349,7 +1347,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                             disabled={isLoadingCustomers}
                           >
                             <FormControl>
-                              <SelectTrigger className="h-12 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg shadow-sm">
+                              <SelectTrigger className="h-10 border border-input hover:border-foreground/30 focus:border-ring focus:ring-2 focus:ring-ring/20 rounded-md">
                                 <SelectValue placeholder={isLoadingCustomers ? "Loading companies..." : "Select company"} />
                               </SelectTrigger>
                             </FormControl>
@@ -1375,12 +1373,12 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                     name="siteId"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Store Name *</FormLabel>
+                        <FormLabel className="text-sm font-semibold text-foreground/80 mb-2">Store name *</FormLabel>
                         {/* For non-admins with an explicitly provided siteId, we usually lock the store.
                            However, for security officers who have multiple assigned stores, we want
                            to let them choose from their assigned sites instead of locking. */}
                         {!isAdmin && propSiteId && !hasMultipleAssignedSites ? (
-                          <div className="flex h-11 w-full rounded-md border border-input bg-gray-50 px-3 py-2 text-sm">
+                          <div className="flex h-11 w-full rounded-md border border-input bg-muted/50 px-3 py-2 text-sm">
                             {form.watch('siteName') || 'Loading...'}
                           </div>
                         ) : (
@@ -1390,7 +1388,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                             disabled={!customerId || isLoadingSites}
                           >
                             <FormControl>
-                              <SelectTrigger className="h-12 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg shadow-sm">
+                              <SelectTrigger className="h-10 border border-input hover:border-foreground/30 focus:border-ring focus:ring-2 focus:ring-ring/20 rounded-md">
                                 <SelectValue placeholder={
                                   !customerId 
                                     ? "Select company first" 
@@ -1426,9 +1424,9 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                     name="officerName"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Colleague Name *</FormLabel>
+                        <FormLabel className="text-sm font-semibold text-foreground/80 mb-2">Colleague name *</FormLabel>
                         <FormControl>
-                          <Input className="h-12 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg shadow-sm" {...field} placeholder="Enter colleague name" />
+                          <Input className="h-10 border border-input hover:border-foreground/30 focus:border-ring focus:ring-2 focus:ring-ring/20 rounded-md" {...field} placeholder="Enter colleague name" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1440,12 +1438,12 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                     name="officerRole"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Colleague Role *</FormLabel>
+                        <FormLabel className="text-sm font-semibold text-foreground/80 mb-2">Colleague role *</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
-                            <SelectTrigger className="h-12 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg shadow-sm">
+                            <SelectTrigger className="h-10 border border-input hover:border-foreground/30 focus:border-ring focus:ring-2 focus:ring-ring/20 rounded-md">
                               {isLoadingPositions
-                                ? <span className="text-gray-400 text-sm">Loading roles...</span>
+                                ? <span className="text-muted-foreground/80 text-sm">Loading roles...</span>
                                 : <SelectValue placeholder="Select role" />
                               }
                             </SelectTrigger>
@@ -1471,9 +1469,9 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                     name="dutyManagerName"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Duty Manager Name</FormLabel>
+                        <FormLabel className="text-sm font-semibold text-foreground/80 mb-2">Duty manager name</FormLabel>
                         <FormControl>
-                          <Input className="h-12 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg shadow-sm" {...field} placeholder="Enter duty manager name" />
+                          <Input className="h-10 border border-input hover:border-foreground/30 focus:border-ring focus:ring-2 focus:ring-ring/20 rounded-md" {...field} placeholder="Enter duty manager name" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1483,15 +1481,15 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
               </div>
 
               {/* Incident Details */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4 lg:p-5">
-                <div className="flex items-center gap-2 sm:gap-3 mb-4">
-                  <div className="h-6 w-6 sm:h-7 sm:w-7 lg:h-8 lg:w-8 text-blue-600">🕒</div>
+              <div id="sec-when" className="scroll-mt-16 xl:scroll-mt-6 rounded-lg border border-border bg-card p-4 sm:p-5">
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-foreground/70"><Clock className="h-4 w-4" aria-hidden /></div>
                   <div>
-                    <h2 className="text-base sm:text-lg lg:text-xl font-medium text-gray-900">Incident Details</h2>
+                    <h2 className="text-base font-semibold text-foreground">When and what</h2>
                   </div>
                 </div>
 
-                <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-3">
                   <FormField
                     control={form.control}
                     name="dateOfIncident"
@@ -1513,7 +1511,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                       }
                       return (
                         <FormItem>
-                          <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Date of Incident *</FormLabel>
+                          <FormLabel className="text-sm font-semibold text-foreground/80 mb-2">Date of Incident *</FormLabel>
                           <FormControl>
                             <Input
                               type="date"
@@ -1523,7 +1521,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                               onBlur={field.onBlur}
                               name={field.name}
                               ref={field.ref}
-                              className="h-12 px-4 bg-white border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 rounded-lg shadow-sm"
+                              className="h-10 px-3 bg-card border border-input hover:border-foreground/30 focus:border-ring focus:ring-2 focus:ring-ring/20 rounded-md"
                               aria-label="Date of incident"
                             />
                           </FormControl>
@@ -1538,7 +1536,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                     name="timeOfIncident"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Time of Incident *</FormLabel>
+                        <FormLabel className="text-sm font-semibold text-foreground/80 mb-2">Time of Incident *</FormLabel>
                         <FormControl>
                           <Input type="time" className="h-11" {...field} />
                         </FormControl>
@@ -1552,7 +1550,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                     name="incidentType"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Type of Incident *</FormLabel>
+                        <FormLabel className="text-sm font-semibold text-foreground/80 mb-2">Type of Incident *</FormLabel>
                         <Select
                           value={field.value || ''}
                           onValueChange={value => {
@@ -1565,16 +1563,16 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                           }}
                         >
                           <FormControl>
-                            <SelectTrigger className="h-12 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg shadow-sm">
+                            <SelectTrigger className="h-10 border border-input hover:border-foreground/30 focus:border-ring focus:ring-2 focus:ring-ring/20 rounded-md">
                               {isLoadingIncidentTypes
-                                ? <span className="text-gray-400 text-sm">Loading types...</span>
+                                ? <span className="text-muted-foreground/80 text-sm">Loading types...</span>
                                 : <SelectValue placeholder="Select type" />
                               }
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
                             {incidentTypesFromDb.length === 0 && !isLoadingIncidentTypes && (
-                              <div className="px-3 py-2 text-sm text-gray-400">No incident types available</div>
+                              <div className="px-3 py-2 text-sm text-muted-foreground/80">No incident types available</div>
                             )}
                             {incidentTypesFromDb.map((t) => (
                               <SelectItem key={t.lookupId} value={t.value}>
@@ -1585,7 +1583,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                         </Select>
                         {(field.value === 'Arrest - Saved?' || incidentType === 'Arrest - Saved?') && (
                           <div className="mt-2">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Arrest Save Comment <span className="text-red-500">*</span></label>
+                            <label className="block text-sm font-medium text-foreground/80 mb-1">Arrest Save Comment <span className="text-loss">*</span></label>
                             <textarea
                               className="w-full border rounded px-2 py-1 text-sm"
                               value={arrestSaveComment}
@@ -1598,7 +1596,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                               placeholder="Did this lead to a save or was the item lost after arrest?"
                             />
                             {formErrors.arrestSaveComment && (
-                              <p className="text-xs text-red-600 mt-1">{formErrors.arrestSaveComment}</p>
+                              <p className="text-xs text-loss mt-1">{formErrors.arrestSaveComment}</p>
                             )}
                           </div>
                         )}
@@ -1610,11 +1608,11 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
               </div>
 
               {/* Description */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4 lg:p-5">
-                <div className="flex items-center gap-2 sm:gap-3 mb-4">
-                  <div className="h-6 w-6 sm:h-7 sm:w-7 lg:h-8 lg:w-8 text-blue-600">📝</div>
+              <div id="sec-what" className="scroll-mt-16 xl:scroll-mt-6 rounded-lg border border-border bg-card p-4 sm:p-5">
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-foreground/70"><FileText className="h-4 w-4" aria-hidden /></div>
                   <div>
-                    <h2 className="text-base sm:text-lg lg:text-xl font-medium text-gray-900">Description</h2>
+                    <h2 className="text-base font-semibold text-foreground">What happened</h2>
                   </div>
                 </div>
 
@@ -1624,7 +1622,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                     name="description"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Incident Details *</FormLabel>
+                        <FormLabel className="text-sm font-semibold text-foreground/80 mb-2">Incident details *</FormLabel>
                         <FormControl>
                           <Textarea
                             placeholder="Describe the incident in detail"
@@ -1651,7 +1649,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                     name="storeComments"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Store Comments</FormLabel>
+                        <FormLabel className="text-sm font-semibold text-foreground/80 mb-2">Store comments</FormLabel>
                         <FormControl>
                           <Textarea
                             placeholder="Add any store-specific comments"
@@ -1668,11 +1666,11 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
             </div>
 
             {/* Police Involvement */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4 lg:p-5">
-              <div className="flex items-center gap-2 sm:gap-3 mb-4">
-                <div className="h-6 w-6 sm:h-7 sm:w-7 lg:h-8 lg:w-8 text-blue-600">👮</div>
+            <div id="sec-police" className="scroll-mt-16 xl:scroll-mt-6 rounded-lg border border-border bg-card p-4 sm:p-5">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-foreground/70"><Siren className="h-4 w-4" aria-hidden /></div>
                 <div>
-                  <h2 className="text-base sm:text-lg lg:text-xl font-medium text-gray-900">Police Involvement</h2>
+                  <h2 className="text-base font-semibold text-foreground">Police</h2>
                 </div>
               </div>
 
@@ -1717,9 +1715,9 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                         name="urnNumber"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-sm font-semibold text-gray-700 mb-2">URN Number</FormLabel>
+                            <FormLabel className="text-sm font-semibold text-foreground/80 mb-2">URN number</FormLabel>
                             <FormControl>
-                              <Input className="h-12 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg shadow-sm" {...field} placeholder="Enter URN Number" />
+                              <Input className="h-10 border border-input hover:border-foreground/30 focus:border-ring focus:ring-2 focus:ring-ring/20 rounded-md" {...field} placeholder="Enter URN Number" />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -1731,9 +1729,9 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                         name="crimeRefNumber"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Crime Reference Number</FormLabel>
+                            <FormLabel className="text-sm font-semibold text-foreground/80 mb-2">Crime reference number</FormLabel>
                             <FormControl>
-                              <Input className="h-12 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg shadow-sm" {...field} placeholder="Enter reference number" />
+                              <Input className="h-10 border border-input hover:border-foreground/30 focus:border-ring focus:ring-2 focus:ring-ring/20 rounded-md" {...field} placeholder="Enter reference number" />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -1746,11 +1744,11 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
             </div>
 
             {/* Offender Details */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4 lg:p-5">
-              <div className="flex items-center gap-2 sm:gap-3 mb-4">
-                <div className="h-6 w-6 sm:h-7 sm:w-7 lg:h-8 lg:w-8 text-blue-600">👤</div>
+            <div id="sec-offender" className="scroll-mt-16 xl:scroll-mt-6 rounded-lg border border-border bg-card p-4 sm:p-5">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-foreground/70"><UserRound className="h-4 w-4" aria-hidden /></div>
                 <div>
-                  <h2 className="text-base sm:text-lg lg:text-xl font-medium text-gray-900">Offender Details</h2>
+                  <h2 className="text-base font-semibold text-foreground">Offender</h2>
                 </div>
               </div>
 
@@ -1761,11 +1759,11 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                     name="offenderName"
                     render={({ field }) => (
                       <FormItem className="lg:col-span-2">
-                        <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Offender Name</FormLabel>
+                        <FormLabel className="text-sm font-semibold text-foreground/80 mb-2">Offender name</FormLabel>
                         <div className="space-y-2">
                           <div className="flex flex-col sm:flex-row gap-2">
                             <FormControl>
-                              <Input className="h-12 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg shadow-sm" {...field} placeholder="Enter offender name" />
+                              <Input className="h-10 border border-input hover:border-foreground/30 focus:border-ring focus:ring-2 focus:ring-ring/20 rounded-md" {...field} placeholder="Enter offender name" />
                             </FormControl>
                             <Button
                               type="button"
@@ -1786,36 +1784,36 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                             <Badge variant="outline" className={cn(
                               "border",
                               repeatOffenderCount > 0 
-                                ? "bg-red-50 text-red-800 border-red-100"
-                                : "bg-green-50 text-green-800 border-green-100"
+                                ? "bg-loss-soft text-loss border-loss/30"
+                                : "bg-recovered-soft text-recovered border-recovered/30"
                             )}>
                               Repeat Offender Count: {repeatOffenderCount}
                             </Badge>
                             <Badge variant="outline" className={cn(
                               "border",
                               offenderVerified
-                                ? "bg-green-50 text-green-800 border-green-100"
-                                : "bg-blue-50 text-blue-800 border-blue-100"
+                                ? "bg-recovered-soft text-recovered border-recovered/30"
+                                : "bg-info-soft text-info border-info/25"
                             )}>
                               {offenderVerified ? 'Details Verified' : 'Details Not Verified'}
                             </Badge>
                           </div>
-                          <div className="mt-3 rounded-xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-4 space-y-3">
+                          <div className="mt-3 space-y-3 rounded-lg border border-info/25 bg-info-soft p-4">
                             <div className="flex items-center gap-3">
-                              <div className="h-11 w-11 rounded-lg border border-blue-200 bg-white flex items-center justify-center shadow-sm">
-                                <User className="h-5 w-5 text-blue-600" />
+                              <div className="h-11 w-11 rounded-lg border border-info/25 bg-card flex items-center justify-center shadow-sm">
+                                <User className="h-5 w-5 text-primary" />
                               </div>
                               <div>
-                                <p className="text-sm font-semibold text-blue-900">
+                                <p className="text-sm font-semibold text-info">
                                   Face Search Intelligence
                                 </p>
-                                <p className="text-xs text-blue-700">
+                                <p className="text-xs text-primary">
                                   Capture a face image and instantly search verified offender records.
                                 </p>
                               </div>
                             </div>
                             {isSearchCaptureMode && isCameraActive ? (
-                              <div className="rounded-lg border border-gray-200 bg-white p-3">
+                              <div className="rounded-lg border border-border bg-card p-3">
                                 <FaceCaptureGuide
                                   videoRef={videoRef}
                                   onCapture={(dataUrl) => {
@@ -1839,7 +1837,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                                     size="sm"
                                     onClick={startSearchCapture}
                                     disabled={isImageSearching}
-                                    className="h-9 text-xs sm:text-sm bg-blue-600 hover:bg-blue-700"
+                                    className="h-9 text-xs sm:text-sm bg-primary hover:bg-primary/90"
                                   >
                                     Capture to search
                                   </Button>
@@ -1858,12 +1856,12 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                                 </div>
                                 <div className="flex flex-col sm:flex-row gap-2">
                                   <div className="relative flex-1">
-                                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-blue-500" />
+                                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" />
                                     <Input
                                       value={form.watch('offenderName') || ''}
                                       onChange={(event) => form.setValue('offenderName', event.target.value)}
                                       placeholder="Search offender by name"
-                                      className="h-10 pl-9 bg-white border-blue-200 focus:border-blue-500"
+                                      className="h-10 pl-9 bg-card border-info/25 focus:border-primary"
                                       aria-label="Search offender by name"
                                     />
                                   </div>
@@ -1890,12 +1888,12 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                           name="offenderId"
                           render={({ field }) => (
                             <FormItem className="mt-4">
-                              <FormLabel className="text-sm font-semibold text-gray-700 mb-2">
+                              <FormLabel className="text-sm font-semibold text-foreground/80 mb-2">
                                 Offender ID / Intelligence Ref (optional)
                               </FormLabel>
                               <FormControl>
                                 <Input
-                                  className="h-11 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg shadow-sm"
+                                  className="h-10 border border-input hover:border-foreground/30 focus:border-ring focus:ring-2 focus:ring-ring/20 rounded-md"
                                   {...field}
                                   placeholder="e.g. INT-2024-001"
                                 />
@@ -1908,44 +1906,44 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                           )}
                         />
                         {offenderSearchError && (
-                          <div className="mt-2 text-sm text-red-600">
+                          <div className="mt-2 text-sm text-loss">
                             {offenderSearchError}
                           </div>
                         )}
                         {offenderHistory && (
                           <div className="mt-3 space-y-3">
                             <div className="flex items-center justify-between">
-                              <p className="text-sm font-medium text-gray-700">Potential Matches (very close only)</p>
-                              <span className="text-xs text-gray-500">
+                              <p className="text-sm font-medium text-foreground/80">Potential Matches (very close only)</p>
+                              <span className="text-xs text-muted-foreground">
                                 Showing {offenderHistory.matches.length} of {offenderHistory.totalCount}
                               </span>
                             </div>
                             <div className="space-y-2">
                               {offenderHistory.matches.map((match, matchIndex) => (
-                                <div key={`${match.offenderName}-${matchIndex}`} className="border border-gray-200 rounded-lg p-2 bg-gray-50">
+                                <div key={`${match.offenderName}-${matchIndex}`} className="border border-border rounded-lg p-2 bg-muted/50">
                                   <div className="flex items-start justify-between gap-2">
                                     <div>
-                                      <p className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                                      <p className="text-sm font-semibold text-foreground flex items-center gap-2">
                                         <span>{match.offenderName}</span>
                                         {typeof match.similarity === 'number' && match.similarityLabel && (
                                           <span
                                             className={
                                               match.similarityLabel === 'High'
-                                                ? 'inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-800'
+                                                ? 'inline-flex items-center rounded-full bg-recovered-soft px-2 py-0.5 text-[11px] font-medium text-recovered'
                                                 : match.similarityLabel === 'Medium'
-                                                  ? 'inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-[11px] font-medium text-yellow-800'
-                                                  : 'inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-800'
+                                                  ? 'inline-flex items-center rounded-full bg-warning-soft px-2 py-0.5 text-[11px] font-medium text-warning'
+                                                  : 'inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground'
                                             }
                                           >
                                             {match.similarityLabel} match • {Math.round(match.similarity * 100)}%
                                           </span>
                                         )}
                                       </p>
-                                      <p className="text-xs text-gray-600">
+                                      <p className="text-xs text-muted-foreground">
                                         DOB: {formatDateSafe(match.offenderDOB, 'dd MMM yyyy')}
                                       </p>
                                       {match.offenderMarks && (
-                                        <p className="text-xs text-gray-600 mt-1">
+                                        <p className="text-xs text-muted-foreground mt-1">
                                           Marks: {match.offenderMarks}
                                         </p>
                                       )}
@@ -1954,7 +1952,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                                       type="button"
                                       variant="ghost"
                                       size="sm"
-                                      className="text-blue-600 hover:text-blue-700"
+                                      className="text-primary hover:text-primary"
                                       onClick={() => {
                                         form.setValue('offenderName', match.offenderName)
                                         if (match.offenderDOB) {
@@ -1996,11 +1994,11 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                                   </div>
                                   <div className="mt-2 space-y-1">
                                     {match.recentIncidents.map((incident) => (
-                                      <div key={incident.incidentId} className="text-xs text-gray-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 border-t border-dashed pt-1 first:border-none first:pt-0">
+                                      <div key={incident.incidentId} className="text-xs text-foreground/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 border-t border-dashed pt-1 first:border-none first:pt-0">
                                         <span>{formatDateSafe(incident.dateOfIncident, 'dd MMM yyyy')} - {incident.siteName}</span>
-                                        <span className="text-gray-500">{incident.incidentType}</span>
+                                        <span className="text-muted-foreground">{incident.incidentType}</span>
 												{(incident.offenderDetailsVerified !== undefined || incident.verificationMethod || incident.verificationEvidenceImage) && (
-													<div className="text-[11px] text-gray-600 flex flex-wrap gap-x-2 gap-y-1 sm:basis-full">
+													<div className="text-[11px] text-muted-foreground flex flex-wrap gap-x-2 gap-y-1 sm:basis-full">
 														{incident.offenderDetailsVerified !== undefined && (
 															<span>Verified: {incident.offenderDetailsVerified ? 'Yes' : 'No'}</span>
 														)}
@@ -2008,7 +2006,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
 															<span>Method: {incident.verificationMethod}</span>
 														)}
 														{incident.verificationEvidenceImage && (
-															<span className="text-gray-500">Evidence attached</span>
+															<span className="text-muted-foreground">Evidence attached</span>
 														)}
 													</div>
 												)}
@@ -2016,7 +2014,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
 													<img
 														src={incident.verificationEvidenceImage}
 														alt={`Verification evidence for ${match.offenderName}`}
-														className="mt-1 max-h-20 w-full max-w-[160px] cursor-zoom-in rounded-md border border-gray-200 object-contain sm:basis-full"
+														className="mt-1 max-h-20 w-full max-w-[160px] cursor-zoom-in rounded-md border border-border object-contain sm:basis-full"
 														loading="lazy"
 														onClick={() => setZoomedEvidenceImage(incident.verificationEvidenceImage || null)}
 													/>
@@ -2040,10 +2038,10 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                     name="gender"
                     render={({ field }) => (
                       <FormItem className="lg:col-span-1">
-                        <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Gender</FormLabel>
+                        <FormLabel className="text-sm font-semibold text-foreground/80 mb-2">Gender</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
-                            <SelectTrigger className="h-12 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg shadow-sm">
+                            <SelectTrigger className="h-10 border border-input hover:border-foreground/30 focus:border-ring focus:ring-2 focus:ring-ring/20 rounded-md">
                               <SelectValue placeholder="N/A or N/K" />
                             </SelectTrigger>
                           </FormControl>
@@ -2066,16 +2064,16 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                     name="offenderDOB"
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
-                        <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Date of Birth</FormLabel>
+                        <FormLabel className="text-sm font-semibold text-foreground/80 mb-2">Date of Birth</FormLabel>
                         <Popover>
                           <PopoverTrigger asChild>
                             <FormControl>
                               <Button
                                 variant={"outline"}
                                 className={cn(
-                                  "w-full h-11 pl-3 text-left font-normal bg-white",
-                                  !field.value && "text-muted-foreground hover:bg-gray-50",
-                                  field.value && "text-gray-900 hover:bg-gray-50"
+                                  "w-full h-11 pl-3 text-left font-normal bg-card",
+                                  !field.value && "text-muted-foreground hover:bg-muted/50",
+                                  field.value && "text-foreground hover:bg-muted/50"
                                 )}
                               >
                                 <div className="flex items-center">
@@ -2083,18 +2081,18 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                                   {field.value ? (
                                     <span>{format(field.value, "PPP")}</span>
                                   ) : (
-                                    <span className="text-gray-500">Select date of birth</span>
+                                    <span className="text-muted-foreground">Select date of birth</span>
                                   )}
                                 </div>
                               </Button>
                             </FormControl>
                           </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0 border-2 border-gray-200 shadow-lg rounded-lg" align="start">
-                            <div className="p-4 bg-white rounded-lg">
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <div className="p-4 bg-card rounded-lg">
                               <div className="flex items-center justify-between mb-4">
                                 <div className="flex items-center gap-2">
                                   <select
-                                    className="px-3 py-2 border border-gray-300 rounded-md text-sm font-medium bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="px-3 py-2 border border-border rounded-md text-sm font-medium bg-card hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-ring"
                                     value={field.value ? field.value.getMonth() : 0}
                                     onChange={(e) => {
                                       const newDate = new Date(field.value || new Date(1990, 0, 1))
@@ -2109,7 +2107,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                                     ))}
                                   </select>
                                   <select
-                                    className="px-3 py-2 border border-gray-300 rounded-md text-sm font-medium bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="px-3 py-2 border border-border rounded-md text-sm font-medium bg-card hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-ring"
                                     value={field.value ? field.value.getFullYear() : 1990}
                                     onChange={(e) => {
                                       const newDate = new Date(field.value || new Date(1990, 0, 1))
@@ -2130,7 +2128,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                                 <button
                                   type="button"
                                   onClick={() => field.onChange(new Date(1990, 0, 1))}
-                                  className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors"
+                                  className="px-3 py-1 text-xs bg-info-soft text-primary rounded-md hover:bg-blue-200 transition-colors"
                                 >
                                   1990
                                 </button>
@@ -2155,8 +2153,8 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                           </PopoverContent>
                         </Popover>
                         {field.value && (
-                          <div className="mt-1.5 text-sm text-gray-600">
-                            <span className="bg-gray-100 px-2 py-1 rounded">
+                          <div className="mt-1.5 text-sm text-muted-foreground">
+                            <span className="bg-muted px-2 py-1 rounded">
                               Age: <span className="font-medium">{Math.floor((new Date().getTime() - field.value.getTime()) / (365.25 * 24 * 60 * 60 * 1000))}</span>
                             </span>
                           </div>
@@ -2171,7 +2169,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                     name="offenderMarks"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Distinguishing Marks / Tattoos</FormLabel>
+                        <FormLabel className="text-sm font-semibold text-foreground/80 mb-2">Distinguishing Marks / Tattoos</FormLabel>
                         <FormControl>
                           <Textarea
                             placeholder="Describe tattoos, scars, or other identifying marks"
@@ -2195,9 +2193,9 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                   name="offenderDetailsVerified"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Details Verified?</FormLabel>
+                      <FormLabel className="text-sm font-semibold text-foreground/80 mb-2">Details Verified?</FormLabel>
                       <div className="flex flex-wrap items-center gap-4">
-                        <label className="flex items-center gap-2 text-sm text-gray-700">
+                        <label className="flex items-center gap-2 text-sm text-foreground/80">
                           <input
                             type="radio"
                             checked={field.value === true}
@@ -2206,7 +2204,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                           />
                           Yes
                         </label>
-                        <label className="flex items-center gap-2 text-sm text-gray-700">
+                        <label className="flex items-center gap-2 text-sm text-foreground/80">
                           <input
                             type="radio"
                             checked={field.value === false}
@@ -2222,19 +2220,19 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                 />
 
               {offenderDetailsVerified && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 rounded-xl border border-gray-200 bg-gray-50 p-3 sm:p-4">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 rounded-xl border border-border bg-muted/50 p-3 sm:p-4">
                   <FormField
                     control={form.control}
                     name="verificationMethod"
                     render={({ field }) => (
                       <FormItem className="lg:col-span-1">
-                        <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Verification Method *</FormLabel>
+                        <FormLabel className="text-sm font-semibold text-foreground/80 mb-2">Verification method *</FormLabel>
                         <Select
                           value={field.value || ''}
                           onValueChange={field.onChange}
                         >
                           <FormControl>
-                            <SelectTrigger className="h-11 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg shadow-sm">
+                            <SelectTrigger className="h-10 border border-input hover:border-foreground/30 focus:border-ring focus:ring-2 focus:ring-ring/20 rounded-md">
                               <SelectValue placeholder="Select verification method" />
                             </SelectTrigger>
                           </FormControl>
@@ -2256,12 +2254,12 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                     name="verificationEvidenceImage"
                     render={() => (
                       <FormItem className="lg:col-span-2">
-                        <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Verification Evidence</FormLabel>
+                        <FormLabel className="text-sm font-semibold text-foreground/80 mb-2">Verification evidence</FormLabel>
                         <FormControl>
                           <div className="space-y-3">
                             {verificationEvidencePreview ? (
                               <div className="space-y-3">
-                                <div className="rounded-lg border border-gray-200 bg-white p-3">
+                                <div className="rounded-lg border border-border bg-card p-3">
                                   <img
                                     src={verificationEvidencePreview}
                                     alt="Verification evidence preview"
@@ -2269,7 +2267,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                                     onClick={() => setZoomedEvidenceImage(verificationEvidencePreview)}
                                   />
                                   {verificationFileName && (
-                                    <p className="mt-2 text-xs text-gray-500">{verificationFileName}</p>
+                                    <p className="mt-2 text-xs text-muted-foreground">{verificationFileName}</p>
                                   )}
                                 </div>
                                 <div className="flex flex-wrap gap-2">
@@ -2297,12 +2295,12 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                               <div className="space-y-3">
                                 {isCameraActive ? (
                                   <div className="space-y-3">
-                                <div className="rounded-lg border border-gray-200 bg-white p-3">
+                                <div className="rounded-lg border border-border bg-card p-3">
                                   <div className="mx-auto w-full max-w-sm sm:max-w-lg">
                                     <video ref={videoRef} className="w-full rounded-md" playsInline muted />
                                   </div>
                                   <canvas ref={canvasRef} className="hidden" />
-                                  <p className="mt-2 text-[11px] text-amber-700 bg-amber-50 rounded px-2 py-1">
+                                  <p className="mt-2 text-[11px] text-warning bg-warning-soft rounded px-2 py-1">
                                     Position your face centered, well-lit, and filling the frame. Avoid shadows and glare.
                                   </p>
                                 </div>
@@ -2342,7 +2340,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                               </div>
                             )}
                             {cameraError && (
-                              <p className="text-xs text-red-600">{cameraError}</p>
+                              <p className="text-xs text-loss">{cameraError}</p>
                             )}
                           </div>
                         </FormControl>
@@ -2359,9 +2357,9 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                     name="offenderAddress.numberAndStreet"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Address</FormLabel>
+                        <FormLabel className="text-sm font-semibold text-foreground/80 mb-2">Address</FormLabel>
                         <FormControl>
-                          <Input className="h-12 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg shadow-sm" {...field} placeholder="Enter street address" />
+                          <Input className="h-10 border border-input hover:border-foreground/30 focus:border-ring focus:ring-2 focus:ring-ring/20 rounded-md" {...field} placeholder="Enter street address" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -2374,9 +2372,9 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                       name="offenderAddress.town"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Town</FormLabel>
+                          <FormLabel className="text-sm font-semibold text-foreground/80 mb-2">Town</FormLabel>
                           <FormControl>
-                            <Input className="h-12 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg shadow-sm" {...field} placeholder="Enter town" />
+                            <Input className="h-10 border border-input hover:border-foreground/30 focus:border-ring focus:ring-2 focus:ring-ring/20 rounded-md" {...field} placeholder="Enter town" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -2388,14 +2386,14 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                       name="offenderAddress.county"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-sm font-semibold text-gray-700 mb-2">County</FormLabel>
+                          <FormLabel className="text-sm font-semibold text-foreground/80 mb-2">County</FormLabel>
                           <Select
                             onValueChange={field.onChange}
                             value={field.value || ''}
                             disabled={isLoadingCounties}
                           >
                             <FormControl>
-                              <SelectTrigger className="h-12 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg shadow-sm">
+                              <SelectTrigger className="h-10 border border-input hover:border-foreground/30 focus:border-ring focus:ring-2 focus:ring-ring/20 rounded-md">
                                 <SelectValue placeholder={isLoadingCounties ? "Loading counties..." : "Select county"} />
                               </SelectTrigger>
                             </FormControl>
@@ -2420,9 +2418,9 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                       name="offenderPlaceOfBirth"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Place of Birth</FormLabel>
+                          <FormLabel className="text-sm font-semibold text-foreground/80 mb-2">Place of Birth</FormLabel>
                           <FormControl>
-                            <Input className="h-12 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg shadow-sm" {...field} placeholder="Enter place of birth" />
+                            <Input className="h-10 border border-input hover:border-foreground/30 focus:border-ring focus:ring-2 focus:ring-ring/20 rounded-md" {...field} placeholder="Enter place of birth" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -2434,9 +2432,9 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                       name="offenderAddress.postCode"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-sm font-semibold text-gray-700 mb-2">Post Code</FormLabel>
+                          <FormLabel className="text-sm font-semibold text-foreground/80 mb-2">Post code</FormLabel>
                           <FormControl>
-                            <Input className="h-12 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg shadow-sm" {...field} placeholder="Enter post code" />
+                            <Input className="h-10 border border-input hover:border-foreground/30 focus:border-ring focus:ring-2 focus:ring-ring/20 rounded-md" {...field} placeholder="Enter post code" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -2448,11 +2446,11 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
             </div>
 
             {/* Incident Categories */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4 lg:p-5">
-              <div className="flex items-center gap-2 sm:gap-3 mb-4">
-                <div className="h-6 w-6 sm:h-7 sm:w-7 lg:h-8 lg:w-8 text-blue-600">🏷️</div>
+            <div id="sec-categories" className="scroll-mt-16 xl:scroll-mt-6 rounded-lg border border-border bg-card p-4 sm:p-5">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-foreground/70"><Tag className="h-4 w-4" aria-hidden /></div>
                 <div>
-                  <h2 className="text-base sm:text-lg lg:text-xl font-medium text-gray-900">Incident Categories</h2>
+                  <h2 className="text-base font-semibold text-foreground">Categories</h2>
                 </div>
               </div>
 
@@ -2485,317 +2483,259 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                   />
                 ))}
                 {incidentCategoryOptions.length === 0 && !isLoadingIncidentCategories && (
-                  <p className="text-sm text-gray-500">No incident categories available.</p>
+                  <p className="text-sm text-muted-foreground">No incident categories available.</p>
                 )}
               </div>
             </div>
 
             {/* Stolen Items */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4 lg:p-5">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <div className="h-6 w-6 sm:h-7 sm:w-7 lg:h-8 lg:w-8 text-blue-600">💰</div>
+            <div id="sec-stolen" className="scroll-mt-16 xl:scroll-mt-6 rounded-lg border border-border bg-card">
+              <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-foreground/70"><PoundSterling className="h-4 w-4" aria-hidden /></div>
                   <div>
-                    <h2 className="text-base sm:text-lg lg:text-xl font-medium text-gray-900">Stolen Items</h2>
+                    <h2 className="text-base font-semibold text-foreground">Stolen items</h2>
+                    <p className="text-[13px] text-muted-foreground">Scan or type a barcode to pull the product from the catalogue, or add an item by hand.</p>
                   </div>
                 </div>
-                <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
-                  <Button
-                    type="button"
-                    onClick={onScanBarcode}
-                    variant="outline"
-                    size="lg"
-                    className="flex items-center justify-center gap-2 w-full sm:w-auto min-h-[44px]"
-                  >
-                    <QrCode className="h-5 w-5" />
-                    Scan Barcode
+                <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
+                  <Button type="button" onClick={onScanBarcode} variant="outline" className="min-h-[44px] gap-2 sm:min-h-0">
+                    <QrCode className="h-4 w-4" aria-hidden />
+                    Scan barcode
                   </Button>
-                  <Button
-                    type="button"
-                    onClick={addStolenItem}
-                    variant="outline"
-                    size="lg"
-                    className="flex items-center justify-center gap-2 w-full sm:w-auto min-h-[44px]"
-                  >
-                    <PlusCircle className="h-5 w-5" />
-                    Add Item
+                  <Button type="button" onClick={addStolenItem} variant="outline" className="min-h-[44px] gap-2 sm:min-h-0">
+                    <PlusCircle className="h-4 w-4" aria-hidden />
+                    Add item
                   </Button>
                 </div>
               </div>
 
-              {/* Manual Barcode Entry */}
-              {onBarcodeScanned && (
-                <div className="mb-4 p-3 sm:p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <Label htmlFor="manual-barcode" className="text-sm font-medium text-gray-700 mb-2 block">
-                    Or enter barcode number manually
-                  </Label>
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <div className="relative flex-1">
-                      <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input
-                        id="manual-barcode"
-                        type="text"
-                        value={manualBarcode}
-                        onChange={(e) => setManualBarcode(e.target.value)}
-                        onKeyDown={handleBarcodeKeyDown}
-                        placeholder="Enter barcode number"
-                        disabled={isProcessingBarcode}
-                        className="pl-10 h-11 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg"
-                        aria-label="Manual barcode entry"
-                      />
+              <div className="space-y-4 p-4 sm:p-5">
+                {/* Manual Barcode Entry */}
+                {onBarcodeScanned && (
+                  <div>
+                    <Label htmlFor="manual-barcode" className="mb-1.5 block text-sm font-medium text-foreground">
+                      Barcode
+                    </Label>
+                    <div className="flex gap-2">
+                      <div className="relative min-w-0 flex-1">
+                        <Hash className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                        <Input
+                          id="manual-barcode"
+                          type="text"
+                          inputMode="numeric"
+                          value={manualBarcode}
+                          onChange={(e) => setManualBarcode(e.target.value)}
+                          onKeyDown={handleBarcodeKeyDown}
+                          placeholder="Barcode number"
+                          disabled={isProcessingBarcode}
+                          className="figures h-10 pl-9"
+                          aria-describedby="manual-barcode-hint"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={handleManualBarcodeEntry}
+                        disabled={!manualBarcode.trim() || isProcessingBarcode}
+                        className="h-10 shrink-0"
+                      >
+                        {isProcessingBarcode ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                            Looking up…
+                          </>
+                        ) : (
+                          'Look up'
+                        )}
+                      </Button>
                     </div>
-                    <Button
-                      type="button"
-                      onClick={handleManualBarcodeEntry}
-                      disabled={!manualBarcode.trim() || isProcessingBarcode}
-                      variant="default"
-                      size="lg"
-                      className="min-h-[44px] sm:w-auto w-full"
-                    >
-                      {isProcessingBarcode ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Processing...
-                        </>
-                      ) : (
-                        <>
-                          <Package className="h-4 w-4 mr-2" />
-                          Add Product
-                        </>
-                      )}
-                    </Button>
+                    <p id="manual-barcode-hint" className="mt-1.5 text-xs text-muted-foreground">
+                      Department, name, VME code and retail price fill in from the catalogue when the product is known.
+                    </p>
                   </div>
-                  <p className="text-xs text-gray-500 mt-2">
-                    Enter a barcode to add the product with department, name, VME code, and retail price from the catalog when available.
-                  </p>
-                </div>
-              )}
+                )}
 
-              {/* Validation Error Display */}
-              {form.formState.errors.root && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
-                  <p className="text-sm font-medium text-red-700">
+                {/* Validation Error Display */}
+                {form.formState.errors.root && (
+                  <div role="alert" className="rounded-md border border-loss/30 bg-loss-soft px-3 py-2 text-sm font-medium text-loss">
                     {form.formState.errors.root.message}
-                  </p>
-                </div>
-              )}
-
-              <div className="space-y-4">
-                <div className="hidden sm:grid sm:grid-cols-12 gap-4">
-                  <div className="col-span-2">
-                    <Label className="text-base font-medium">Department</Label>
                   </div>
-                  <div className="col-span-3">
-                    <Label className="text-base font-medium">Product Name</Label>
-                  </div>
-                  <div className="col-span-2">
-                    <Label className="text-base font-medium">VMECode</Label>
-                  </div>
-                  <div className="col-span-1">
-                    <Label className="text-base font-medium">Retail price</Label>
-                  </div>
-                  <div className="col-span-1">
-                    <Label className="text-base font-medium">Qty</Label>
-                  </div>
-                  <div className="col-span-2">
-                    <Label className="text-base font-medium">Total</Label>
-                  </div>
-                  <div className="col-span-1">
-                    <Label className="text-base font-medium">Barcode</Label>
-                  </div>
-                </div>
+                )}
 
                 {stolenItems.length > 0 ? (
-                  <div className="space-y-4">
-                    {stolenItems.map((item, index) => (
-                      <div key={index} className="flex flex-col sm:grid sm:grid-cols-12 gap-3 sm:gap-4 items-start sm:items-center border-b sm:border-0 pb-4 sm:pb-0">
-                        <div className="w-full sm:col-span-2">
-                          <Label className="sm:hidden mb-1 block text-sm font-medium">Department</Label>
-                          <Select
-                            value={item.category}
-                            onValueChange={(value) => updateStolenItem(index, "category", value)}
-                          >
-                            <SelectTrigger className="h-12 border-2 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg shadow-sm">
-                              {isLoadingDepartments
-                                ? <span className="text-gray-400 text-sm">Loading...</span>
-                                : <SelectValue placeholder="Select department" />
-                              }
-                            </SelectTrigger>
-                            <SelectContent>
-                              {catalogDepartments.length === 0 && !isLoadingDepartments && (
-                                <div className="px-3 py-2 text-sm text-gray-400">No departments in catalog yet</div>
-                              )}
-                              {catalogDepartments.map((dept) => (
-                                <SelectItem key={dept} value={dept}>
-                                  {dept}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="w-full sm:col-span-3">
-                          <Label className="sm:hidden mb-1 block text-sm font-medium">Product Name</Label>
-                          <Input
-                            className="h-11"
-                            value={item.productName}
-                            onChange={(e) => updateStolenItem(index, "productName", e.target.value)}
-                            placeholder="Product name"
-                          />
-                        </div>
-                        <div className="w-full sm:col-span-2">
-                          <Label className="sm:hidden mb-1 block text-sm font-medium">VMECode</Label>
-                          <Input
-                            className="h-11"
-                            value={item.description}
-                            onChange={(e) => updateStolenItem(index, "description", e.target.value)}
-                            placeholder="VME code"
-                          />
-                        </div>
-                        <div className="w-full sm:col-span-1">
-                          <Label className="sm:hidden mb-1 block text-sm font-medium">Retail price</Label>
-                          <Input
-                            className="h-11"
-                            type="number"
-                            step="0.01"
-                            value={item.cost}
-                            onChange={(e) => updateStolenItem(index, "cost", parseFloat(e.target.value))}
-                            placeholder="0.00"
-                          />
-                        </div>
-                        <div className="w-full sm:col-span-1">
-                          <Label className="sm:hidden mb-1 block text-sm font-medium">Quantity</Label>
-                          <Input
-                            className="h-11"
-                            type="number"
-                            value={item.quantity}
-                            onChange={(e) => updateStolenItem(index, "quantity", parseInt(e.target.value))}
-                            placeholder="1"
-                          />
-                        </div>
-                        <div className="w-full sm:col-span-2 flex items-center gap-2">
-                          <div className="flex-1">
-                            <Label className="sm:hidden mb-1 block text-sm font-medium">Total</Label>
-                            <Input
-                              className="h-11 text-right tabular-nums"
-                              type="number"
-                              value={item.totalAmount}
-                              disabled
-                            />
+                  <ol className="space-y-3">
+                    {stolenItems.map((item, index) => {
+                      const fieldId = (name: string) => `item-${index}-${name}`
+                      return (
+                        <li key={item.id ?? index} className="rounded-lg border border-border">
+                          <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/40 py-1.5 pl-3 pr-1.5">
+                            <div className="flex min-w-0 items-center gap-2 text-sm">
+                              <span className="figures font-semibold text-foreground">Item {index + 1}</span>
+                              {item.barcode ? (
+                                <span className="figures truncate rounded bg-card px-1.5 py-0.5 text-xs text-muted-foreground ring-1 ring-border">
+                                  {item.barcode}
+                                </span>
+                              ) : null}
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeStolenItem(index)}
+                              className="h-8 gap-1.5 px-2 text-muted-foreground hover:bg-loss-soft hover:text-loss"
+                              aria-label={`Remove item ${index + 1}`}
+                            >
+                              <Trash2 className="h-4 w-4" aria-hidden />
+                              <span className="hidden sm:inline">Remove</span>
+                            </Button>
                           </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => removeStolenItem(index)}
-                            className="text-red-500 hover:text-red-600 h-12 w-12 flex items-center justify-center"
-                          >
-                            <Trash2 className="h-7 w-7" />
-                          </Button>
-                        </div>
-                        <div className="w-full sm:col-span-1">
-                          <Label className="sm:hidden mb-1 block text-sm font-medium">Barcode</Label>
-                          <Input
-                            className="h-11"
-                            value={item.barcode || ''}
-                            disabled
-                          />
-                        </div>
-                        <div className="w-full sm:col-span-12 rounded-lg border border-border bg-muted/30 px-4 py-3">
-                          <div className="flex flex-col gap-3">
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                              <div className="flex items-center gap-3">
+
+                          <div className="grid grid-cols-2 gap-3 p-3 md:grid-cols-6 lg:grid-cols-12">
+                            <div className="col-span-2 md:col-span-3 lg:col-span-3">
+                              <Label htmlFor={fieldId('dept')} className="mb-1 block text-xs font-medium text-muted-foreground">Department</Label>
+                              <Select value={item.category} onValueChange={(value) => updateStolenItem(index, 'category', value)}>
+                                <SelectTrigger id={fieldId('dept')} className="h-10">
+                                  {isLoadingDepartments ? <span className="text-sm text-muted-foreground">Loading…</span> : <SelectValue placeholder="Select department" />}
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {catalogDepartments.length === 0 && !isLoadingDepartments && (
+                                    <div className="px-3 py-2 text-sm text-muted-foreground">No departments in the catalogue yet</div>
+                                  )}
+                                  {catalogDepartments.map((dept) => (
+                                    <SelectItem key={dept} value={dept}>
+                                      {dept}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="col-span-2 md:col-span-3 lg:col-span-4">
+                              <Label htmlFor={fieldId('name')} className="mb-1 block text-xs font-medium text-muted-foreground">Product name</Label>
+                              <Input
+                                id={fieldId('name')}
+                                className="h-10"
+                                value={item.productName}
+                                onChange={(e) => updateStolenItem(index, 'productName', e.target.value)}
+                                placeholder="e.g. Lurpak Spreadable 500g"
+                              />
+                            </div>
+                            <div className="col-span-2 md:col-span-2 lg:col-span-2">
+                              <Label htmlFor={fieldId('vme')} className="mb-1 block text-xs font-medium text-muted-foreground">VME code</Label>
+                              <Input
+                                id={fieldId('vme')}
+                                className="figures h-10"
+                                value={item.description}
+                                onChange={(e) => updateStolenItem(index, 'description', e.target.value)}
+                                placeholder="VME code"
+                              />
+                            </div>
+                            <div className="md:col-span-2 lg:col-span-2">
+                              <Label htmlFor={fieldId('cost')} className="mb-1 block text-xs font-medium text-muted-foreground">Price (£)</Label>
+                              <Input
+                                id={fieldId('cost')}
+                                className="figures h-10 text-right"
+                                type="number"
+                                inputMode="decimal"
+                                step="0.01"
+                                min={0}
+                                value={item.cost}
+                                onChange={(e) => updateStolenItem(index, 'cost', parseFloat(e.target.value))}
+                                placeholder="0.00"
+                              />
+                            </div>
+                            <div className="md:col-span-2 lg:col-span-1">
+                              <Label htmlFor={fieldId('qty')} className="mb-1 block text-xs font-medium text-muted-foreground">Qty</Label>
+                              <Input
+                                id={fieldId('qty')}
+                                className="figures h-10 text-right"
+                                type="number"
+                                inputMode="numeric"
+                                min={1}
+                                value={item.quantity}
+                                onChange={(e) => updateStolenItem(index, 'quantity', parseInt(e.target.value))}
+                                placeholder="1"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col gap-3 border-t border-dashed border-border px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                              <label htmlFor={`recovered-${item.id}`} className="flex min-h-[36px] cursor-pointer items-center gap-2.5 text-sm font-medium text-foreground">
                                 <Checkbox
                                   id={`recovered-${item.id}`}
                                   checked={Boolean(item.wasRecovered)}
                                   onCheckedChange={(checked) => updateStolenItem(index, 'wasRecovered', checked === true)}
                                 />
-                                <Label htmlFor={`recovered-${item.id}`} className="text-sm font-medium">
-                                  Was item recovered?
-                                </Label>
-                              </div>
-                              <div className="text-sm text-muted-foreground">
-                                Recovered items count as saved value for the store.
-                              </div>
+                                Recovered
+                              </label>
+                              {item.wasRecovered ? (
+                                <div className="flex items-center gap-2">
+                                  <Label htmlFor={fieldId('recqty')} className="text-sm text-muted-foreground">Quantity back</Label>
+                                  <Input
+                                    id={fieldId('recqty')}
+                                    className="figures h-9 w-20 text-right"
+                                    type="number"
+                                    inputMode="numeric"
+                                    min={0}
+                                    max={item.quantity}
+                                    value={item.recoveredQuantity ?? 0}
+                                    onChange={(e) => updateStolenItem(index, 'recoveredQuantity', parseInt(e.target.value || '0', 10))}
+                                  />
+                                  <span className="figures text-sm text-muted-foreground">of {item.quantity || 0}</span>
+                                </div>
+                              ) : null}
                             </div>
-
-                            <div className="grid gap-3 sm:grid-cols-3">
-                              <div>
-                                <Label className="mb-1 block text-sm font-medium">Recovered Quantity</Label>
-                                <Input
-                                  className="h-11"
-                                  type="number"
-                                  min={0}
-                                  max={item.quantity}
-                                  value={item.recoveredQuantity ?? 0}
-                                  onChange={(e) => updateStolenItem(index, 'recoveredQuantity', parseInt(e.target.value || '0', 10))}
-                                  disabled={!item.wasRecovered}
-                                />
+                            <dl className="figures flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm">
+                              <div className="flex items-baseline gap-1.5">
+                                <dt className="text-muted-foreground">Total</dt>
+                                <dd className="font-semibold text-foreground">£{Number(item.totalAmount || 0).toFixed(2)}</dd>
                               </div>
-                              <div>
-                                <Label className="mb-1 block text-sm font-medium">Value Saved</Label>
-                                <Input
-                                  className="h-11 text-right"
-                                  type="number"
-                                  value={item.recoveredAmount ?? 0}
-                                  disabled
-                                />
+                              <div className="flex items-baseline gap-1.5">
+                                <dt className="text-muted-foreground">Recovered</dt>
+                                <dd className="font-semibold text-recovered">£{Number(item.recoveredAmount ?? 0).toFixed(2)}</dd>
                               </div>
-                              <div>
-                                <Label className="mb-1 block text-sm font-medium">Value Lost</Label>
-                                <Input
-                                  className="h-11 text-right"
-                                  type="number"
-                                  value={item.lostAmount ?? item.totalAmount}
-                                  disabled
-                                />
+                              <div className="flex items-baseline gap-1.5">
+                                <dt className="text-muted-foreground">Lost</dt>
+                                <dd className="font-semibold text-loss">£{Number(item.lostAmount ?? item.totalAmount ?? 0).toFixed(2)}</dd>
                               </div>
-                            </div>
+                            </dl>
                           </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                        </li>
+                      )
+                    })}
+                  </ol>
                 ) : (
-                  <div className="text-center py-6 sm:py-8 lg:py-12 border border-dashed rounded-lg">
-                    <div className="flex justify-center mb-4">
-                      <Package className="h-10 w-10 sm:h-12 sm:w-12 text-gray-400" />
-                    </div>
-                    <p className="text-base text-gray-600">No items added</p>
-                    <p className="text-sm text-gray-500">Click "Add Item" to start recording stolen items</p>
+                  <div className="flex flex-col items-center rounded-lg border border-dashed border-border px-4 py-8 text-center">
+                    <Package className="mb-3 h-8 w-8 text-muted-foreground" aria-hidden />
+                    <p className="text-sm font-medium text-foreground">No items yet</p>
+                    <p className="mt-0.5 max-w-sm text-[13px] text-muted-foreground">Scan or look up a barcode above, or choose Add item to enter one by hand.</p>
                   </div>
                 )}
-
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-4 sm:pt-6 border-t mt-4 sm:mt-6">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base font-medium">Total Items:</span>
-                    <span className="text-lg font-semibold">{stolenItems.length}</span>
-                  </div>
-                  <div className="grid gap-2 text-sm sm:grid-cols-3 sm:gap-4">
-                    <div className="rounded-md bg-muted/40 px-3 py-2">
-                      <span className="block text-muted-foreground">Total Stolen</span>
-                      <span className="text-lg font-semibold">
-                        £{calculateIncidentValueTotals(stolenItems).totalStolenValue.toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="rounded-md bg-emerald-50 px-3 py-2 dark:bg-emerald-950/30">
-                      <span className="block text-emerald-700 dark:text-emerald-300">Value Saved</span>
-                      <span className="text-lg font-semibold text-emerald-700 dark:text-emerald-300">
-                        £{calculateIncidentValueTotals(stolenItems).totalRecoveredValue.toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="rounded-md bg-rose-50 px-3 py-2 dark:bg-rose-950/30">
-                      <span className="block text-rose-700 dark:text-rose-300">Value Lost</span>
-                      <span className="text-lg font-semibold text-rose-700 dark:text-rose-300">
-                        £{calculateIncidentValueTotals(stolenItems).totalLostValue.toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
               </div>
+
+              {(() => {
+                const totals = calculateIncidentValueTotals(stolenItems)
+                const cells = [
+                  { label: 'Items', value: String(stolenItems.length), tone: 'text-foreground' },
+                  { label: 'Stolen', value: `£${totals.totalStolenValue.toFixed(2)}`, tone: 'text-foreground' },
+                  { label: 'Recovered', value: `£${totals.totalRecoveredValue.toFixed(2)}`, tone: 'text-recovered' },
+                  { label: 'Lost', value: `£${totals.totalLostValue.toFixed(2)}`, tone: 'text-loss' },
+                ]
+                return (
+                  <dl className="grid grid-cols-2 border-t border-border sm:grid-cols-4" aria-label="Item totals">
+                    {cells.map((cell) => (
+                      <div key={cell.label} className="px-4 py-3 shadow-[1px_1px_0_0_hsl(var(--border))] sm:px-5">
+                        <dt className="text-xs font-medium text-muted-foreground">{cell.label}</dt>
+                        <dd className={`figures font-display text-xl font-semibold ${cell.tone}`}>{cell.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )
+              })()}
             </div>
 
-            {/* Form Actions */}
-            <div className="flex flex-col gap-3 pt-4">
+            {/* Form Actions: pinned to the bottom of the scroll area so saving is always one tap away */}
+            <div className="sticky bottom-0 z-20 -mx-4 flex flex-col gap-3 border-t border-border bg-card/95 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur sm:-mx-6 sm:px-6 xl:mx-0 xl:px-0">
               {/* Error Summary */}
               {(() => {
                 const errors: Array<{ field: string; message: string }> = []
@@ -2817,9 +2757,9 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                 flattenErrors(form.formState.errors)
                 
                 return errors.length > 0 ? (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-3">
-                    <p className="text-sm font-medium text-red-800 mb-2">Please fix the following errors:</p>
-                    <ul className="list-disc list-inside text-sm text-red-700 space-y-1">
+                  <div className="max-h-36 overflow-y-auto rounded-md border border-loss/30 bg-loss-soft p-3">
+                    <p className="text-sm font-medium text-loss mb-2">Please fix the following errors:</p>
+                    <ul className="list-disc list-inside text-sm text-loss space-y-1">
                       {errors.map(({ field, message }) => (
                         <li key={field}>
                           <span className="font-semibold">{field}:</span> {message}
@@ -2830,23 +2770,26 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                 ) : null
               })()}
               
-              <div className="flex justify-end items-center gap-3">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={onCancel}
-                  className="h-9 px-4 text-sm"
-                  disabled={isLoading}
-                >
-                  Cancel
-                </Button>
-                <Button 
-                  type="submit" 
-                  className="h-9 px-4 text-sm bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
-                  disabled={isLoading}
-                >
-                  {isLoading ? "Saving..." : isEditMode ? "Update" : "Create"}
-                </Button>
+              <div className="flex items-center justify-between gap-3">
+                <p className="hidden text-xs text-muted-foreground sm:block">Fields marked * are required.</p>
+                <div className="flex flex-1 items-center justify-end gap-2 sm:flex-none">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={onCancel}
+                    className="flex-1 sm:flex-none"
+                    disabled={isLoading}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    type="submit" 
+                    className="flex-1 sm:flex-none sm:min-w-[9rem]"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? "Saving…" : isEditMode ? "Save changes" : "Submit report"}
+                  </Button>
+                </div>
               </div>
             </div>
           </div>

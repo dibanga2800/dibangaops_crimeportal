@@ -6,30 +6,16 @@ import {
 	Target,
 	TrendingUp,
 	AlertTriangle,
-	Activity,
 	BarChart3,
 	Clock,
 	MapPin,
 	Package,
-	Shield,
 	ChevronLeft,
 	ChevronRight,
-	SlidersHorizontal,
+	Building2,
 } from 'lucide-react'
 import { format, startOfYear } from 'date-fns'
-import {
-	BarChart,
-	Bar,
-	XAxis,
-	YAxis,
-	CartesianGrid,
-	Tooltip,
-	ResponsiveContainer,
-	PieChart,
-	Pie,
-	Cell,
-	Legend,
-} from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 
 import { useAuth } from '@/contexts/AuthContext'
 import { useCustomerSelection } from '@/contexts/CustomerSelectionContext'
@@ -47,29 +33,15 @@ import type {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Badge } from '@/components/ui/badge'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { PageHeader } from '@/components/layout/PageHeader'
+import { FilterBar, DateRangeField, FilterChip } from '@/components/common/FilterBar'
+import { StatLedger, type StatLedgerItem } from '@/components/common/StatLedger'
+import { EmptyState } from '@/components/common/EmptyState'
+import { useChartTheme, chartTooltipStyle, axisTick } from '@/lib/chart-theme'
 import { useToast } from '@/components/ui/use-toast'
 import { filterByAssignedSiteIds } from '@/utils/siteAccess'
-
-// ============================================================================
-// Constants
-// ============================================================================
-
-const CHART_PALETTE = ['#6366f1', '#f97316', '#22c55e', '#0ea5e9', '#ec4899', '#facc15']
-
-const CHART_GRADIENTS = [
-	{ id: 'grad0', start: '#6366f1', end: '#8b5cf6' },
-	{ id: 'grad1', start: '#f97316', end: '#fb923c' },
-	{ id: 'grad2', start: '#22c55e', end: '#4ade80' },
-	{ id: 'grad3', start: '#0ea5e9', end: '#38bdf8' },
-	{ id: 'grad4', start: '#ec4899', end: '#f472b6' },
-	{ id: 'grad5', start: '#facc15', end: '#fde047' },
-]
-
-const HERO_ICONS = [Activity, BarChart3, Shield, Target]
 
 // ============================================================================
 // Utility helpers
@@ -103,14 +75,14 @@ const buildAnalystNotes = (d: CrimeIntelligenceResponse): string[] => {
 	}
 	if (d.topProducts?.[0]) {
 		const p = d.topProducts[0]
-		notes.push(`"${p.name}" is the most frequently stolen item — ${p.count} units recorded.`)
+		notes.push(`${p.name} is the most frequently stolen item, with ${p.count} units recorded.`)
 	}
 	if (d.timeBuckets?.length) {
 		const peak = [...d.timeBuckets].sort((a, b) => b.count - a.count)[0]
 		if (peak?.count > 0)
-			notes.push(`Peak activity during ${peak.bucket.toLowerCase()} (${peak.percentage.toFixed(1)}% of cases).`)
+			notes.push(`Activity peaks in the ${peak.bucket.toLowerCase()} (${peak.percentage.toFixed(1)}% of cases).`)
 	}
-	if (!notes.length) notes.push('No significant trends detected for the selected filters.')
+	if (!notes.length) notes.push('No significant trends for the selected filters.')
 	return notes
 }
 
@@ -118,481 +90,292 @@ const buildAnalystNotes = (d: CrimeIntelligenceResponse): string[] => {
 // Sub-components
 // ============================================================================
 
-interface ChartCardProps {
+interface PanelProps {
 	title: string
+	description?: string
 	icon: React.ElementType
-	iconColor: string
+	actions?: React.ReactNode
 	children: React.ReactNode
+	className?: string
 }
 
-const ChartCard = ({ title, icon: Icon, iconColor, children }: ChartCardProps) => (
-	<Card className="border border-slate-200 shadow-sm bg-white overflow-hidden">
-		<CardHeader className="px-5 py-4 border-b border-slate-100">
-			<CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-				<Icon className={`h-4 w-4 flex-shrink-0 ${iconColor}`} />
-				{title}
-			</CardTitle>
-		</CardHeader>
+const Panel = ({ title, description, icon: Icon, actions, children, className }: PanelProps) => (
+	<section className={`rounded-lg border border-border bg-card ${className ?? ''}`}>
+		<div className="flex flex-wrap items-start justify-between gap-3 p-4 sm:p-5">
+			<div className="min-w-0">
+				<h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+					<Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+					{title}
+				</h2>
+				{description ? <p className="mt-0.5 text-[13px] text-muted-foreground">{description}</p> : null}
+			</div>
+			{actions}
+		</div>
 		{children}
-	</Card>
+	</section>
 )
 
-interface HeroMetricCardProps {
-	metric: CrimeInsightMetric
-	index: number
-}
+const PanelEmpty = ({ label }: { label: string }) => (
+	<p className="px-4 pb-8 pt-4 text-center text-sm text-muted-foreground sm:px-5">{label}</p>
+)
 
-const HERO_ACCENT = [
-	{ bg: 'bg-indigo-50', icon: 'bg-indigo-100 text-indigo-600', text: 'text-indigo-700' },
-	{ bg: 'bg-emerald-50', icon: 'bg-emerald-100 text-emerald-600', text: 'text-emerald-700' },
-	{ bg: 'bg-orange-50', icon: 'bg-orange-100 text-orange-600', text: 'text-orange-700' },
-	{ bg: 'bg-sky-50', icon: 'bg-sky-100 text-sky-600', text: 'text-sky-700' },
-]
+const PanelLoading = ({ rows = 5 }: { rows?: number }) => (
+	<div className="space-y-3 px-4 pb-5 sm:px-5" aria-busy="true">
+		{Array.from({ length: rows }).map((_, i) => (
+			<Skeleton key={i} className="h-7 w-full" />
+		))}
+	</div>
+)
 
-const HeroMetricCard = ({ metric, index }: HeroMetricCardProps) => {
-	const Icon = HERO_ICONS[index % HERO_ICONS.length]
-	const accent = HERO_ACCENT[index % HERO_ACCENT.length]
-	return (
-		<Card className="border border-slate-200 shadow-sm bg-white">
-			<CardContent className="p-5">
-				<div className={`inline-flex p-2 rounded-lg ${accent.icon} mb-3`}>
-					<Icon className="h-4 w-4" />
-				</div>
-				<p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">{metric.title}</p>
-				{!metric.valueImpact && (
-					<p className={`text-2xl font-bold ${accent.text} leading-tight truncate mb-1`}>{metric.value}</p>
-				)}
-				{metric.valueImpact ? (
-					<p className="text-[clamp(0.72rem,1.2vw,1rem)] whitespace-nowrap overflow-hidden text-ellipsis tracking-tight font-semibold mt-1">
-						<span className="text-emerald-600 font-medium">Recovered {metric.valueImpact.recovered}</span>
-						<span className="text-slate-400"> / </span>
-						<span className="text-rose-600 font-medium">
-							{metric.valueImpact.lossLabel ?? 'Est. loss'} {metric.valueImpact.estimatedLoss}
-						</span>
-					</p>
-				) : (
-					metric.subtext && <p className="text-xs text-slate-400">{metric.subtext}</p>
-				)}
-				{metric.trend && (
-					<div className="flex items-center gap-1 mt-2">
-						<TrendingUp
-							className={`h-3 w-3 ${metric.trendIsPositive ? 'text-emerald-500' : 'text-rose-500 rotate-180'}`}
-						/>
-						<span className={`text-xs font-medium ${metric.trendIsPositive ? 'text-emerald-600' : 'text-rose-600'}`}>
-							{metric.trend}
-						</span>
-					</div>
-				)}
-			</CardContent>
-		</Card>
-	)
-}
-
-interface PaginatedBarChartProps {
+interface RankedBarsProps {
 	title: string
+	description: string
 	icon: React.ElementType
-	iconColor: string
 	data: CrimeInsightListItem[]
 	emptyLabel: string
-	gradientIndex?: number
 	loading: boolean
+	unit?: string
 }
 
-const PaginatedBarChart = ({
-	title,
-	icon,
-	iconColor,
-	data,
-	emptyLabel,
-	gradientIndex = 0,
-	loading,
-}: PaginatedBarChartProps) => {
+/** A ranked list with proportional bars: easier to read than rotated chart labels. */
+const RankedBars = ({ title, description, icon, data, emptyLabel, loading, unit = 'incidents' }: RankedBarsProps) => {
 	const [page, setPage] = useState(1)
-	const itemsPerPage = 6
-	const totalPages = Math.ceil(data.length / itemsPerPage)
-	const start = (page - 1) * itemsPerPage
-	const pageData = data.slice(start, start + itemsPerPage)
-	const grad = CHART_GRADIENTS[gradientIndex % CHART_GRADIENTS.length]
-	const gradId = `pgBarGrad-${gradientIndex}`
+	const perPage = 8
+	const totalPages = Math.max(1, Math.ceil(data.length / perPage))
+	const start = (page - 1) * perPage
+	const pageData = data.slice(start, start + perPage)
+	const max = Math.max(1, ...data.map((d) => d.count))
 
 	return (
-		<ChartCard title={title} icon={icon} iconColor={iconColor}>
-			<CardContent className="p-5">
-				{loading ? (
-					<Skeleton className="h-64 w-full rounded-lg" />
-				) : pageData.length ? (
-					<>
-						<div className="h-64">
-							<ResponsiveContainer width="100%" height="100%">
-								<BarChart data={pageData} margin={{ top: 8, right: 8, left: -8, bottom: 56 }}>
-									<defs>
-										<linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-											<stop offset="0%" stopColor={grad.start} stopOpacity={0.85} />
-											<stop offset="100%" stopColor={grad.end} stopOpacity={0.55} />
-										</linearGradient>
-									</defs>
-									<CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-									<XAxis
-										dataKey="name"
-										tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 500 }}
-										axisLine={false}
-										tickLine={false}
-										angle={-40}
-										textAnchor="end"
-										height={56}
-										interval={0}
-									/>
-									<YAxis
-										tick={{ fontSize: 10, fill: '#94a3b8' }}
-										axisLine={false}
-										tickLine={false}
-										width={32}
-									/>
-									<Tooltip
-										contentStyle={{
-											backgroundColor: '#fff',
-											border: '1px solid #e2e8f0',
-											borderRadius: '8px',
-											boxShadow: '0 4px 12px rgba(0,0,0,.08)',
-											fontSize: '12px',
-											padding: '8px 12px',
-										}}
-										cursor={{ fill: 'rgba(99,102,241,.06)' }}
-									/>
-									<Bar dataKey="count" fill={`url(#${gradId})`} radius={[4, 4, 0, 0]} />
-								</BarChart>
-							</ResponsiveContainer>
+		<Panel title={title} description={description} icon={icon}>
+			{loading ? (
+				<PanelLoading />
+			) : !pageData.length ? (
+				<PanelEmpty label={emptyLabel} />
+			) : (
+				<>
+					<ol className="space-y-3.5 px-4 pb-5 sm:px-5" start={start + 1}>
+						{pageData.map((item, i) => {
+							const rank = start + i + 1
+							return (
+								<li key={item.name}>
+									<div className="flex items-baseline justify-between gap-3 text-sm">
+										<span className="flex min-w-0 items-baseline gap-2">
+											<span className="figures w-4 shrink-0 text-xs text-muted-foreground">{rank}</span>
+											<span className="truncate font-medium text-foreground">{item.name}</span>
+										</span>
+										<span className="figures shrink-0 text-muted-foreground">
+											<span className="font-semibold text-foreground">{item.count.toLocaleString('en-GB')}</span> {unit} ·{' '}
+											{item.percentage.toFixed(1)}%
+										</span>
+									</div>
+									<div className="ml-6 mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
+										<div
+											className={`h-full rounded-full ${rank === 1 ? 'bg-primary' : 'bg-primary/55'}`}
+											style={{ width: `${(item.count / max) * 100}%` }}
+										/>
+									</div>
+								</li>
+							)
+						})}
+					</ol>
+					{data.length > perPage && (
+						<div className="flex items-center justify-between border-t border-border px-4 py-2.5 sm:px-5">
+							<Button variant="ghost" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
+								<ChevronLeft className="h-4 w-4" />
+								Previous
+							</Button>
+							<span className="figures text-xs text-muted-foreground">
+								{start + 1}–{Math.min(start + perPage, data.length)} of {data.length}
+							</span>
+							<Button variant="ghost" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>
+								Next
+								<ChevronRight className="h-4 w-4" />
+							</Button>
 						</div>
-						{data.length > itemsPerPage && (
-							<div className="flex items-center justify-between pt-4 mt-2 border-t border-slate-100">
-								<Button
-									variant="outline"
-									size="sm"
-									onClick={() => setPage(p => Math.max(1, p - 1))}
-									disabled={page === 1}
-									className="h-8 px-3 text-xs gap-1"
-								>
-									<ChevronLeft className="h-3 w-3" />
-									Prev
-								</Button>
-								<span className="text-xs text-slate-400">
-									{start + 1}–{Math.min(start + itemsPerPage, data.length)} of {data.length}
-								</span>
-								<Button
-									variant="outline"
-									size="sm"
-									onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-									disabled={page >= totalPages}
-									className="h-8 px-3 text-xs gap-1"
-								>
-									Next
-									<ChevronRight className="h-3 w-3" />
-								</Button>
-							</div>
-						)}
-					</>
-				) : (
-					<div className="h-64 flex items-center justify-center">
-						<p className="text-sm text-slate-400">{emptyLabel}</p>
-					</div>
-				)}
-			</CardContent>
-		</ChartCard>
+					)}
+				</>
+			)}
+		</Panel>
 	)
 }
 
-interface IncidentPieChartProps {
-	data: CrimeInsightListItem[]
-	loading: boolean
-}
-
-const IncidentPieChart = ({ data, loading }: IncidentPieChartProps) => (
-	<ChartCard title="Incident Mix" icon={Target} iconColor="text-indigo-500">
-		<CardContent className="p-5">
+const IncidentMix = ({ data, loading }: { data: CrimeInsightListItem[]; loading: boolean }) => {
+	const theme = useChartTheme()
+	const palette = theme.series.length ? theme.series : [theme.primary]
+	const total = data.reduce((sum, d) => sum + d.count, 0)
+	return (
+		<Panel title="Incident mix" description="What kind of incidents are being reported." icon={Target}>
 			{loading ? (
-				<Skeleton className="h-64 w-full rounded-lg" />
-			) : data.length ? (
-				<div className="grid gap-4 sm:grid-cols-2 items-center">
-					<div className="h-56">
+				<PanelLoading />
+			) : !data.length ? (
+				<PanelEmpty label="No incident types recorded for these filters." />
+			) : (
+				<div className="grid items-center gap-4 px-4 pb-5 sm:grid-cols-[11rem_minmax(0,1fr)] sm:px-5">
+					<div className="relative mx-auto h-44 w-44">
 						<ResponsiveContainer width="100%" height="100%">
 							<PieChart>
-								<defs>
-									{CHART_GRADIENTS.map(g => (
-										<linearGradient key={g.id} id={`pie-${g.id}`} x1="0" y1="0" x2="1" y2="1">
-											<stop offset="0%" stopColor={g.start} stopOpacity={0.9} />
-											<stop offset="100%" stopColor={g.end} stopOpacity={0.7} />
-										</linearGradient>
-									))}
-								</defs>
-								<Pie
-									data={data}
-									dataKey="count"
-									nameKey="name"
-									innerRadius={46}
-									outerRadius={78}
-									paddingAngle={4}
-									stroke="white"
-									strokeWidth={2}
-								>
+								<Pie data={data} dataKey="count" nameKey="name" innerRadius={54} outerRadius={84} paddingAngle={2} stroke={theme.card} strokeWidth={2}>
 									{data.map((_, i) => (
-										<Cell
-											key={`cell-${i}`}
-											fill={`url(#pie-${CHART_GRADIENTS[i % CHART_GRADIENTS.length].id})`}
-										/>
+										<Cell key={`cell-${i}`} fill={palette[i % palette.length]} />
 									))}
 								</Pie>
-								<Tooltip
-									contentStyle={{
-										backgroundColor: '#fff',
-										border: '1px solid #e2e8f0',
-										borderRadius: '8px',
-										boxShadow: '0 4px 12px rgba(0,0,0,.08)',
-										fontSize: '12px',
-										padding: '8px 12px',
-									}}
-								/>
-								<Legend
-									wrapperStyle={{ fontSize: '10px' }}
-									iconType="circle"
-									layout="horizontal"
-									verticalAlign="bottom"
-								/>
+								<Tooltip {...chartTooltipStyle(theme)} />
 							</PieChart>
 						</ResponsiveContainer>
+						<div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+							<span className="figures font-display text-2xl font-semibold leading-none text-foreground">{total.toLocaleString('en-GB')}</span>
+							<span className="mt-1 text-[11px] text-muted-foreground">incidents</span>
+						</div>
 					</div>
-					<ul className="space-y-1.5">
+					<ul className="divide-y divide-border">
 						{data.map((item, i) => (
-							<li
-								key={item.name}
-								className="flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-slate-50 transition-colors"
-							>
-								<span className="flex items-center gap-2 min-w-0">
-									<span
-										className="h-2.5 w-2.5 rounded-full flex-shrink-0"
-										style={{ backgroundColor: CHART_PALETTE[i % CHART_PALETTE.length] }}
-									/>
-									<span className="text-xs text-slate-700 truncate">{item.name}</span>
+							<li key={item.name} className="flex items-center justify-between gap-3 py-2">
+								<span className="flex min-w-0 items-center gap-2">
+									<span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: palette[i % palette.length] }} aria-hidden />
+									<span className="truncate text-sm text-foreground">{item.name}</span>
 								</span>
-								<span className="text-xs font-semibold text-slate-600 ml-3 flex-shrink-0">
-									{item.count.toLocaleString()}
-									<span className="text-slate-400 font-normal ml-1">({item.percentage.toFixed(0)}%)</span>
+								<span className="figures shrink-0 text-sm text-muted-foreground">
+									<span className="font-semibold text-foreground">{item.count.toLocaleString('en-GB')}</span> · {item.percentage.toFixed(0)}%
 								</span>
 							</li>
 						))}
 					</ul>
 				</div>
-			) : (
-				<div className="h-64 flex items-center justify-center">
-					<p className="text-sm text-slate-400">No incident type distribution available.</p>
-				</div>
 			)}
-		</CardContent>
-	</ChartCard>
-)
-
-interface TimeChartProps {
-	data: CrimeInsightTimeBucket[]
-	loading: boolean
-}
-
-const TimeChart = ({ data, loading }: TimeChartProps) => (
-	<ChartCard title="Time-of-Day Activity" icon={Clock} iconColor="text-emerald-500">
-		<CardContent className="p-5">
-			{loading ? (
-				<Skeleton className="h-64 w-full rounded-lg" />
-			) : data.length ? (
-				<div className="h-64">
-					<ResponsiveContainer width="100%" height="100%">
-						<BarChart data={data} margin={{ top: 8, right: 8, left: -8, bottom: 40 }}>
-							<defs>
-								<linearGradient id="timeGrad" x1="0" y1="0" x2="0" y2="1">
-									<stop offset="0%" stopColor="#22c55e" stopOpacity={0.85} />
-									<stop offset="100%" stopColor="#4ade80" stopOpacity={0.55} />
-								</linearGradient>
-							</defs>
-							<CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-							<XAxis
-								dataKey="bucket"
-								tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 500 }}
-								axisLine={false}
-								tickLine={false}
-								angle={-25}
-								textAnchor="end"
-								height={48}
-							/>
-							<YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={32} />
-							<Tooltip
-								contentStyle={{
-									backgroundColor: '#fff',
-									border: '1px solid #e2e8f0',
-									borderRadius: '8px',
-									boxShadow: '0 4px 12px rgba(0,0,0,.08)',
-									fontSize: '12px',
-									padding: '8px 12px',
-								}}
-								cursor={{ fill: 'rgba(34,197,94,.06)' }}
-							/>
-							<Bar dataKey="count" fill="url(#timeGrad)" radius={[4, 4, 0, 0]} />
-						</BarChart>
-					</ResponsiveContainer>
-				</div>
-			) : (
-				<div className="h-64 flex items-center justify-center">
-					<p className="text-sm text-slate-400">No time-of-day data available.</p>
-				</div>
-			)}
-		</CardContent>
-	</ChartCard>
-)
-
-interface ProductsTableProps {
-	data: CrimeInsightListItem[]
-	loading: boolean
-}
-
-const ProductsTable = ({ data, loading }: ProductsTableProps) => (
-	<ChartCard title="Most Stolen Products" icon={Package} iconColor="text-orange-500">
-		<CardContent className="p-5">
-			{loading ? (
-				<Skeleton className="h-52 w-full rounded-lg" />
-			) : data.length ? (
-				<div className="overflow-x-auto">
-					<table className="w-full text-sm">
-						<thead>
-							<tr className="border-b border-slate-200">
-								<th className="text-left py-2 px-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-									Product
-								</th>
-								<th className="text-right py-2 px-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-									Qty
-								</th>
-								<th className="text-right py-2 px-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-									Value
-								</th>
-								<th className="text-right py-2 px-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-									Share
-								</th>
-							</tr>
-						</thead>
-						<tbody className="divide-y divide-slate-100">
-							{data.map((item, i) => (
-								<tr key={item.name} className="hover:bg-slate-50 transition-colors">
-									<td className="py-3 px-3">
-										<div className="flex items-center gap-2.5">
-											<span className="flex h-6 w-6 items-center justify-center rounded bg-orange-100 text-orange-700 text-xs font-bold flex-shrink-0">
-												{i + 1}
-											</span>
-											<span className="text-slate-700 font-medium text-xs truncate max-w-[160px]">
-												{item.name}
-											</span>
-										</div>
-									</td>
-									<td className="py-3 px-3 text-right text-slate-600 font-semibold text-xs">
-										{item.count.toLocaleString()}
-									</td>
-									<td className="py-3 px-3 text-right text-emerald-600 font-semibold text-xs">
-										£{(item.value ?? 0).toLocaleString()}
-									</td>
-									<td className="py-3 px-3 text-right">
-										<Badge variant="secondary" className="text-xs font-semibold">
-											{item.percentage.toFixed(1)}%
-										</Badge>
-									</td>
-								</tr>
-							))}
-						</tbody>
-					</table>
-				</div>
-			) : (
-				<div className="h-52 flex items-center justify-center">
-					<p className="text-sm text-slate-400">No stolen product data available.</p>
-				</div>
-			)}
-		</CardContent>
-	</ChartCard>
-)
-
-interface HotProductsCardProps {
-	data: CrimeInsightListItem[]
-	loading: boolean
-}
-
-const HotProductsCard = ({ data, loading }: HotProductsCardProps) => {
-	const top5 = data.slice(0, 5)
-	return (
-		<ChartCard title="Top Hot Products" icon={Target} iconColor="text-rose-500">
-			<CardContent className="p-5">
-				{loading ? (
-					<div className="space-y-3">
-						{Array.from({ length: 5 }).map((_, i) => (
-							<Skeleton key={i} className="h-14 w-full rounded-lg" />
-						))}
-					</div>
-				) : top5.length ? (
-					<div className="space-y-2">
-						{top5.map((product, i) => (
-							<div
-								key={product.name}
-								className="flex items-center gap-3 p-3 rounded-lg border border-slate-100 hover:border-slate-200 hover:bg-slate-50 transition-all"
-							>
-								<span className="flex h-7 w-7 items-center justify-center rounded-full bg-rose-100 text-rose-700 text-xs font-bold flex-shrink-0">
-									{i + 1}
-								</span>
-								<div className="flex-1 min-w-0">
-									<p className="text-sm font-semibold text-slate-800 truncate">{product.name}</p>
-									<div className="flex items-center gap-2 mt-0.5 flex-wrap">
-										<span className="text-xs text-slate-500">{product.count.toLocaleString()} units</span>
-										<span className="text-xs text-emerald-600 font-medium">
-											£{(product.value ?? 0).toLocaleString()}
-										</span>
-									</div>
-								</div>
-								<Badge variant="secondary" className="text-xs flex-shrink-0">
-									{product.percentage.toFixed(1)}%
-								</Badge>
-							</div>
-						))}
-					</div>
-				) : (
-					<p className="text-sm text-slate-400 text-center py-8">Insufficient product data.</p>
-				)}
-			</CardContent>
-		</ChartCard>
+		</Panel>
 	)
 }
 
-interface AnalystNotesCardProps {
-	notes: string[]
-	loading: boolean
+const TimeChart = ({ data, loading }: { data: CrimeInsightTimeBucket[]; loading: boolean }) => {
+	const theme = useChartTheme()
+	const peak = [...data].sort((a, b) => b.count - a.count)[0]
+	return (
+		<Panel
+			title="Time of day"
+			description={peak && peak.count > 0 ? `Busiest: ${peak.bucket.toLowerCase()}, ${peak.percentage.toFixed(0)}% of incidents.` : 'When incidents are reported.'}
+			icon={Clock}
+		>
+			{loading ? (
+				<PanelLoading />
+			) : !data.length ? (
+				<PanelEmpty label="No time-of-day data for these filters." />
+			) : (
+				<div className="h-64 px-2 pb-4 sm:px-4">
+					<ResponsiveContainer width="100%" height="100%">
+						<BarChart data={data} margin={{ top: 16, right: 8, left: 0, bottom: 0 }}>
+							<CartesianGrid vertical={false} stroke={theme.grid} />
+							<XAxis
+								dataKey="bucket"
+								tick={axisTick(theme)}
+								axisLine={{ stroke: theme.grid }}
+								tickLine={false}
+								interval={0}
+								tickFormatter={(v: string) => String(v).replace(/:00/g, '')}
+							/>
+							<YAxis tick={axisTick(theme)} axisLine={false} tickLine={false} width={32} allowDecimals={false} />
+							<Tooltip {...chartTooltipStyle(theme)} />
+							<Bar dataKey="count" name="Incidents" radius={[3, 3, 0, 0]} maxBarSize={56}>
+								{data.map((row) => (
+									<Cell key={row.bucket} fill={theme.primary} fillOpacity={row.bucket === peak?.bucket ? 1 : 0.5} />
+								))}
+							</Bar>
+						</BarChart>
+					</ResponsiveContainer>
+				</div>
+			)}
+		</Panel>
+	)
 }
 
-const AnalystNotesCard = ({ notes, loading }: AnalystNotesCardProps) => (
-	<ChartCard title="Analyst Notes" icon={TrendingUp} iconColor="text-indigo-500">
-		<CardContent className="p-5">
-			{loading ? (
-				<div className="space-y-3">
-					{Array.from({ length: 3 }).map((_, i) => (
-						<Skeleton key={i} className="h-5 w-full rounded" />
-					))}
-				</div>
-			) : (
-				<ul className="space-y-2">
-					{notes.map((note, i) => (
-						<li
-							key={i}
-							className="flex items-start gap-3 p-3 rounded-lg border-l-4 border-indigo-400 bg-indigo-50/40"
-						>
-							<span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex-shrink-0 mt-0.5">
-								{i + 1}
-							</span>
-							<p className="text-xs text-slate-600 leading-relaxed">{note}</p>
-						</li>
-					))}
-				</ul>
-			)}
-		</CardContent>
-	</ChartCard>
+const ProductsTable = ({ data, loading }: { data: CrimeInsightListItem[]; loading: boolean }) => (
+	<Panel title="Most stolen products" description="By units taken in the period." icon={Package} className="lg:col-span-2">
+		{loading ? (
+			<PanelLoading rows={6} />
+		) : !data.length ? (
+			<PanelEmpty label="No stolen products recorded for these filters." />
+		) : (
+			<div className="overflow-x-auto border-t border-border">
+				<Table>
+					<TableHeader>
+						<TableRow>
+							<TableHead className="w-10">#</TableHead>
+							<TableHead>Product</TableHead>
+							<TableHead className="text-right">Units</TableHead>
+							<TableHead className="hidden text-right sm:table-cell">Value</TableHead>
+							<TableHead className="w-[28%]">Share</TableHead>
+						</TableRow>
+					</TableHeader>
+					<TableBody>
+						{data.map((item, i) => (
+							<TableRow key={item.name}>
+								<TableCell className="figures text-muted-foreground">{i + 1}</TableCell>
+								<TableCell className="font-medium">{item.name}</TableCell>
+								<TableCell className="figures text-right">{item.count.toLocaleString('en-GB')}</TableCell>
+								<TableCell className="figures hidden text-right sm:table-cell">£{(item.value ?? 0).toLocaleString('en-GB')}</TableCell>
+								<TableCell>
+									<div className="flex items-center gap-2">
+										<div className="hidden h-1.5 flex-1 overflow-hidden rounded-full bg-muted sm:block">
+											<div className="h-full rounded-full bg-primary/70" style={{ width: `${Math.min(100, item.percentage)}%` }} />
+										</div>
+										<span className="figures w-12 text-right text-xs text-muted-foreground">{item.percentage.toFixed(1)}%</span>
+									</div>
+								</TableCell>
+							</TableRow>
+						))}
+					</TableBody>
+				</Table>
+			</div>
+		)}
+	</Panel>
 )
+
+const AnalystNotes = ({ notes, loading, generatedAt }: { notes: string[]; loading: boolean; generatedAt?: string }) => (
+	<Panel title="What stands out" icon={TrendingUp} description={generatedAt ? `Generated ${format(new Date(generatedAt), 'd MMM yyyy, HH:mm')}` : undefined}>
+		{loading ? (
+			<PanelLoading rows={3} />
+		) : (
+			<ol className="divide-y divide-border px-4 pb-4 sm:px-5">
+				{notes.map((note, i) => (
+					<li key={i} className="flex gap-3 py-2.5 first:pt-0">
+						<span className="figures mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-accent-foreground">
+							{i + 1}
+						</span>
+						<p className="text-sm leading-6 text-foreground">{note}</p>
+					</li>
+				))}
+			</ol>
+		)}
+	</Panel>
+)
+
+const toLedgerItem = (metric: CrimeInsightMetric): StatLedgerItem => {
+	if (metric.valueImpact) {
+		return {
+			label: metric.title,
+			value: metric.valueImpact.recovered,
+			tone: 'recovered',
+			hint: (
+				<>
+					recovered · <span className="text-loss">{metric.valueImpact.lossLabel ?? 'est. loss'} {metric.valueImpact.estimatedLoss}</span>
+				</>
+			),
+		}
+	}
+	const text = String(metric.value ?? '')
+	const long = text.length > 9 && !/^[£$€]?[\d.,]+[%kKmM]?$/.test(text)
+	return {
+		label: metric.title,
+		value: long ? <span className="block whitespace-normal text-[1.375rem] leading-tight sm:text-[1.625rem]">{text}</span> : metric.value,
+		hint: metric.trend ? (
+			<span className={metric.trendIsPositive ? 'text-recovered' : 'text-loss'}>
+				{metric.trendIsPositive ? '▲' : '▼'} {metric.trend}
+			</span>
+		) : (
+			metric.subtext
+		),
+	}
+}
 
 // ============================================================================
 // Page Component
@@ -769,10 +552,10 @@ export default function CustomerCrimeIntelligence() {
 
 	if (isResolvingCustomer || authLoading) {
 		return (
-			<div className="flex items-center justify-center min-h-screen bg-slate-50">
+			<div className="flex min-h-[50vh] items-center justify-center" aria-busy="true">
 				<div className="space-y-3 text-center">
-					<div className="animate-spin rounded-full h-9 w-9 border-2 border-indigo-600 border-t-transparent mx-auto" />
-					<p className="text-sm text-slate-500">Loading customer context…</p>
+					<div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+					<p className="text-sm text-muted-foreground">Loading company…</p>
 				</div>
 			</div>
 		)
@@ -780,15 +563,15 @@ export default function CustomerCrimeIntelligence() {
 
 	if (pageError && !isAdmin && !insights) {
 		return (
-			<div className="container mx-auto p-6 space-y-4 max-w-2xl">
+			<div className="max-w-2xl space-y-4">
 				<Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
 					<ArrowLeft className="h-4 w-4 mr-1.5" />
 					Back
 				</Button>
-				<Card className="border-rose-200 bg-rose-50">
+				<Card className="border-loss/30 bg-loss-soft">
 					<CardContent className="flex items-center gap-3 py-5">
-						<AlertTriangle className="h-5 w-5 text-rose-500 flex-shrink-0" />
-						<p className="text-rose-700 text-sm font-medium">{pageError}</p>
+						<AlertTriangle className="h-5 w-5 text-loss flex-shrink-0" />
+						<p className="text-loss text-sm font-medium">{pageError}</p>
 					</CardContent>
 				</Card>
 			</div>
@@ -799,237 +582,208 @@ export default function CustomerCrimeIntelligence() {
 	// Main render
 	// ──────────────────────────────────────────────────────────────────────────
 
+	const canPickCompany = isAdmin || (isManager && assignedCustomers.length > 1)
+	const regionName = regions.find((r) => r.id === selectedRegionId)?.name
+	const siteName = sites.find((s) => String(s.siteID) === selectedSiteId)?.locationName
+	const ledgerItems = (insights?.heroMetrics ?? []).slice(0, 4).map(toLedgerItem)
+
 	return (
-		<div className="min-h-screen bg-slate-50 overflow-x-hidden">
-			<div className="container mx-auto px-4 sm:px-6 py-6 space-y-6 max-w-screen-xl">
-
-				{/* ── Page Header ── */}
-				<div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-					<div className="space-y-1 min-w-0">
-						<div className="flex items-center gap-2 flex-wrap">
-							<Button
-								variant="ghost"
-								size="sm"
-								onClick={() => navigate(-1)}
-								className="h-8 px-2 hover:bg-slate-100 -ml-2"
-							>
-								<ArrowLeft className="h-4 w-4 mr-1" />
-								Back
-							</Button>
-							<Badge className="bg-indigo-600 text-white border-0 text-xs">Customer Insight</Badge>
-						</div>
-						<h1 className="text-2xl sm:text-3xl font-bold text-slate-900 leading-tight">
-							{customer?.name} — Crime Intelligence
-						</h1>
-						<p className="text-sm text-slate-500">
-							Live incident telemetry across stores, products, and time-of-day patterns.
-						</p>
-						{startDate && endDate && (
-							<p className="text-xs text-slate-500">
-								Period: {format(startDate, 'PP')} – {format(endDate, 'PP')} (year to date by default)
-							</p>
-						)}
-						{(isAdmin || (isManager && assignedCustomers.length > 1)) && (
-							<div className="mt-3 max-w-xs">
-								<p className="text-xs font-medium text-slate-500 mb-1">Customer</p>
-								<Select
-									disabled={isAdmin && (loadingCustomers || availableCustomers.length === 0)}
-									value={selectedCustomerForAdmin?.toString() ?? ''}
-									onValueChange={value => {
-										const id = parseInt(value, 10)
-										setSelectedCustomerForAdmin(id)
-										setSelectedCustomerId(id)
-										const params = new URLSearchParams(searchParams)
-										params.set('customerId', value)
-										navigate({ search: params.toString() }, { replace: true })
-										setFiltersVersion(v => v + 1)
-									}}
-								>
-									<SelectTrigger className="h-9 text-sm" aria-label="Select customer">
-										<SelectValue placeholder={isAdmin && loadingCustomers ? 'Loading customers…' : 'Select customer'} />
-									</SelectTrigger>
-									<SelectContent>
-										{isAdmin
-											? availableCustomers.map(c => (
-												<SelectItem key={c.id} value={c.id.toString()}>
-													{c.name}
-												</SelectItem>
-											  ))
-											: assignedCustomers.map(c => (
-												<SelectItem key={c.id} value={c.id.toString()}>
-													{c.name}
-												</SelectItem>
-											  ))}
-									</SelectContent>
-								</Select>
-							</div>
-						)}
-					</div>
-					<Button
-						variant="outline"
-						size="sm"
-						onClick={fetchInsights}
-						disabled={loadingInsights}
-						className="self-start sm:self-center flex-shrink-0 h-9"
-					>
-						<RefreshCcw className={`h-3.5 w-3.5 mr-2 ${loadingInsights ? 'animate-spin' : ''}`} />
-						Refresh
+		<div className="w-full space-y-5">
+			<PageHeader
+				leading={
+					<Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="-ml-2 h-8 px-2 text-muted-foreground hover:text-foreground">
+						<ArrowLeft className="h-4 w-4" />
+						Back
 					</Button>
-				</div>
-
-				{/* ── Filter Bar ── */}
-				<Card className="border border-slate-200 shadow-sm bg-white">
-					<CardHeader className="px-5 py-3.5 border-b border-slate-100">
-						<CardTitle className="text-sm font-semibold text-slate-600 flex items-center gap-2">
-							<SlidersHorizontal className="h-3.5 w-3.5 text-slate-400" />
-							Filters
-						</CardTitle>
-					</CardHeader>
-					<CardContent className="px-5 py-4 grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-						<div className="space-y-1.5">
-							<Label htmlFor="crime-intel-start-date" className="text-xs font-medium text-slate-500">
-								Start date
-							</Label>
-							<Input
-								id="crime-intel-start-date"
-								type="date"
-								value={toIsoDate(startDate) ?? ''}
-								onChange={(e) => {
-									setStartDate(fromDateInputValue(e.target.value))
-									setFiltersVersion((v) => v + 1)
-								}}
-								className="h-9 text-sm w-full"
-								aria-label="Start date"
-							/>
-						</div>
-						<div className="space-y-1.5">
-							<Label htmlFor="crime-intel-end-date" className="text-xs font-medium text-slate-500">
-								End date
-							</Label>
-							<Input
-								id="crime-intel-end-date"
-								type="date"
-								value={toIsoDate(endDate) ?? ''}
-								onChange={(e) => {
-									setEndDate(fromDateInputValue(e.target.value))
-									setFiltersVersion((v) => v + 1)
-								}}
-								className="h-9 text-sm w-full"
-								aria-label="End date"
-							/>
-						</div>
-						<div className="space-y-1.5">
-							<p className="text-xs font-medium text-slate-500">Region</p>
+				}
+				title="Crime intelligence"
+				description={
+					<>
+						{customer?.name ? <span className="font-medium text-foreground">{customer.name}: </span> : null}
+						where incidents happen, what is taken and when.
+					</>
+				}
+				className="pb-0"
+				actions={
+					<>
+						{canPickCompany && (
 							<Select
-								value={selectedRegionId}
-								onValueChange={value => {
-									setSelectedRegionId(value)
-									setSelectedSiteId('all')
-									setFiltersVersion(v => v + 1)
+								disabled={isAdmin && (loadingCustomers || availableCustomers.length === 0)}
+								value={selectedCustomerForAdmin?.toString() ?? ''}
+								onValueChange={(value) => {
+									const id = parseInt(value, 10)
+									setSelectedCustomerForAdmin(id)
+									setSelectedCustomerId(id)
+									const params = new URLSearchParams(searchParams)
+									params.set('customerId', value)
+									navigate({ search: params.toString() }, { replace: true })
+									setFiltersVersion((v) => v + 1)
 								}}
 							>
-								<SelectTrigger className="h-9 text-sm">
-									<SelectValue placeholder="All regions" />
+								<SelectTrigger className="h-9 w-full gap-2 sm:w-60" aria-label="Company">
+									<Building2 className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+									<SelectValue placeholder={isAdmin && loadingCustomers ? 'Loading companies…' : 'Select company'} />
 								</SelectTrigger>
 								<SelectContent>
-									<SelectItem value="all">All Regions</SelectItem>
-									{regions.map(r => (
-										<SelectItem key={r.id} value={r.id}>
-											{r.name}
+									{(isAdmin ? availableCustomers : assignedCustomers).map((c) => (
+										<SelectItem key={c.id} value={c.id.toString()}>
+											{c.name}
 										</SelectItem>
 									))}
 								</SelectContent>
 							</Select>
-						</div>
-						<div className="space-y-1.5">
-							<p className="text-xs font-medium text-slate-500">Site</p>
-							<Select
-								value={selectedSiteId}
-								onValueChange={value => {
-									setSelectedSiteId(value)
-									setFiltersVersion(v => v + 1)
-								}}
-							>
-								<SelectTrigger className="h-9 text-sm">
-									<SelectValue placeholder="All sites" />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="all">All Sites</SelectItem>
-									{sites.map(s => (
-										<SelectItem key={s.siteID} value={s.siteID?.toString() ?? ''}>
-											{s.locationName}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-						</div>
-					</CardContent>
-				</Card>
+						)}
+						<Button variant="outline" onClick={fetchInsights} disabled={loadingInsights || !resolvedCustomerId}>
+							<RefreshCcw className={`h-4 w-4 ${loadingInsights ? 'animate-spin' : ''}`} />
+							Refresh
+						</Button>
+					</>
+				}
+			/>
 
-				{/* ── Hero Metrics ── */}
-				{loadingInsights && !insights ? (
-					<div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
-						{Array.from({ length: 4 }).map((_, i) => (
-							<Card key={i} className="border border-slate-200 shadow-sm bg-white p-5">
-								<Skeleton className="h-8 w-8 rounded-lg mb-3" />
-								<Skeleton className="h-3 w-20 mb-2" />
-								<Skeleton className="h-7 w-28" />
-							</Card>
-						))}
-					</div>
-				) : (
-					<div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
-						{(insights?.heroMetrics ?? []).map((m, i) => (
-							<HeroMetricCard key={m.title} metric={m} index={i} />
-						))}
-					</div>
-				)}
-
-				{/* ── Charts Row 1: Hot Stores + Incident Mix ── */}
-				<div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
-					<PaginatedBarChart
-						title="Hot Stores"
-						icon={MapPin}
-						iconColor="text-indigo-500"
-						data={insights?.topStores ?? []}
-						emptyLabel="No store-level crime data available."
-						gradientIndex={0}
-						loading={loadingInsights}
-					/>
-					<IncidentPieChart data={insights?.topIncidentTypes ?? []} loading={loadingInsights} />
-				</div>
-
-				{/* ── Charts Row 2: Time of Day + Regional Exposure ── */}
-				<div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
-					<TimeChart data={insights?.timeBuckets ?? []} loading={loadingInsights} />
-					<PaginatedBarChart
-						title="Regional Exposure"
-						icon={BarChart3}
-						iconColor="text-sky-500"
-						data={insights?.topRegions ?? []}
-						emptyLabel="No regional breakdown available."
-						gradientIndex={3}
-						loading={loadingInsights}
+			{!resolvedCustomerId ? (
+				<div className="rounded-lg border border-border bg-card">
+					<EmptyState
+						icon={<Building2 className="h-5 w-5" />}
+						title="Choose a company"
+						description="Crime intelligence is worked out per company. Pick one above to see where incidents happen, what is taken and when."
 					/>
 				</div>
+			) : (
+				<>
+					<FilterBar
+						label="Crime intelligence filters"
+						summary={
+							<>
+								<span>Showing</span>
+								<FilterChip>
+									{startDate && endDate ? `${format(startDate, 'd MMM yyyy')} to ${format(endDate, 'd MMM yyyy')}` : 'All dates'}
+								</FilterChip>
+								{regionName ? (
+									<FilterChip
+										onRemove={() => {
+											setSelectedRegionId('all')
+											setSelectedSiteId('all')
+											setFiltersVersion((v) => v + 1)
+										}}
+										removeLabel="Remove region filter"
+									>
+										{regionName}
+									</FilterChip>
+								) : (
+									<FilterChip>All regions</FilterChip>
+								)}
+								{siteName ? (
+									<FilterChip
+										onRemove={() => {
+											setSelectedSiteId('all')
+											setFiltersVersion((v) => v + 1)
+										}}
+										removeLabel="Remove store filter"
+									>
+										{siteName}
+									</FilterChip>
+								) : null}
+							</>
+						}
+					>
+						<DateRangeField
+							from={toIsoDate(startDate) ?? ''}
+							to={toIsoDate(endDate) ?? ''}
+							onFromChange={(value) => {
+								setStartDate(fromDateInputValue(value))
+								setFiltersVersion((v) => v + 1)
+							}}
+							onToChange={(value) => {
+								setEndDate(fromDateInputValue(value))
+								setFiltersVersion((v) => v + 1)
+							}}
+						/>
+						<Select
+							value={selectedRegionId}
+							onValueChange={(value) => {
+								setSelectedRegionId(value)
+								setSelectedSiteId('all')
+								setFiltersVersion((v) => v + 1)
+							}}
+						>
+							<SelectTrigger className="h-9 w-full sm:w-44" aria-label="Region">
+								<SelectValue placeholder="All regions" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="all">All regions</SelectItem>
+								{regions.map((r) => (
+									<SelectItem key={r.id} value={r.id}>
+										{r.name}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+						<Select
+							value={selectedSiteId}
+							onValueChange={(value) => {
+								setSelectedSiteId(value)
+								setFiltersVersion((v) => v + 1)
+							}}
+						>
+							<SelectTrigger className="h-9 w-full gap-2 sm:w-52" aria-label="Store">
+								<MapPin className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+								<SelectValue placeholder="All stores" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="all">All stores</SelectItem>
+								{sites.map((s) => (
+									<SelectItem key={s.siteID} value={s.siteID?.toString() ?? ''}>
+										{s.locationName}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					</FilterBar>
 
-				{/* ── Bottom Row: Products Table + Hot Products + Analyst Notes ── */}
-				<div className="grid gap-6 grid-cols-1 lg:grid-cols-3">
-					<div className="lg:col-span-2 space-y-6">
+					{pageError && (
+						<div role="alert" className="flex items-center gap-2 rounded-lg border border-loss/30 bg-loss-soft px-4 py-3 text-sm text-loss">
+							<AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
+							{pageError}
+						</div>
+					)}
+
+					{loadingInsights && !insights ? (
+						<StatLedger items={Array.from({ length: 4 }, () => ({ label: ' ', value: ' ' }))} loading />
+					) : ledgerItems.length ? (
+						<StatLedger items={ledgerItems} />
+					) : null}
+
+					<div className="grid gap-5 xl:grid-cols-2">
+						<RankedBars
+							title="Hot stores"
+							description="Stores ranked by number of incidents."
+							icon={MapPin}
+							data={insights?.topStores ?? []}
+							emptyLabel="No store-level incidents for these filters."
+							loading={loadingInsights}
+						/>
+						<IncidentMix data={insights?.topIncidentTypes ?? []} loading={loadingInsights} />
+					</div>
+
+					<div className="grid gap-5 xl:grid-cols-2">
+						<TimeChart data={insights?.timeBuckets ?? []} loading={loadingInsights} />
+						<RankedBars
+							title="Regional exposure"
+							description="Regions ranked by number of incidents."
+							icon={BarChart3}
+							data={insights?.topRegions ?? []}
+							emptyLabel="No regional breakdown for these filters."
+							loading={loadingInsights}
+						/>
+					</div>
+
+					<div className="grid gap-5 lg:grid-cols-3">
 						<ProductsTable data={insights?.topProducts ?? []} loading={loadingInsights} />
-						<AnalystNotesCard notes={analystNotes} loading={loadingInsights} />
+						<AnalystNotes notes={analystNotes} loading={loadingInsights} generatedAt={insights?.generatedAt} />
 					</div>
-					<HotProductsCard data={insights?.topProducts ?? []} loading={loadingInsights} />
-				</div>
-
-				{/* ── Footer timestamp ── */}
-				{insights?.generatedAt && (
-					<p className="text-xs text-slate-400 text-right">
-						Last generated {format(new Date(insights.generatedAt), 'dd MMM yyyy HH:mm')}
-					</p>
-				)}
-
-			</div>
+				</>
+			)}
 		</div>
 	)
 }

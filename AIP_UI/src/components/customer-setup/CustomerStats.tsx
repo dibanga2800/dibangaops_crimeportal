@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { Building2, MapPin, Users, Star, TrendingUp, Shield } from "lucide-react"
 import { useMemo, useState, useEffect } from "react"
+import { StatLedger } from "@/components/common/StatLedger"
 import type { Customer, Region, Site } from "@/types/customer"
 import { customerService } from "@/services/customerService"
 import { regionService } from "@/services/regionService"
@@ -115,101 +116,53 @@ export function CustomerStats({ selectedCustomerId, updateTrigger }: CustomerSta
 
   const stats = [
     {
-      title: selectedCustomerId ? "Selected Customer" : "Total Customers",
+      title: selectedCustomerId ? "Selected company" : "Companies",
       value: statsData.customers.length,
       description: selectedCustomerId 
         ? `${statsData.activeCustomers.length} active` 
-        : `${statsData.activeCustomers.length} active customers`,
+        : `${statsData.activeCustomers.length} active`,
       icon: Users,
-      gradient: "from-blue-600 to-blue-800",
-      iconColor: "text-blue-100"
+      tone: "neutral" as const
     },
     {
-      title: selectedCustomerId ? "Company Type" : "Company Types",
+      title: selectedCustomerId ? "Company type" : "Company types",
       value: statsData.customerTypes,
       description: selectedCustomerId 
         ? "Service type" 
-        : "Different service types",
+        : "Service types in use",
       icon: TrendingUp,
-      gradient: "from-purple-600 to-purple-800",
-      iconColor: "text-purple-100"
+      tone: "info" as const
     },
     {
-      title: selectedCustomerId ? "Customer Regions" : "Total Regions",
+      title: selectedCustomerId ? "Regions" : "Regions",
       value: statsData.regions.length,
       description: selectedCustomerId 
         ? "Coverage areas" 
-        : "Coverage areas managed",
+        : "Coverage areas",
       icon: MapPin,
-      gradient: "from-green-600 to-green-800",
-      iconColor: "text-green-100"
+      tone: "signal" as const
     },
     {
-      title: selectedCustomerId ? "Customer Sites" : "Core Sites",
+      title: selectedCustomerId ? "Sites" : "Core sites",
       value: selectedCustomerId ? statsData.sites.length : statsData.coreSites.length,
       description: selectedCustomerId 
         ? `${statsData.coreSites.length} core sites` 
         : `${statsData.sites.length} total sites`,
       icon: Shield,
-      gradient: "from-orange-600 to-orange-800",
-      iconColor: "text-orange-100"
+      tone: "warning" as const
     }
   ]
 
-  if (isLoading) {
-    return (
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-        {[...Array(4)].map((_, index) => (
-          <Card key={index} className="border-0 shadow-lg overflow-hidden">
-            <div className="bg-gradient-to-r from-gray-600 to-gray-800 text-white">
-              <CardContent className="p-3 sm:p-4 md:p-6">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1 flex-1">
-                    <div className="h-3 sm:h-4 bg-white/20 rounded animate-pulse"></div>
-                    <div className="h-6 sm:h-8 bg-white/20 rounded animate-pulse"></div>
-                    <div className="h-2 sm:h-3 bg-white/20 rounded animate-pulse"></div>
-                  </div>
-                  <div className="flex-shrink-0 ml-2">
-                    <div className="h-6 w-6 sm:h-8 sm:w-8 bg-white/20 rounded animate-pulse"></div>
-                  </div>
-                </div>
-              </CardContent>
-            </div>
-          </Card>
-        ))}
-      </div>
-    )
-  }
-
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-      {stats.map((stat, index) => {
-        const IconComponent = stat.icon
-        return (
-          <Card key={index} className="border-0 shadow-lg overflow-hidden">
-            <div className={`bg-gradient-to-r ${stat.gradient} text-white`}>
-              <CardContent className="p-3 sm:p-4 md:p-6">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1 flex-1 min-w-0">
-                    <p className="text-[10px] sm:text-xs md:text-sm font-medium text-white/80 truncate">
-                      {stat.title}
-                    </p>
-                    <p className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold">
-                      {stat.value}
-                    </p>
-                    <p className="text-[9px] sm:text-xs text-white/70 truncate">
-                      {stat.description}
-                    </p>
-                  </div>
-                  <div className="flex-shrink-0 ml-2">
-                    <IconComponent className={`h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8 ${stat.iconColor}`} />
-                  </div>
-                </div>
-              </CardContent>
-            </div>
-          </Card>
-        )
-      })}
-    </div>
+    <StatLedger
+      loading={isLoading}
+      items={stats.map((stat) => ({
+        label: stat.title,
+        value: stat.value,
+        hint: stat.description,
+        icon: <stat.icon />,
+        tone: stat.tone,
+      }))}
+    />
   )
 }

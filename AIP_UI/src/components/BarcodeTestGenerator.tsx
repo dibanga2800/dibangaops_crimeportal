@@ -234,7 +234,7 @@ const BarcodeTestGenerator: React.FC = () => {
 						</Button>
 					</div>
 					{originalDbEan && originalDbEan !== ean13 && (
-						<p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
+						<p className="text-xs text-warning bg-warning-soft p-2 rounded">
 							⚠️ Database EAN: <span className="font-mono">{originalDbEan}</span> → Corrected to: <span className="font-mono">{ean13}</span> (check digit fixed)
 						</p>
 					)}
@@ -285,8 +285,8 @@ const BarcodeTestGenerator: React.FC = () => {
 
 				{barcodeUrl && (
 					<div className="space-y-2">
-						<Label>Barcode Image</Label>
-						<div className="border rounded-lg p-4 bg-white flex flex-col items-center gap-4">
+						<Label>Barcode image</Label>
+						<div className="border rounded-lg p-4 bg-card flex flex-col items-center gap-4">
 							<img
 								src={barcodeUrl}
 								alt={`EAN-13 Barcode: ${ean13}`}
@@ -353,7 +353,7 @@ const BarcodeTestGenerator: React.FC = () => {
 									<Card key={barcode.ean} className="overflow-hidden">
 										<CardContent className="p-4 space-y-3">
 											<div className="flex flex-col items-center gap-2">
-												<div className="border rounded-lg p-3 bg-white w-full flex justify-center">
+												<div className="border rounded-lg p-3 bg-card w-full flex justify-center">
 													<img
 														src={barcode.url}
 														alt={`EAN-13 Barcode: ${barcode.ean}`}
@@ -381,7 +381,7 @@ const BarcodeTestGenerator: React.FC = () => {
 														</Button>
 													</div>
 													{barcode.originalEan && (
-														<p className="text-xs text-amber-600 bg-amber-50 p-1 rounded text-center">
+														<p className="text-xs text-warning bg-warning-soft p-1 rounded text-center">
 															Original: <span className="font-mono">{barcode.originalEan}</span>
 														</p>
 													)}

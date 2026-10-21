@@ -26,7 +26,7 @@ const AboutPage = () => {
 			description="A production crime and incident management platform for the Heart of England Co-operative, deployed across all 40 of its retail stores."
 		>
 			<section className="space-y-2" aria-labelledby="about-what-it-does">
-				<h2 id="about-what-it-does" className="text-sm font-semibold text-slate-900">
+				<h2 id="about-what-it-does" className="text-sm font-semibold text-foreground">
 					What it does
 				</h2>
 				<p>
@@ -37,21 +37,21 @@ const AboutPage = () => {
 			</section>
 
 			<section className="space-y-3" aria-labelledby="about-how-it-works">
-				<h2 id="about-how-it-works" className="text-sm font-semibold text-slate-900">
+				<h2 id="about-how-it-works" className="text-sm font-semibold text-foreground">
 					How it works
 				</h2>
-				<ul className="divide-y divide-slate-200 border border-slate-200">
+				<ul className="divide-y divide-border border border-border">
 					{CAPABILITIES.map(({ title, body }) => (
 						<li key={title} className="px-4 py-3.5">
-							<p className="font-medium text-slate-900">{title}</p>
-							<p className="mt-1 text-slate-600">{body}</p>
+							<p className="font-medium text-foreground">{title}</p>
+							<p className="mt-1 text-muted-foreground">{body}</p>
 						</li>
 					))}
 				</ul>
 			</section>
 
 			<section className="space-y-2" aria-labelledby="about-why-it-matters">
-				<h2 id="about-why-it-matters" className="text-sm font-semibold text-slate-900">
+				<h2 id="about-why-it-matters" className="text-sm font-semibold text-foreground">
 					Why it matters
 				</h2>
 				<p>
@@ -61,7 +61,7 @@ const AboutPage = () => {
 				</p>
 			</section>
 
-			<p className="border-t border-slate-200 pt-5 text-slate-600">
+			<p className="border-t border-border pt-5 text-muted-foreground">
 				Designed, built, and led end-to-end by David Ibanga.
 			</p>
 		</PublicPageShell>

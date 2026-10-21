@@ -14,13 +14,13 @@ export function CustomCaption(props: CaptionProps) {
         type="button"
         onClick={() => previousMonth && goToMonth(previousMonth)}
         disabled={!previousMonth}
-				className="w-8 h-8 flex items-center justify-center text-xl text-gray-600 hover:text-gray-900 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+				className="w-8 h-8 flex items-center justify-center text-xl text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex-shrink-0"
         aria-label="Previous Month"
       >
         ‹
       </button>
 			<div className="flex-1 text-center min-w-0">
-				<span className="text-base font-semibold text-gray-900 whitespace-nowrap">
+				<span className="text-base font-semibold text-foreground whitespace-nowrap">
 					{month} {year}
         </span>
       </div>
@@ -28,7 +28,7 @@ export function CustomCaption(props: CaptionProps) {
         type="button"
         onClick={() => nextMonth && goToMonth(nextMonth)}
         disabled={!nextMonth}
-				className="w-8 h-8 flex items-center justify-center text-xl text-gray-600 hover:text-gray-900 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+				className="w-8 h-8 flex items-center justify-center text-xl text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex-shrink-0"
         aria-label="Next Month"
       >
         ›

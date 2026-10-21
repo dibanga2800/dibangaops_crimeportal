@@ -42,7 +42,7 @@ export function AddressSection({ form }: AddressSectionProps) {
           name="address.village"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Village/Area (Optional)</FormLabel>
+              <FormLabel>Village/Area (optional)</FormLabel>
               <FormControl>
                 <Input {...field} />
               </FormControl>

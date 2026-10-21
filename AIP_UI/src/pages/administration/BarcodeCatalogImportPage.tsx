@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useState } from 'react'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { Link } from 'react-router-dom'
 import { ErrorBoundary, type FallbackProps } from 'react-error-boundary'
-import { ScanBarcode, Upload, CheckCircle2, Loader2, Download, ExternalLink } from 'lucide-react'
+import { Upload, CheckCircle2, Loader2, Download, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -122,22 +123,21 @@ const BarcodeCatalogImportPageInner = () => {
 	}
 
 	return (
-		<div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gradient-to-br from-background via-muted/30 to-background">
-			<div className="container mx-auto max-w-screen-2xl space-y-4 px-3 py-4 sm:px-4 md:space-y-6 md:px-6 lg:px-8">
-				<div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-					<div className="flex items-center gap-2">
-						<ScanBarcode className="h-7 w-7 shrink-0 text-primary" aria-hidden />
-						<h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl md:text-3xl">
-							Barcode catalog import
-						</h1>
-					</div>
-					<Button variant="outline" size="sm" asChild>
-						<Link to="/administration/product-catalog">
-							<ExternalLink className="mr-2 h-4 w-4" aria-hidden />
-							Browse catalog
-						</Link>
-					</Button>
-				</div>
+		<div className="w-full">
+			<div className="space-y-6">
+				<PageHeader
+					title="Barcode catalog import"
+					description="Upload a product export to add or update the catalog staff search when recording stolen items."
+					className="pb-0"
+					actions={
+						<Button variant="outline" asChild>
+							<Link to="/administration/product-catalog">
+								<ExternalLink className="h-4 w-4" aria-hidden />
+								Browse catalog
+							</Link>
+						</Button>
+					}
+				/>
 
 				<Card>
 					<CardHeader>
@@ -154,21 +154,52 @@ const BarcodeCatalogImportPageInner = () => {
 					<CardContent className="space-y-6">
 						<div className="space-y-2">
 							<Label htmlFor="csv-file">CSV file</Label>
-							<div className="flex flex-wrap items-center gap-2">
-								<Input
+							<label
+								htmlFor="csv-file"
+								onDragOver={(e) => {
+									e.preventDefault()
+									e.currentTarget.dataset.drag = 'true'
+								}}
+								onDragLeave={(e) => {
+									delete e.currentTarget.dataset.drag
+								}}
+								onDrop={(e) => {
+									e.preventDefault()
+									delete e.currentTarget.dataset.drag
+									const dropped = e.dataTransfer.files?.[0] ?? null
+									if (dropped) void handlePickFile(dropped)
+								}}
+								className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-border px-6 py-8 text-center transition-colors hover:border-primary/40 hover:bg-accent/40 focus-within:border-primary data-[drag=true]:border-primary data-[drag=true]:bg-accent/60"
+							>
+								<span className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
+									<Upload className="h-5 w-5" aria-hidden />
+								</span>
+								{file ? (
+									<>
+										<span className="text-sm font-medium text-foreground">{file.name}</span>
+										<span className="figures text-xs text-muted-foreground">
+											{(file.size / 1024).toFixed(0)} KB · choose another file to replace it
+										</span>
+									</>
+								) : (
+									<>
+										<span className="text-sm font-medium text-foreground">
+											Drop a CSV here, or <span className="text-primary underline underline-offset-2">choose a file</span>
+										</span>
+										<span className="text-xs text-muted-foreground">Max 5MB, up to 10,000 data rows.</span>
+									</>
+								)}
+								<input
 									id="csv-file"
 									type="file"
 									accept=".csv,text/csv"
-									className="max-w-md cursor-pointer"
+									className="sr-only"
 									onChange={(e) => {
 										const f = e.target.files?.[0] ?? null
 										void handlePickFile(f)
 									}}
-									aria-label="Choose CSV file to import"
 								/>
-								<Upload className="h-4 w-4 text-muted-foreground" aria-hidden />
-							</div>
-							<p className="text-xs text-muted-foreground">Max 5MB. Up to 10,000 data rows.</p>
+							</label>
 						</div>
 
 						{preview?.ok && preview.ignoredCostPriceColumnDetected && (
@@ -189,7 +220,7 @@ const BarcodeCatalogImportPageInner = () => {
 								<CardHeader className="py-3">
 									<CardTitle className="text-sm font-medium text-muted-foreground">Valid (unique)</CardTitle>
 								</CardHeader>
-								<CardContent className="pb-3 pt-0 text-2xl font-semibold text-emerald-600 dark:text-emerald-400">
+								<CardContent className="pb-3 pt-0 text-2xl font-semibold text-recovered">
 									{stats.valid}
 								</CardContent>
 							</Card>
@@ -203,7 +234,7 @@ const BarcodeCatalogImportPageInner = () => {
 								<CardHeader className="py-3">
 									<CardTitle className="text-sm font-medium text-muted-foreground">Merged duplicates</CardTitle>
 								</CardHeader>
-								<CardContent className="pb-3 pt-0 text-2xl font-semibold text-amber-600 dark:text-amber-400">
+								<CardContent className="pb-3 pt-0 text-2xl font-semibold text-warning">
 									{lastResult?.deduplicatedInFileCount ?? stats.deduplicatedInFile}
 								</CardContent>
 							</Card>
@@ -267,9 +298,9 @@ const BarcodeCatalogImportPageInner = () => {
 							<Alert
 								className={
 									importOutcome.status === 'full'
-										? 'border-emerald-500/50 bg-emerald-50 text-emerald-950 dark:bg-emerald-950/30 dark:text-emerald-100'
+										? 'border-recovered/50 bg-recovered-soft text-emerald-950'
 										: importOutcome.status === 'partial'
-											? 'border-amber-500/50 bg-amber-50 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100'
+											? 'border-warning/50 bg-warning-soft text-amber-950'
 											: undefined
 								}
 								variant={importOutcome.status === 'failed' ? 'destructive' : 'default'}
@@ -355,7 +386,7 @@ const BarcodeCatalogImportPageInner = () => {
 												<TableHead className="w-14">Line</TableHead>
 												<TableHead>Barcode</TableHead>
 												<TableHead>Department</TableHead>
-												<TableHead>VMECode</TableHead>
+												<TableHead>VME code</TableHead>
 												<TableHead>ProductName</TableHead>
 												<TableHead>RetailPrice</TableHead>
 												<TableHead>Status</TableHead>
@@ -374,7 +405,7 @@ const BarcodeCatalogImportPageInner = () => {
 														{row.validationError ? (
 															<span className="text-destructive">{row.validationError}</span>
 														) : (
-															<span className="text-emerald-600 dark:text-emerald-400">OK</span>
+															<span className="text-recovered">OK</span>
 														)}
 													</TableCell>
 												</TableRow>
