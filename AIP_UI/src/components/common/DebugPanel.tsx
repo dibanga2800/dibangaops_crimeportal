@@ -32,7 +32,7 @@ export const DebugPanel = () => {
 	if (!isOpen) {
 		return (
 			<Button
-				className="fixed bottom-4 right-4 bg-yellow-500 hover:bg-yellow-600"
+				className="fixed bottom-4 right-4 bg-warning hover:bg-warning/90"
 				onClick={() => setIsOpen(true)}
 			>
 				Show Debug Panel
@@ -41,9 +41,9 @@ export const DebugPanel = () => {
 	}
 
 	return (
-		<Card className="fixed bottom-4 right-4 w-96 h-96 p-4 bg-white dark:bg-gray-800 shadow-lg">
+		<Card className="fixed bottom-4 right-4 w-96 h-96 p-4 bg-card shadow-lg">
 			<div className="flex justify-between items-center mb-4">
-				<h3 className="text-lg font-semibold">Debug Panel</h3>
+				<h3 className="text-lg font-semibold">Debug panel</h3>
 				<div className="space-x-2">
 					<Button size="sm" variant="outline" onClick={refreshData}>
 						Refresh
@@ -58,11 +58,11 @@ export const DebugPanel = () => {
 				<div className="space-y-4">
 					<div>
 						<h4 className="font-medium mb-2">Session Snapshot:</h4>
-						<pre className="text-xs bg-gray-100 dark:bg-gray-900 p-2 rounded">
+						<pre className="text-xs bg-muted p-2 rounded">
 							{JSON.stringify(debugData, null, 2)}
 						</pre>
 					</div>
-					<p className="text-xs text-gray-500 dark:text-gray-400">
+					<p className="text-xs text-muted-foreground">
 						User details originate from the API and are cached in memory only.
 					</p>
 				</div>

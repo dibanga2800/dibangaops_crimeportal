@@ -6,48 +6,12 @@
  */
 
 import { useState, useMemo } from 'react'
-import {
-	BarChart,
-	Bar,
-	LineChart,
-	Line,
-	XAxis,
-	YAxis,
-	CartesianGrid,
-	Tooltip,
-	Legend,
-	ResponsiveContainer,
-	PieChart,
-	Pie,
-	Cell,
-} from 'recharts'
-import {
-	Card,
-	CardContent,
-	CardDescription,
-	CardHeader,
-	CardTitle,
-} from '@/components/ui/card'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Badge } from '@/components/ui/badge'
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { Button } from '@/components/ui/button'
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from '@/components/ui/table'
+import { Segmented } from '@/components/common/Segmented'
+import { useChartTheme, chartTooltipStyle, axisTick } from '@/lib/chart-theme'
 import type { CrimeTrendData, DayOfWeekData, StoreDrilldownData, TimeOfDayData } from '@/types/analytics'
-import {
-	Calendar,
-	Clock,
-	TrendingUp,
-	MapPin,
-	ChevronRight,
-	ArrowLeft,
-} from 'lucide-react'
+import { Clock, MapPin, ChevronRight, ArrowLeft } from 'lucide-react'
 
 interface CrimeTrendExplorerProps {
 	data: CrimeTrendData
@@ -131,19 +95,21 @@ const TimeOfDayTooltip = ({ active, payload }: ChartTooltipProps) => {
 }
 
 const CHART_COLORS = [
-	'#3b82f6', // blue
-	'#10b981', // green
-	'#f59e0b', // amber
-	'#ef4444', // red
-	'#8b5cf6', // purple
-	'#ec4899', // pink
-	'#14b8a6', // teal
+	'#1F6FA8', // blue
+	'#0E7C66', // green
+	'#C4680F', // amber
+	'#B42318', // red
+	'#5B4A8B', // purple
+	'#A3365E', // pink
+	'#1C7C78', // teal
 ]
 
 export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorerProps) => {
 	const [selectedDay, setSelectedDay] = useState<string | null>(null)
 	const [selectedHour, setSelectedHour] = useState<number | null>(null)
 	const [selectedStore, setSelectedStore] = useState<string | null>(null)
+	const [view, setView] = useState<'day' | 'hour'>('day')
+	const theme = useChartTheme()
 
 	const storeList = useMemo(() => Object.values(data.storeDrilldown), [data.storeDrilldown])
 
@@ -312,494 +278,320 @@ export const CrimeTrendExplorer = ({ data, loading = false }: CrimeTrendExplorer
 		return store
 	}, [selectedStore, selectedDay, selectedHour, selectedHourLabel, data.storeDrilldown])
 
+	const peakDay = useMemo(() => [...dayOfWeekData].sort((a, b) => b.incidents - a.incidents)[0], [dayOfWeekData])
+	const peakHour = useMemo(() => [...timeOfDayData].sort((a, b) => b.incidents - a.incidents)[0], [timeOfDayData])
+	const sortedTypes = useMemo(() => [...incidentTypeData].sort((a, b) => b.count - a.count), [incidentTypeData])
+	const maxTypeCount = sortedTypes[0]?.count || 1
+
 	if (loading) {
+		return <div className="h-[420px] animate-pulse rounded-lg border border-border bg-card" aria-busy="true" aria-label="Loading crime trends" />
+	}
+
+	const moneyTick = (v: number) => (Math.abs(v) >= 1000 ? `£${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : `£${v}`)
+	const legend = [
+		{ key: 'stolenValue', label: 'Stolen', color: theme.foreground },
+		{ key: 'recoveredValue', label: 'Recovered', color: theme.recovered },
+		{ key: 'lostValue', label: 'Lost', color: theme.loss },
+	]
+
+	const storeList_ = (rows: StoreSliceRow[], slice: string, peakLabel: string, peakValue: (s: StoreDrilldownData) => string) => (
+		<div className="border-t border-border">
+			<div className="flex flex-wrap items-baseline justify-between gap-2 px-4 pt-4 sm:px-5">
+				<h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+					<MapPin className="h-4 w-4 text-muted-foreground" aria-hidden />
+					Stores {slice}
+				</h4>
+				<span className="figures text-xs text-muted-foreground">
+					{rows.length} {rows.length === 1 ? 'store' : 'stores'} · {rows.reduce((s, r) => s + r.sliceIncidents, 0)} incidents
+				</span>
+			</div>
+			{rows.length === 0 ? (
+				<p className="px-4 py-6 text-center text-sm text-muted-foreground sm:px-5">No stores recorded incidents {slice}.</p>
+			) : (
+				<ul className="mt-2 divide-y divide-border">
+					{rows.map(({ store, sliceIncidents }) => (
+						<li key={store.storeId}>
+							<button
+								type="button"
+								onClick={() => handleStoreClick(store.storeName)}
+								className="!flex w-full !items-center !justify-between gap-3 !rounded-none !border-0 !px-4 !py-2.5 text-left hover:bg-muted/50 sm:!px-5"
+							>
+								<span className="min-w-0">
+									<span className="block truncate text-sm font-medium text-foreground">{store.storeName}</span>
+									<span className="block text-xs text-muted-foreground">
+										{peakLabel} {peakValue(store)}
+									</span>
+								</span>
+								<span className="flex shrink-0 items-center gap-2">
+									<span className="figures text-sm font-semibold text-foreground">{sliceIncidents}</span>
+									<ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden />
+								</span>
+							</button>
+						</li>
+					))}
+				</ul>
+			)}
+		</div>
+	)
+
+	if (selectedStore && selectedStoreData) {
+		const inSelection = 'filterContext' in selectedStoreData && selectedStoreData.filterContext
+		const cells = [
+			{ label: inSelection ? 'Incidents in selection' : 'Incidents', value: String(selectedStoreData.incidents), tone: 'text-foreground' },
+			{ label: 'Peak day', value: selectedStoreData.peakDay, tone: 'text-foreground' },
+			{ label: 'Peak hour', value: `${selectedStoreData.peakHour}:00`, tone: 'text-foreground' },
+			{ label: 'Stolen', value: `£${selectedStoreData.totalStolenValue.toFixed(0)}`, tone: 'text-foreground' },
+			{ label: 'Recovered', value: `£${selectedStoreData.totalRecoveredValue.toFixed(0)}`, tone: 'text-recovered' },
+			{ label: 'Lost', value: `£${selectedStoreData.totalLostValue.toFixed(0)}`, tone: 'text-loss' },
+		]
 		return (
-			<Card>
-				<CardHeader>
-					<CardTitle>Crime Trend Explorer</CardTitle>
-					<CardDescription>Loading analytics data...</CardDescription>
-				</CardHeader>
-			</Card>
+			<section className="rounded-lg border border-border bg-card">
+				<div className="flex flex-wrap items-start justify-between gap-3 p-4 sm:p-5">
+					<div>
+						<Button variant="ghost" size="sm" onClick={() => setSelectedStore(null)} className="-ml-2 mb-1 h-8 px-2 text-muted-foreground">
+							<ArrowLeft className="h-4 w-4" />
+							Back to trends
+						</Button>
+						<h3 className="font-display text-2xl font-semibold text-foreground">{selectedStoreData.storeName}</h3>
+						<p className="text-[13px] text-muted-foreground">
+							{inSelection
+								? `Incidents ${selectedStoreData.filterContext}`
+								: 'Every incident at this store in the period'}{' '}
+							· recovery rate {selectedStoreData.recoveryRate.toFixed(1)}%
+						</p>
+					</div>
+				</div>
+				<dl className="figures grid grid-cols-2 border-y border-border sm:grid-cols-3 xl:grid-cols-6">
+					{cells.map((cell) => (
+						<div key={cell.label} className="px-4 py-3 shadow-[1px_1px_0_0_hsl(var(--border))] sm:px-5">
+							<dt className="text-xs font-medium text-muted-foreground">{cell.label}</dt>
+							<dd className={`font-display text-xl font-semibold ${cell.tone}`}>{cell.value}</dd>
+						</div>
+					))}
+				</dl>
+				<div className="p-4 sm:p-5">
+					<h4 className="mb-3 text-sm font-semibold text-foreground">Incident types</h4>
+					{selectedStoreData.incidentTypes.length === 0 ? (
+						<p className="text-sm text-muted-foreground">No incident types recorded for this selection.</p>
+					) : (
+						<ul className="space-y-3">
+							{selectedStoreData.incidentTypes.map((type) => (
+								<li key={type.type}>
+									<div className="flex items-baseline justify-between gap-3 text-sm">
+										<span className="truncate font-medium text-foreground">{type.type}</span>
+										<span className="figures shrink-0 text-muted-foreground">
+											<span className="font-semibold text-foreground">{type.count}</span> · {type.percentage.toFixed(1)}% · £
+											{type.totalValue.toFixed(2)}
+										</span>
+									</div>
+									<div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+										<div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, type.percentage)}%` }} />
+									</div>
+								</li>
+							))}
+						</ul>
+					)}
+				</div>
+			</section>
 		)
 	}
 
 	return (
-		<Card className="w-full shadow-sm border-2">
-			<CardHeader className="pb-4">
-				<div className="flex items-center justify-between">
+		<div className="space-y-5">
+			{/* Value over time */}
+			<section className="rounded-lg border border-border bg-card">
+				<div className="flex flex-wrap items-start justify-between gap-3 p-4 sm:p-5">
 					<div>
-						<CardTitle className="flex items-center gap-2">
-							<TrendingUp className="h-5 w-5" />
-							Crime Trend Explorer
-						</CardTitle>
-						<CardDescription>
-							Analyze crime patterns by day, time, and incident type
-						</CardDescription>
-						<div className="mt-1 flex items-center gap-2 flex-wrap">
-							{selectedDay && (
-								<div className="flex items-center gap-2">
-									<span className="text-sm text-muted-foreground">Day:</span>
-									<Badge variant="secondary">{selectedDay}</Badge>
-								</div>
-							)}
-							{selectedHour !== null && (
-								<div className="flex items-center gap-2">
-									<span className="text-sm text-muted-foreground">Hour:</span>
-									<Badge variant="secondary">{selectedHour}:00</Badge>
-								</div>
-							)}
-						</div>
+						<h3 className="text-base font-semibold text-foreground">Value stolen, recovered and lost</h3>
+						<p className="mt-0.5 text-[13px] text-muted-foreground">Per period across the selected stores.</p>
 					</div>
-					{(selectedDay || selectedHour || selectedStore) && (
-						<Button
-							variant="outline"
+					<ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground" aria-label="Legend">
+						{legend.map((item) => (
+							<li key={item.key} className="flex items-center gap-1.5">
+								<span className="h-0.5 w-4 rounded-full" style={{ backgroundColor: item.color }} aria-hidden />
+								{item.label}
+							</li>
+						))}
+					</ul>
+				</div>
+				<div className="h-[260px] w-full px-2 pb-3 sm:h-[300px] sm:px-4">
+					<ResponsiveContainer width="100%" height="100%">
+						<AreaChart data={recoveryTrendData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+							<defs>
+								<linearGradient id="cte-lost" x1="0" y1="0" x2="0" y2="1">
+									<stop offset="0%" stopColor={theme.loss} stopOpacity={0.18} />
+									<stop offset="100%" stopColor={theme.loss} stopOpacity={0} />
+								</linearGradient>
+							</defs>
+							<CartesianGrid vertical={false} stroke={theme.grid} />
+							<XAxis dataKey="period" tick={axisTick(theme)} tickLine={false} axisLine={{ stroke: theme.grid }} minTickGap={16} />
+							<YAxis tick={axisTick(theme)} tickLine={false} axisLine={false} width={48} tickFormatter={moneyTick} />
+							<Tooltip {...chartTooltipStyle(theme)} formatter={(v: number) => `£${Number(v).toLocaleString('en-GB', { maximumFractionDigits: 0 })}`} />
+							<Area type="monotone" dataKey="stolenValue" name="Stolen" stroke={theme.foreground} strokeWidth={1.75} fill="none" dot={false} />
+							<Area type="monotone" dataKey="lostValue" name="Lost" stroke={theme.loss} strokeWidth={2} fill="url(#cte-lost)" dot={false} />
+							<Area type="monotone" dataKey="recoveredValue" name="Recovered" stroke={theme.recovered} strokeWidth={2} fill="none" dot={false} />
+						</AreaChart>
+					</ResponsiveContainer>
+				</div>
+			</section>
+
+			<div className="grid gap-5 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+				{/* When it happens */}
+				<section className="rounded-lg border border-border bg-card">
+					<div className="flex flex-wrap items-start justify-between gap-3 p-4 sm:p-5">
+						<div>
+							<h3 className="text-base font-semibold text-foreground">When incidents happen</h3>
+							<p className="mt-0.5 text-[13px] text-muted-foreground">
+								{view === 'day'
+									? peakDay
+										? <>Busiest day: <span className="font-medium text-foreground">{peakDay.day}</span>. Select a bar to see the stores.</>
+										: 'Select a bar to see the stores.'
+									: peakHour
+										? <>Busiest hour: <span className="font-medium text-foreground">{peakHour.label}</span>. Select a bar to see the stores.</>
+										: 'Select a bar to see the stores.'}
+							</p>
+						</div>
+						<Segmented<'day' | 'hour'>
+							ariaLabel="Group by"
 							size="sm"
-							onClick={() => {
+							value={view}
+							onChange={(v) => {
+								setView(v)
 								setSelectedDay(null)
 								setSelectedHour(null)
-								setSelectedStore(null)
 							}}
-						>
-							<ArrowLeft className="h-4 w-4 mr-2" />
-							Reset View
-						</Button>
-					)}
-				</div>
-			</CardHeader>
-			<CardContent className="pt-6">
-				<div className="mb-8 space-y-4">
-					<div>
-						<h3 className="font-semibold">Recovered vs Lost Trend</h3>
-						<p className="text-sm text-muted-foreground">
-							Track stolen value against saved and unrecovered loss over time.
-						</p>
+							options={[
+								{ value: 'day', label: 'Day of week' },
+								{ value: 'hour', label: 'Hour of day' },
+							]}
+						/>
 					</div>
-					<div className="h-[320px] w-full">
+					<div className="h-[260px] w-full px-2 pb-3 sm:h-[300px] sm:px-4">
 						<ResponsiveContainer width="100%" height="100%">
-							<LineChart data={recoveryTrendData}>
-								<CartesianGrid strokeDasharray="3 3" className="stroke-gray-200" />
-								<XAxis dataKey="period" className="text-xs" tick={{ fill: '#6b7280' }} />
-								<YAxis className="text-xs" tick={{ fill: '#6b7280' }} />
-								<Tooltip
-									contentStyle={{
-										backgroundColor: '#fff',
-										border: '1px solid #e5e7eb',
-										borderRadius: '0.5rem',
-									}}
-								/>
-								<Legend />
-								<Line type="monotone" dataKey="stolenValue" name="Stolen" stroke="#6366f1" strokeWidth={2} dot={false} />
-								<Line type="monotone" dataKey="recoveredValue" name="Saved" stroke="#10b981" strokeWidth={2} dot={false} />
-								<Line type="monotone" dataKey="lostValue" name="Lost" stroke="#ef4444" strokeWidth={2} dot={false} />
-							</LineChart>
+							{view === 'day' ? (
+								<BarChart key="day" data={dayOfWeekData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+									<CartesianGrid vertical={false} stroke={theme.grid} />
+									<XAxis dataKey="day" tick={axisTick(theme)} tickLine={false} axisLine={{ stroke: theme.grid }} tickFormatter={(d: string) => d.slice(0, 3)} />
+									<YAxis tick={axisTick(theme)} tickLine={false} axisLine={false} width={36} allowDecimals={false} />
+									<Tooltip content={<DayOfWeekTooltip />} cursor={{ fill: theme.grid, fillOpacity: 0.35 }} />
+									<Bar
+										dataKey="incidents"
+										name="Incidents"
+										radius={[3, 3, 0, 0]}
+										animationDuration={450}
+										maxBarSize={56}
+										onClick={(barData) => {
+											const payload = barData?.payload as DayOfWeekData | undefined
+											if (payload?.day) handleDayClick(payload.day)
+										}}
+										style={{ cursor: 'pointer' }}
+									>
+										{dayOfWeekData.map((row) => (
+											<Cell
+												key={row.day}
+												fill={selectedDay ? (row.day === selectedDay ? theme.primary : theme.grid) : row.day === peakDay?.day ? theme.primary : theme.series[0] ?? theme.primary}
+												fillOpacity={!selectedDay && row.day !== peakDay?.day ? 0.55 : 1}
+											/>
+										))}
+									</Bar>
+								</BarChart>
+							) : (
+								<BarChart key="hour" data={timeOfDayData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+									<CartesianGrid vertical={false} stroke={theme.grid} />
+									<XAxis dataKey="label" tick={axisTick(theme)} tickLine={false} axisLine={{ stroke: theme.grid }} interval="preserveStartEnd" minTickGap={12} />
+									<YAxis tick={axisTick(theme)} tickLine={false} axisLine={false} width={36} allowDecimals={false} />
+									<Tooltip content={<TimeOfDayTooltip />} cursor={{ fill: theme.grid, fillOpacity: 0.35 }} />
+									<Bar
+										dataKey="incidents"
+										name="Incidents"
+										radius={[3, 3, 0, 0]}
+										animationDuration={450}
+										maxBarSize={32}
+										onClick={(barData) => {
+											const payload = barData?.payload as TimeOfDayData | undefined
+											if (payload?.hour !== undefined) handleHourClick(payload.hour)
+										}}
+										style={{ cursor: 'pointer' }}
+									>
+										{timeOfDayData.map((row) => (
+											<Cell
+												key={row.hour}
+												fill={selectedHour !== null ? (row.hour === selectedHour ? theme.primary : theme.grid) : row.hour === peakHour?.hour ? theme.primary : theme.series[0] ?? theme.primary}
+												fillOpacity={selectedHour === null && row.hour !== peakHour?.hour ? 0.55 : 1}
+											/>
+										))}
+									</Bar>
+								</BarChart>
+							)}
 						</ResponsiveContainer>
 					</div>
-				</div>
-
-				{!selectedStore ? (
-					<Tabs defaultValue="day-of-week" className="w-full">
-						<TabsList className="grid w-full grid-cols-3 mb-6">
-							<TabsTrigger value="day-of-week">Day of Week</TabsTrigger>
-							<TabsTrigger value="time-of-day">Time of Day</TabsTrigger>
-							<TabsTrigger value="incident-types">Incident Types</TabsTrigger>
-						</TabsList>
-
-						<TabsContent value="day-of-week" className="space-y-6 mt-6">
-							<div className="h-[400px] w-full">
-								<ResponsiveContainer width="100%" height="100%">
-									<BarChart data={dayOfWeekData}>
-										<CartesianGrid strokeDasharray="3 3" className="stroke-gray-200" />
-										<XAxis
-											dataKey="day"
-											className="text-xs"
-											tick={{ fill: '#6b7280' }}
-										/>
-										<YAxis className="text-xs" tick={{ fill: '#6b7280' }} />
-										<Tooltip content={<DayOfWeekTooltip />} />
-										<Bar
-											dataKey="incidents"
-											fill={CHART_COLORS[0]}
-											name="Incidents"
-											radius={[8, 8, 0, 0]}
-											onClick={(barData) => {
-												const payload = barData?.payload as DayOfWeekData | undefined
-												if (payload?.day) {
-													handleDayClick(payload.day)
-												}
-											}}
-											style={{ cursor: 'pointer' }}
-										/>
-									</BarChart>
-								</ResponsiveContainer>
-							</div>
-
-							{selectedDay && filteredStores.length > 0 && (
-								<div className="space-y-4">
-									<div className="flex items-center gap-2">
-										<MapPin className="h-4 w-4 text-gray-600" />
-										<h3 className="font-semibold">
-											Stores with incidents on {selectedDay} ({filteredStores.length}{' '}
-											{filteredStores.length === 1 ? 'store' : 'stores'} ·{' '}
-											{filteredDayIncidentTotal}{' '}
-											{filteredDayIncidentTotal === 1 ? 'incident' : 'incidents'} on {selectedDay})
-										</h3>
-									</div>
-									<div className="border rounded-lg">
-										<Table>
-											<TableHeader>
-												<TableRow>
-													<TableHead>Store</TableHead>
-													<TableHead>{`Incidents on ${selectedDay}`}</TableHead>
-													<TableHead>Store Peak Hour</TableHead>
-													<TableHead className="text-right">Actions</TableHead>
-												</TableRow>
-											</TableHeader>
-											<TableBody>
-												{filteredStores.map(({ store, sliceIncidents }) => (
-													<TableRow key={store.storeId}>
-														<TableCell className="font-medium">
-															{store.storeName}
-														</TableCell>
-														<TableCell>{sliceIncidents}</TableCell>
-														<TableCell>
-															<Badge variant="outline">{store.peakHour}:00</Badge>
-														</TableCell>
-														<TableCell className="text-right">
-															<Button
-																variant="ghost"
-																size="sm"
-																onClick={() => handleStoreClick(store.storeName)}
-															>
-																View Details
-																<ChevronRight className="h-4 w-4 ml-1" />
-															</Button>
-														</TableCell>
-													</TableRow>
-												))}
-											</TableBody>
-										</Table>
-									</div>
-								</div>
-							)}
-
-							{selectedDay && filteredStores.length === 0 && (
-								<div className="text-center py-8 text-gray-500">
-									No stores recorded incidents on {selectedDay}
-								</div>
-							)}
-						</TabsContent>
-
-						<TabsContent value="time-of-day" className="space-y-6 mt-6">
-							<div className="h-[400px] w-full">
-								<ResponsiveContainer width="100%" height="100%">
-									<BarChart data={timeOfDayData}>
-										<CartesianGrid strokeDasharray="3 3" className="stroke-gray-200" />
-										<XAxis
-											dataKey="label"
-											className="text-xs"
-											tick={{ fill: '#6b7280' }}
-											angle={-45}
-											textAnchor="end"
-											height={80}
-										/>
-										<YAxis className="text-xs" tick={{ fill: '#6b7280' }} />
-										<Tooltip content={<TimeOfDayTooltip />} />
-										<Bar
-											dataKey="incidents"
-											fill={CHART_COLORS[1]}
-											name="Incidents"
-											radius={[8, 8, 0, 0]}
-											onClick={(barData) => {
-												const payload = barData?.payload as TimeOfDayData | undefined
-												if (payload?.hour !== undefined) {
-													handleHourClick(payload.hour)
-												}
-											}}
-											style={{ cursor: 'pointer' }}
-										/>
-									</BarChart>
-								</ResponsiveContainer>
-							</div>
-
-							{selectedHour !== null && filteredStoresByHour.length > 0 && (
-								<div className="space-y-4">
-									<div className="flex items-center gap-2">
-										<MapPin className="h-4 w-4 text-gray-600" />
-										<h3 className="font-semibold">
-											Stores with incidents at {selectedHourLabel ?? `${selectedHour}:00`} (
-											{filteredStoresByHour.length}{' '}
-											{filteredStoresByHour.length === 1 ? 'store' : 'stores'} ·{' '}
-											{filteredHourIncidentTotal}{' '}
-											{filteredHourIncidentTotal === 1 ? 'incident' : 'incidents'} at{' '}
-											{selectedHourLabel ?? `${selectedHour}:00`})
-										</h3>
-									</div>
-									<div className="border rounded-lg">
-										<Table>
-											<TableHeader>
-												<TableRow>
-													<TableHead>Store</TableHead>
-													<TableHead>{`Incidents at ${selectedHourLabel ?? `${selectedHour}:00`}`}</TableHead>
-													<TableHead>Store Peak Day</TableHead>
-													<TableHead className="text-right">Actions</TableHead>
-												</TableRow>
-											</TableHeader>
-											<TableBody>
-												{filteredStoresByHour.map(({ store, sliceIncidents }) => (
-													<TableRow key={store.storeId}>
-														<TableCell className="font-medium">
-															{store.storeName}
-														</TableCell>
-														<TableCell>{sliceIncidents}</TableCell>
-														<TableCell>
-															<Badge variant="outline">{store.peakDay}</Badge>
-														</TableCell>
-														<TableCell className="text-right">
-															<Button
-																variant="ghost"
-																size="sm"
-																onClick={() => handleStoreClick(store.storeName)}
-															>
-																View Details
-																<ChevronRight className="h-4 w-4 ml-1" />
-															</Button>
-														</TableCell>
-													</TableRow>
-												))}
-											</TableBody>
-										</Table>
-									</div>
-								</div>
-							)}
-
-							{selectedHour !== null && filteredStoresByHour.length === 0 && (
-								<div className="text-center py-8 text-gray-500">
-									No stores recorded incidents at {selectedHourLabel ?? `${selectedHour}:00`}
-								</div>
-							)}
-
-							<div className="space-y-4">
-								<div className="flex items-center gap-2">
-									<Clock className="h-4 w-4 text-gray-600" />
-									<h3 className="font-semibold">Top 3 Most Common Peak Hours</h3>
-								</div>
-								<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-									{[...timeOfDayData]
-										.filter((item) => item.storesPeaking > 0)
-										.sort((a, b) => b.storesPeaking - a.storesPeaking)
-										.slice(0, 3)
-										.map((item) => {
-											const totalStores = storeList.length
-											const sharePct = totalStores > 0 ? (item.storesPeaking / totalStores) * 100 : 0
-											return (
-												<Card
-													key={item.hour}
-													className={`cursor-pointer transition-all hover:shadow-md ${
-														selectedHour === item.hour ? 'ring-2 ring-blue-500' : ''
-													}`}
-													onClick={() => handleHourClick(item.hour)}
-												>
-													<CardHeader className="pb-2">
-														<CardTitle className="text-sm font-medium flex items-center gap-2">
-															<Clock className="h-4 w-4" />
-															{item.label}
-														</CardTitle>
-													</CardHeader>
-													<CardContent>
-														<div className="text-2xl font-bold">
-															{item.storesPeaking} {item.storesPeaking === 1 ? 'store' : 'stores'}
-														</div>
-														<p className="text-xs text-gray-500">
-															{sharePct.toFixed(1)}% of stores peak here
-														</p>
-													</CardContent>
-												</Card>
-											)
-										})}
+					{view === 'day' && selectedDay && storeList_(filteredStores, `on ${selectedDay}`, 'Peak hour', (s) => `${s.peakHour}:00`)}
+					{view === 'hour' && selectedHour !== null &&
+						storeList_(filteredStoresByHour, `at ${selectedHourLabel ?? `${selectedHour}:00`}`, 'Peak day', (s) => s.peakDay)}
+					{view === 'hour' && selectedHour === null && (() => {
+						const peaks = [...timeOfDayData]
+							.filter((item) => item.storesPeaking > 0)
+							.sort((a, b) => b.storesPeaking - a.storesPeaking)
+							.slice(0, 3)
+						if (!peaks.length) return null
+						return (
+							<div className="border-t border-border px-4 py-3 sm:px-5">
+								<p className="mb-2 text-xs font-medium text-muted-foreground">Most common store peak hours</p>
+								<div className="flex flex-wrap gap-2">
+									{peaks.map((item) => (
+										<button
+											key={item.hour}
+											type="button"
+											onClick={() => handleHourClick(item.hour)}
+											className="!flex !items-center gap-2 !rounded-full !border !border-border !px-3 !py-1 text-sm hover:bg-muted"
+										>
+											<Clock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+											<span className="font-medium text-foreground">{item.label}</span>
+											<span className="figures text-xs text-muted-foreground">
+												{item.storesPeaking} {item.storesPeaking === 1 ? 'store' : 'stores'}
+											</span>
+										</button>
+									))}
 								</div>
 							</div>
-						</TabsContent>
+						)
+					})()}
+				</section>
 
-						<TabsContent value="incident-types" className="space-y-6 mt-6">
-							<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-								<div className="h-[400px] w-full">
-									<ResponsiveContainer width="100%" height="100%">
-										<PieChart>
-											<Pie
-												data={incidentTypeData}
-												cx="50%"
-												cy="50%"
-												labelLine={false}
-												label={({ name, percentage }) =>
-													percentage > 5 ? `${name}: ${percentage.toFixed(1)}%` : ''
-												}
-												outerRadius={120}
-												fill="#8884d8"
-												dataKey="count"
-											>
-												{incidentTypeData.map((entry, index) => (
-													<Cell key={`cell-${index}`} fill={entry.fill} />
-												))}
-											</Pie>
-											<Tooltip
-												contentStyle={{
-													backgroundColor: '#fff',
-													border: '1px solid #e5e7eb',
-													borderRadius: '0.5rem',
-												}}
-											/>
-										</PieChart>
-									</ResponsiveContainer>
-								</div>
-								<div className="space-y-2">
-									<h3 className="font-semibold mb-4">Incident Type Breakdown</h3>
-									{[...incidentTypeData]
-										.sort((a, b) => b.count - a.count)
-										.map((item, index) => (
-											<Card key={item.type}>
-												<CardContent className="p-4">
-													<div className="flex items-center justify-between">
-														<div className="flex items-center gap-3">
-															<div
-																className="w-4 h-4 rounded"
-																style={{ backgroundColor: item.fill }}
-															/>
-															<span className="font-medium">{item.type}</span>
-														</div>
-														<div className="text-right">
-															<div className="font-semibold">{item.count}</div>
-															<div className="text-xs text-gray-500">
-																{item.percentage.toFixed(1)}%
-															</div>
-														</div>
-													</div>
-												</CardContent>
-											</Card>
-										))}
-								</div>
-							</div>
-						</TabsContent>
-					</Tabs>
-				) : (
-					<div className="space-y-4">
-						<div className="flex items-center gap-2">
-							<Button
-								variant="ghost"
-								size="sm"
-								onClick={() => setSelectedStore(null)}
-							>
-								<ArrowLeft className="h-4 w-4 mr-2" />
-								Back to Overview
-							</Button>
-						</div>
-						{selectedStoreData && (
-							<>
-								<Card>
-									<CardHeader>
-										<CardTitle>{selectedStoreData.storeName}</CardTitle>
-										<CardDescription>
-											{'filterContext' in selectedStoreData && selectedStoreData.filterContext
-												? `Incidents ${selectedStoreData.filterContext} (${selectedStoreData.incidents} in selection)`
-												: 'Detailed incident breakdown for this store'}
-										</CardDescription>
-									</CardHeader>
-									<CardContent>
-										<div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-											<Card>
-												<CardContent className="p-4">
-													<div className="text-sm text-gray-500">
-														{'filterContext' in selectedStoreData && selectedStoreData.filterContext
-															? 'Incidents in selection'
-															: 'Total Incidents'}
-													</div>
-													<div className="text-2xl font-bold">
-														{selectedStoreData.incidents}
-													</div>
-												</CardContent>
-											</Card>
-											<Card>
-												<CardContent className="p-4">
-													<div className="text-sm text-gray-500">Peak Day</div>
-													<div className="text-2xl font-bold">
-														{selectedStoreData.peakDay}
-													</div>
-												</CardContent>
-											</Card>
-											<Card>
-												<CardContent className="p-4">
-													<div className="text-sm text-gray-500">Peak Hour</div>
-													<div className="text-2xl font-bold">
-														{selectedStoreData.peakHour}:00
-													</div>
-												</CardContent>
-											</Card>
-										</div>
-										<div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-											<Card>
-												<CardContent className="p-4">
-													<div className="text-sm text-gray-500">Value Stolen</div>
-													<div className="text-2xl font-bold">
-														£{selectedStoreData.totalStolenValue.toFixed(0)}
-													</div>
-												</CardContent>
-											</Card>
-											<Card>
-												<CardContent className="p-4">
-													<div className="text-sm text-gray-500">Value Saved</div>
-													<div className="text-2xl font-bold text-emerald-600 dark:text-emerald-300">
-														£{selectedStoreData.totalRecoveredValue.toFixed(0)}
-													</div>
-												</CardContent>
-											</Card>
-											<Card>
-												<CardContent className="p-4">
-													<div className="text-sm text-gray-500">Value Lost</div>
-													<div className="text-2xl font-bold text-rose-600 dark:text-rose-300">
-														£{selectedStoreData.totalLostValue.toFixed(0)}
-													</div>
-													<div className="text-xs text-muted-foreground mt-1">
-														Recovery rate {selectedStoreData.recoveryRate.toFixed(1)}%
-													</div>
-												</CardContent>
-											</Card>
-										</div>
-										<div>
-											<h3 className="font-semibold mb-4">Incident Types</h3>
-											<div className="border rounded-lg">
-												<Table>
-													<TableHeader>
-														<TableRow>
-															<TableHead>Type</TableHead>
-															<TableHead>Count</TableHead>
-															<TableHead>Percentage</TableHead>
-															<TableHead className="text-right">Total Value</TableHead>
-														</TableRow>
-													</TableHeader>
-													<TableBody>
-														{selectedStoreData.incidentTypes.map((type) => (
-															<TableRow key={type.type}>
-																<TableCell className="font-medium">{type.type}</TableCell>
-																<TableCell>{type.count}</TableCell>
-																<TableCell>
-																	{type.percentage.toFixed(1)}%
-																</TableCell>
-																<TableCell className="text-right">
-																	£{type.totalValue.toFixed(2)}
-																</TableCell>
-															</TableRow>
-														))}
-													</TableBody>
-												</Table>
-											</div>
-										</div>
-									</CardContent>
-								</Card>
-							</>
-						)}
+				{/* What happens */}
+				<section className="rounded-lg border border-border bg-card">
+					<div className="p-4 sm:p-5">
+						<h3 className="text-base font-semibold text-foreground">Incident types</h3>
+						<p className="mt-0.5 text-[13px] text-muted-foreground">Share of all incidents in the period.</p>
 					</div>
-				)}
-			</CardContent>
-		</Card>
+					{sortedTypes.length === 0 ? (
+						<p className="px-4 pb-6 text-sm text-muted-foreground sm:px-5">No incidents recorded.</p>
+					) : (
+						<ul className="space-y-3.5 px-4 pb-5 sm:px-5">
+							{sortedTypes.map((item, index) => (
+								<li key={item.type}>
+									<div className="flex items-baseline justify-between gap-3 text-sm">
+										<span className="truncate font-medium text-foreground">{item.type}</span>
+										<span className="figures shrink-0 text-muted-foreground">
+											<span className="font-semibold text-foreground">{item.count}</span> · {item.percentage.toFixed(1)}%
+										</span>
+									</div>
+									<div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
+										<div
+											className="h-full rounded-full"
+											style={{
+												width: `${(item.count / maxTypeCount) * 100}%`,
+												backgroundColor: index === 0 ? theme.primary : theme.series[0] ?? theme.primary,
+												opacity: index === 0 ? 1 : 0.55,
+											}}
+										/>
+									</div>
+								</li>
+							))}
+						</ul>
+					)}
+				</section>
+			</div>
+		</div>
 	)
 }
-

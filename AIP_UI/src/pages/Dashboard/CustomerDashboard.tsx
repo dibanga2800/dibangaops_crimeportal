@@ -221,10 +221,10 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center" role="alert">
-        <div className="text-center p-4 rounded-lg bg-white shadow-lg">
-          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" aria-hidden="true" />
-          <h2 className="text-lg font-semibold text-gray-900 mb-2">Error Loading Dashboard</h2>
-          <p className="text-gray-600 mb-4">{error}</p>
+        <div className="text-center p-4 rounded-lg bg-card shadow-lg">
+          <AlertCircle className="h-12 w-12 text-loss mx-auto mb-4" aria-hidden="true" />
+          <h2 className="text-lg font-semibold text-foreground mb-2">Error Loading Dashboard</h2>
+          <p className="text-muted-foreground mb-4">{error}</p>
           <Button 
             variant="outline" 
             onClick={() => window.location.reload()}
@@ -280,7 +280,7 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
               <h1 className="text-xl sm:text-2xl lg:text-3xl font-semibold">
                 {customerName} Overview
               </h1>
-              <Building2 className="h-6 w-6 sm:h-7 sm:w-7 text-gray-500" aria-hidden="true" />
+              <Building2 className="h-6 w-6 sm:h-7 sm:w-7 text-muted-foreground" aria-hidden="true" />
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto flex-wrap">
@@ -292,8 +292,8 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
                     if (!isNaN(id)) setSelectedCustomerId(id)
                   }}
                 >
-                  <SelectTrigger className="w-full sm:w-[220px] h-11" aria-label="Select customer">
-                    <SelectValue placeholder="Select customer" />
+                  <SelectTrigger className="w-full sm:w-[220px] h-11" aria-label="Company">
+                    <SelectValue placeholder="Select company" />
                   </SelectTrigger>
                   <SelectContent>
                     {assignedCustomers.map((c) => (
@@ -309,7 +309,7 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
                   <SelectValue placeholder="Select Region" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Regions</SelectItem>
+                  <SelectItem value="all">All regions</SelectItem>
                   {regions.map((region) => (
                     <SelectItem key={region.id} value={region.id}>
                       {region.name}
@@ -319,11 +319,11 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
               </Select>
 
               <Select value={selectedSite} onValueChange={setSelectedSite}>
-                <SelectTrigger className="w-full sm:w-[250px] h-11" aria-label="Select site">
-                  <SelectValue placeholder="Select Site" />
+                <SelectTrigger className="w-full sm:w-[250px] h-11" aria-label="Store">
+                  <SelectValue placeholder="Select store" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Sites</SelectItem>
+                  <SelectItem value="all">All stores</SelectItem>
                   {filteredSites.map((site) => (
                     <SelectItem key={site.id} value={site.id}>
                       {site.locationName}
@@ -364,7 +364,7 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
                       {metric.value}
                     </div>
                     <div className="flex items-center mt-2 sm:mt-3">
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-white/20 text-white text-sm">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-card/20 text-white text-sm">
                         {metric.trend === 'up' ? 
                           <ArrowUpRight className="h-4 w-4 sm:h-5 sm:w-5 mr-1.5" aria-hidden="true" /> : 
                           <ArrowDownRight className="h-4 w-4 sm:h-5 sm:w-5 mr-1.5" aria-hidden="true" />
@@ -418,7 +418,7 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
                   </div>
 
                   <div className="w-full sm:w-auto">
-                    <div className="bg-gray-100 rounded-lg p-1 flex text-sm">
+                    <div className="bg-muted rounded-lg p-1 flex text-sm">
                       {(["daily", "weekly", "monthly", "yearly"] as const).map((period) => (
                         <button
                           key={period}
@@ -426,8 +426,8 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
                           className={cn(
                             "flex-1 sm:flex-none px-3 py-1.5 rounded-md transition-colors capitalize",
                             period === activePeriod
-                              ? "bg-white shadow-sm text-emerald-600 font-medium"
-                              : "text-gray-600 hover:text-gray-900"
+                              ? "bg-card shadow-sm text-recovered font-medium"
+                              : "text-muted-foreground hover:text-foreground"
                           )}
                         >
                           {period}
@@ -460,13 +460,13 @@ const CustomerDashboard = ({ userRole }: CustomerDashboardProps) => {
                           tick={{ fontSize: 12 }}
                           tickLine={false}
                           axisLine={false}
-                          className="text-gray-500"
+                          className="text-muted-foreground"
                         />
                         <YAxis
                           tick={{ fontSize: 12 }}
                           tickLine={false}
                           axisLine={false}
-                          className="text-gray-500"
+                          className="text-muted-foreground"
                         />
                         <Tooltip
                           contentStyle={{

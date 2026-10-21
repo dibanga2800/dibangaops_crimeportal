@@ -289,7 +289,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
 						)}
 						<video ref={videoRef} className="h-full w-full object-contain" muted playsInline />
 						<div className="pointer-events-none absolute inset-4 rounded-lg border-2 border-white/25">
-							<div className="absolute inset-x-10 top-1/3 h-1/3 border-2 border-blue-500/60">
+							<div className="absolute inset-x-10 top-1/3 h-1/3 border-2 border-primary/60">
 								<div className="absolute inset-0 flex items-center justify-center">
 									<div className="h-0.5 w-3/4 animate-pulse bg-blue-400/50" />
 								</div>
@@ -298,7 +298,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
 					</div>
 
 					{error && (
-						<div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+						<div className="rounded-lg border border-loss/30 bg-loss-soft p-3 text-sm text-loss">
 							<p className="font-medium">Camera Issue</p>
 							<p className="whitespace-pre-line">{error}</p>
 							{error.includes('Camera access was denied') && (
@@ -319,7 +319,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
 					)}
 
 					{resolutionWarning && (
-						<div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+						<div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning-soft p-3 text-sm text-warning">
 							<AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
 							<div>
 								<p className="font-medium">Low Resolution Detected</p>
@@ -330,7 +330,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
 
 					{diagnostics && <p className="text-xs text-muted-foreground">{diagnostics}</p>}
 
-					<div className="text-sm text-gray-600">
+					<div className="text-sm text-muted-foreground">
 						<p className="font-medium">Tips for reliable scans:</p>
 						<ul className="list-disc space-y-1 pl-4">
 							<li>Fill at least half the frame width with the barcode</li>

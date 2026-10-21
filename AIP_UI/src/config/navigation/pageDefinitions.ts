@@ -135,7 +135,7 @@ export const PAGE_DEFINITIONS: PageDefinition[] = [
 	},
 	{
 		pageId: 'alert-rules',
-		title: 'Alert Rules',
+		title: 'Alert rules',
 		path: '/operations/alert-rules',
 		category: 'Main',
 		description: 'Configure alert rules for stores and LPM',
@@ -143,7 +143,7 @@ export const PAGE_DEFINITIONS: PageDefinition[] = [
 	},
 	{
 		pageId: 'data-analytics-hub',
-		title: 'Data Analytics Hub',
+		title: 'Analytics hub',
 		path: '/analytics/data-analytics-hub',
 		category: 'Main',
 		description: 'Analytics dashboard with crime trends, hot products, and resource deployment',
@@ -153,7 +153,7 @@ export const PAGE_DEFINITIONS: PageDefinition[] = [
 	// Administration
 	{
 		pageId: 'user-setup',
-		title: 'User Setup',
+		title: 'Users',
 		path: '/administration/user-setup',
 		category: 'Administration',
 		description: 'User management and setup',
@@ -161,7 +161,7 @@ export const PAGE_DEFINITIONS: PageDefinition[] = [
 	},
 	{
 		pageId: 'employee-registration',
-		title: 'Employee Registration',
+		title: 'Employees',
 		path: '/administration/employee-registration',
 		category: 'Administration',
 		description: 'Employee registration',
@@ -169,7 +169,7 @@ export const PAGE_DEFINITIONS: PageDefinition[] = [
 	},
 	{
 		pageId: 'customer-setup',
-		title: 'Company Setup',
+		title: 'Companies',
 		path: '/administration/customer-setup',
 		category: 'Administration',
 		description: 'Company management',
@@ -177,7 +177,7 @@ export const PAGE_DEFINITIONS: PageDefinition[] = [
 	},
 	{
 		pageId: 'barcode-catalog-import',
-		title: 'Barcode catalog import',
+		title: 'Barcode import',
 		path: '/administration/barcode-catalog-import',
 		category: 'Administration',
 		description:
@@ -186,7 +186,7 @@ export const PAGE_DEFINITIONS: PageDefinition[] = [
 	},
 	{
 		pageId: 'product-catalog',
-		title: 'Product catalog',
+		title: 'Product catalogue',
 		path: '/administration/product-catalog',
 		category: 'Administration',
 		description: 'Browse products by barcode and update retail prices',
@@ -196,7 +196,7 @@ export const PAGE_DEFINITIONS: PageDefinition[] = [
 	// Operations
 	{
 		pageId: 'incident-report',
-		title: 'Incident Report',
+		title: 'Incident reports',
 		path: '/operations/incident-report',
 		category: 'Operations',
 		description: 'Incident reporting',
@@ -204,7 +204,7 @@ export const PAGE_DEFINITIONS: PageDefinition[] = [
 	},
 	{
 		pageId: 'incident-graph',
-		title: 'Incident Graph',
+		title: 'Incident graph',
 		path: '/operations/incident-graph',
 		category: 'Operations',
 		description: 'Incident graphs',
@@ -212,7 +212,7 @@ export const PAGE_DEFINITIONS: PageDefinition[] = [
 	},
 	{
 		pageId: 'crime-intelligence',
-		title: 'Crime Intelligence',
+		title: 'Crime intelligence',
 		path: '/operations/crime-intelligence',
 		category: 'Operations',
 		description: 'Crime intelligence dashboard',

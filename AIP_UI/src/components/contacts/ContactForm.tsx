@@ -40,7 +40,7 @@ export function ContactForm({ onSubmit, initialData }: ContactFormProps) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="name">Full Name</Label>
+          <Label htmlFor="name">Full name</Label>
           <Input
             id="name"
             name="name"
@@ -114,7 +114,7 @@ export function ContactForm({ onSubmit, initialData }: ContactFormProps) {
         </div>
 
         <div className="space-y-2 col-span-2">
-          <Label>Services Required</Label>
+          <Label>Services required</Label>
           <ServiceSelector 
             selectedServices={selectedServices}
             onServiceToggle={handleServiceToggle}

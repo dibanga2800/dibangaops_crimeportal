@@ -39,10 +39,10 @@ export const IncidentClassificationBadge = ({ incidentId, compact = false }: Inc
 			: <CheckCircle className="h-3 w-3" />
 
 	const riskColor = classification?.riskLevel === 'high'
-		? 'bg-red-100 text-red-800 border-red-200'
+		? 'bg-loss-soft text-loss border-loss/30'
 		: classification?.riskLevel === 'medium'
-			? 'bg-amber-100 text-amber-800 border-amber-200'
-			: 'bg-emerald-100 text-emerald-800 border-emerald-200'
+			? 'bg-warning-soft text-warning border-warning/30'
+			: 'bg-recovered-soft text-recovered border-recovered/30'
 
 	if (compact) {
 		return (
@@ -79,7 +79,7 @@ export const IncidentClassificationBadge = ({ incidentId, compact = false }: Inc
 			<CardHeader className="p-3 pb-2">
 				<div className="flex items-center justify-between">
 					<CardTitle className="text-sm flex items-center gap-1.5">
-						<Brain className="h-4 w-4 text-violet-500" />
+						<Brain className="h-4 w-4 text-primary" />
 						AI Classification
 					</CardTitle>
 					{!classification && !loading && (
@@ -92,7 +92,7 @@ export const IncidentClassificationBadge = ({ incidentId, compact = false }: Inc
 			{loading && (
 				<CardContent className="p-3 pt-0">
 					<div className="flex items-center gap-2 text-sm text-muted-foreground">
-						<div className="animate-spin h-4 w-4 border-2 border-violet-500 border-t-transparent rounded-full" />
+						<div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
 						Analysing incident...
 					</div>
 				</CardContent>
@@ -127,7 +127,7 @@ export const IncidentClassificationBadge = ({ incidentId, compact = false }: Inc
 
 					<button
 						onClick={() => setExpanded(!expanded)}
-						className="flex items-center gap-1 text-xs text-violet-600 hover:text-violet-800"
+						className="flex items-center gap-1 text-xs text-primary hover:text-primary"
 					>
 						{expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
 						{expanded ? 'Hide' : 'Show'} suggested actions

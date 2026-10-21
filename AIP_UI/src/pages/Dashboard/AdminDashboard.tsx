@@ -1,5 +1,6 @@
 ﻿import React from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { formatMoney } from '@/lib/money'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -47,6 +48,13 @@ import { cn } from '@/lib/utils'
 import { usePageAccess } from "@/contexts/PageAccessContext"
 import { useCustomerSelection } from '@/contexts/CustomerSelectionContext'
 import { DashboardGreeting } from '@/components/dashboard/DashboardGreeting'
+import { WeekHourGrid } from '@/components/dashboard/WeekHourGrid'
+import { StoreLeaderboard } from '@/components/dashboard/StoreLeaderboard'
+import { StatLedger } from '@/components/common/StatLedger'
+import { FilterBar, FilterChip, DateRangeField } from '@/components/common/FilterBar'
+import { Segmented } from '@/components/common/Segmented'
+import { EmptyState } from '@/components/common/EmptyState'
+import { useChartTheme, chartTooltipStyle, axisTick } from '@/lib/chart-theme'
 import { analyticsService } from '@/services/analyticsService'
 import { customerDashboardService } from '@/services/dashboardService'
 import { incidentsApi } from '@/services/api/incidents'
@@ -73,26 +81,6 @@ import {
 	NOTIFICATIONS_DISMISSED_EVENT,
 } from '@/lib/notifications/dismissed-notifications'
 
-const gbpFormatter = new Intl.NumberFormat('en-GB', {
-	style: 'currency',
-	currency: 'GBP',
-	maximumFractionDigits: 0,
-})
-
-const gbpCompactFormatter = new Intl.NumberFormat('en-GB', {
-	style: 'currency',
-	currency: 'GBP',
-	notation: 'compact',
-	maximumFractionDigits: 1,
-})
-
-/** Formats GBP for dashboard stat cards (e.g. £42, £1.2K). */
-const formatCurrency = (value: number): string => {
-	if (value >= 1_000) {
-		return gbpCompactFormatter.format(value)
-	}
-	return gbpFormatter.format(value)
-}
 
 const getIncidentFinancials = (incident: any) => {
   const stolenItems = Array.isArray(incident?.StolenItems)
@@ -158,6 +146,8 @@ interface AdminDashboardProps {
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrator' }) => {
+  const navigate = useNavigate();
+  const chartTheme = useChartTheme();
   const { currentRole, isTestMode, testRole, isLoading } = usePageAccess();
   const effectiveRole = isTestMode && testRole ? testRole : currentRole;
   const sessionUser = React.useMemo(() => sessionStore.getUser(), [])
@@ -929,7 +919,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
 
   // Log region selection and filtered data for debugging
   React.useEffect(() => {
-    const selectedRegionName = selectedRegion === 'all' ? 'All Regions' : regions.find(r => r.id === selectedRegion)?.name || selectedRegion;
+    const selectedRegionName = selectedRegion === 'all' ? 'All regions' : regions.find(r => r.id === selectedRegion)?.name || selectedRegion;
     
     console.log('ðŸ—ºï¸ Selected region:', selectedRegionName, `(ID: ${selectedRegion})`);
     console.log('ðŸ“Š Total loaded incidents:', loadedIncidents.length);
@@ -1125,6 +1115,105 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
   // Get x-axis key based on active period
   const dataKey = activePeriod === 'Daily' ? 'date' : activePeriod === 'Weekly' ? 'week' : activePeriod === 'Monthly' ? 'month' : 'year'
 
+  // Weekly series (last 8 weeks) behind the ledger sparklines, plus the change
+  // of the last 4 weeks against the 4 before. Derived from the same filtered
+  // incidents the rest of the page uses, so the lines always agree with the table.
+  const ledgerTrends = React.useMemo(() => {
+    const WEEKS = 8
+    const weekMs = 7 * 24 * 60 * 60 * 1000
+    const end = Date.now()
+    const buckets = Array.from({ length: WEEKS }, () => ({ count: 0, lost: 0, recovered: 0, shoplifting: 0 }))
+    filteredIncidents.forEach((incident) => {
+      const t = new Date(incident.dateOfIncident || (incident as any).date || '').getTime()
+      if (!Number.isFinite(t)) return
+      const age = Math.floor((end - t) / weekMs)
+      if (age < 0 || age >= WEEKS) return
+      const b = buckets[WEEKS - 1 - age]
+      const f = getIncidentFinancials(incident)
+      b.count += 1
+      b.lost += f.totalLostValue
+      b.recovered += f.totalRecoveredValue
+      if (isIncidentTypeShoplifting(incident)) b.shoplifting += 1
+    })
+    const pick = (key: 'count' | 'lost' | 'recovered' | 'shoplifting') => buckets.map((b) => b[key])
+    const change = (series: number[]) => {
+      const recent = series.slice(-4).reduce((a, v) => a + v, 0)
+      const prior = series.slice(0, 4).reduce((a, v) => a + v, 0)
+      if (prior === 0) return undefined
+      return ((recent - prior) / prior) * 100
+    }
+    const series = { count: pick('count'), lost: pick('lost'), recovered: pick('recovered'), shoplifting: pick('shoplifting') }
+    const hasHistory = series.count.some((v) => v > 0)
+    return {
+      hasHistory,
+      series,
+      change: {
+        count: change(series.count),
+        lost: change(series.lost),
+        recovered: change(series.recovered),
+        shoplifting: change(series.shoplifting),
+      },
+    }
+  }, [filteredIncidents])
+
+
+  // When incidents happen (day × time) and per-store league table, both from the incidents in view.
+  const incidentTimes = React.useMemo(
+    () =>
+      filteredIncidents
+        .map((incident) => {
+          const raw = incident.dateOfIncident || (incident as any).date
+          if (!raw) return null
+          const d = new Date(raw)
+          const time = (incident as any).timeOfIncident as string | undefined
+          if (time && /^\d{1,2}:\d{2}/.test(time)) {
+            const [h, m] = time.split(':').map(Number)
+            d.setHours(h, m)
+          }
+          return d
+        })
+        .filter((d): d is Date => d instanceof Date && !Number.isNaN(d.getTime())),
+    [filteredIncidents],
+  )
+
+  const storeRows = React.useMemo(() => {
+    const WEEKS = 8
+    const weekMs = 7 * 24 * 60 * 60 * 1000
+    const now = Date.now()
+    const byStore = new Map<string, { store: string; incidents: number; lost: number; recovered: number; trend: number[] }>()
+    filteredIncidents.forEach((incident) => {
+      const store = incident.siteName || (incident as any).storeName || 'Unknown store'
+      const row = byStore.get(store) ?? { store, incidents: 0, lost: 0, recovered: 0, trend: Array(WEEKS).fill(0) }
+      const f = getIncidentFinancials(incident)
+      row.incidents += 1
+      row.lost += f.totalLostValue
+      row.recovered += f.totalRecoveredValue
+      const t = new Date(incident.dateOfIncident || (incident as any).date || '').getTime()
+      const age = Math.floor((now - t) / weekMs)
+      if (Number.isFinite(age) && age >= 0 && age < WEEKS) row.trend[WEEKS - 1 - age] += 1
+      byStore.set(store, row)
+    })
+    return [...byStore.values()].sort((a, b) => b.incidents - a.incidents || b.lost - a.lost).slice(0, 8)
+  }, [filteredIncidents])
+
+  // One-sentence briefing under the greeting: the change that matters most right now.
+  const briefing = React.useMemo(() => {
+    const lostChange = ledgerTrends.change.lost
+    const recent4Lost = ledgerTrends.series.lost.slice(-4).reduce((a, v) => a + v, 0)
+    const topStore = storeRows[0]
+    const parts: string[] = []
+    if (ledgerTrends.hasHistory && recent4Lost > 0) {
+      const direction =
+        lostChange === undefined ? '' : Math.abs(lostChange) < 5 ? ', about the same as the 4 weeks before' : lostChange > 0 ? `, up ${Math.round(lostChange)}% on the 4 weeks before` : `, down ${Math.abs(Math.round(lostChange))}% on the 4 weeks before`
+      parts.push(`${formatMoney(recent4Lost, 'headline')} lost in the last 4 weeks${direction}.`)
+    }
+    if (topStore && storeRows.length > 1) {
+      const share = Math.round((topStore.incidents / Math.max(1, filteredIncidents.length)) * 100)
+      parts.push(`${topStore.store} accounts for ${share}% of incidents.`)
+    }
+    return parts.join(' ')
+  }, [ledgerTrends, storeRows, filteredIncidents.length])
+
   // Define background colors for each stat card based on type
   const getStatCardColor = (color: string) => {
     switch(color) {
@@ -1139,564 +1228,445 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ viewRole = 'administrat
   // Show loading state while page access data is being loaded
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="space-y-4 text-center">
-          <div className="text-lg font-medium">Loading Dashboard...</div>
-          <div className="text-sm text-gray-500">Please wait</div>
-        </div>
+      <div className="flex min-h-[50vh] items-center justify-center" role="status">
+        <p className="text-sm text-muted-foreground">Loading dashboard…</p>
       </div>
     );
   }
 
+  const filtersActive = isDateRangeActive || selectedRegion !== 'all'
+  const selectedRegionName = regions.find(r => r.id === selectedRegion)?.name
+  const periodLabel =
+    activePeriod === 'Daily' ? 'Last 7 days' :
+    activePeriod === 'Weekly' ? 'Last 4 weeks' :
+    activePeriod === 'Monthly' ? 'Last 12 months' : 'Last 5 years'
+  const hasChartData = chartData.length > 0 && !chartData.every(d => (d.recoveredValue || 0) + (d.lostValue || 0) === 0)
+  const maxHeat = Math.max(1, ...heatmapData.map(d => d.incidents))
+  const newAlertCount = scopedNewAlertCount || alerts.filter(a => a.priority === 'high').length
+  const riskTone = (level: string) =>
+    level === 'high' ? 'bg-loss' : level === 'medium' ? 'bg-warning' : 'bg-recovered'
+  const riskBadge = (level: string) =>
+    level === 'high' ? 'destructive' as const : level === 'medium' ? 'warning' as const : 'success' as const
+  // Scores arrive as 0–1 from the classifier; tolerate 0–100 too.
+  const riskWidth = (score: number) => {
+    const pct = score <= 1 ? score * 100 : score
+    return `${Math.max(2, Math.min(100, Math.round(pct)))}%`
+  }
+
   // Unified dashboard UI (admin/manager/store/security-officer)
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-          <DashboardGreeting />
-          {showIncidentReportCta && (
-            <Button asChild className="h-9 text-xs sm:text-sm bg-blue-600 hover:bg-blue-700 self-start sm:self-auto">
-              <Link to="/operations/incident-report?open=new">
-                <Plus className="h-4 w-4 mr-1" />
-                Incident Report
-              </Link>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <DashboardGreeting showLastLogin={false} subtitle={briefing || undefined} />
+        {showIncidentReportCta && (
+          <Button asChild className="self-start sm:self-auto">
+            <Link to="/operations/incident-report?open=new">
+              <Plus className="h-4 w-4" />
+              New incident report
+            </Link>
+          </Button>
+        )}
+      </div>
+
+      {incidentsLoading && (
+        <div className="flex items-center gap-3 rounded-lg border border-info/20 bg-info-soft px-4 py-3" role="status">
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-info/30 border-t-info" aria-hidden />
+          <p className="text-sm text-info">Loading incident data…</p>
+        </div>
+      )}
+      {isScopedRole && !hasAssignedSites && (
+        <div className="rounded-lg border border-warning/25 bg-warning-soft px-4 py-3">
+          <p className="text-sm text-warning">
+            No stores are assigned to this account yet. Metrics and recent incidents appear once an administrator assigns a store.
+          </p>
+        </div>
+      )}
+
+      {/* Scope and filters */}
+      <FilterBar
+        label="Dashboard filters"
+        actions={
+          <>
+            <Button
+              variant="ghost"
+              onClick={handleClearDateRange}
+              disabled={!isDateRangeActive && !fromDateInput && !toDateInput}
+              className="flex-1 sm:flex-none"
+            >
+              Clear
             </Button>
-          )}
-        </div>
-        
-        
-        {/* Loading State */}
-        {incidentsLoading && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center gap-3">
-            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-            <p className="text-sm text-blue-800">Loading incident data...</p>
-          </div>
-        )}
-        {isScopedRole && !hasAssignedSites && (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-            <p className="text-sm text-amber-800">
-              No stores are assigned to this account yet. Dashboard metrics and recent incidents are hidden until store assignments are added.
-            </p>
-          </div>
-        )}
-        
-        {/* Region Selection */}
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-2 md:gap-4">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Dashboard Overview</h2>
-            <Badge variant="secondary" className="text-xs">
-              {viewBadgeLabel}
-            </Badge>
-            {isScopedRole && (
-              <Badge variant="outline" className="text-xs">
-                {scopedStoreLabel || 'Assigned store'}
-              </Badge>
-            )}
-            {selectedRegion !== 'all' && (
-              <Badge variant="default" className="text-xs bg-blue-600">
-                <MapPin className="h-3 w-3 mr-1" />
-                {regions.find(r => r.id === selectedRegion)?.name || 'Region Filter Active'}
-              </Badge>
-            )}
-          </div>
-          
-          <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-            <Select value={selectedRegion} onValueChange={setSelectedRegion} disabled={isScopedRole}>
-              <SelectTrigger className="w-full text-sm md:w-[200px]">
-                <SelectValue placeholder="Select region" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Regions</SelectItem>
-                {regions.map((region) => (
-                  <SelectItem key={region.id} value={region.id}>
-                    {region.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <div className="flex flex-col gap-2 w-full md:w-auto">
-              <div className="flex flex-col sm:flex-row gap-2 w-full">
-                <Input
-                  type="date"
-                  value={fromDateInput}
-                  onChange={(event) => {
-                    const nextFrom = event.target.value
-                    setFromDateInput(nextFrom)
-                    if (nextFrom && toDateInput && new Date(nextFrom) > new Date(toDateInput)) {
-                      setDateRangeError('Start date must be before end date.')
-                      return
-                    }
-                    setDateRangeError(null)
-                    setFromDate(nextFrom)
-                    setToDate(toDateInput)
-                  }}
-                  className="w-full text-sm"
-                  aria-label="Filter incidents from date"
-                />
-                <Input
-                  type="date"
-                  value={toDateInput}
-                  onChange={(event) => {
-                    const nextTo = event.target.value
-                    setToDateInput(nextTo)
-                    if (fromDateInput && nextTo && new Date(fromDateInput) > new Date(nextTo)) {
-                      setDateRangeError('Start date must be before end date.')
-                      return
-                    }
-                    setDateRangeError(null)
-                    setFromDate(fromDateInput)
-                    setToDate(nextTo)
-                  }}
-                  className="w-full text-sm"
-                  aria-label="Filter incidents to date"
-                />
+          </>
+        }
+        summary={
+          <>
+            <span className="mr-0.5">Showing</span>
+            <FilterChip>{viewBadgeLabel}</FilterChip>
+            {isScopedRole && <FilterChip>{scopedStoreLabel || 'Assigned store'}</FilterChip>}
+            <FilterChip
+              onRemove={selectedRegion !== 'all' && !isScopedRole ? () => setSelectedRegion('all') : undefined}
+              removeLabel="Show all regions"
+            >
+              {selectedRegion !== 'all' ? (selectedRegionName || 'Region filter') : 'All regions'}
+            </FilterChip>
+            <FilterChip onRemove={isDateRangeActive ? handleClearDateRange : undefined} removeLabel="Clear dates">
+              {isDateRangeActive
+                ? `${fromDate ? format(new Date(fromDate), 'd MMM yyyy') : 'Start'} to ${toDate ? format(new Date(toDate), 'd MMM yyyy') : 'today'}`
+                : 'All dates'}
+            </FilterChip>
+          </>
+        }
+      >
+        <Select value={selectedRegion} onValueChange={setSelectedRegion} disabled={isScopedRole}>
+          <SelectTrigger className="w-full sm:w-[190px]" aria-label="Region">
+            <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <SelectValue placeholder="Select region" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All regions</SelectItem>
+            {regions.map((region) => (
+              <SelectItem key={region.id} value={region.id}>
+                {region.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <DateRangeField
+          from={fromDateInput}
+          to={toDateInput}
+          fromLabel="Filter incidents from date"
+          toLabel="Filter incidents to date"
+          onFromChange={(nextFrom) => {
+            setDateRangeError(null)
+            setFromDateInput(nextFrom)
+            setFromDate(nextFrom)
+          }}
+          onToChange={(nextTo) => {
+            setDateRangeError(null)
+            setToDateInput(nextTo)
+            setToDate(nextTo)
+          }}
+        />
+      </FilterBar>
+      {dateRangeError && (
+        <p className="-mt-3 text-xs text-loss" role="alert">{dateRangeError}</p>
+      )}
+
+      {/* Headline figures */}
+      <StatLedger
+        loading={incidentsLoading}
+        items={[
+          {
+            label: 'Incidents',
+            value: quickStats.totalIncidents.toLocaleString('en-GB'),
+            hint: filtersActive ? 'Within selected filters' : 'All time',
+            tone: 'neutral',
+            trend: ledgerTrends.hasHistory ? ledgerTrends.series.count : undefined,
+            delta: ledgerTrends.change.count !== undefined ? { value: ledgerTrends.change.count, goodWhenUp: false, against: 'previous 4 weeks' } : undefined,
+            onClick: () => navigate('/operations/incident-report'),
+            ariaLabel: 'View all incidents',
+          },
+          {
+            label: 'Value lost',
+            value: formatMoney(quickStats.totalLostValue || 0, 'headline'),
+            hint: filtersActive ? 'Within selected filters' : 'All time',
+            tone: 'loss',
+            trend: ledgerTrends.hasHistory ? ledgerTrends.series.lost : undefined,
+            delta: ledgerTrends.change.lost !== undefined ? { value: ledgerTrends.change.lost, goodWhenUp: false, against: 'previous 4 weeks' } : undefined,
+            onClick: () => navigate('/operations/incident-report'),
+            ariaLabel: 'View incidents by value lost',
+          },
+          {
+            label: 'Value recovered',
+            value: formatMoney(quickStats.totalValue, 'headline'),
+            hint: 'Returned to stock or paid for',
+            tone: 'recovered',
+            trend: ledgerTrends.hasHistory ? ledgerTrends.series.recovered : undefined,
+            delta: ledgerTrends.change.recovered !== undefined ? { value: ledgerTrends.change.recovered, goodWhenUp: true, against: 'previous 4 weeks' } : undefined,
+            onClick: () => navigate('/operations/incident-report'),
+            ariaLabel: 'View incidents by value recovered',
+          },
+          {
+            label: 'Shoplifting',
+            value: quickStats.shopliftingIncidents.toLocaleString('en-GB'),
+            hint: `${quickStats.shopliftingPercentage}% of incidents in view`,
+            tone: 'warning',
+            trend: ledgerTrends.hasHistory ? ledgerTrends.series.shoplifting : undefined,
+            onClick: () => navigate('/operations/incident-report?incidentType=Shoplifting'),
+            ariaLabel: 'View shoplifting incidents',
+          },
+        ]}
+      />
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+        <div className="min-w-0 xl:col-span-8">
+          {/* Loss vs recovery over time */}
+          <Card>
+            <CardHeader className="flex flex-col gap-3 space-y-0 pb-2 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-0.5">
+                <CardTitle>Loss and recovery</CardTitle>
+                <p className="text-[13px] text-muted-foreground">
+                  {periodLabel}
+                  {selectedRegion !== 'all' && `, ${selectedRegionName || 'selected region'}`}
+                </p>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleApplyDateRange}
-                  className="h-9 text-xs sm:text-sm"
-                >
-                  Apply Dates
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleClearDateRange}
-                  className="h-9 text-xs sm:text-sm"
-                  disabled={!isDateRangeActive && !fromDateInput && !toDateInput}
-                >
-                  Clear Dates
-                </Button>
-              </div>
-              {dateRangeError && (
-                <p className="text-xs text-red-600">{dateRangeError}</p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Quick Statistics */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-          {/* Total Incidents */}
-          <Link to="/operations/incident-report" className="block" aria-label="View all incidents">
-            <Card className="min-w-[140px] bg-blue-600 text-white border-0 shadow-md overflow-hidden relative cursor-pointer transition-shadow hover:shadow-lg">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 md:p-4 pb-2 md:pb-3">
-                <CardTitle className="text-xs font-medium md:text-sm text-white">
-                  Total Incidents
-                </CardTitle>
-                <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
-                  <AlertCircle className="h-4 w-4 text-white" />
-                </div>
-              </CardHeader>
-              <CardContent className="p-3 md:p-4 pt-1 md:pt-2 z-10 relative">
-                <div className="text-xl font-bold md:text-2xl lg:text-3xl text-white">{quickStats.totalIncidents}</div>
-                <div className="text-xs text-white/60 mt-1">
-                  {isDateRangeActive || selectedRegion !== 'all'
-                    ? 'Within selected filters'
-                    : 'All time'}
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
-
-          {/* Lost Value */}
-          <Link to="/operations/incident-report" className="block" aria-label="View incidents by lost value">
-            <Card className="min-w-[140px] bg-rose-700 text-white border-0 shadow-md overflow-hidden relative cursor-pointer transition-shadow hover:shadow-lg">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 md:p-4 pb-2 md:pb-3">
-                <CardTitle className="text-xs font-medium md:text-sm text-white">
-                  Lost Value
-                </CardTitle>
-                <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
-                  <AlertCircle className="h-4 w-4 text-white" />
-                </div>
-              </CardHeader>
-              <CardContent className="p-3 md:p-4 pt-1 md:pt-2 z-10 relative">
-                <div className="text-xl font-bold md:text-2xl lg:text-3xl text-white">
-                  {formatCurrency(quickStats.totalLostValue || 0)}
-                </div>
-                <div className="text-xs text-white/60 mt-1">
-                  {isDateRangeActive || selectedRegion !== 'all' ? 'Within selected filters' : 'All time'}
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
-
-          {/* Total Value Recovered */}
-          <Link to="/operations/incident-report" className="block" aria-label="View incidents by value recovered">
-            <Card className="min-w-[140px] bg-emerald-600 text-white border-0 shadow-md overflow-hidden relative cursor-pointer transition-shadow hover:shadow-lg">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 md:p-4 pb-2 md:pb-3">
-                <CardTitle className="text-xs font-medium md:text-sm text-white">
-                  Value Recovered
-                </CardTitle>
-                <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
-                  <Currency className="h-4 w-4 text-white" />
-                </div>
-              </CardHeader>
-              <CardContent className="p-3 md:p-4 pt-1 md:pt-2 z-10 relative">
-                <div className="text-xl font-bold md:text-2xl lg:text-3xl text-white">
-                  {formatCurrency(quickStats.totalValue)}
-                </div>
-                <div className="text-xs text-white/60 mt-1">Total recovered</div>
-              </CardContent>
-            </Card>
-          </Link>
-
-          {/* Shoplifting incidents */}
-          <Link
-            to="/operations/incident-report?incidentType=Shoplifting"
-            className="block"
-            aria-label="View shoplifting incidents"
-          >
-            <Card className="min-w-[140px] bg-indigo-600 text-white border-0 shadow-md overflow-hidden relative cursor-pointer transition-shadow hover:shadow-lg">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 md:p-4 pb-2 md:pb-3">
-                <CardTitle className="text-xs font-medium md:text-sm text-white">
-                  Shoplifting
-                </CardTitle>
-                <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
-                  <Shield className="h-4 w-4 text-white" />
-                </div>
-              </CardHeader>
-              <CardContent className="p-3 md:p-4 pt-1 md:pt-2 z-10 relative">
-                <div className="text-xl font-bold md:text-2xl lg:text-3xl text-white">{quickStats.shopliftingIncidents}</div>
-                <div className="text-xs text-white/60 mt-1">
-                  {quickStats.shopliftingPercentage}% of incidents in view
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
-        </div>
-
-        {/* Main Content Grid */}
-        <div className="grid gap-4 grid-cols-1 lg:grid-cols-7">
-          {/* Tasks and Incidents Section */}
-          <div className="lg:col-span-5 space-y-4">
-            {/* Incident Reports Chart with time period filters */}
-            <Card>
-              <CardHeader className="p-2 md:p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-2 sm:space-y-0">
-                <div className="flex flex-col gap-1">
-                  <CardTitle className="text-base font-medium md:text-lg lg:text-xl">Incident Reports</CardTitle>
-                  <p className="text-xs text-muted-foreground">
-                    {activePeriod === 'Daily' ? 'Last 7 days' : 
-                     activePeriod === 'Weekly' ? 'Last 4 weeks' : 
-                     activePeriod === 'Monthly' ? 'Last 12 months' : 
-                     'Last 5 years'}
-                    {selectedRegion !== 'all' && ` • ${regions.find(r => r.id === selectedRegion)?.name || 'Region Filter'}`}
-                  </p>
-                </div>
-                <div className="flex items-center space-x-1">
-                  <div className="bg-gray-100 rounded-lg p-0.5 flex text-xs md:text-sm">
-                    {["Daily", "Weekly", "Monthly", "Yearly"].map((period, index) => (
-                      <button
-                        key={period}
-                        className={`px-3 py-1 rounded-md transition-colors ${
-                          period === activePeriod 
-                            ? "bg-white shadow-sm text-emerald-500 font-medium" 
-                            : "text-gray-500 hover:text-gray-700"
-                        }`}
-                        onClick={() => setActivePeriod(period as 'Daily' | 'Weekly' | 'Monthly' | 'Yearly')}
-                      >
-                        {period}
-                      </button>
-                    ))}
+              <Segmented
+                ariaLabel="Chart period"
+                value={activePeriod}
+                options={['Daily', 'Weekly', 'Monthly', 'Yearly'] as const}
+                onChange={(period) => setActivePeriod(period)}
+                size="sm"
+              />
+            </CardHeader>
+            <CardContent>
+              {!hasChartData && !incidentsLoading ? (
+                <EmptyState
+                  className="h-[280px]"
+                  icon={<AlertCircle />}
+                  title="No incidents in this period"
+                  description={
+                    selectedRegion === 'all'
+                      ? `Nothing was recorded for the ${periodLabel.toLowerCase()}. Try a longer period.`
+                      : `Nothing was recorded for ${selectedRegionName || 'this region'} in the ${periodLabel.toLowerCase()}.`
+                  }
+                  action={selectedRegion !== 'all' ? (
+                    <Button variant="outline" size="sm" onClick={() => setSelectedRegion('all')}>
+                      Show all regions
+                    </Button>
+                  ) : undefined}
+                />
+              ) : (
+                <>
+                  <div className="mb-3 flex items-center gap-4 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-0.5 w-4 rounded-full bg-loss" aria-hidden />
+                      Lost
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-0.5 w-4 rounded-full bg-recovered" aria-hidden />
+                      Recovered
+                    </span>
                   </div>
-                </div>
-              </CardHeader>
-              <CardContent className="h-[200px] md:h-[280px] lg:h-[320px] p-2 md:p-4">
-                {(chartData.length === 0 || chartData.every(d => (d.recoveredValue || 0) + (d.lostValue || 0) === 0)) && !incidentsLoading ? (
-                  <div className="flex items-center justify-center h-full">
-                    <div className="text-center space-y-2">
-                      <AlertCircle className="h-12 w-12 text-gray-400 mx-auto" />
-                      <p className="text-sm font-medium text-gray-600">No incidents found</p>
-                      <p className="text-xs text-gray-500">
-                        {selectedRegion === 'all' 
-                          ? `No incident data available for the selected time period (${activePeriod})` 
-                          : `No incidents found for ${regions.find(r => r.id === selectedRegion)?.name || 'this region'} in the selected time period`}
-                      </p>
-                      {selectedRegion !== 'all' && (
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={() => setSelectedRegion('all')}
-                          className="mt-2"
-                        >
-                          View All Regions
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex items-center justify-end mb-2 space-x-4">
-                      <div className="flex items-center">
-                        <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block mr-1"></span>
-                        <span className="text-xs text-gray-500">Recovered Value</span>
-                      </div>
-                      <div className="flex items-center">
-                        <span className="w-3 h-3 rounded-full bg-rose-500 inline-block mr-1"></span>
-                        <span className="text-xs text-gray-500">Lost Value</span>
-                      </div>
-                    </div>
+                  <div className="h-[240px] sm:h-[280px]">
                     <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart 
-                    data={chartData} 
-                    margin={{ top: 5, right: 5, left: -15, bottom: 5 }}
-                  >
-                    <defs>
-                      <linearGradient id="colorRecoveredValue" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                      </linearGradient>
-                      <linearGradient id="colorLostValue" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
-                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis 
-                      dataKey={dataKey} 
-                      tick={{ fontSize: 10, fill: '#6B7280' }} 
-                      axisLine={{ stroke: '#E5E7EB' }}
-                      tickLine={false}
-                    />
-                    <YAxis 
-                      tick={{ fontSize: 10, fill: '#6B7280' }}
-                      axisLine={false}
-                      tickLine={false}
-                      tickFormatter={(value) => formatCurrency(Number(value))}
-                    />
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: 'white', 
-                        borderRadius: '0.5rem', 
-                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', 
-                        border: 'none', 
-                        fontSize: '0.75rem' 
-                      }}
-                      itemStyle={{ padding: '2px 0' }}
-                      formatter={(value) => [formatCurrency(Number(value)), '']}
-                      labelFormatter={(label) => `${label}`}
-                    />
-                    <Area
-                      type="monotone"
-                      name="Recovered Value"
-                      dataKey="recoveredValue"
-                      stroke="#10b981"
-                      fillOpacity={1}
-                      fill="url(#colorRecoveredValue)"
-                      activeDot={{ r: 6, stroke: '#10b981', strokeWidth: 2, fill: 'white' }}
-                      strokeWidth={2}
-                    />
-                    <Area
-                      type="monotone"
-                      name="Lost Value"
-                      dataKey="lostValue"
-                      stroke="#ef4444"
-                      fillOpacity={1}
-                      fill="url(#colorLostValue)"
-                      activeDot={{ r: 6, stroke: '#ef4444', strokeWidth: 2, fill: 'white' }}
-                      strokeWidth={2}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Recent Incidents */}
-            <Card>
-              <CardHeader className="p-2 md:p-4 flex flex-row items-center justify-between">
-                <CardTitle className="text-base font-medium md:text-lg lg:text-xl">Recent Incidents</CardTitle>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  asChild 
-                  className="text-xs h-8 px-2"
-                >
-                  <Link to="/operations/incident-report">
-                    <ChevronRight className="h-3.5 w-3.5 mr-1" />
-                    View All
-                  </Link>
-                </Button>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="px-2 pb-4 md:px-4 overflow-visible">
-                  <IncidentTable data={recentIncidents} />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Sidebar Content */}
-          <div className="lg:col-span-2 space-y-4">
-            {/* AI Risk Indicators */}
-            {aiAnalytics && aiAnalytics.riskIndicators.length > 0 && (
-              <Card>
-                <CardHeader className="p-2 md:p-4">
-                  <CardTitle className="text-base font-medium md:text-lg lg:text-xl flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4" />
-                    AI Risk Indicators
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="divide-y">
-                    {aiAnalytics.riskIndicators.map((indicator, idx) => (
-                      <div key={idx} className="p-3">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-medium">{indicator.indicator}</span>
-                          <Badge
-                            variant={indicator.level === 'high' ? 'destructive' : indicator.level === 'medium' ? 'secondary' : 'default'}
-                            className="text-xs"
-                          >
-                            {indicator.level}
-                          </Badge>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-1.5 mb-1">
-                          <div
-                            className={cn(
-                              'h-1.5 rounded-full transition-all',
-                              indicator.level === 'high' ? 'bg-red-500' : indicator.level === 'medium' ? 'bg-amber-500' : 'bg-emerald-500'
-                            )}
-                            style={{ width: `${Math.round(indicator.score * 100)}%` }}
-                          />
-                        </div>
-                        {indicator.description && (
-                          <p className="text-xs text-muted-foreground">{indicator.description}</p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Alerts */}
-            <Card>
-              <CardHeader className="p-2 md:p-4 flex flex-row items-center justify-between gap-2 flex-wrap">
-                <CardTitle className="text-base font-medium md:text-lg lg:text-xl flex items-center gap-2">
-                  <Bell className="h-4 w-4" />
-                  Alerts
-                </CardTitle>
-                <div className="flex items-center gap-2 shrink-0">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="text-xs h-8"
-                    onClick={handleClearDashboardNotifications}
-                    aria-label="Clear notifications from dashboard and bell"
-                  >
-                    Clear notifications
-                  </Button>
-                  {alerts.length > 0 && (
-                  <Badge variant="destructive" className="text-xs">
-                    {scopedNewAlertCount || alerts.filter(a => a.priority === 'high').length} New
-                  </Badge>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="divide-y">
-                  {alerts.length === 0 ? (
-                    <div className="p-6 text-center text-sm text-muted-foreground" role="status">
-                      No alerts to display
-                    </div>
-                  ) : (
-                  alerts.map((alert) => (
-                    <div 
-                      key={alert.id} 
-                      className={`p-3 hover:bg-muted/50 transition-colors ${
-                        alert.priority === 'high' ? 'bg-red-50/50 dark:bg-red-950/20' : ''
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className={`flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full ${
-                          alert.type === 'error' ? 'bg-red-500' :
-                          alert.type === 'warning' ? 'bg-amber-500' :
-                          'bg-blue-500'
-                        } text-white`}>
-                          <AlertCircle className="h-4 w-4" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-start mb-1">
-                            <p className="text-sm font-medium text-foreground">{alert.title}</p>
-                            <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">{alert.time}</span>
-                          </div>
-                          <p className="text-xs text-muted-foreground">{alert.message}</p>
-                          {alert.priority === 'high' && (
-                            <Badge variant="destructive" className="mt-2 text-xs">High Priority</Badge>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Heatmap Preview */}
-            <Card className="overflow-hidden">
-              <CardHeader className="p-2 md:p-4 flex flex-row items-center justify-between">
-                <CardTitle className="text-base font-medium md:text-lg lg:text-xl flex items-center gap-2">
-                  <MapPin className="h-4 w-4" />
-                  Heatmap Preview
-                </CardTitle>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  asChild 
-                  className="text-xs h-8 px-2"
-                >
-                  <Link to="/analytics/data-analytics-hub">
-                    <ChevronRight className="h-3.5 w-3.5 mr-1" />
-                    View Full
-                  </Link>
-                </Button>
-              </CardHeader>
-              <CardContent className="p-2 md:p-4">
-                <div className="space-y-3">
-                  <div className="text-xs text-muted-foreground mb-2">
-                    Incident frequency by store (last 30 days)
-                  </div>
-                  <div className="h-[200px] overflow-auto">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={heatmapData} layout="vertical" margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis type="number" tick={{ fontSize: 10 }} />
-                        <YAxis 
-                          dataKey="store" 
-                          type="category" 
-                          width={120} 
-                          tick={{ fontSize: 9 }} 
-                          interval={0}
+                      <AreaChart data={chartData} margin={{ top: 6, right: 8, left: -8, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="dashLost" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={chartTheme.loss} stopOpacity={0.18} />
+                            <stop offset="100%" stopColor={chartTheme.loss} stopOpacity={0} />
+                          </linearGradient>
+                          <linearGradient id="dashRecovered" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={chartTheme.recovered} stopOpacity={0.18} />
+                            <stop offset="100%" stopColor={chartTheme.recovered} stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid vertical={false} stroke={chartTheme.grid} strokeDasharray="0" />
+                        <XAxis dataKey={dataKey} tick={axisTick(chartTheme)} axisLine={{ stroke: chartTheme.grid }} tickLine={false} />
+                        <YAxis
+                          tick={axisTick(chartTheme)}
+                          axisLine={false}
+                          tickLine={false}
+                          width={56}
+                          tickFormatter={(value) => formatMoney(Number(value), 'axis')}
                         />
-                        <Tooltip 
-                          formatter={(value: number) => [`${value} incidents`, '']}
-                          contentStyle={{ 
-                            backgroundColor: 'white', 
-                            borderRadius: '0.5rem', 
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', 
-                            border: 'none', 
-                            fontSize: '0.75rem' 
-                          }}
+                        <Tooltip
+                          {...chartTooltipStyle(chartTheme)}
+                          formatter={(value, name) => [formatMoney(Number(value), 'exact'), name]}
                         />
-                        <Bar dataKey="incidents" fill="#3b82f6" radius={[0, 4, 4, 0]} />
-                      </BarChart>
+                        <Area
+                          type="monotone"
+                          name="Lost"
+                          dataKey="lostValue"
+                          stroke={chartTheme.loss}
+                          fill="url(#dashLost)"
+                          strokeWidth={2}
+                          activeDot={{ r: 4, strokeWidth: 2, stroke: chartTheme.card, fill: chartTheme.loss }}
+                        />
+                        <Area
+                          type="monotone"
+                          name="Recovered"
+                          dataKey="recoveredValue"
+                          stroke={chartTheme.recovered}
+                          fill="url(#dashRecovered)"
+                          strokeWidth={2}
+                          activeDot={{ r: 4, strokeWidth: 2, stroke: chartTheme.card, fill: chartTheme.recovered }}
+                        />
+                      </AreaChart>
                     </ResponsiveContainer>
                   </div>
-                  <div className="text-xs text-muted-foreground text-center pt-2 border-t">
-                    Showing top 6 stores. View full heatmap for complete analysis.
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                </>
+              )}
+            </CardContent>
+          </Card>
 
-          </div>
         </div>
+        <aside className="flex min-w-0 flex-col xl:col-span-4" aria-label="Needs attention">
+          {/* Alerts */}
+          <Card className="flex flex-1 flex-col">
+            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-3">
+              <CardTitle className="flex items-center gap-2">
+                <Bell className="h-4 w-4 text-muted-foreground" />
+                Needs attention
+                {alerts.length > 0 && newAlertCount > 0 && (
+                  <Badge variant="destructive" className="figures">{newAlertCount} new</Badge>
+                )}
+              </CardTitle>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleClearDashboardNotifications}
+                aria-label="Clear notifications from dashboard and bell"
+                disabled={alerts.length === 0}
+              >
+                Clear
+              </Button>
+            </CardHeader>
+            <CardContent className="p-0">
+              {alerts.length === 0 ? (
+                <EmptyState icon={<Bell />} title="No alerts" description="Alerts appear here when an alert rule matches a new incident." className="py-8" />
+              ) : (
+                <ul className="divide-y divide-border border-t border-border">
+                  {alerts.slice(0, 5).map((alert) => (
+                    <li key={alert.id} className="flex gap-3 px-5 py-3.5">
+                      <span
+                        aria-hidden
+                        className={cn(
+                          'mt-1.5 h-2 w-2 shrink-0 rounded-full',
+                          alert.type === 'error' ? 'bg-loss' : alert.type === 'warning' ? 'bg-warning' : 'bg-info'
+                        )}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline justify-between gap-3">
+                          <p className="truncate text-sm font-medium text-foreground">{alert.title}</p>
+                          <span className="shrink-0 text-xs text-muted-foreground">{alert.time}</span>
+                        </div>
+                        <p className="mt-0.5 text-[13px] leading-5 text-muted-foreground">{alert.message}</p>
+                        {alert.priority === 'high' && (
+                          <Badge variant="destructive" className="mt-1.5">High priority</Badge>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {alerts.length > 5 && (
+                <p className="border-t border-border px-5 py-2.5 text-xs text-muted-foreground">
+                  {alerts.length - 5} more {alerts.length - 5 === 1 ? 'alert' : 'alerts'} in the notification bell
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+        </aside>
       </div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+        {/* Store league table */}
+        <Card className="overflow-hidden xl:col-span-7">
+          <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-3">
+            <div className="space-y-0.5">
+              <CardTitle className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                Stores to watch
+              </CardTitle>
+              <p className="text-[13px] text-muted-foreground">Ranked by incidents, with what each is losing and its direction over 8 weeks</p>
+            </div>
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/analytics/data-analytics-hub">
+                Analytics
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          </CardHeader>
+          <CardContent className="p-0">
+            {storeRows.length === 0 ? (
+              <EmptyState icon={<MapPin />} title="No store activity yet" className="py-8" />
+            ) : (
+              <StoreLeaderboard rows={storeRows} />
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Day and time pattern */}
+        <Card className="xl:col-span-5">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              When incidents happen
+            </CardTitle>
+            <p className="text-[13px] text-muted-foreground">Day of week against time of day. Plan cover around the darkest cells.</p>
+          </CardHeader>
+          <CardContent>
+            {incidentTimes.length === 0 ? (
+              <EmptyState icon={<Clock />} title="No incidents in view" className="py-8" />
+            ) : (
+              <WeekHourGrid times={incidentTimes} />
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Risk signals */}
+      {aiAnalytics && aiAnalytics.riskIndicators.length > 0 && (
+        <section aria-labelledby="risk-signals-title" className="rounded-xl border border-border bg-card">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 px-5 pb-3 pt-4">
+            <h2 id="risk-signals-title" className="flex items-center gap-2 text-base font-semibold text-foreground">
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              Risk signals
+            </h2>
+            <p className="text-[13px] text-muted-foreground">Scored by the incident classifier</p>
+          </div>
+          <ul className="grid grid-cols-1 divide-y divide-border border-t border-border sm:grid-cols-2 sm:divide-y-0 xl:grid-cols-4">
+            {aiAnalytics.riskIndicators.slice(0, 4).map((indicator, idx) => (
+              <li
+                key={idx}
+                className={cn(
+                  'space-y-2 px-5 py-4',
+                  idx > 0 && 'sm:border-l sm:border-border',
+                  idx === 2 && 'sm:border-l-0 sm:border-t xl:border-l xl:border-t-0',
+                  idx === 3 && 'sm:border-t xl:border-t-0'
+                )}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium text-foreground">{indicator.indicator}</span>
+                  <Badge variant={riskBadge(indicator.level)} className="shrink-0 first-letter:uppercase">{indicator.level} risk</Badge>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted" aria-hidden>
+                  <div className={cn('h-full rounded-full', riskTone(indicator.level))} style={{ width: riskWidth(indicator.score) }} />
+                </div>
+                {indicator.description && (
+                  <p className="text-xs leading-5 text-muted-foreground">{indicator.description}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+        {/* Recent incidents */}
+        <Card className="overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <div className="space-y-0.5">
+              <CardTitle>Recent incidents</CardTitle>
+              <p className="text-[13px] text-muted-foreground">Latest reports in the current view</p>
+            </div>
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/operations/incident-report">
+                View all
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          </CardHeader>
+          <CardContent className="p-0">
+            <IncidentTable data={recentIncidents} />
+          </CardContent>
+        </Card>
+
+      {incidentsPagination && incidentsPagination.totalCount > filteredIncidents.length && filteredIncidents.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          Totals cover all {incidentsPagination.totalCount.toLocaleString('en-GB')} incidents in view. Trends, stores and times use the latest {filteredIncidents.length.toLocaleString('en-GB')}.
+        </p>
+      )}
     </div>
   )
 }

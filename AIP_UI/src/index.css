@@ -2,100 +2,156 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Inter (UI text and figures) and Plus Jakarta Sans (titles and headline
+ * numbers), self-hosted variable fonts (SIL OFL 1.1, see assets/fonts/*-OFL.txt)
+ * so they pass font-src 'self'. One file each covers every weight. */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./assets/fonts/inter-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url("./assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/*
+ * DibangOps design tokens
+ * ---------------------------------------------------------------------------
+ * Colours come from the Heart of England Co-operative logo (navy and gold).
+ * Ink      #121B30  sidebar, a deep version of the logo navy
+ * Paper    #F6F7F9  app background
+ * Navy     #23397A  primary actions (logo navy)
+ * Gold     #D9A92C  brand signal: active nav and small markers only (logo gold)
+ * Loss     #B42318  money lost, destructive
+ * Recovered#0E7C66  money recovered, success
+ *
+ * The app shell sets <html data-ui="app">. Everything that changes the look of
+ * the base document (font, form-control defaults) is scoped to that attribute
+ * so the login page keeps rendering exactly as before.
+ */
+
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 220 20% 97%;
+    --foreground: 222 35% 14%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 222 35% 14%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 222 35% 14%;
 
-    --primary: 248 42% 38%;
+    --primary: 225 55% 31%;
     --primary-foreground: 0 0% 100%;
-    /* Template colors - using HSL values for #423A8E (primary purple) */
 
-    --secondary: 246 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 220 16% 93%;
+    --secondary-foreground: 222 35% 18%;
 
-    --muted: 246 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 220 16% 94%;
+    --muted-foreground: 220 9% 40%;
 
-    --accent: 246 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 222 45% 95%;
+    --accent-foreground: 225 55% 25%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 4 76% 40%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 246 31.8% 91.4%;
-    --input: 246 31.8% 91.4%;
-    --ring: 246 84% 4.9%;
+    --border: 220 13% 87%;
+    --input: 220 11% 78%;
+    --ring: 225 55% 38%;
 
     --radius: 0.5rem;
 
-    --sidebar-background: 246 30% 98%;
-    --sidebar-foreground: 246 5.3% 26.1%;
-    --sidebar-primary: 246 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 246 4.8% 95.9%;
-    --sidebar-accent-foreground: 246 5.9% 10%;
-    --sidebar-border: 246 13% 91%;
-    --sidebar-ring: 246 91.2% 59.8%;
+    /* Semantic signals */
+    --loss: 4 76% 40%;
+    --loss-soft: 4 80% 96%;
+    --recovered: 168 80% 27%;
+    --recovered-soft: 160 45% 94%;
+    --warning: 25 90% 37%;
+    --warning-soft: 38 90% 94%;
+    --info: 205 70% 36%;
+    --info-soft: 210 70% 95%;
+    --signal: 43 70% 51%;
+    --ink: 224 45% 13%;
+
+    /* Sidebar (ink) */
+    --sidebar-background: 224 62% 12%;
+    --sidebar-foreground: 220 40% 98%;
+    --sidebar-primary: 43 70% 55%;
+    --sidebar-primary-foreground: 224 45% 10%;
+    --sidebar-accent: 222 50% 26%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 222 45% 26%;
+    --sidebar-ring: 43 70% 55%;
+
+    --header-height: 64px;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    --background: 224 32% 8%;
+    --foreground: 220 15% 93%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 224 28% 11%;
+    --card-foreground: 220 15% 93%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 224 28% 12%;
+    --popover-foreground: 220 15% 93%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 220 75% 74%;
+    --primary-foreground: 224 45% 10%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 224 22% 17%;
+    --secondary-foreground: 220 15% 93%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 224 22% 15%;
+    --muted-foreground: 220 10% 64%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 224 30% 19%;
+    --accent-foreground: 220 15% 95%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 4 72% 58%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --border: 224 20% 19%;
+    --input: 224 18% 26%;
+    --ring: 220 75% 74%;
 
-    --sidebar-background: 246 5.9% 10%;
-    --sidebar-foreground: 246 4.8% 95.9%;
-    --sidebar-primary: 246 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 246 3.7% 15.9%;
-    --sidebar-accent-foreground: 246 4.8% 95.9%;
-    --sidebar-border: 246 3.7% 15.9%;
-    --sidebar-ring: 246 91.2% 59.8%;
+    --loss: 4 80% 66%;
+    --loss-soft: 4 45% 16%;
+    --recovered: 162 55% 52%;
+    --recovered-soft: 162 40% 14%;
+    --warning: 33 90% 60%;
+    --warning-soft: 33 50% 15%;
+    --info: 210 80% 68%;
+    --info-soft: 210 45% 17%;
+
+    --sidebar-background: 224 55% 7%;
+    --sidebar-foreground: 220 32% 96%;
+    --sidebar-accent: 222 45% 19%;
+    --sidebar-border: 222 40% 18%;
   }
 
-  input[type="text"],
-  input[type="date"],
-  input[type="email"],
-  input[type="number"],
-  input[type="password"],
-  input[type="tel"],
-  select,
-  textarea {
+  /* Legacy form defaults — kept only for pages outside the app shell (login). */
+  :where(html:not([data-ui="app"])) input[type="text"],
+  :where(html:not([data-ui="app"])) input[type="date"],
+  :where(html:not([data-ui="app"])) input[type="email"],
+  :where(html:not([data-ui="app"])) input[type="number"],
+  :where(html:not([data-ui="app"])) input[type="password"],
+  :where(html:not([data-ui="app"])) input[type="tel"],
+  :where(html:not([data-ui="app"])) select,
+  :where(html:not([data-ui="app"])) textarea {
     @apply block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm;
   }
 
-  button {
+  :where(html:not([data-ui="app"])) button {
     @apply inline-flex justify-center rounded-md border border-transparent px-4 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2;
   }
 }
@@ -108,4 +164,212 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* ---- App shell scope ---------------------------------------------------- */
+  html.dark[data-ui="app"] {
+    color-scheme: dark;
+  }
+
+  html[data-ui="app"] {
+    accent-color: hsl(var(--primary));
+  }
+
+  html[data-ui="app"] {
+    font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    /* cv05: tailed l, cv08: serifed I, so IDs and codes read unambiguously */
+    font-feature-settings: "cv05" 1, "cv08" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Zero-specificity defaults so component classes always win. */
+  :where(html[data-ui="app"]) :where(
+      input[type="text"], input[type="date"], input[type="datetime-local"], input[type="time"],
+      input[type="email"], input[type="number"], input[type="password"], input[type="tel"],
+      input[type="search"], input[type="url"], select, textarea) {
+    display: block;
+    width: 100%;
+    border-radius: calc(var(--radius) - 2px);
+    border-color: hsl(var(--input));
+    background-color: hsl(var(--card));
+    color: hsl(var(--foreground));
+    font-size: 0.875rem;
+  }
+
+  :where(html[data-ui="app"]) :where(input, select, textarea):focus {
+    border-color: hsl(var(--ring));
+    --tw-ring-color: hsl(var(--ring) / 0.25);
+  }
+
+  :where(html[data-ui="app"]) :where(input, textarea)::placeholder {
+    color: hsl(var(--muted-foreground) / 0.8);
+  }
+
+  :where(html[data-ui="app"]) :where(button) {
+    display: inline-flex;
+    justify-content: center;
+    border-radius: calc(var(--radius) - 2px);
+    border: 1px solid transparent;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+
+  :where(html[data-ui="app"]) :where(button):focus {
+    outline: none;
+  }
+
+  :where(html[data-ui="app"]) :where(button, a, [role="button"], [tabindex]):focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  :where(html[data-ui="app"]) :where(h2, h3, h4) {
+    letter-spacing: -0.012em;
+  }
+
+  /* Page titles use the display face: geometric, confident, friendly. */
+  :where(html[data-ui="app"]) :where(h1) {
+    font-family: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.022em;
+  }
+
+  :where(html[data-ui="app"]) ::selection {
+    background: hsl(var(--signal) / 0.35);
+  }
+
+  :where(html[data-ui="app"]) ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  :where(html[data-ui="app"]) ::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.28);
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 999px;
+  }
+
+  :where(html[data-ui="app"]) ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer components {
+  /* Numbers that should line up in columns (money, counts, dates). */
+  .figures {
+    font-variant-numeric: tabular-nums lining-nums;
+  }
+
+  /* Small uppercase-free label used above form groups and inside data cells. */
+  .field-label {
+    @apply text-[13px] font-medium text-foreground;
+  }
+
+  .surface {
+    @apply rounded-lg border border-border bg-card text-card-foreground;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-ui="app"] *,
+  html[data-ui="app"] *::before,
+  html[data-ui="app"] *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---- Charts (Recharts) ----------------------------------------------------
+ * CSS outranks SVG presentation attributes, so these keep every chart's
+ * axes, grid and tooltip on-theme in light and dark without per-chart props.
+ */
+html[data-ui="app"] .recharts-cartesian-axis-tick-value,
+html[data-ui="app"] .recharts-polar-angle-axis-tick-value,
+html[data-ui="app"] .recharts-label {
+  fill: hsl(var(--muted-foreground));
+  font-size: 11px;
+}
+
+html[data-ui="app"] .recharts-cartesian-grid line {
+  stroke: hsl(var(--border));
+}
+
+html[data-ui="app"] .recharts-cartesian-axis-line,
+html[data-ui="app"] .recharts-cartesian-axis-tick-line {
+  stroke: hsl(var(--border));
+}
+
+html[data-ui="app"] .recharts-default-tooltip {
+  background-color: hsl(var(--popover)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 8px 24px -6px rgb(0 0 0 / 0.18);
+  color: hsl(var(--popover-foreground));
+  font-size: 12px;
+}
+
+html[data-ui="app"] .recharts-tooltip-label {
+  color: hsl(var(--foreground));
+  font-weight: 600;
+}
+
+html[data-ui="app"] .recharts-legend-item-text {
+  color: hsl(var(--muted-foreground)) !important;
+  font-size: 12px;
+}
+
+/* Popups and controls on the analytics store map */
+html[data-ui="app"] .store-map-popup .maplibregl-popup-content {
+	background: hsl(var(--card));
+	color: hsl(var(--foreground));
+	border: 1px solid hsl(var(--border));
+	border-radius: 8px;
+	box-shadow: 0 8px 24px -6px rgb(0 0 0 / 0.18);
+	padding: 8px 10px;
+	font: 12px/1.45 inherit;
+	font-family: inherit;
+	font-variant-numeric: tabular-nums;
+}
+html[data-ui="app"] .store-map-popup .maplibregl-popup-content strong { font-weight: 600; }
+html[data-ui="app"] .store-map-popup.maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: hsl(var(--card)); }
+html[data-ui="app"] .store-map-popup.maplibregl-popup-anchor-top .maplibregl-popup-tip { border-bottom-color: hsl(var(--card)); }
+html[data-ui="app"] .maplibregl-ctrl-group { border-radius: 6px; box-shadow: 0 0 0 1px hsl(var(--border)); }
+html[data-ui="app"] .maplibregl-ctrl-group button { padding: 0 !important; justify-content: center !important; }
+
+
+/* ---------------------------------------------------------------------------
+ * Glossy sidebar: a lit navy surface with a soft top sheen and a faint gold
+ * glow, glass-pill hover and active states. Scoped to the app shell.
+ * ------------------------------------------------------------------------- */
+.sidebar-gloss {
+  background-color: hsl(var(--sidebar-background));
+  background-image:
+    linear-gradient(180deg, hsl(0 0% 100% / 0.07), transparent 9rem),
+    radial-gradient(120% 55% at 0% 0%, hsl(220 85% 62% / 0.22), transparent 60%),
+    radial-gradient(90% 40% at 100% 100%, hsl(43 80% 55% / 0.12), transparent 65%),
+    linear-gradient(180deg, hsl(222 62% 18%) 0%, hsl(var(--sidebar-background)) 45%, hsl(225 65% 8%) 100%);
+  box-shadow: inset -1px 0 0 hsl(0 0% 100% / 0.08), 4px 0 24px -12px hsl(224 70% 8% / 0.6);
+}
+.dark .sidebar-gloss {
+  background-image:
+    radial-gradient(120% 55% at 0% 0%, hsl(220 85% 60% / 0.20), transparent 60%),
+    radial-gradient(90% 40% at 100% 100%, hsl(43 80% 55% / 0.08), transparent 65%),
+    linear-gradient(180deg, hsl(222 55% 12%) 0%, hsl(var(--sidebar-background)) 45%, hsl(225 60% 4%) 100%);
+}
+.sidebar-link-active {
+  background-image: linear-gradient(180deg, hsl(0 0% 100% / 0.16), hsl(0 0% 100% / 0.06));
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.20),
+    inset 0 0 0 1px hsl(0 0% 100% / 0.08),
+    0 6px 16px -8px hsl(224 80% 5% / 0.7);
+}
+.sidebar-link-active > svg {
+  filter: drop-shadow(0 0 6px hsl(43 85% 58% / 0.65));
+}
+.sidebar-link-active::before {
+  box-shadow: 0 0 10px 1px hsl(43 85% 58% / 0.7);
 }

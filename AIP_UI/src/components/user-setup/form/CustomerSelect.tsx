@@ -42,10 +42,10 @@ export function CustomerSelect({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       <div className="space-y-2">
-        <Label className="text-gray-700">Available Customers</Label>
+        <Label className="text-foreground/80">Available companies</Label>
         <select 
           multiple 
-          className="w-full h-48 bg-white/50 border border-purple-200 rounded-lg p-2 focus:border-purple-400 focus:ring-purple-400"
+          className="w-full h-48 bg-card/50 border border-primary/25 rounded-lg p-2 focus:border-primary focus:ring-ring"
           value={selectedCustomers.map(String)}
           onChange={(e) => {
             const values = Array.from(e.target.selectedOptions, option => Number(option.value));
@@ -63,11 +63,11 @@ export function CustomerSelect({
       </div>
 
       <div className="space-y-2">
-        <Label className="text-gray-700">Assigned Customers</Label>
+        <Label className="text-foreground/80">Assigned companies</Label>
         <div className="flex flex-col gap-2">
           <select 
             multiple 
-            className="w-full h-48 bg-white/50 border border-purple-200 rounded-lg p-2 focus:border-purple-400 focus:ring-purple-400"
+            className="w-full h-48 bg-card/50 border border-primary/25 rounded-lg p-2 focus:border-primary focus:ring-ring"
             value={assignedCustomers.map(String)}
             onChange={(e) => {
               const values = Array.from(e.target.selectedOptions, option => Number(option.value));
@@ -88,7 +88,7 @@ export function CustomerSelect({
               type="button" 
               onClick={handleAdd}
               variant="outline"
-              className="border-purple-200 hover:bg-purple-50"
+              className="border-primary/25 hover:bg-accent"
               disabled={selectedCustomers.length === 0}
             >
               Add &gt;&gt;
@@ -97,7 +97,7 @@ export function CustomerSelect({
               type="button" 
               onClick={handleRemove}
               variant="outline"
-              className="border-purple-200 hover:bg-purple-50"
+              className="border-primary/25 hover:bg-accent"
               disabled={assignedCustomers.length === 0}
             >
               &lt;&lt; Remove

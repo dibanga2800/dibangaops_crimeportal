@@ -10,7 +10,7 @@ interface ContactSectionProps {
 export function ContactSection({ form }: ContactSectionProps) {
   return (
     <div className="space-y-4">
-      <h3 className="font-semibold">Contact Details</h3>
+      <h3 className="font-semibold">Contact details</h3>
       <div className="grid grid-cols-2 gap-4">
         <FormField
           control={form.control}
@@ -88,7 +88,7 @@ export function ContactSection({ form }: ContactSectionProps) {
           name="contact.phone"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Phone Number</FormLabel>
+              <FormLabel>Phone number</FormLabel>
               <FormControl>
                 <Input type="tel" {...field} />
               </FormControl>

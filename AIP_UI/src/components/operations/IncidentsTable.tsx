@@ -166,7 +166,7 @@ export function IncidentsTable({ incidents, onEdit, onDelete }: IncidentsTablePr
                         {onDelete && (
                           <DropdownMenuItem
                             onClick={() => onDelete(incident)}
-                            className="text-red-600 focus:text-red-600"
+                            className="text-loss focus:text-loss"
                           >
                             <Trash2 className="mr-2 h-4 w-4" />
                             Delete

@@ -1,4 +1,11 @@
 import { useState, useCallback, useEffect, useMemo, useRef, Suspense, lazy } from "react"
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { formatMoney } from '@/lib/money'
+import { EmptyState } from '@/components/common/EmptyState'
+import { Segmented } from '@/components/common/Segmented'
+import { FilterBar, FilterChip, DateRangeField } from '@/components/common/FilterBar'
+import { StatLedger } from '@/components/common/StatLedger'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { Incident, StolenItem } from "@/types/incidents"
 import { IncidentDetailView } from '@/components/operations/IncidentDetailView'
 const IncidentForm = lazy(() =>
@@ -6,7 +13,7 @@ const IncidentForm = lazy(() =>
 )
 
 const LazyLoadingFallback = () => (
-  <div className="flex items-center justify-center py-8 text-sm text-gray-500">
+  <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
     Loading...
   </div>
 )
@@ -31,7 +38,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 // Removed mockIncidents import - now using API service
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { 
   PlusCircle, 
   PoundSterling, 
@@ -42,8 +48,6 @@ import {
   Eye,
   FileText,
   Search,
-  Calendar,
-  Building2
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import {
@@ -61,14 +65,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination"
 import BarcodeScanner from '@/components/BarcodeScanner'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { incidentsApi } from "@/services/api/incidents"
@@ -263,6 +259,8 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
     const incidentTypeParam = searchParams.get('incidentType')
     const fromDateParam = searchParams.get('fromDate')
     const toDateParam = searchParams.get('toDate')
+    const searchParam = searchParams.get('search')
+    if (searchParam) setSearchTerm(searchParam)
 
     if (!presetParam && !incidentTypeParam && !fromDateParam && !toDateParam) {
       return
@@ -618,14 +616,32 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
     }
   }, [editingIncident, catalogDepartments, toast])
 
+  const clearDateFilter = () => {
+    setDatePreset(null)
+    setFromDate("")
+    setToDate("")
+    setFromDateInput("")
+    setToDateInput("")
+    setCurrentPage(1)
+  }
+  const formatIncidentDate = (value: string) => new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+  const incidentTypeOptions = Array.from(
+    new Set([...(incidentsResponse.data ?? []).map((incident: Incident) => incident.incidentType).filter(Boolean), ...(incidentTypeFilter ? [incidentTypeFilter] : [])])
+  ).sort() as string[]
+  const pageWindow = (() => {
+    const size = Math.min(totalPages, 5)
+    const start = Math.max(1, Math.min(currentPage - 2, totalPages - size + 1))
+    return Array.from({ length: size }, (_, i) => start + i)
+  })()
+
   // Loading state
   // If we were navigated here with ?open=new, avoid showing the loading screen/blink.
   if (isLoading && !isAutoOpenRef.current) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-slate-50 to-blue-50 flex items-center justify-center">
+      <div className="flex min-h-[50vh] items-center justify-center" role="status">
         <div className="text-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading incident data...</p>
+          <div className="mx-auto mb-3 h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-primary"></div>
+          <p className="text-sm text-muted-foreground">Loading incidents…</p>
         </div>
       </div>
     )
@@ -635,13 +651,13 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
   // If we were navigated here with ?open=new, still show the "new incident" form dialog.
   if (error && !isAutoOpenRef.current) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-slate-50 to-blue-50 flex items-center justify-center">
-        <div className="text-center max-w-md mx-auto p-6 bg-white rounded-lg shadow-sm">
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="surface mx-auto max-w-md p-6 text-center">
           <div className="mb-4">
-            <AlertCircle className="h-12 w-12 text-red-500 mx-auto" />
+            <AlertCircle className="h-12 w-12 text-loss mx-auto" />
           </div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Failed to Load Incidents</h2>
-          <p className="text-gray-600 mb-4">
+          <h2 className="mb-2 text-lg font-semibold text-foreground">Incidents could not be loaded</h2>
+          <p className="text-muted-foreground mb-4">
             {error instanceof Error ? error.message : 'An error occurred while loading incident data.'}
           </p>
           <div className="space-y-3">
@@ -649,7 +665,7 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
               onClick={() => window.location.reload()}
               className="w-full"
             >
-              Retry Loading
+              Reload page
             </Button>
             <Button
               variant="outline"
@@ -659,7 +675,7 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
               }}
               className="w-full"
             >
-              Refresh Data
+              Try again
             </Button>
           </div>
         </div>
@@ -668,461 +684,366 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
   }
 
   return (
-    <div className="min-h-screen w-full min-w-0 overflow-x-hidden bg-gradient-to-br from-blue-50 via-slate-50 to-blue-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
+    <div className="w-full min-w-0">
       <Toaster />
       {!isAutoOpenRef.current && (
-        <div className="w-full max-w-full mx-auto py-3 sm:py-4 md:py-6 lg:py-8 px-3 sm:px-4 md:px-6 lg:px-8">
-        {/* Header Section */}
-        <div className="flex flex-col space-y-3 sm:space-y-4 md:space-y-6 lg:space-y-8">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 min-w-0">
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-              <div className="bg-blue-100 p-2 sm:p-2.5 rounded-lg flex-shrink-0">
-                <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
-              </div>
-              <div className="min-w-0">
-                <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 dark:text-gray-100 truncate">Incident Reports</h1>
-                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Track and manage security incidents across all sites</p>
-              </div>
-            </div>
-            <Button
-              onClick={() => {
-                setEditingIncident(null)
-                setCreatePrefilledStolenItems([])
-                setOpen(true)
-              }}
-              size="default"
-              className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm flex items-center gap-2 w-full sm:w-auto text-sm flex-shrink-0"
-              disabled={!canCreateIncident}
-            >
-              <PlusCircle className="w-4 h-4 sm:w-5 sm:h-5" />
-              Incident Report
-            </Button>
-          </div>
+        <div className="w-full max-w-full">
+        <div className="flex flex-col gap-6">
+          <PageHeader
+            title="Incident reports"
+            description="Every incident recorded across your stores. Filter, review and open a report to see its evidence."
+            className="pb-0"
+            actions={
+              <Button
+                onClick={() => {
+                  setEditingIncident(null)
+                  setCreatePrefilledStolenItems([])
+                  setOpen(true)
+                }}
+                className="w-full sm:w-auto"
+                disabled={!canCreateIncident}
+              >
+                <PlusCircle className="h-4 w-4" />
+                New incident report
+              </Button>
+            }
+          />
           {enforceSiteScope && !hasAssignedSites && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              No stores are assigned to this account yet. Incident data is hidden until store assignments are added.
+            <div className="rounded-lg border border-warning/30 bg-warning-soft px-4 py-3 text-sm text-warning">
+              No stores are assigned to this account yet. Incident data appears once an administrator assigns a store.
             </div>
           )}
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 min-w-0">
-            <Card className="bg-gradient-to-br from-emerald-800 to-emerald-900 border-emerald-700 shadow-md col-span-1 min-w-0">
-              <CardHeader className="flex flex-row items-center justify-between p-3 md:p-4 pb-1 md:pb-2">
-                <CardTitle className="text-xs sm:text-sm font-medium text-white">Total Value Recovered</CardTitle>
-                <PoundSterling className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-300 flex-shrink-0" />
-              </CardHeader>
-              <CardContent className="p-3 md:p-4 pt-0 md:pt-1">
-                <div className="text-base sm:text-lg md:text-xl font-bold text-white truncate">£{stats.totalAmountRecovered.toFixed(2)}</div>
-              </CardContent>
-            </Card>
-            <Card className="bg-gradient-to-br from-rose-800 to-rose-900 border-rose-700 shadow-md col-span-1 min-w-0">
-              <CardHeader className="flex flex-row items-center justify-between p-3 md:p-4 pb-1 md:pb-2">
-                <CardTitle className="text-xs sm:text-sm font-medium text-white">Total Value Lost</CardTitle>
-                <PoundSterling className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-rose-300 flex-shrink-0" />
-              </CardHeader>
-              <CardContent className="p-3 md:p-4 pt-0 md:pt-1">
-                <div className="text-base sm:text-lg md:text-xl font-bold text-white truncate">£{stats.totalAmountLost.toFixed(2)}</div>
-              </CardContent>
-            </Card>
-            <Card className="bg-gradient-to-br from-purple-800 to-purple-900 border-purple-700 shadow-md col-span-2 md:col-span-1 min-w-0">
-              <CardHeader className="flex flex-row items-center justify-between p-3 md:p-4 pb-1 md:pb-2">
-                <CardTitle className="text-xs sm:text-sm font-medium text-white">Unique Stores</CardTitle>
-                <Store className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-300 flex-shrink-0" />
-              </CardHeader>
-              <CardContent className="p-3 md:p-4 pt-0 md:pt-1">
-                <div className="text-base sm:text-lg md:text-xl font-bold text-white">{stats.uniqueSites}</div>
-              </CardContent>
-            </Card>
-            <Card className="bg-gradient-to-br from-blue-800 to-blue-900 border-blue-700 shadow-md col-span-2 md:col-span-1 min-w-0">
-              <CardHeader className="flex flex-row items-center justify-between p-3 md:p-4 pb-1 md:pb-2">
-                <CardTitle className="text-xs sm:text-sm font-medium text-white">Total Incidents</CardTitle>
-                <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-300 flex-shrink-0" />
-              </CardHeader>
-              <CardContent className="p-3 md:p-4 pt-0 md:pt-1">
-                <div className="text-base sm:text-lg md:text-xl font-bold text-white">{stats.totalIncidents}</div>
-              </CardContent>
-            </Card>
-          </div>
+          <StatLedger
+            items={[
+              { label: 'Incidents', value: stats.totalIncidents.toLocaleString('en-GB'), hint: 'In the current filter', icon: <AlertCircle />, tone: 'neutral' },
+              { label: 'Value lost', value: formatMoney(stats.totalAmountLost, 'headline'), hint: 'Not recovered', icon: <PoundSterling />, tone: 'loss' },
+              { label: 'Value recovered', value: formatMoney(stats.totalAmountRecovered, 'headline'), hint: 'Returned or paid for', icon: <PoundSterling />, tone: 'recovered' },
+              { label: 'Stores affected', value: stats.uniqueSites, hint: 'With at least one incident', icon: <Store />, tone: 'info' },
+            ]}
+          />
         </div>
 
-        {/* Table Section */}
-        <div className="mt-3 sm:mt-4 md:mt-6 lg:mt-8 bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden min-w-0">
-          {/* Search Bar */}
-          <div className="p-3 sm:p-4 md:p-6 border-b border-gray-200 dark:border-slate-700 space-y-4 min-w-0">
-            <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end lg:justify-between">
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant={datePreset === 'today' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => handlePresetFilter('today')}
-                  className="h-9 text-xs sm:text-sm"
-                >
-                  Today
-                </Button>
-                <Button
-                  variant={datePreset === 'week' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => handlePresetFilter('week')}
-                  className="h-9 text-xs sm:text-sm"
-                >
-                  Week
-                </Button>
-                <Button
-                  variant={datePreset === 'month' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => handlePresetFilter('month')}
-                  className="h-9 text-xs sm:text-sm"
-                >
-                  Month
-                </Button>
+        {/* Filters */}
+        <div className="mt-6 space-y-3">
+          <FilterBar
+            label="Incident filters"
+            activeCount={[isDateRangeActive, isRegionFilterActive, isIncidentTypeFilterActive].filter(Boolean).length}
+            primary={
+              <div className="relative w-full sm:w-60">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search store, person, type…"
+                  aria-label="Search incidents"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="h-9 pl-9"
+                />
+              </div>
+            }
+            actions={
+              <>
                 <Button
                   variant="ghost"
-                  size="sm"
                   onClick={handleClearFilters}
-                  className="h-9 text-xs sm:text-sm"
+                  className="flex-1 sm:flex-none"
                   disabled={!isDateRangeActive && !datePreset && !isIncidentTypeFilterActive && !isRegionFilterActive}
                 >
-                  Clear
+                  Clear all
                 </Button>
-              </div>
-
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full xl:w-auto min-w-0 flex-shrink">
-                <Select value={regionFilter} onValueChange={(value) => {
-                  setRegionFilter(value)
+              </>
+            }
+            summary={
+              <>
+                <span className="figures mr-1 font-medium text-foreground">
+                  {(shouldUseClientPagination ? filteredIncidents.length : incidentsResponse.pagination?.totalCount ?? paginatedIncidents.length).toLocaleString('en-GB')} incidents
+                </span>
+                {isDateRangeActive && (
+                  <FilterChip onRemove={clearDateFilter} removeLabel="Clear dates">
+                    {fromDate ? new Date(fromDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Start'} to{' '}
+                    {toDate ? new Date(toDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'today'}
+                  </FilterChip>
+                )}
+                {isRegionFilterActive && (
+                  <FilterChip onRemove={() => { setRegionFilter('all'); setCurrentPage(1) }} removeLabel="Show all regions">
+                    {regions.find((r) => r.regionID.toString() === regionFilter)?.regionName ?? 'Region'}
+                  </FilterChip>
+                )}
+                {isIncidentTypeFilterActive && (
+                  <FilterChip onRemove={() => { setIncidentTypeFilter(null); setCurrentPage(1) }} removeLabel="Show all types">
+                    {incidentTypeFilter}
+                  </FilterChip>
+                )}
+                {!isClientFilterActive && <span>across all stores and dates</span>}
+              </>
+            }
+          >
+            <Segmented
+              ariaLabel="Period"
+              value={datePreset === 'today' || datePreset === 'week' || datePreset === 'month' ? datePreset : 'all'}
+              options={[
+                { value: 'all', label: 'All' },
+                { value: 'today', label: 'Today' },
+                { value: 'week', label: 'Week' },
+                { value: 'month', label: 'Month' },
+              ] as const}
+              onChange={(value) => (value === 'all' ? clearDateFilter() : handlePresetFilter(value))}
+              className="w-full justify-between sm:w-auto [&>button]:flex-1 sm:[&>button]:flex-none"
+            />
+            <DateRangeField
+              from={fromDateInput}
+              to={toDateInput}
+              onFromChange={(value) => {
+                setFromDateInput(value)
+                setFromDate(value)
+                setDatePreset(value ? 'custom' : null)
+                setCurrentPage(1)
+              }}
+              onToChange={(value) => {
+                setToDateInput(value)
+                setToDate(value)
+                setCurrentPage(1)
+              }}
+              fromLabel="Filter from date"
+              toLabel="Filter to date"
+            />
+            <Select
+              value={regionFilter}
+              onValueChange={(value) => {
+                setRegionFilter(value)
+                setCurrentPage(1)
+              }}
+            >
+              <SelectTrigger className="h-9 w-full sm:w-[170px]" aria-label="Region">
+                <SelectValue placeholder={isLoadingRegions ? 'Loading regions…' : 'All regions'} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All regions</SelectItem>
+                {regions.map((region) => (
+                  <SelectItem key={region.regionID} value={region.regionID.toString()}>
+                    {region.regionName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {incidentTypeOptions.length > 0 && (
+              <Select
+                value={incidentTypeFilter ?? 'all'}
+                onValueChange={(value) => {
+                  setIncidentTypeFilter(value === 'all' ? null : value)
                   setCurrentPage(1)
-                }}>
-                  <SelectTrigger className="h-9 text-xs sm:text-sm w-full sm:w-[200px]">
-                    <SelectValue placeholder={isLoadingRegions ? 'Loading regions...' : 'All regions'} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All regions</SelectItem>
-                    {regions.map((region) => (
-                      <SelectItem key={region.regionID} value={region.regionID.toString()}>
-                        {region.regionName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <div className="flex flex-col sm:flex-row gap-2 w-full">
-                  <Input
-                    type="date"
-                    value={fromDateInput}
-                    onChange={(e) => setFromDateInput(e.target.value)}
-                    className="h-9 text-xs sm:text-sm"
-                    aria-label="Filter from date"
-                  />
-                  <Input
-                    type="date"
-                    value={toDateInput}
-                    onChange={(e) => setToDateInput(e.target.value)}
-                    className="h-9 text-xs sm:text-sm"
-                    aria-label="Filter to date"
-                  />
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleApplyDateRange}
-                  className="h-9 text-xs sm:text-sm w-full sm:w-auto"
-                >
-                  Apply
-                </Button>
-              </div>
-            </div>
+                }}
+              >
+                <SelectTrigger className="h-9 w-full sm:w-[170px]" aria-label="Incident type">
+                  <SelectValue placeholder="All types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All types</SelectItem>
+                  {incidentTypeOptions.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </FilterBar>
 
-            <div className="relative w-full max-w-xl min-w-0">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-4 h-4" />
-              <Input
-                placeholder="Search incidents..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 border-gray-300 dark:border-slate-600 text-sm h-9 dark:bg-slate-950 dark:text-gray-100 dark:placeholder:text-gray-500"
+          {/* Results */}
+          <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card">
+            {!hasIncidents && (
+              <EmptyState
+                className="py-16"
+                icon={<FileText />}
+                title={
+                  isClientFilterActive
+                    ? 'No incidents match these filters'
+                    : isSearchActive
+                      ? 'No incidents match your search'
+                      : 'No incidents recorded yet'
+                }
+                description={
+                  isClientFilterActive
+                    ? 'Widen the dates or clear a filter to see more.'
+                    : isSearchActive
+                      ? 'Check the spelling, or search by store, person or incident type.'
+                      : 'Reports filed by store teams will appear here.'
+                }
+                action={
+                  isClientFilterActive ? (
+                    <Button variant="outline" onClick={handleClearFilters}>Clear filters</Button>
+                  ) : isSearchActive ? (
+                    <Button variant="outline" onClick={() => setSearchTerm('')}>Clear search</Button>
+                  ) : (
+                    <Button
+                      onClick={() => {
+                        setEditingIncident(null)
+                        setCreatePrefilledStolenItems([])
+                        setOpen(true)
+                      }}
+                      disabled={!canCreateIncident}
+                    >
+                      <PlusCircle className="h-4 w-4" />
+                      New incident report
+                    </Button>
+                  )
+                }
               />
-            </div>
-          </div>
+            )}
 
-          {!hasIncidents && (
-            <div className="p-6 sm:p-8 text-center border-b border-gray-200 dark:border-slate-700">
-              <div className="mb-4">
-                <FileText className="h-10 w-10 text-gray-300 dark:text-gray-600 mx-auto" />
-              </div>
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                {isClientFilterActive
-                  ? 'No Incidents Match Your Filters'
-                  : isSearchActive
-                    ? 'No Incidents Match Your Search'
-                    : 'No Incidents Found'}
-              </h2>
-              <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-4">
-                {isClientFilterActive
-                  ? 'Try adjusting your filters to see more incident reports.'
-                  : isSearchActive
-                    ? 'Try adjusting your search terms to see more incident reports.'
-                    : 'There are no incident reports available. Create your first incident report to get started.'}
-              </p>
-              {isClientFilterActive ? (
-                <Button
-                  variant="outline"
-                  onClick={handleClearFilters}
-                  className="text-sm"
-                >
-                  Clear Filters
-                </Button>
-              ) : isSearchActive ? (
-                <Button
-                  variant="outline"
-                  onClick={() => setSearchTerm("")}
-                  className="text-sm"
-                >
-                  Clear Search
-                </Button>
-              ) : (
-                <Button
-                  onClick={() => {
-                    setEditingIncident(null)
-                    setCreatePrefilledStolenItems([])
-                    setOpen(true)
-                  }}
-                  className="text-sm"
-                  disabled={!canCreateIncident}
-                >
-                  Incident Report
-                </Button>
-              )}
-            </div>
-          )}
+            {/* Phone: one tappable row per incident */}
+            {hasIncidents && (
+              <ul className="divide-y divide-border md:hidden">
+                {paginatedIncidents.map((incident) => {
+                  const f = getIncidentFinancials(incident)
+                  const when = incident.dateOfIncident || incident.date
+                  return (
+                    <li key={incident.id}>
+                      <button
+                        type="button"
+                        onClick={() => handleView(incident)}
+                        className="!flex w-full !flex-col !items-stretch gap-1.5 !rounded-none !border-0 !px-4 !py-3.5 text-left !font-normal transition-colors active:bg-muted/60"
+                      >
+                        <span className="flex items-baseline justify-between gap-3">
+                          <span className="min-w-0 truncate text-sm font-semibold text-foreground">{incident.siteName || 'Unknown store'}</span>
+                          <span className={`figures shrink-0 text-sm font-semibold ${f.totalLostValue > 0 ? 'text-loss' : 'text-muted-foreground'}`}>
+                            {f.totalLostValue > 0 ? `−${formatMoney(f.totalLostValue)}` : formatMoney(0)}
+                          </span>
+                        </span>
+                        <span className="flex items-center justify-between gap-3">
+                          <span className="flex min-w-0 items-center gap-2">
+                            <span className="inline-flex shrink-0 items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground/80">
+                              {incident.incidentType}
+                            </span>
+                            <span className="figures truncate text-xs text-muted-foreground">
+                              {when ? formatIncidentDate(when) : 'No date'}
+                              {incident.timeOfIncident ? `, ${incident.timeOfIncident}` : ''}
+                            </span>
+                          </span>
+                          {f.totalRecoveredValue > 0 && (
+                            <span className="figures shrink-0 text-xs font-medium text-recovered">+{formatMoney(f.totalRecoveredValue)} back</span>
+                          )}
+                        </span>
+                        <span className="truncate text-xs text-muted-foreground">Reported by {incident.officerName || 'unknown'}</span>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
 
-          {/* Mobile Card Layout - visible only on small screens */}
-          {hasIncidents && (
-            <div className="block md:hidden p-3 space-y-3">
-              {paginatedIncidents.map((incident) => (
-                <div key={incident.id} className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-950 shadow-sm p-4 space-y-3">
-                  {/* Header with customer and amount */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate">{incident.customerName || 'N/A'}</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">{incident.siteName}</div>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <div className="font-semibold text-sm text-emerald-600">
-                        Saved £{getIncidentFinancials(incident).totalRecoveredValue.toFixed(2)}
-                      </div>
-                      <div className="text-xs text-rose-600">
-                        Lost £{getIncidentFinancials(incident).totalLostValue.toFixed(2)}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Details Grid */}
-                  <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-gray-200 dark:border-slate-700">
-                    <div>
-                      <span className="text-gray-500 dark:text-gray-400 block mb-0.5">Officer</span>
-                      <div className="font-medium text-gray-900 dark:text-gray-100 truncate">{incident.officerName || 'N/A'}</div>
-                    </div>
-                    <div>
-                      <span className="text-gray-500 dark:text-gray-400 block mb-0.5">Date</span>
-                      <div className="font-medium text-gray-900 dark:text-gray-100">{incident.date ? new Date(incident.date).toLocaleDateString() : 'N/A'}</div>
-                    </div>
-                    <div className="col-span-2">
-                      <span className="text-gray-500 dark:text-gray-400 block mb-0.5">Incident Type</span>
-                      <div className="font-medium text-gray-900 dark:text-gray-100">{incident.incidentType}</div>
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex gap-2 pt-2 border-t border-gray-200 dark:border-slate-700">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleView(incident)}
-                      className="flex-1 h-9 text-xs"
-                    >
-                      <Eye className="w-3.5 h-3.5 mr-1.5" />
-                      View
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleEdit(incident)}
-                      className="flex-1 h-9 text-xs"
-                    >
-                      <Edit2 className="w-3.5 h-3.5 mr-1.5" />
-                      Edit
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDelete(incident)}
-                      className="h-9 px-3 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Desktop Table Layout - visible on medium screens and above */}
-          {hasIncidents && (
-            <div className="hidden md:block min-w-0 -mx-px">
-              <div className="min-w-[480px] overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
+            {/* Tablet and desktop table */}
+            {hasIncidents && (
+              <div className="hidden min-w-0 overflow-x-auto md:block">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-gray-50 dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800">
-                      <TableHead className="font-medium text-sm text-gray-900 dark:text-gray-200 py-3 whitespace-nowrap">Company Name</TableHead>
-                      <TableHead className="font-medium text-sm text-gray-900 dark:text-gray-200 py-3 whitespace-nowrap">Store Name</TableHead>
-                      <TableHead className="font-medium text-sm text-gray-900 dark:text-gray-200 py-3 whitespace-nowrap">Staff Member Name</TableHead>
-                      <TableHead className="font-medium text-sm text-gray-900 dark:text-gray-200 py-3 whitespace-nowrap hidden lg:table-cell">
-                        <div className="flex items-center gap-2">
-                          <Calendar className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-                          <span>Incident Date / Time</span>
-                        </div>
-                      </TableHead>
-                      <TableHead className="font-medium text-sm text-gray-900 dark:text-gray-200 py-3 whitespace-nowrap">Saved / Lost</TableHead>
-                      <TableHead className="font-medium text-sm text-gray-900 dark:text-gray-200 py-3 whitespace-nowrap hidden lg:table-cell">Incident Type</TableHead>
-                      <TableHead className="font-medium text-sm text-gray-900 dark:text-gray-200 py-3 text-right whitespace-nowrap">Actions</TableHead>
+                    <TableRow>
+                      <TableHead className="w-[150px]">Date and time</TableHead>
+                      <TableHead>Store</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead className="hidden lg:table-cell">Reported by</TableHead>
+                      <TableHead className="text-right">Recovered</TableHead>
+                      <TableHead className="text-right">Lost</TableHead>
+                      <TableHead className="w-[112px] text-right"><span className="sr-only">Actions</span></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {paginatedIncidents.map((incident) => (
-                      <TableRow 
-                        key={incident.id}
-                        className="text-sm text-gray-900 dark:text-gray-100 odd:bg-white odd:dark:bg-slate-900 even:bg-gray-50/60 even:dark:bg-slate-800/40 hover:bg-blue-50/70 dark:hover:bg-slate-700/60 transition-colors"
-                      >
-                        <TableCell className="py-3 font-medium whitespace-nowrap">
-                          {incident.customerName || 'N/A'}
-                        </TableCell>
-                        <TableCell className="py-3 font-medium whitespace-nowrap max-w-[140px] truncate text-gray-800 dark:text-gray-100" title={incident.siteName}>
-                          {incident.siteName}
-                        </TableCell>
-                        <TableCell className="py-3 whitespace-nowrap max-w-[120px] truncate text-gray-700 dark:text-gray-200" title={incident.officerName || 'N/A'}>{incident.officerName || 'N/A'}</TableCell>
-                        <TableCell className="py-3 hidden lg:table-cell whitespace-nowrap">
-                          {incident.dateOfIncident || incident.date ? (
-                            <div className="flex items-center gap-2 tabular-nums">
-                              <span className="text-gray-900 dark:text-gray-100">{new Date(incident.dateOfIncident || incident.date || '').toLocaleDateString()}</span>
-                              <span className="text-blue-600 dark:text-blue-400 text-xs font-semibold bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded-md">
-                                {incident.timeOfIncident || new Date(incident.dateOfIncident || incident.date || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </span>
+                    {paginatedIncidents.map((incident) => {
+                      const f = getIncidentFinancials(incident)
+                      const when = incident.dateOfIncident || incident.date
+                      return (
+                        <TableRow
+                          key={incident.id}
+                          className="group cursor-pointer"
+                          onClick={() => handleView(incident)}
+                        >
+                          <TableCell className="whitespace-nowrap">
+                            <span className="block text-foreground">{when ? formatIncidentDate(when) : 'No date'}</span>
+                            <span className="block text-xs text-muted-foreground">
+                              {incident.timeOfIncident || (when ? new Date(when).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '')}
+                            </span>
+                          </TableCell>
+                          <TableCell className="min-w-[180px]">
+                            <span className="block font-medium text-foreground">{incident.siteName || 'Unknown store'}</span>
+                            <span className="block text-xs text-muted-foreground">{incident.customerName}</span>
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-foreground/80">
+                              {incident.incidentType}
+                            </span>
+                          </TableCell>
+                          <TableCell className="hidden whitespace-nowrap text-foreground/80 lg:table-cell">
+                            {incident.officerName || 'Unknown'}
+                          </TableCell>
+                          <TableCell className={`whitespace-nowrap text-right ${f.totalRecoveredValue > 0 ? 'font-medium text-recovered' : 'text-muted-foreground'}`}>
+                            {formatMoney(f.totalRecoveredValue)}
+                          </TableCell>
+                          <TableCell className={`whitespace-nowrap text-right ${f.totalLostValue > 0 ? 'font-medium text-loss' : 'text-muted-foreground'}`}>
+                            {formatMoney(f.totalLostValue)}
+                          </TableCell>
+                          <TableCell className="py-2" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-end gap-0.5 opacity-70 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                              <Button variant="ghost" size="icon" onClick={() => handleView(incident)} className="!h-8 !w-8 !p-0" title="Open">
+                                <Eye className="h-4 w-4" />
+                                <span className="sr-only">Open incident</span>
+                              </Button>
+                              <Button variant="ghost" size="icon" onClick={() => handleEdit(incident)} className="!h-8 !w-8 !p-0" title="Edit">
+                                <Edit2 className="h-4 w-4" />
+                                <span className="sr-only">Edit incident</span>
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDelete(incident)}
+                                className="!h-8 !w-8 !p-0 hover:bg-loss-soft hover:text-loss"
+                                title="Delete"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                <span className="sr-only">Delete incident</span>
+                              </Button>
                             </div>
-                          ) : (
-                            'N/A'
-                          )}
-                        </TableCell>
-                        <TableCell className="py-3 whitespace-nowrap">
-                          <div className="flex flex-col">
-                            <span className="text-emerald-700 dark:text-emerald-400 font-medium">Saved £{getIncidentFinancials(incident).totalRecoveredValue.toFixed(2)}</span>
-                            <span className="text-rose-700 dark:text-rose-400 text-xs font-medium">Lost £{getIncidentFinancials(incident).totalLostValue.toFixed(2)}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="py-3 hidden lg:table-cell whitespace-nowrap">
-                          <span className="inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-xs font-medium text-slate-700 dark:text-slate-200">
-                            {incident.incidentType}
-                          </span>
-                        </TableCell>
-                        <TableCell className="py-3">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleView(incident)}
-                              className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 border-blue-200 dark:border-blue-800"
-                            >
-                              <Eye className="w-4 h-4" />
-                              <span className="sr-only">View</span>
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleEdit(incident)}
-                              className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 border-blue-200 dark:border-blue-800"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                              <span className="sr-only">Edit</span>
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDelete(incident)}
-                              className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 border-red-200 dark:border-red-800"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                              <span className="sr-only">Delete</span>
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
                   </TableBody>
                 </Table>
               </div>
-            </div>
-          )}
-        </div>
+            )}
 
-        {/* Pagination */}
-        {hasIncidents && totalPages > 1 && (
-          <div className="flex justify-center py-3 sm:py-4 border-t border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-            <Pagination>
-              <PaginationContent className="flex flex-wrap items-center gap-1 sm:gap-0">
-                <PaginationItem>
-                  <PaginationPrevious 
-                    onClick={() => handlePageChange(currentPage - 1)}
-                    className={`${currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'} h-8 w-8 sm:h-9 sm:w-auto text-xs sm:text-sm flex items-center justify-center`}
-                    aria-disabled={currentPage === 1}
-                  >
-                    <span className="sr-only">Go to previous page</span>
-                  </PaginationPrevious>
-                </PaginationItem>
-                
-                {/* Desktop Pagination Numbers */}
-                {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                  let pageToShow;
-                  
-                  if (totalPages <= 5) {
-                    pageToShow = i + 1;
-                  } else if (currentPage <= 3) {
-                    pageToShow = i + 1;
-                  } else if (currentPage >= totalPages - 2) {
-                    pageToShow = totalPages - 4 + i;
-                  } else {
-                    pageToShow = currentPage - 2 + i;
-                  }
-                  
-                  return (
-                    <PaginationItem key={pageToShow} className="hidden sm:inline-block">
-                      <PaginationLink
-                        onClick={() => handlePageChange(pageToShow)}
-                        isActive={currentPage === pageToShow}
-                        className="h-8 w-8 sm:h-9 sm:w-9 flex cursor-pointer items-center justify-center rounded-md text-xs sm:text-sm"
-                        aria-label={`Go to page ${pageToShow}`}
+            {/* Pagination */}
+            {hasIncidents && totalPages > 1 && (
+              <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-3">
+                <p className="figures text-xs text-muted-foreground">
+                  Page <span className="font-medium text-foreground">{currentPage}</span> of {totalPages}
+                </p>
+                <div className="flex items-center gap-1">
+                  <Button variant="outline" size="sm" onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1}>
+                    Previous
+                  </Button>
+                  <div className="hidden items-center gap-1 sm:flex">
+                    {pageWindow.map((page) => (
+                      <Button
+                        key={page}
+                        variant={page === currentPage ? 'secondary' : 'ghost'}
+                        size="sm"
+                        onClick={() => handlePageChange(page)}
+                        aria-current={page === currentPage ? 'page' : undefined}
+                        aria-label={`Page ${page}`}
+                        className="figures !w-8 !px-0"
                       >
-                        {pageToShow}
-                      </PaginationLink>
-                    </PaginationItem>
-                  );
-                })}
-                
-                {/* Mobile Pagination Counter */}
-                <PaginationItem className="sm:hidden">
-                  <span className="h-8 px-3 flex items-center justify-center text-xs font-medium text-gray-600 dark:text-gray-400">
-                    {currentPage} / {totalPages}
-                  </span>
-                </PaginationItem>
-                
-                <PaginationItem>
-                  <PaginationNext 
-                    onClick={() => handlePageChange(currentPage + 1)}
-                    className={`${currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'} h-8 w-8 sm:h-9 sm:w-auto text-xs sm:text-sm flex items-center justify-center`}
-                    aria-disabled={currentPage === totalPages}
-                  >
-                    <span className="sr-only">Go to next page</span>
-                  </PaginationNext>
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
+                        {page}
+                      </Button>
+                    ))}
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === totalPages}>
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
-        )}
+        </div>
         </div>
       )}
 
@@ -1133,16 +1054,16 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
           if (!isOpen) handleCloseDialog()
         }}
       >
-        <DialogContent className="w-[calc(100%-16px)] sm:w-[calc(100%-32px)] max-w-[95vw] sm:max-w-[92vw] md:max-w-[90vw] lg:max-w-[90vw] xl:max-w-[85vw] 2xl:max-w-[80vw] h-[90vh] p-0 bg-background">
-          <DialogHeader className="px-4 py-3 border-b bg-background">
-            <DialogTitle className="text-xl font-bold">
-              {isEditingExistingIncident ? 'Edit Incident Report' : 'Incident Report'}
+        <DialogContent className="flex h-[100dvh] w-full max-w-none flex-col gap-0 overflow-clip rounded-none border-0 bg-background p-0 sm:h-[92vh] sm:w-[calc(100%-32px)] sm:max-w-[1200px] sm:rounded-lg sm:border">
+          <DialogHeader className="shrink-0 border-b border-border bg-card px-4 py-4 pr-12 text-left sm:px-6">
+            <DialogTitle className="font-display font-semibold">
+              {isEditingExistingIncident ? 'Edit incident report' : 'New incident report'}
             </DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground">
-              {isEditingExistingIncident ? 'Update the incident details below' : 'Fill in the incident details below'}
+              {isEditingExistingIncident ? 'Change any details and save. Fields marked * are required.' : 'Fields marked * are required. Be as specific as you can about what was taken and who was involved.'}
             </DialogDescription>
           </DialogHeader>
-          <div className="flex-1 overflow-y-auto bg-muted/30">
+          <div className="min-h-0 flex-1 overflow-y-auto bg-background">
             <Suspense fallback={<LazyLoadingFallback />}>
               <IncidentForm
                 initialData={editingIncident}
@@ -1163,44 +1084,75 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
         </DialogContent>
       </Dialog>
 
-      <Dialog 
-        open={!!viewingIncident} 
-        onOpenChange={(isOpen) => !isOpen && setViewingIncident(null)}
-      >
-        <DialogContent className="flex h-[90vh] max-h-[90vh] flex-col w-[calc(100%-16px)] sm:w-[calc(100%-32px)] max-w-[95vw] sm:max-w-[92vw] md:max-w-[90vw] lg:max-w-[90vw] xl:max-w-[85vw] 2xl:max-w-[80vw] p-0">
-            <DialogHeader className="px-4 py-3 border-b bg-background">
-            <DialogTitle className="text-xl font-bold">View Incident Details</DialogTitle>
-            <DialogDescription className="text-sm text-muted-foreground">
-              Incident ID: {viewingIncident?.id}
-            </DialogDescription>
-          </DialogHeader>
-          {viewingIncident && (
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <div className="min-h-0 flex-1 overflow-y-auto">
-                <IncidentDetailView incident={viewingIncident} />
-              </div>
-
-              {/* Form Actions */}
-              <div className="sticky bottom-0 bg-background border-t px-4 py-3 flex justify-end gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => handleEdit(viewingIncident)}
-                  className="h-9 px-4 text-sm"
-                >
-                  Edit
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setViewingIncident(null)}
-                  className="h-9 px-4 text-sm"
-                >
-                  Close
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <Sheet open={!!viewingIncident} onOpenChange={(isOpen) => !isOpen && setViewingIncident(null)}>
+        <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-xl">
+          {viewingIncident && (() => {
+            const f = getIncidentFinancials(viewingIncident)
+            const when = viewingIncident.dateOfIncident || viewingIncident.date
+            return (
+              <>
+                <SheetHeader className="space-y-3 border-b border-border px-5 pb-5 pt-5 text-left sm:px-6">
+                  <div className="flex flex-wrap items-center gap-2 pr-8">
+                    <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-foreground/80">
+                      {viewingIncident.incidentType}
+                    </span>
+                    <span className="figures text-xs text-muted-foreground">
+                      {when ? formatIncidentDate(when) : 'No date'}
+                      {viewingIncident.timeOfIncident ? `, ${viewingIncident.timeOfIncident}` : ''}
+                    </span>
+                  </div>
+                  <SheetTitle className="font-display text-2xl font-semibold leading-tight tracking-tight">
+                    {viewingIncident.siteName || 'Incident'}
+                  </SheetTitle>
+                  <SheetDescription className="text-sm">
+                    {viewingIncident.customerName}{viewingIncident.officerName ? `, reported by ${viewingIncident.officerName}` : ''}
+                  </SheetDescription>
+                  <dl className="figures grid grid-cols-3 overflow-hidden rounded-lg border border-border">
+                    <div className="px-3 py-2.5">
+                      <dt className="text-xs text-muted-foreground">Stolen</dt>
+                      <dd className="font-display text-lg font-semibold text-foreground">{formatMoney(f.totalStolenValue || f.totalRecoveredValue + f.totalLostValue)}</dd>
+                    </div>
+                    <div className="border-l border-border px-3 py-2.5">
+                      <dt className="text-xs text-muted-foreground">Recovered</dt>
+                      <dd className="font-display text-lg font-semibold text-recovered">{formatMoney(f.totalRecoveredValue)}</dd>
+                    </div>
+                    <div className="border-l border-border px-3 py-2.5">
+                      <dt className="text-xs text-muted-foreground">Lost</dt>
+                      <dd className="font-display text-lg font-semibold text-loss">{formatMoney(f.totalLostValue)}</dd>
+                    </div>
+                  </dl>
+                </SheetHeader>
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                  <IncidentDetailView incident={viewingIncident} />
+                </div>
+                <div className="flex items-center justify-between gap-2 border-t border-border bg-card px-5 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-6">
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      const incident = viewingIncident
+                      setViewingIncident(null)
+                      handleDelete(incident)
+                    }}
+                    className="text-loss hover:bg-loss-soft hover:text-loss"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </Button>
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => setViewingIncident(null)}>
+                      Close
+                    </Button>
+                    <Button onClick={() => handleEdit(viewingIncident)}>
+                      <Edit2 className="h-4 w-4" />
+                      Edit report
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )
+          })()}
+        </SheetContent>
+      </Sheet>
 
       <AlertDialog 
         open={!!deletingIncident} 
@@ -1208,19 +1160,19 @@ export default function IncidentReportPage({ isCustomerView = false, customerId:
       >
         <AlertDialogContent className="w-[calc(100%-32px)] max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg sm:text-xl">Delete Incident Report</AlertDialogTitle>
+            <AlertDialogTitle>Delete this incident report?</AlertDialogTitle>
             <AlertDialogDescription className="text-sm">
-              Are you sure you want to delete this incident report? This action cannot be undone.
+              It will be removed for everyone, including from analytics and alert history. This can't be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 sm:gap-0">
             <AlertDialogCancel className="text-sm">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmDelete}
-              className="bg-red-600 hover:bg-red-700 text-white text-sm"
+              className="bg-destructive hover:bg-destructive/90 text-white text-sm"
               disabled={deleteMutation.isPending}
             >
-              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+              {deleteMutation.isPending ? 'Deleting…' : 'Delete report'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

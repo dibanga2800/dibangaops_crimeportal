@@ -96,7 +96,7 @@ export const FaceCaptureGuide: React.FC<FaceCaptureGuideProps> = ({
 
 			const rotation = 0
 
-			ctx.strokeStyle = '#22c55e'
+			ctx.strokeStyle = '#94C949'
 			ctx.lineWidth = Math.max(2.5, Math.min(5, base * 0.012))
 			ctx.beginPath()
 			ctx.ellipse(cx, cy, safeRx, safeRy, rotation, 0, 2 * Math.PI)
@@ -104,7 +104,7 @@ export const FaceCaptureGuide: React.FC<FaceCaptureGuideProps> = ({
 
 			const fontSize = Math.max(12, Math.min(16, base * 0.05))
 			ctx.font = `${fontSize}px system-ui, sans-serif`
-			ctx.fillStyle = '#22c55e'
+			ctx.fillStyle = '#94C949'
 			ctx.textAlign = 'center'
 
 			const text = 'Position face in oval, then tap Capture & search'

@@ -21,7 +21,7 @@ import {
 import { useAvailableCustomers } from '@/hooks/useAvailableCustomers';
 import { Users, Eye, EyeOff, Building2, Lock, FileText, Shield, Briefcase, ChevronRight, ChevronLeft, AlertTriangle, Loader2, MapPin } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { FormSection, FormActions } from "@/components/common/FormSection";
 import { employeeService } from '@/services/employeeService';
 import { siteService } from '@/services/siteService';
 import { userService } from '@/services/userService';
@@ -170,6 +170,8 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  // Required-field highlights only appear after the first save attempt.
+  const [attempted, setAttempted] = useState(false);
   const [sites, setSites] = useState<any[]>([]);
   const [loadingSites, setLoadingSites] = useState(false);
 
@@ -486,6 +488,7 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setAttempted(true);
     
     // Check for validation errors first
     if (Object.keys(validationErrors).length > 0) {
@@ -569,16 +572,9 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Personal Information Section */}
-      <Card>
-        <CardHeader className="pb-4">
-          <CardTitle className="text-lg font-semibold flex items-center gap-2">
-            <Users className="h-5 w-5 text-primary" />
-            Personal Information
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <FormSection icon={<Users />} title="Personal information" className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <Label htmlFor="firstName">First Name</Label>
+            <Label htmlFor="firstName">First name</Label>
             <Input
               id="firstName"
               name="firstName"
@@ -588,7 +584,7 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
             />
           </div>
           <div>
-            <Label htmlFor="lastName">Last Name</Label>
+            <Label htmlFor="lastName">Last name</Label>
             <Input
               id="lastName"
               name="lastName"
@@ -598,8 +594,8 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
             />
           </div>
           <div>
-            <Label htmlFor="username" className={validationErrors.username ? 'text-red-600' : ''}>
-              Username * {validationErrors.username && <span className="text-red-600">← Fix this field</span>}
+            <Label htmlFor="username" className={validationErrors.username ? 'text-loss' : ''}>
+              Username *
             </Label>
             <Input
               id="username"
@@ -609,23 +605,23 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
               pattern="[a-zA-Z0-9._-]+"
               title="Username can only contain letters, numbers, dots, hyphens, and underscores (no spaces)"
               placeholder="e.g., james.haigh or jhaigh"
-              className={validationErrors.username ? 'border-red-500 focus:border-red-600 focus:ring-red-600' : ''}
+              className={validationErrors.username ? 'border-loss focus:border-loss focus:ring-loss/20' : ''}
               required
             />
             {validationErrors.username ? (
-              <p className="text-xs text-red-600 mt-1 font-medium flex items-center gap-1">
+              <p className="text-xs text-loss mt-1 font-medium flex items-center gap-1">
                 <AlertTriangle className="h-3 w-3" />
                 {validationErrors.username}
               </p>
             ) : (
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 Letters, numbers, dots (.), hyphens (-), underscores (_) only. No spaces.
               </p>
             )}
           </div>
           <div>
-            <Label htmlFor="email" className={validationErrors.email ? 'text-red-600' : ''}>
-              Email * {validationErrors.email && <span className="text-red-600">← Fix this field</span>}
+            <Label htmlFor="email" className={validationErrors.email ? 'text-loss' : ''}>
+              Email *
             </Label>
             <Input
               id="email"
@@ -633,12 +629,12 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
               type="email"
               value={formData.email}
               onChange={handleInputChange}
-              className={validationErrors.email ? 'border-red-500 focus:border-red-600 focus:ring-red-600' : ''}
+              className={validationErrors.email ? 'border-loss focus:border-loss focus:ring-loss/20' : ''}
               placeholder="user@example.com"
               required
             />
             {validationErrors.email && (
-              <p className="text-xs text-red-600 mt-1 font-medium flex items-center gap-1">
+              <p className="text-xs text-loss mt-1 font-medium flex items-center gap-1">
                 <AlertTriangle className="h-3 w-3" />
                 {validationErrors.email}
               </p>
@@ -691,8 +687,8 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
 
           {/* Employee selection – always shown so we can link a user to an employee record */}
           <div className="md:col-span-2">
-            <Label htmlFor="employeeId" className={!formData.employeeId ? 'text-red-600' : ''}>
-              Select Employee *
+            <Label htmlFor="employeeId" className={attempted && !formData.employeeId ? 'text-loss' : ''}>
+              Select employee *
             </Label>
             <Select
               value={formData.employeeId ? String(formData.employeeId) : ''}
@@ -704,7 +700,7 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
               }
               required
             >
-              <SelectTrigger className={!formData.employeeId ? 'border-red-500' : ''}>
+              <SelectTrigger className={attempted && !formData.employeeId ? 'border-loss' : ''}>
                 <SelectValue placeholder={loadingEmployees ? 'Loading employees...' : 'Select an employee'} />
               </SelectTrigger>
               <SelectContent>
@@ -718,7 +714,7 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
                 ) : employees.length === 0 ? (
                   <SelectItem value="no-employees" disabled>
                     <div className="flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4 text-amber-500" />
+                      <AlertTriangle className="h-4 w-4 text-warning" />
                       No employees available - Check backend connection
                     </div>
                   </SelectItem>
@@ -732,22 +728,14 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
               </SelectContent>
             </Select>
           </div>
-        </CardContent>
-      </Card>
+        </FormSection>
 
       {/* Customer Assignment Section - Only for internal security roles */}
       {!isCustomerRole && (
-        <Card>
-          <CardHeader className="pb-4">
-            <CardTitle className="text-lg font-semibold flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-primary" />
-              Customer Assignments
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+        <FormSection icon={<Building2 />} title="Company assignments">
             {isLoading ? (
               <div className="text-center py-4">
-                <div className="text-sm text-gray-500">Loading companies...</div>
+                <div className="text-sm text-muted-foreground">Loading companies...</div>
               </div>
             ) : (
               <div className="space-y-4">
@@ -762,7 +750,7 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
                   onAdd={handleAddCustomer}
                   onRemove={handleRemoveCustomer}
                 />
-                <div className="text-sm text-gray-500">
+                <div className="text-sm text-muted-foreground">
                   {selectedCustomersForDualList.length} customer(s) assigned
                 </div>
 
@@ -779,12 +767,12 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
                         : 'to this user'}
                     </Label>
                     {loadingSites ? (
-                      <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         Loading sites for assigned customers...
                       </div>
                     ) : sites.length === 0 ? (
-                      <div className="text-sm text-gray-500">
+                      <div className="text-sm text-muted-foreground">
                         No sites found for the assigned customers yet.
                       </div>
                     ) : (
@@ -809,7 +797,7 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
                               <span>
                                 {site.locationName || site.LocationName || `Site ${id}`}
                                 {site.sinNumber && (
-                                  <span className="ml-1 text-xs text-gray-500">
+                                  <span className="ml-1 text-xs text-muted-foreground">
                                     ({site.sinNumber})
                                   </span>
                                 )}
@@ -820,7 +808,7 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
                       </div>
                     )}
                     {formData.assignedSiteIds && formData.assignedSiteIds.length > 0 && (
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-muted-foreground">
                         {formData.assignedSiteIds.length} site(s) assigned
                       </div>
                     )}
@@ -828,21 +816,13 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
                 )}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </FormSection>
       )}
 
       {/* Additional Information Section */}
-      <Card>
-        <CardHeader className="pb-4">
-          <CardTitle className="text-lg font-semibold flex items-center gap-2">
-            <Briefcase className="h-5 w-5 text-primary" />
-            Additional Information
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <FormSection icon={<Briefcase />} title="Additional information" className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <Label htmlFor="jobTitle">Job Title</Label>
+            <Label htmlFor="jobTitle">Job title</Label>
             <Input
               id="jobTitle"
               name="jobTitle"
@@ -852,7 +832,7 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
           </div>
           {isCustomerRole && (
             <div>
-              <Label htmlFor="customerId" className={!formData.customerId ? 'text-red-600' : ''}>
+              <Label htmlFor="customerId" className={attempted && !formData.customerId ? 'text-loss' : ''}>
                 Customer *
               </Label>
               <Select
@@ -860,7 +840,7 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
                 onValueChange={(value) => handleSelectChange('customerId', value)}
                 required
               >
-                <SelectTrigger className={!formData.customerId ? 'border-red-500' : ''}>
+                <SelectTrigger className={attempted && !formData.customerId ? 'border-loss' : ''}>
                   <SelectValue placeholder={isLoading ? 'Loading companies...' : 'Select company'} />
                 </SelectTrigger>
                 <SelectContent>
@@ -887,15 +867,15 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
                   )}
                 </SelectContent>
               </Select>
-              {!formData.customerId && (
-                <p className="text-xs text-red-600 mt-1">Company selection is required for company users</p>
+              {attempted && !formData.customerId && (
+                <p className="text-xs text-loss mt-1">Company selection is required for company users</p>
               )}
             </div>
           )}
           {formData.role === 'store' && isCustomerRole && (
             <div>
-              <Label htmlFor="primarySiteId" className={!formData.primarySiteId ? 'text-red-600' : ''}>
-                Store (Site) *
+              <Label htmlFor="primarySiteId" className={attempted && !formData.primarySiteId ? 'text-loss' : ''}>
+                Store (site) *
               </Label>
               <Select
                 value={formData.primarySiteId ?? ''}
@@ -904,7 +884,7 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
                 }
                 required
               >
-                <SelectTrigger className={!formData.primarySiteId ? 'border-red-500' : ''}>
+                <SelectTrigger className={attempted && !formData.primarySiteId ? 'border-loss' : ''}>
                   <SelectValue placeholder={loadingSites ? 'Loading stores...' : 'Select store'} />
                 </SelectTrigger>
                 <SelectContent>
@@ -934,8 +914,8 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
                   )}
                 </SelectContent>
               </Select>
-              {!formData.primarySiteId && (
-                <p className="text-xs text-red-600 mt-1">Store selection is required for store users</p>
+              {attempted && !formData.primarySiteId && (
+                <p className="text-xs text-loss mt-1">Store selection is required for store users</p>
               )}
             </div>
           )}
@@ -949,7 +929,7 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
             />
           </div>
           <div>
-            <Label htmlFor="signatureCode">Signature Code</Label>
+            <Label htmlFor="signatureCode">Signature code</Label>
             <Input
               id="signatureCode"
               name="signatureCode"
@@ -967,10 +947,9 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
               <Label htmlFor="recordIsDeleted">Record is Deleted</Label>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </FormSection>
 
-      <div className="flex justify-end gap-2">
+      <FormActions>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
@@ -983,9 +962,9 @@ export const UserForm = ({ initialData, onSubmit, onCancel }: UserFormProps) => 
               : ''
           }
         >
-          {initialData ? 'Update' : 'Create'} User
+          {initialData ? 'Save changes' : 'Create user'}
         </Button>
-      </div>
+      </FormActions>
     </form>
   );
 }; 

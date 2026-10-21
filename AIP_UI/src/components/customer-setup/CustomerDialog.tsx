@@ -1,4 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { FormActions } from '@/components/common/FormSection'
+import { SUBTABS_LIST, SUBTABS_TRIGGER } from '@/pages/analytics/components/moduleStyles'
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -258,8 +260,8 @@ export function CustomerDialog({ open, onOpenChange, customer, onSave }: Custome
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[95vw] sm:max-w-[800px] xl:max-w-[1000px] p-4 sm:p-6 xl:p-8 max-h-[95vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-lg md:text-xl xl:text-2xl">
-            {customer ? "Edit Customer" : "New Customer"}
+          <DialogTitle>
+            {customer ? "Edit company" : "New company"}
           </DialogTitle>
           <DialogDescription>
             {customer ? "Update customer information, regions, and sites" : "Create a new customer. Regions and sites can be added after saving."}
@@ -269,37 +271,19 @@ export function CustomerDialog({ open, onOpenChange, customer, onSave }: Custome
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <Tabs defaultValue="details" className="w-full" activationMode="manual">
-              <TabsList className={`grid w-full ${customer?.id ? 'grid-cols-3' : 'grid-cols-1'} transition-none`}>
-                <TabsTrigger value="details">Company Details</TabsTrigger>
-                {customer?.id && (
-                  <>
-                    <TabsTrigger value="regions">Regions</TabsTrigger>
-                    <TabsTrigger value="sites">Sites</TabsTrigger>
-                  </>
-                )}
-              </TabsList>
+              {customer?.id ? (
+                <TabsList className={SUBTABS_LIST}>
+                  <TabsTrigger className={SUBTABS_TRIGGER} value="details">Details</TabsTrigger>
+                  <TabsTrigger className={SUBTABS_TRIGGER} value="regions">Regions</TabsTrigger>
+                  <TabsTrigger className={SUBTABS_TRIGGER} value="sites">Stores</TabsTrigger>
+                </TabsList>
+              ) : null}
               
-              <TabsContent value="details" className="space-y-6 mt-6">
+              <TabsContent value="details" className="mt-2 space-y-6">
                 {!customer?.id && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                    <div className="flex items-start">
-                      <div className="flex-shrink-0">
-                        <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                      <div className="ml-3">
-                        <h3 className="text-sm font-medium text-blue-800">
-                          Regions and Sites
-                        </h3>
-                        <div className="mt-2 text-sm text-blue-700">
-                          <p>
-                            After creating this company, you'll be able to add regions and sites using the dedicated tabs that will appear.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <p className="rounded-md border border-border bg-muted/40 px-3 py-2.5 text-[13px] text-muted-foreground">
+                    Regions and stores are added after the company is created, from the tabs that appear here.
+                  </p>
                 )}
                 <CompanyDetailsSection form={form} />
                 <AddressSection form={form} />
@@ -322,9 +306,9 @@ export function CustomerDialog({ open, onOpenChange, customer, onSave }: Custome
                         setSelectedRegion(undefined)
                         setRegionDialogOpen(true)
                       }}
-                      className="bg-purple-600 hover:bg-purple-700"
+                      
                     >
-                      Add Region
+                      Add region
                     </Button>
                   </div>
                   </TabsContent>
@@ -343,9 +327,9 @@ export function CustomerDialog({ open, onOpenChange, customer, onSave }: Custome
                           setSelectedSite(undefined)
                           setSiteDialogOpen(true)
                         }}
-                        className="bg-purple-600 hover:bg-purple-700"
+                        
                       >
-                        Add Site
+                        Add store
                       </Button>
                     </div>
                   </TabsContent>
@@ -353,14 +337,14 @@ export function CustomerDialog({ open, onOpenChange, customer, onSave }: Custome
               )}
             </Tabs>
 
-            <div className="flex justify-end space-x-2 pt-4 border-t">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
+            <FormActions>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
               <Button type="submit">
-                {customer ? "Update Customer" : "Create Customer"}
+                {customer ? "Save changes" : "Create company"}
               </Button>
-            </div>
+            </FormActions>
           </form>
         </Form>
 

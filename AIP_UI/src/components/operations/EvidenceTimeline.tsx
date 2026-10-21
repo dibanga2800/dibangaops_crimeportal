@@ -14,12 +14,12 @@ interface EvidenceTimelineProps {
 }
 
 const statusColors: Record<string, string> = {
-	'registered': 'bg-blue-100 text-blue-800',
-	'in-transit': 'bg-amber-100 text-amber-800',
-	'in-storage': 'bg-emerald-100 text-emerald-800',
-	'released': 'bg-violet-100 text-violet-800',
-	'disposed': 'bg-gray-100 text-gray-800',
-	'returned': 'bg-teal-100 text-teal-800'
+	'registered': 'bg-info-soft text-info',
+	'in-transit': 'bg-warning-soft text-warning',
+	'in-storage': 'bg-recovered-soft text-recovered',
+	'released': 'bg-accent text-primary',
+	'disposed': 'bg-muted text-foreground',
+	'returned': 'bg-info-soft text-info'
 }
 
 const eventIcons: Record<string, typeof Clock> = {
@@ -84,7 +84,7 @@ export const EvidenceTimeline = ({ incidentId, readonly = false }: EvidenceTimel
 			<CardHeader className="p-3 pb-2">
 				<div className="flex items-center justify-between">
 					<CardTitle className="text-sm flex items-center gap-1.5">
-						<ScanBarcode className="h-4 w-4 text-blue-500" />
+						<ScanBarcode className="h-4 w-4 text-primary" />
 						Evidence Chain
 						{evidence.length > 0 && (
 							<Badge variant="secondary" className="text-xs ml-1">{evidence.length}</Badge>
@@ -147,7 +147,7 @@ export const EvidenceTimeline = ({ incidentId, readonly = false }: EvidenceTimel
 
 				{loading && (
 					<div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
-						<div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full" />
+						<div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
 						Loading evidence...
 					</div>
 				)}
@@ -165,7 +165,7 @@ export const EvidenceTimeline = ({ incidentId, readonly = false }: EvidenceTimel
 								<ScanBarcode className="h-4 w-4 text-muted-foreground" />
 								<span className="text-sm font-mono font-medium">{item.barcode}</span>
 							</div>
-							<Badge className={cn('text-xs', statusColors[item.status] || 'bg-gray-100')}>
+							<Badge className={cn('text-xs', statusColors[item.status] || 'bg-muted')}>
 								{item.status}
 							</Badge>
 						</div>
@@ -174,13 +174,13 @@ export const EvidenceTimeline = ({ incidentId, readonly = false }: EvidenceTimel
 						</div>
 
 						{item.custodyEvents.length > 0 && (
-							<div className="relative pl-4 space-y-1.5 border-l border-gray-200 ml-1">
+							<div className="relative pl-4 space-y-1.5 border-l border-border ml-1">
 								{item.custodyEvents.map(event => {
 									const Icon = eventIcons[event.eventType] || Clock
 									return (
 										<div key={event.custodyEventId} className="flex items-start gap-2">
-											<div className="absolute -left-[7px] w-3.5 h-3.5 rounded-full bg-white border-2 border-blue-400 flex items-center justify-center">
-												<Icon className="h-2 w-2 text-blue-500" />
+											<div className="absolute -left-[7px] w-3.5 h-3.5 rounded-full bg-card border-2 border-primary flex items-center justify-center">
+												<Icon className="h-2 w-2 text-primary" />
 											</div>
 											<div className="flex-1 ml-2">
 												<div className="flex items-center gap-1.5">

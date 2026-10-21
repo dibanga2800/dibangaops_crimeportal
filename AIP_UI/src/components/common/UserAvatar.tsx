@@ -22,7 +22,7 @@ export function UserAvatar({
     lg: 'h-14 w-14',
   }
 
-  const borderClass = showBorder ? 'border border-blue-700' : ''
+  const borderClass = showBorder ? 'ring-1 ring-border' : ''
 
   const profileSrc = user?.profilePicture || undefined
   const initials = user
@@ -37,7 +37,7 @@ export function UserAvatar({
         alt={altText}
         className="object-cover"
       />
-      <AvatarFallback className="bg-blue-700 text-white">
+      <AvatarFallback className="bg-primary/15 text-xs font-semibold text-primary dark:bg-primary/20">
         {initials}
       </AvatarFallback>
     </Avatar>

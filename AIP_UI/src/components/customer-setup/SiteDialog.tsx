@@ -291,13 +291,13 @@ export function SiteDialog({ open, onOpenChange, site, selectedCustomerId, onSuc
       <DialogContent className="max-w-[95vw] sm:max-w-[600px] xl:max-w-[800px] p-4 sm:p-6 xl:p-8 max-h-[95vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {site ? "Edit Site" : "Add New Site"}
+            {site ? "Edit store" : "New store"}
           </DialogTitle>
           <DialogDescription>
             {site ? "Update the site information below." : "Fill in the details to create a new site for the selected customer."}
           </DialogDescription>
           {availableRegions.length === 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-2">
+            <div className="bg-warning-soft border border-warning/30 rounded-lg p-3 mt-2">
               <div className="flex items-start">
                 <div className="flex-shrink-0">
                   <svg className="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
@@ -305,10 +305,10 @@ export function SiteDialog({ open, onOpenChange, site, selectedCustomerId, onSuc
                   </svg>
                 </div>
                 <div className="ml-3">
-                  <h3 className="text-sm font-medium text-amber-800">
-                    No Regions Available
+                  <h3 className="text-sm font-medium text-warning">
+                    No regions available
                   </h3>
-                  <div className="mt-1 text-sm text-amber-700">
+                  <div className="mt-1 text-sm text-warning">
                     <p>
                       This company doesn't have any regions yet. Please create a region first before adding sites.
                     </p>
@@ -322,7 +322,7 @@ export function SiteDialog({ open, onOpenChange, site, selectedCustomerId, onSuc
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
             {/* Basic Information */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Basic Information</h3>
+              <h3 className="text-sm font-semibold text-foreground">Basic information</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {!selectedCustomerId && (
                   <FormField
@@ -339,9 +339,9 @@ export function SiteDialog({ open, onOpenChange, site, selectedCustomerId, onSuc
                           </FormControl>
                           <SelectContent>
                             {isLoadingCustomers
-                              ? <SelectItem value="loading" disabled>Loading customers...</SelectItem>
+                              ? <SelectItem value="loading" disabled>Loading companies…</SelectItem>
                               : availableCustomers.length === 0
-                                ? <SelectItem value="none" disabled>No customers available</SelectItem>
+                                ? <SelectItem value="none" disabled>No companies available</SelectItem>
                                 : availableCustomers.map((customer) => (
                                     <SelectItem key={customer.id} value={customer.id.toString()}>
                                       {customer.companyName}
@@ -378,7 +378,7 @@ export function SiteDialog({ open, onOpenChange, site, selectedCustomerId, onSuc
                               <SelectItem key={region.regionID} value={region.regionID.toString()}>
                                 {region.regionName}
                                 {region.regionDescription && (
-                                  <span className="text-gray-500 ml-2">- {region.regionDescription}</span>
+                                  <span className="text-muted-foreground ml-2">- {region.regionDescription}</span>
                                 )}
                               </SelectItem>
                             ))
@@ -386,7 +386,7 @@ export function SiteDialog({ open, onOpenChange, site, selectedCustomerId, onSuc
                         </SelectContent>
                       </Select>
                       {availableRegions.length === 0 && (
-                        <p className="text-sm text-amber-600 mt-1">
+                        <p className="text-sm text-warning mt-1">
                           Please create a region for this company first before adding sites.
                         </p>
                       )}
@@ -400,7 +400,7 @@ export function SiteDialog({ open, onOpenChange, site, selectedCustomerId, onSuc
                   name="locationName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Location Name *</FormLabel>
+                      <FormLabel>Location name *</FormLabel>
                       <FormControl>
                         <Input {...field} disabled={isLoading} placeholder="Enter location name" />
                       </FormControl>
@@ -414,7 +414,7 @@ export function SiteDialog({ open, onOpenChange, site, selectedCustomerId, onSuc
                   name="locationType"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Location Type</FormLabel>
+                      <FormLabel>Location type</FormLabel>
                       <FormControl>
                         <Input {...field} disabled={isLoading} placeholder="e.g., Office, Warehouse, Retail" />
                       </FormControl>
@@ -428,7 +428,7 @@ export function SiteDialog({ open, onOpenChange, site, selectedCustomerId, onSuc
                   name="sinNumber"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>SIN Number</FormLabel>
+                      <FormLabel>SIN number</FormLabel>
                       <FormControl>
                         <Input {...field} disabled={isLoading} placeholder="Enter SIN Number" />
                       </FormControl>
@@ -441,14 +441,14 @@ export function SiteDialog({ open, onOpenChange, site, selectedCustomerId, onSuc
 
             {/* Address Information */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Address Information</h3>
+              <h3 className="text-sm font-semibold text-foreground">Address information</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="buildingName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Building Name</FormLabel>
+                      <FormLabel>Building name</FormLabel>
                       <FormControl>
                         <Input {...field} disabled={isLoading} placeholder="Enter building name" />
                       </FormControl>
@@ -462,7 +462,7 @@ export function SiteDialog({ open, onOpenChange, site, selectedCustomerId, onSuc
                   name="numberandStreet"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Street Address</FormLabel>
+                      <FormLabel>Street address</FormLabel>
                       <FormControl>
                         <Input {...field} disabled={isLoading} placeholder="Enter street address" />
                       </FormControl>
@@ -542,14 +542,14 @@ export function SiteDialog({ open, onOpenChange, site, selectedCustomerId, onSuc
 
             {/* Contact & Contract Information */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Contact & Contract Information</h3>
+              <h3 className="text-sm font-semibold text-foreground">Contact & contract information</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="telephoneNumber"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Telephone Number</FormLabel>
+                      <FormLabel>Telephone number</FormLabel>
                       <FormControl>
                         <Input {...field} disabled={isLoading} placeholder="Enter telephone number" />
                       </FormControl>
@@ -563,7 +563,7 @@ export function SiteDialog({ open, onOpenChange, site, selectedCustomerId, onSuc
                   name="contractStartDate"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Contract Start Date</FormLabel>
+                      <FormLabel>Contract start date</FormLabel>
                       <FormControl>
                         <Input {...field} type="date" disabled={isLoading} />
                       </FormControl>
@@ -577,7 +577,7 @@ export function SiteDialog({ open, onOpenChange, site, selectedCustomerId, onSuc
                   name="contractEndDate"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Contract End Date</FormLabel>
+                      <FormLabel>Contract end date</FormLabel>
                       <FormControl>
                         <Input {...field} type="date" disabled={isLoading} />
                       </FormControl>
@@ -590,7 +590,7 @@ export function SiteDialog({ open, onOpenChange, site, selectedCustomerId, onSuc
 
             {/* Site Status & Configuration */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Site Status & Configuration</h3>
+              <h3 className="text-sm font-semibold text-foreground">Store status and set-up</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
@@ -605,7 +605,7 @@ export function SiteDialog({ open, onOpenChange, site, selectedCustomerId, onSuc
                         />
                       </FormControl>
                       <div className="space-y-1 leading-none">
-                        <FormLabel>Core Site</FormLabel>
+                        <FormLabel>Core site</FormLabel>
                       </div>
                       <FormMessage />
                     </FormItem>
@@ -617,7 +617,7 @@ export function SiteDialog({ open, onOpenChange, site, selectedCustomerId, onSuc
                   name="siteSurveyComplete"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Site Survey Complete Date</FormLabel>
+                      <FormLabel>Store survey completed</FormLabel>
                       <FormControl>
                         <Input {...field} type="date" disabled={isLoading} />
                       </FormControl>
@@ -631,7 +631,7 @@ export function SiteDialog({ open, onOpenChange, site, selectedCustomerId, onSuc
                   name="assignmentInstructionsIssued"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Assignment Instructions Issued Date</FormLabel>
+                      <FormLabel>Assignment instructions issued date</FormLabel>
                       <FormControl>
                         <Input {...field} type="date" disabled={isLoading} />
                       </FormControl>
@@ -645,7 +645,7 @@ export function SiteDialog({ open, onOpenChange, site, selectedCustomerId, onSuc
                   name="riskAssessmentIssued"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Risk Assessment Issued Date</FormLabel>
+                      <FormLabel>Risk assessment issued date</FormLabel>
                       <FormControl>
                         <Input {...field} type="date" disabled={isLoading} />
                       </FormControl>
@@ -658,7 +658,7 @@ export function SiteDialog({ open, onOpenChange, site, selectedCustomerId, onSuc
 
             {/* Additional Details */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Additional Details</h3>
+              <h3 className="text-sm font-semibold text-foreground">Additional details</h3>
               <FormField
                 control={form.control}
                 name="details"
@@ -669,7 +669,7 @@ export function SiteDialog({ open, onOpenChange, site, selectedCustomerId, onSuc
                       <Textarea 
                         {...field} 
                         disabled={isLoading} 
-                        placeholder="Enter additional details about the site"
+                        placeholder="Anything else worth knowing about this store"
                         rows={4}
                       />
                     </FormControl>

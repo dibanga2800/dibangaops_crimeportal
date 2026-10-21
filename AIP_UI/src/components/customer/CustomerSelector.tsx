@@ -79,16 +79,16 @@ export const CustomerSelector: React.FC = () => {
 	}
 
 	return (
-		<div className="px-3 py-2 mb-2 border-b border-border">
-			<label className="block text-xs font-medium text-muted-foreground mb-2">
-				Select Company
+		<div className="px-3 py-2">
+			<label className="mb-1.5 block text-xs font-medium text-sidebar-foreground/70">
+				Company
 			</label>
 			<Select
 				value={selectValue}
 				onValueChange={handleValueChange}
 				disabled={isLoading || customers.length === 0}
 			>
-				<SelectTrigger className="w-full h-9 text-sm">
+				<SelectTrigger className="h-9 w-full border-sidebar-border bg-sidebar-accent text-sm text-white shadow-none hover:border-white/25 focus:border-signal focus:ring-signal/25 data-[placeholder]:text-sidebar-foreground [&>svg]:text-sidebar-foreground">
 					<SelectValue placeholder={isLoading ? 'Loading companies...' : 'Select a company'} />
 				</SelectTrigger>
 				<SelectContent className="max-h-[300px]">
@@ -100,8 +100,8 @@ export const CustomerSelector: React.FC = () => {
 				</SelectContent>
 			</Select>
 			{selectedCustomer && (
-				<p className="text-xs text-muted-foreground mt-1">
-					Viewing as: <span className="font-medium">{selectedCustomer.name}</span>
+				<p className="mt-1.5 text-xs text-sidebar-foreground/70">
+					Viewing <span className="font-medium text-sidebar-foreground">{selectedCustomer.name}</span>
 				</p>
 			)}
 		</div>

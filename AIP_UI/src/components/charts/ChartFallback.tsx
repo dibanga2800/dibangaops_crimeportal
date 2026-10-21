@@ -14,10 +14,10 @@ const ChartFallback: React.FC<ChartFallbackProps> = ({
   onRetry
 }) => {
   return (
-    <div className="flex flex-col items-center justify-center h-[400px] p-6 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
-      <BarChartIcon className="h-16 w-16 text-slate-300 dark:text-slate-600 mb-4" />
-      <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-2">{title}</h3>
-      <p className="text-sm text-slate-600 dark:text-slate-400 text-center max-w-md mb-6">{message}</p>
+    <div className="flex flex-col items-center justify-center h-[400px] p-6 bg-muted/50 rounded-lg border border-border">
+      <BarChartIcon className="h-16 w-16 text-slate-300 mb-4" />
+      <h3 className="text-lg font-medium text-foreground mb-2">{title}</h3>
+      <p className="text-sm text-muted-foreground text-center max-w-md mb-6">{message}</p>
       {onRetry && (
         <Button 
           onClick={onRetry}
