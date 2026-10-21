@@ -87,10 +87,11 @@ export function AccordionTrigger({
       type="button"
       onClick={() => setValue(itemValue)}
       className={cn(
-        "flex w-full items-center justify-between py-4 font-medium transition-all hover:underline [&[data-state=open]>svg]:rotate-180",
+        "flex w-full items-center justify-between py-3 text-sm font-medium transition-all [&[data-state=open]>svg]:rotate-180",
         className
       )}
       data-state={isExpanded ? "open" : "closed"}
+      aria-expanded={isExpanded}
       {...props}
     >
       {children}

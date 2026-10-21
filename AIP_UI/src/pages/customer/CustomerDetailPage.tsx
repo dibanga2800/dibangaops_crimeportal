@@ -99,7 +99,7 @@ export default function CustomerDetailPage() {
   if (error || !customer) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <div className="rounded-lg bg-red-50 p-4 text-red-800">
+        <div className="rounded-lg bg-loss-soft p-4 text-loss">
           {error || 'Customer not found'}
         </div>
       </div>
@@ -109,7 +109,7 @@ export default function CustomerDetailPage() {
   const availablePages = pageState.pages;
 
   return (
-    <div className="container mx-auto p-6">
+    <div className="w-full">
       <div className="mb-6">
         <Button 
           variant="outline" 
@@ -121,7 +121,7 @@ export default function CustomerDetailPage() {
         </Button>
         
         <div className="mb-4">
-          <h1 className="text-3xl font-bold">{customer.companyName}</h1>
+          <h1 className="text-[1.75rem] font-semibold leading-[1.1] tracking-tight text-foreground sm:text-[2.125rem]">{customer.companyName}</h1>
           <p className="text-muted-foreground">
             Company Number: {customer.companyNumber}
           </p>
@@ -150,7 +150,7 @@ export default function CustomerDetailPage() {
           {pageState.isLoading && (
             <div className="text-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
-              <p className="text-muted-foreground">Loading assigned pages...</p>
+              <p className="text-sm text-muted-foreground">Loading assigned pages…</p>
             </div>
           )}
 
@@ -165,7 +165,7 @@ export default function CustomerDetailPage() {
               {availablePages.map(page => (
                 <Card 
                   key={page.id} 
-                  className="cursor-pointer hover:shadow-md transition-shadow"
+                  className="cursor-pointer transition-colors hover:border-foreground/25 hover:bg-muted/30"
                   onClick={() => handlePageNavigation(page)}
                 >
                   <CardContent className="p-4">

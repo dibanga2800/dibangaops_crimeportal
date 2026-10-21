@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Bell, Store, Shield, Plus, Trash2, Edit2, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react'
@@ -351,45 +352,38 @@ export default function AlertRulesPage() {
 	}
 
 	return (
-		<div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-gradient-to-br from-blue-50 via-slate-50 to-blue-50">
-			<div className="container mx-auto px-3 sm:px-4 md:px-6 py-3 sm:py-4 md:py-6 space-y-4 sm:space-y-6 max-w-screen-2xl">
-				<div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
-					<div>
-						<h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold">Alert Rules</h1>
-						<p className="text-xs sm:text-sm md:text-base text-muted-foreground mt-1">
-							Manage alert rules for stores and Loss Prevention Managers
-						</p>
-					</div>
-				</div>
+		<div className="w-full">
+			<div className="space-y-6">
+				<PageHeader
+					title="Alert rules"
+					description="Decide which incidents notify nearby stores and which go straight to a loss prevention manager."
+					className="pb-0"
+				/>
 
 			{loading && (
-				<Card>
-					<CardContent className="p-4 sm:p-6">
-						<div className="flex items-center justify-center gap-3">
-							<div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
-							<p className="text-xs sm:text-sm text-muted-foreground">Loading alert rules...</p>
-						</div>
-					</CardContent>
-				</Card>
+				<div className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3" role="status">
+					<div className="h-4 w-4 animate-spin rounded-full border-2 border-muted border-t-primary"></div>
+					<p className="text-sm text-muted-foreground">Loading alert rules…</p>
+				</div>
 			)}
 
 			<Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'store' | 'lpm' | 'instances')} className="w-full">
-				<TabsList className="grid w-full grid-cols-3 mb-4 sm:mb-6 h-auto">
-					<TabsTrigger value="store" className="flex items-center gap-2 text-xs sm:text-sm py-2">
+				<TabsList className="h-auto w-full justify-start overflow-x-auto sm:w-auto">
+					<TabsTrigger value="store">
 						<Store className="h-4 w-4" />
-						<span className="hidden sm:inline">Store Alert Rules</span>
+						<span className="hidden sm:inline">Store rules</span>
 						<span className="sm:hidden">Store</span>
-						<Badge variant="secondary" className="ml-1 sm:ml-2 text-xs">{storeRules.length}</Badge>
+						<Badge variant="secondary" className="figures ml-1 px-1.5 text-[11px]">{storeRules.length}</Badge>
 					</TabsTrigger>
-					<TabsTrigger value="lpm" className="flex items-center gap-2 text-xs sm:text-sm py-2">
+					<TabsTrigger value="lpm">
 						<Shield className="h-4 w-4" />
-						<span className="hidden sm:inline">LPM Alert Rules</span>
+						<span className="hidden sm:inline">LPM rules</span>
 						<span className="sm:hidden">LPM</span>
-						<Badge variant="secondary" className="ml-1 sm:ml-2 text-xs">{lpmRules.length}</Badge>
+						<Badge variant="secondary" className="figures ml-1 px-1.5 text-[11px]">{lpmRules.length}</Badge>
 					</TabsTrigger>
-					<TabsTrigger value="instances" className="flex items-center gap-2 text-xs sm:text-sm py-2">
+					<TabsTrigger value="instances">
 						<AlertTriangle className="h-4 w-4" />
-						<span className="hidden sm:inline">Alert Instances</span>
+						<span className="hidden sm:inline">Triggered alerts</span>
 						<span className="sm:hidden">Alerts</span>
 					</TabsTrigger>
 				</TabsList>
@@ -407,7 +401,7 @@ export default function AlertRulesPage() {
 								<div className="min-w-0 flex-1">
 									<CardTitle className="flex items-center gap-2 text-base sm:text-lg">
 										<Store className="h-5 w-5 flex-shrink-0" />
-										<span>Store Alert Rules</span>
+										<span>Store rules</span>
 									</CardTitle>
 									<CardDescription className="mt-1 text-xs sm:text-sm">
 										Create rules that trigger alerts for stores based on keywords, incident types, and conditions
@@ -421,7 +415,7 @@ export default function AlertRulesPage() {
 									className="w-full sm:w-auto text-xs sm:text-sm"
 								>
 									<Plus className="h-4 w-4 mr-2" />
-									Create Store Rule
+									New store rule
 								</Button>
 							</div>
 						</CardHeader>
@@ -430,14 +424,14 @@ export default function AlertRulesPage() {
 								<div className="text-center py-8 text-muted-foreground">
 									<Bell className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-4 opacity-50" />
 									<p className="text-sm sm:text-base">No store alert rules created yet</p>
-									<p className="text-xs sm:text-sm mt-2">Click "Create Store Rule" to get started</p>
+									<p className="text-xs sm:text-sm mt-2">Create one to notify nearby stores when a matching incident is reported.</p>
 								</div>
 							) : (
 								<>
 									{/* Mobile Card Layout */}
 									<div className="block md:hidden space-y-3">
 										{storeRules.map(rule => (
-											<div key={rule.id} className="rounded-lg border bg-white shadow-sm p-4 space-y-3">
+											<div key={rule.id} className="rounded-lg border bg-card shadow-sm p-4 space-y-3">
 												{/* Header with name and status */}
 												<div className="flex items-start justify-between gap-2">
 													<div className="flex-1 min-w-0">
@@ -450,9 +444,9 @@ export default function AlertRulesPage() {
 														className="h-8 w-8 p-0 flex-shrink-0"
 													>
 														{rule.isActive ? (
-															<CheckCircle2 className="h-4 w-4 text-green-600" />
+															<CheckCircle2 className="h-4 w-4 text-recovered" />
 														) : (
-															<XCircle className="h-4 w-4 text-gray-400" />
+															<XCircle className="h-4 w-4 text-muted-foreground/80" />
 														)}
 													</Button>
 												</div>
@@ -460,7 +454,7 @@ export default function AlertRulesPage() {
 												{/* Details */}
 												<div className="space-y-2 text-xs pt-2 border-t">
 													<div>
-														<span className="text-gray-500 block mb-1">Keywords</span>
+														<span className="text-muted-foreground block mb-1">Keywords</span>
 														<div className="flex flex-wrap gap-1">
 															{rule.keywords.slice(0, 3).map((keyword, idx) => (
 																<Badge key={idx} variant="secondary" className="text-xs">
@@ -475,7 +469,7 @@ export default function AlertRulesPage() {
 														</div>
 													</div>
 													<div>
-														<span className="text-gray-500 block mb-1">Incident Types</span>
+														<span className="text-muted-foreground block mb-1">Incident Types</span>
 														<div className="flex flex-wrap gap-1">
 															{rule.incidentTypes.slice(0, 3).map((type, idx) => (
 																<Badge key={idx} variant="outline" className="text-xs">
@@ -491,11 +485,11 @@ export default function AlertRulesPage() {
 													</div>
 													<div className="grid grid-cols-2 gap-2">
 														<div>
-															<span className="text-gray-500 block mb-0.5">Radius</span>
+															<span className="text-muted-foreground block mb-0.5">Radius</span>
 															<div className="font-medium">{rule.storeRadius} miles</div>
 														</div>
 														<div>
-															<span className="text-gray-500 block mb-0.5">Channels</span>
+															<span className="text-muted-foreground block mb-0.5">Channels</span>
 															<div className="flex flex-wrap gap-1">
 																{rule.channels.map((channel, idx) => (
 																	<Badge key={idx} variant="default" className="text-xs">
@@ -522,7 +516,7 @@ export default function AlertRulesPage() {
 														variant="outline"
 														size="sm"
 														onClick={() => handleDeleteStoreRuleClick(rule)}
-														className="h-9 px-3 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+														className="h-9 px-3 text-xs text-loss hover:text-loss hover:bg-loss-soft"
 													>
 														<Trash2 className="h-3.5 w-3.5" />
 													</Button>
@@ -595,9 +589,9 @@ export default function AlertRulesPage() {
 																className="h-6"
 															>
 																{rule.isActive ? (
-																	<CheckCircle2 className="h-4 w-4 text-green-600" />
+																	<CheckCircle2 className="h-4 w-4 text-recovered" />
 																) : (
-																	<XCircle className="h-4 w-4 text-gray-400" />
+																	<XCircle className="h-4 w-4 text-muted-foreground/80" />
 																)}
 															</Button>
 														</TableCell>
@@ -638,7 +632,7 @@ export default function AlertRulesPage() {
 								<div className="min-w-0 flex-1">
 									<CardTitle className="flex items-center gap-2 text-base sm:text-lg">
 										<Shield className="h-5 w-5 flex-shrink-0" />
-										<span>LPM Alert Rules</span>
+										<span>LPM rules</span>
 									</CardTitle>
 									<CardDescription className="mt-1 text-xs sm:text-sm">
 										Create rules that trigger alerts for Loss Prevention Managers in specific regions
@@ -652,7 +646,7 @@ export default function AlertRulesPage() {
 									className="w-full sm:w-auto text-xs sm:text-sm"
 								>
 									<Plus className="h-4 w-4 mr-2" />
-									Create LPM Rule
+									New LPM rule
 								</Button>
 							</div>
 						</CardHeader>
@@ -661,14 +655,14 @@ export default function AlertRulesPage() {
 								<div className="text-center py-8 text-muted-foreground">
 									<Shield className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-4 opacity-50" />
 									<p className="text-sm sm:text-base">No LPM alert rules created yet</p>
-									<p className="text-xs sm:text-sm mt-2">Click "Create LPM Rule" to get started</p>
+									<p className="text-xs sm:text-sm mt-2">Create one to email a loss prevention manager when a matching incident is reported.</p>
 								</div>
 							) : (
 								<>
 									{/* Mobile Card Layout */}
 									<div className="block md:hidden space-y-3">
 										{lpmRules.map(rule => (
-											<div key={rule.id} className="rounded-lg border bg-white shadow-sm p-4 space-y-3">
+											<div key={rule.id} className="rounded-lg border bg-card shadow-sm p-4 space-y-3">
 												{/* Header with name and status */}
 												<div className="flex items-start justify-between gap-2">
 													<div className="flex-1 min-w-0">
@@ -681,9 +675,9 @@ export default function AlertRulesPage() {
 														className="h-8 w-8 p-0 flex-shrink-0"
 													>
 														{rule.isActive ? (
-															<CheckCircle2 className="h-4 w-4 text-green-600" />
+															<CheckCircle2 className="h-4 w-4 text-recovered" />
 														) : (
-															<XCircle className="h-4 w-4 text-gray-400" />
+															<XCircle className="h-4 w-4 text-muted-foreground/80" />
 														)}
 													</Button>
 												</div>
@@ -691,7 +685,7 @@ export default function AlertRulesPage() {
 												{/* Details */}
 												<div className="space-y-2 text-xs pt-2 border-t">
 													<div>
-														<span className="text-gray-500 block mb-1">Keywords</span>
+														<span className="text-muted-foreground block mb-1">Keywords</span>
 														<div className="flex flex-wrap gap-1">
 															{rule.keywords.slice(0, 3).map((keyword, idx) => (
 																<Badge key={idx} variant="secondary" className="text-xs">
@@ -706,7 +700,7 @@ export default function AlertRulesPage() {
 														</div>
 													</div>
 													<div>
-														<span className="text-gray-500 block mb-1">Incident Types</span>
+														<span className="text-muted-foreground block mb-1">Incident Types</span>
 														<div className="flex flex-wrap gap-1">
 															{rule.incidentTypes.slice(0, 3).map((type, idx) => (
 																<Badge key={idx} variant="outline" className="text-xs">
@@ -721,11 +715,11 @@ export default function AlertRulesPage() {
 														</div>
 													</div>
 													<div>
-														<span className="text-gray-500 block mb-0.5">LPM Region</span>
+														<span className="text-muted-foreground block mb-0.5">LPM Region</span>
 														<div className="font-medium">{rule.lpmRegion}</div>
 													</div>
 													<div>
-														<span className="text-gray-500 block mb-0.5">Channels</span>
+														<span className="text-muted-foreground block mb-0.5">Channels</span>
 														<div className="flex flex-wrap gap-1">
 															{rule.channels.map((channel, idx) => (
 																<Badge key={idx} variant="default" className="text-xs">
@@ -751,7 +745,7 @@ export default function AlertRulesPage() {
 														variant="outline"
 														size="sm"
 														onClick={() => handleDeleteLPMRuleClick(rule)}
-														className="h-9 px-3 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+														className="h-9 px-3 text-xs text-loss hover:text-loss hover:bg-loss-soft"
 													>
 														<Trash2 className="h-3.5 w-3.5" />
 													</Button>
@@ -824,9 +818,9 @@ export default function AlertRulesPage() {
 																className="h-6"
 															>
 																{rule.isActive ? (
-																	<CheckCircle2 className="h-4 w-4 text-green-600" />
+																	<CheckCircle2 className="h-4 w-4 text-recovered" />
 																) : (
-																	<XCircle className="h-4 w-4 text-gray-400" />
+																	<XCircle className="h-4 w-4 text-muted-foreground/80" />
 																)}
 															</Button>
 														</TableCell>
@@ -864,8 +858,8 @@ export default function AlertRulesPage() {
 			<Dialog open={isStoreDialogOpen} onOpenChange={setIsStoreDialogOpen}>
 				<DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
 					<DialogHeader>
-						<DialogTitle className="text-base sm:text-lg">
-							{editingStoreRule ? 'Edit Store Alert Rule' : 'Create Store Alert Rule'}
+						<DialogTitle>
+							{editingStoreRule ? 'Edit store rule' : 'New store rule'}
 						</DialogTitle>
 						<DialogDescription className="text-xs sm:text-sm">
 							Configure alert rules that will notify stores when incidents match the specified criteria
@@ -886,8 +880,8 @@ export default function AlertRulesPage() {
 			<Dialog open={isLPMDialogOpen} onOpenChange={setIsLPMDialogOpen}>
 				<DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
 					<DialogHeader>
-						<DialogTitle className="text-base sm:text-lg">
-							{editingLPMRule ? 'Edit LPM Alert Rule' : 'Create LPM Alert Rule'}
+						<DialogTitle>
+							{editingLPMRule ? 'Edit LPM rule' : 'New LPM rule'}
 						</DialogTitle>
 						<DialogDescription className="text-xs sm:text-sm">
 							Configure alert rules that will notify Loss Prevention Managers in specific regions
@@ -920,7 +914,7 @@ export default function AlertRulesPage() {
 						</AlertDialogCancel>
 						<AlertDialogAction
 							onClick={handleDeleteStoreRule}
-							className="bg-red-600 hover:bg-red-700 text-sm"
+							className="bg-destructive hover:bg-destructive/90 text-sm"
 						>
 							Delete Rule
 						</AlertDialogAction>
@@ -944,7 +938,7 @@ export default function AlertRulesPage() {
 						</AlertDialogCancel>
 						<AlertDialogAction
 							onClick={handleDeleteLPMRule}
-							className="bg-red-600 hover:bg-red-700 text-sm"
+							className="bg-destructive hover:bg-destructive/90 text-sm"
 						>
 							Delete Rule
 						</AlertDialogAction>

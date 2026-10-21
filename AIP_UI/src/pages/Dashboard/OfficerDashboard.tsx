@@ -101,7 +101,7 @@ const StatCard: React.FC<StatCardProps> = ({
               )}
             </div>
           </div>
-          <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+          <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-card/20 flex items-center justify-center flex-shrink-0">
             <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white" />
           </div>
         </div>
@@ -128,9 +128,9 @@ const ActivityItem: React.FC<{ activity: Activity }> = ({ activity }) => {
 
   const getActivityColor = (type: Activity['type']) => {
     switch (type) {
-      case 'incident': return 'bg-red-500'
-      case 'patrol': return 'bg-blue-500'
-      case 'report': return 'bg-green-500'
+      case 'incident': return 'bg-destructive'
+      case 'patrol': return 'bg-primary'
+      case 'report': return 'bg-recovered'
       default: return 'bg-gray-500'
     }
   }
@@ -138,21 +138,21 @@ const ActivityItem: React.FC<{ activity: Activity }> = ({ activity }) => {
   const Icon = getActivityIcon(activity.type)
 
   return (
-    <div className="flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border bg-white hover:shadow-md transition-shadow">
+    <div className="flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border bg-card hover:shadow-md transition-shadow">
       <div className={`rounded-full p-1.5 ${getActivityColor(activity.type)} text-white flex-shrink-0`}>
         <Icon className="h-3 w-3" />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
-          <h4 className="font-medium text-xs sm:text-sm text-gray-900 truncate">{activity.title}</h4>
-          <span className="text-[10px] sm:text-xs text-gray-500 whitespace-nowrap">{activity.time}</span>
+          <h4 className="font-medium text-xs sm:text-sm text-foreground truncate">{activity.title}</h4>
+          <span className="text-[10px] sm:text-xs text-muted-foreground whitespace-nowrap">{activity.time}</span>
         </div>
-        <p className="text-[10px] sm:text-xs text-gray-600 flex items-center gap-1 mt-1">
+        <p className="text-[10px] sm:text-xs text-muted-foreground flex items-center gap-1 mt-1">
           <MapPin className="h-3 w-3 flex-shrink-0" />
           <span className="truncate">{activity.location}</span>
         </p>
         {activity.value && (
-          <p className="text-[10px] sm:text-xs font-medium text-green-600 mt-1">
+          <p className="text-[10px] sm:text-xs font-medium text-recovered mt-1">
             Value: £{activity.value.toFixed(2)}
           </p>
         )}
@@ -181,7 +181,7 @@ const ProgressCard: React.FC<ProgressCardProps> = ({ title, current, target, uni
       <CardContent className="p-3 sm:p-4 md:p-6">
         <div className="space-y-2 sm:space-y-3 md:space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="font-medium text-xs sm:text-sm md:text-base text-gray-900">{title}</h3>
+            <h3 className="font-medium text-xs sm:text-sm md:text-base text-foreground">{title}</h3>
             <Badge variant={percentage >= 80 ? 'default' : 'secondary'} className="text-[10px] sm:text-xs">
               {percentage.toFixed(0)}%
             </Badge>
@@ -189,13 +189,13 @@ const ProgressCard: React.FC<ProgressCardProps> = ({ title, current, target, uni
           
           <div className="space-y-1.5 sm:space-y-2">
             <div className="flex justify-between text-[10px] sm:text-xs">
-              <span className="text-gray-600">Current: {formatMetricValue(current)}</span>
-              <span className="text-gray-600">Target: {formatMetricValue(target)}</span>
+              <span className="text-muted-foreground">Current: {formatMetricValue(current)}</span>
+              <span className="text-muted-foreground">Target: {formatMetricValue(target)}</span>
             </div>
             <Progress value={percentage} className="h-1.5 sm:h-2" />
           </div>
           
-          <div className="text-[10px] sm:text-xs text-gray-600">
+          <div className="text-[10px] sm:text-xs text-muted-foreground">
             {target - current > 0 ? (
               <>Need {formatMetricValue(target - current)} more to reach target</>
             ) : (
@@ -241,12 +241,12 @@ const IncidentTable: React.FC<{ incidents: RecentIncident[] }> = ({ incidents })
                     <TableCell className="text-xs sm:text-sm">{new Date(incident.date).toLocaleDateString()}</TableCell>
                     <TableCell className="max-w-[160px] sm:max-w-[200px] truncate text-xs sm:text-sm">{incident.siteName}</TableCell>
                     <TableCell className="text-xs sm:text-sm">{incident.type}</TableCell>
-                    <TableCell className="text-right text-xs sm:text-sm text-green-700 dark:text-green-300">
+                    <TableCell className="text-right text-xs sm:text-sm text-recovered">
                       {((incident.recoveredValue ?? incident.value ?? incident.amount ?? 0) > 0)
                         ? `£${(incident.recoveredValue ?? incident.value ?? incident.amount ?? 0).toFixed(2)}`
                         : '-'}
                     </TableCell>
-                    <TableCell className="text-right text-xs sm:text-sm text-red-700 dark:text-red-300">
+                    <TableCell className="text-right text-xs sm:text-sm text-loss">
                       {((incident.lostValue ?? 0) > 0) ? `£${(incident.lostValue ?? 0).toFixed(2)}` : '-'}
                     </TableCell>
                   </TableRow>
@@ -258,7 +258,7 @@ const IncidentTable: React.FC<{ incidents: RecentIncident[] }> = ({ incidents })
       </div>
       
       <div className="flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-4 px-1">
-        <div className="text-[10px] sm:text-xs text-gray-500 text-center sm:text-left">
+        <div className="text-[10px] sm:text-xs text-muted-foreground text-center sm:text-left">
           Showing {((page - 1) * pageSize) + 1} to {Math.min(page * pageSize, incidents.length)} of {incidents.length} incidents
         </div>
         <div className="flex items-center space-x-2">
@@ -489,10 +489,10 @@ export default function OfficerDashboard() {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-4">
         <Card className="w-full max-w-md mx-auto">
           <CardHeader>
-            <CardTitle className="text-red-600 text-base sm:text-lg">Error Loading Dashboard</CardTitle>
+            <CardTitle className="text-loss text-base sm:text-lg">Error Loading Dashboard</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-gray-600 text-sm">{error instanceof Error ? error.message : 'An error occurred'}</p>
+            <p className="text-muted-foreground text-sm">{error instanceof Error ? error.message : 'An error occurred'}</p>
             <Button 
               className="mt-4 w-full sm:w-auto"
               onClick={() => window.location.reload()}
@@ -509,8 +509,8 @@ export default function OfficerDashboard() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
         <div className="text-center space-y-3">
-          <div className="animate-spin rounded-full h-8 w-8 sm:h-10 sm:w-10 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="text-gray-600 text-sm">Loading dashboard...</p>
+          <div className="animate-spin rounded-full h-8 w-8 sm:h-10 sm:w-10 border-b-2 border-primary mx-auto"></div>
+          <p className="text-muted-foreground text-sm">Loading dashboard...</p>
         </div>
       </div>
     )
@@ -528,7 +528,7 @@ export default function OfficerDashboard() {
             {showNewIncidentButton && (
               <Button
                 asChild
-                className="flex-shrink-0 h-9 sm:h-10 px-3 sm:px-4 gap-2 bg-blue-600 hover:bg-blue-700"
+                className="flex-shrink-0 h-9 sm:h-10 px-3 sm:px-4 gap-2 bg-primary hover:bg-primary/90"
               >
                 <Link to="/operations/incident-report?open=new" className="flex items-center">
                   <PlusCircle className="h-4 w-4" aria-hidden />
@@ -540,16 +540,16 @@ export default function OfficerDashboard() {
 
           <section
             aria-label="Date filter"
-            className="rounded-lg border bg-white/80 backdrop-blur-sm p-3 sm:p-4"
+            className="rounded-lg border bg-card/80 backdrop-blur-sm p-3 sm:p-4"
           >
             <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
-              <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                <CalendarRange className="h-4 w-4 text-blue-600" />
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground/80">
+                <CalendarRange className="h-4 w-4 text-primary" />
                 Date Range
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 w-full lg:w-auto">
                 <div className="space-y-1">
-                  <label htmlFor="officer-from-date" className="text-xs text-gray-600">From</label>
+                  <label htmlFor="officer-from-date" className="text-xs text-muted-foreground">From</label>
                   <Input
                     id="officer-from-date"
                     type="date"
@@ -559,7 +559,7 @@ export default function OfficerDashboard() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label htmlFor="officer-to-date" className="text-xs text-gray-600">To</label>
+                  <label htmlFor="officer-to-date" className="text-xs text-muted-foreground">To</label>
                   <Input
                     id="officer-to-date"
                     type="date"
@@ -622,7 +622,7 @@ export default function OfficerDashboard() {
               {/* Monthly Progress */}
               <section aria-label="Monthly Progress">
                 <h2 className="text-sm sm:text-base font-semibold mb-3 flex items-center gap-2">
-                  <Target className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
+                  <Target className="h-4 w-4 sm:h-5 sm:w-5 text-recovered" />
                   Monthly Progress (Selected Range)
                 </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -645,28 +645,28 @@ export default function OfficerDashboard() {
                 <Card className="mt-3">
                   <CardContent className="p-3 sm:p-4">
                     <div className="flex items-center justify-between gap-3 mb-3">
-                      <h3 className="text-xs sm:text-sm font-semibold text-gray-900">Store Financial Snapshot (Selected Range)</h3>
+                      <h3 className="text-xs sm:text-sm font-semibold text-foreground">Store Financial Snapshot (Selected Range)</h3>
                       <Badge variant="secondary" className="text-[10px] sm:text-xs">
                         Live from incidents
                       </Badge>
                     </div>
 
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                      <div className="rounded-md border bg-rose-50/70 p-2 sm:p-3">
-                        <p className="text-[10px] sm:text-xs text-gray-600">Value Lost</p>
-                        <p className="text-sm sm:text-base font-semibold text-rose-700">{formatCurrency(computedStats.lostValueThisMonth)}</p>
+                      <div className="rounded-md border bg-loss-soft/70 p-2 sm:p-3">
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">Value Lost</p>
+                        <p className="text-sm sm:text-base font-semibold text-loss">{formatCurrency(computedStats.lostValueThisMonth)}</p>
                       </div>
-                      <div className="rounded-md border bg-emerald-50/70 p-2 sm:p-3">
-                        <p className="text-[10px] sm:text-xs text-gray-600">Value Recovered</p>
-                        <p className="text-sm sm:text-base font-semibold text-emerald-700">{formatCurrency(computedStats.recoveredValueThisMonth)}</p>
+                      <div className="rounded-md border bg-recovered-soft/70 p-2 sm:p-3">
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">Value Recovered</p>
+                        <p className="text-sm sm:text-base font-semibold text-recovered">{formatCurrency(computedStats.recoveredValueThisMonth)}</p>
                       </div>
-                      <div className="rounded-md border bg-blue-50/70 p-2 sm:p-3">
-                        <p className="text-[10px] sm:text-xs text-gray-600">Recovery Rate</p>
-                        <p className="text-sm sm:text-base font-semibold text-blue-700">{monthlyFinancialSnapshot.recoveryRate.toFixed(1)}%</p>
+                      <div className="rounded-md border bg-info-soft/70 p-2 sm:p-3">
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">Recovery Rate</p>
+                        <p className="text-sm sm:text-base font-semibold text-primary">{monthlyFinancialSnapshot.recoveryRate.toFixed(1)}%</p>
                       </div>
-                      <div className="rounded-md border bg-amber-50/70 p-2 sm:p-3">
-                        <p className="text-[10px] sm:text-xs text-gray-600">Incidents in Range</p>
-                        <p className="text-sm sm:text-base font-semibold text-amber-700">{monthlyFinancialSnapshot.incidentsInRangeCount}</p>
+                      <div className="rounded-md border bg-warning-soft/70 p-2 sm:p-3">
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">Incidents in Range</p>
+                        <p className="text-sm sm:text-base font-semibold text-warning">{monthlyFinancialSnapshot.incidentsInRangeCount}</p>
                       </div>
                     </div>
                   </CardContent>
@@ -676,7 +676,7 @@ export default function OfficerDashboard() {
               {/* Recent Incidents */}
               <section aria-label="Recent Incidents">
                 <h2 className="text-sm sm:text-base font-semibold mb-3 flex items-center gap-2">
-                  <FileWarning className="h-4 w-4 sm:h-5 sm:w-5 text-red-600" />
+                  <FileWarning className="h-4 w-4 sm:h-5 sm:w-5 text-loss" />
                   Recent Incidents
                 </h2>
                 <Card>
@@ -696,7 +696,7 @@ export default function OfficerDashboard() {
                 <Card>
                   <CardHeader className="p-3 sm:p-4">
                     <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-                      <ActivityIcon className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
+                      <ActivityIcon className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                       Recent Activity
                     </CardTitle>
                   </CardHeader>
@@ -706,7 +706,7 @@ export default function OfficerDashboard() {
                         <ActivityItem key={activity.id} activity={activity} />
                       ))
                     ) : (
-                      <p className="text-xs text-gray-500 py-2">No recent activity for your assigned stores.</p>
+                      <p className="text-xs text-muted-foreground py-2">No recent activity for your assigned stores.</p>
                     )}
                   </CardContent>
                 </Card>
@@ -717,7 +717,7 @@ export default function OfficerDashboard() {
                 <Card>
                   <CardHeader className="p-3 sm:p-4">
                     <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-                      <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
+                      <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-recovered" />
                       AI Risk Indicators
                     </CardTitle>
                   </CardHeader>
@@ -735,23 +735,23 @@ export default function OfficerDashboard() {
                                 {indicator.level}
                               </Badge>
                             </div>
-                            <div className="w-full bg-gray-200 rounded-full h-1.5 mb-1">
+                            <div className="w-full bg-muted rounded-full h-1.5 mb-1">
                               <div
                                 className={cn(
                                   'h-1.5 rounded-full transition-all',
-                                  indicator.level === 'high' ? 'bg-red-500' : indicator.level === 'medium' ? 'bg-amber-500' : 'bg-emerald-500'
+                                  indicator.level === 'high' ? 'bg-destructive' : indicator.level === 'medium' ? 'bg-warning' : 'bg-recovered'
                                 )}
                                 style={{ width: `${Math.round(indicator.score * 100)}%` }}
                               />
                             </div>
                             {indicator.description && (
-                              <p className="text-[10px] sm:text-xs text-gray-600 mt-1">{indicator.description}</p>
+                              <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">{indicator.description}</p>
                             )}
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <p className="text-xs text-gray-500 py-2">
+                      <p className="text-xs text-muted-foreground py-2">
                         {selectedCustomerId != null || selectedSiteId != null
                           ? 'No AI risk indicators available for your assigned stores.'
                           : 'Select a store to view AI risk indicators.'}

@@ -12,7 +12,7 @@ export function PersonalInfoStep({ onNext }: PersonalInfoStepProps) {
     <div className="space-y-6">
       <div className="space-y-4">
         <div>
-          <Label>AIP Access Level</Label>
+          <Label>AIP access level</Label>
           <Select>
             <SelectTrigger>
               <SelectValue placeholder="Select access level" />
@@ -41,12 +41,12 @@ export function PersonalInfoStep({ onNext }: PersonalInfoStepProps) {
         </div>
 
         <div>
-          <Label>Start Date</Label>
+          <Label>Start date</Label>
           <Input type="date" />
         </div>
 
         <div>
-          <Label>Employee Number</Label>
+          <Label>Employee number</Label>
           <Input />
         </div>
 

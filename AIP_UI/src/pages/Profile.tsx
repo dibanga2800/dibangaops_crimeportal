@@ -1,4 +1,5 @@
 import { useState, useEffect, ChangeEvent } from 'react'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
@@ -380,27 +381,23 @@ const Profile = () => {
   const userName = user ? `${user.firstName} ${user.lastName}` : 'User'
 
   return (
-    <div className="h-full">
-      <div className="flex items-center justify-between border-b px-6 py-4">
-        <div>
-          <h1 className="text-2xl font-semibold">Profile Settings</h1>
-          <p className="text-sm text-muted-foreground">
-            Manage your account settings and preferences
-          </p>
-        </div>
-      </div>
+    <div className="mx-auto w-full max-w-4xl">
+      <PageHeader
+        title="Your profile"
+        description="Your photo, contact details and sign-in security."
+      />
 
-      <div className="p-4 md:p-6 space-y-6">
+      <div className="space-y-6">
         <Tabs defaultValue="personal" className="w-full">
-          <TabsList className="mb-4">
-            <TabsTrigger value="personal">Personal Information</TabsTrigger>
-            <TabsTrigger value="security">Security Settings</TabsTrigger>
+          <TabsList>
+            <TabsTrigger value="personal">Personal details</TabsTrigger>
+            <TabsTrigger value="security">Security</TabsTrigger>
           </TabsList>
 
           <TabsContent value="personal" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Profile Picture</CardTitle>
+                <CardTitle>Profile photo</CardTitle>
                 <CardDescription>
                   Take a photo with your camera or upload an image
                 </CardDescription>
@@ -414,7 +411,7 @@ const Profile = () => {
                   userInitials={userInitials}
                 />
                 <div className="space-y-2 text-center sm:text-left">
-                  <h3 className="font-medium">Your Profile Photo</h3>
+                  <h3 className="text-sm font-medium">Shown in the sidebar and on reports you file</h3>
                   <p className="text-sm text-muted-foreground">
                     Click the avatar or camera icon to take a new photo
                     or upload an image.
@@ -427,13 +424,13 @@ const Profile = () => {
 
             <Card>
               <CardHeader>
-                <CardTitle>Personal Information</CardTitle>
+                <CardTitle>Personal details</CardTitle>
                 <CardDescription>Update your personal details</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="firstName">First Name</Label>
+                    <Label htmlFor="firstName">First name</Label>
                     <Input
                       id="firstName"
                       name="firstName"
@@ -443,7 +440,7 @@ const Profile = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="lastName">Last Name</Label>
+                    <Label htmlFor="lastName">Last name</Label>
                     <Input
                       id="lastName"
                       name="lastName"
@@ -467,7 +464,7 @@ const Profile = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="phone">Phone Number</Label>
+                    <Label htmlFor="phone">Phone number</Label>
                     <Input
                       id="phone"
                       name="phone"
@@ -483,7 +480,7 @@ const Profile = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="jobTitle">Job Title</Label>
+                    <Label htmlFor="jobTitle">Job title</Label>
                     <Input
                       id="jobTitle"
                       name="jobTitle"
@@ -554,7 +551,7 @@ const Profile = () => {
                   <div className="space-y-0.5">
                     <Label className="flex items-center gap-2">
                       {securitySettings.twoFactorAuth
-                        ? <ShieldCheck className="h-4 w-4 text-green-600" />
+                        ? <ShieldCheck className="h-4 w-4 text-recovered" />
                         : <ShieldOff className="h-4 w-4 text-muted-foreground" />
                       }
                       Two-factor Authentication
@@ -579,7 +576,7 @@ const Profile = () => {
                 {/* Email Notifications */}
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <Label>Email Notifications</Label>
+                    <Label>Email notifications</Label>
                     <p className="text-sm text-muted-foreground">
                       Receive security alerts via email
                     </p>
@@ -596,7 +593,7 @@ const Profile = () => {
                 {/* Login Alerts */}
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <Label>Login Alerts</Label>
+                    <Label>Sign-in alerts</Label>
                     <p className="text-sm text-muted-foreground">
                       Get notified when someone logs into your account
                     </p>
@@ -644,7 +641,7 @@ const Profile = () => {
           <div className="space-y-4 py-2">
             {/* Current Password */}
             <div className="space-y-2">
-              <Label htmlFor="currentPassword">Current Password</Label>
+              <Label htmlFor="currentPassword">Current password</Label>
               <div className="relative">
                 <Input
                   id="currentPassword"
@@ -673,7 +670,7 @@ const Profile = () => {
 
             {/* New Password */}
             <div className="space-y-2">
-              <Label htmlFor="newPassword">New Password</Label>
+              <Label htmlFor="newPassword">New password</Label>
               <div className="relative">
                 <Input
                   id="newPassword"
@@ -706,7 +703,7 @@ const Profile = () => {
 
             {/* Confirm Password */}
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm New Password</Label>
+              <Label htmlFor="confirmPassword">Confirm new password</Label>
               <div className="relative">
                 <Input
                   id="confirmPassword"

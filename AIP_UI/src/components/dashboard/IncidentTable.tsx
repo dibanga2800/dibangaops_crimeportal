@@ -139,196 +139,181 @@ export function IncidentTable({ data }: DataTableProps) {
 
   return (
     <div>
-      <div className="flex items-center justify-between py-2 md:py-4">
+      <div className="flex items-center justify-between gap-3 px-4 pb-3 sm:px-5">
         <div className="relative">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search incidents..."
             value={searchQuery}
             onChange={handleSearchChange}
-            className="h-9 w-[180px] pl-8 text-xs md:text-sm lg:w-[280px] border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+            className="h-9 w-[200px] pl-8 lg:w-[280px]"
           />
         </div>
         {filteredAndSortedData.length > 0 && (
-          <div className="text-xs md:text-sm text-muted-foreground rounded-md border border-slate-200 dark:border-slate-700 px-2.5 py-1 bg-slate-50/70 dark:bg-slate-900/70">
+          <div className="figures shrink-0 text-xs text-muted-foreground">
             Showing {startIndex + 1}-{Math.min(endIndex, filteredAndSortedData.length)} of {filteredAndSortedData.length}
           </div>
         )}
       </div>
       
       {/* Mobile Card Layout - visible only on small screens */}
-      <div className="block md:hidden space-y-3">
+      <div className="block border-t border-border md:hidden">
         {filteredAndSortedData.length === 0 && data.length > 0 ? (
-          <div className="rounded-md border p-4 text-center text-sm text-amber-600">
-            Data available but filtered out: {data.length} records found
+          <div className="m-4 rounded-md border border-warning/25 bg-warning-soft p-4 text-center text-sm text-warning">
+            None of the {data.length} incidents match your search
           </div>
         ) : currentPageData.length > 0 ? (
-          currentPageData.map((report) => (
-            <div key={report.id} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-card p-4 space-y-2 shadow-sm">
-              <div className="flex justify-between items-start gap-2">
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-sm truncate">{report.customerName}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">{report.store || report.siteName}</div>
-                </div>
-                <div className="text-right">
-                  <div className="font-semibold text-sm text-green-600 dark:text-green-400 whitespace-nowrap">
-                    Rec: £{(report.recoveredValue ?? report.amount).toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2
-                    })}
+          <ul className="divide-y divide-border">
+            {currentPageData.map((report) => {
+              const recovered = Number(report.recoveredValue ?? report.amount ?? 0)
+              const lost = Number(report.lostValue ?? 0)
+              const money = (v: number) => `£${v.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              return (
+                <li key={report.id} className="space-y-1.5 px-4 py-3.5">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="min-w-0 truncate text-sm font-semibold text-foreground">{report.store || report.siteName}</p>
+                    <p className={`figures shrink-0 text-sm font-semibold ${lost > 0 ? 'text-loss' : 'text-muted-foreground'}`}>
+                      {lost > 0 ? `−${money(lost)}` : money(0)}
+                    </p>
                   </div>
-                  <div className="font-semibold text-xs text-red-600 dark:text-red-400 whitespace-nowrap">
-                    Lost: £{(report.lostValue ?? 0).toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2
-                    })}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="inline-flex shrink-0 items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground/80">
+                        {report.incidentType}
+                      </span>
+                      <span className="figures truncate text-xs text-muted-foreground">
+                        {new Date(report.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}, {getDisplayTime(report)}
+                      </span>
+                    </div>
+                    {recovered > 0 && (
+                      <span className="figures shrink-0 text-xs font-medium text-recovered">+{money(recovered)} back</span>
+                    )}
                   </div>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t">
-                <div>
-                  <span className="text-muted-foreground">Officer:</span>
-                  <div className="font-medium truncate">{report.officerName}</div>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Date / Time:</span>
-                  <div className="font-medium flex items-center gap-1.5">
-                    <span>{new Date(report.date).toLocaleDateString()}</span>
-                    <span className="text-blue-600 dark:text-blue-400 text-[11px] font-semibold bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded-md">
-                      {getDisplayTime(report)}
-                    </span>
-                  </div>
-                </div>
-                <div className="col-span-2">
-                  <span className="text-muted-foreground">Type:</span>
-                  <div className="mt-0.5 inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[11px] font-medium text-slate-700 dark:text-slate-200">
-                    {report.incidentType}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))
+                  <p className="truncate text-xs text-muted-foreground">Reported by {report.officerName}</p>
+                </li>
+              )
+            })}
+          </ul>
         ) : (
-          <div className="rounded-md border p-8 text-center text-sm text-muted-foreground">
-            No results found. Data length: {data.length}
+          <div className="m-4 rounded-md border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+            No incidents to show yet.
           </div>
         )}
       </div>
-      
+
       {/* Desktop Table Layout - visible on medium screens and above */}
-      <div className="hidden md:block rounded-xl border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
+      <div className="hidden overflow-hidden border-t border-border md:block">
         <div className="overflow-x-auto">
-          <table className="w-full caption-bottom text-sm">
+          <table className="figures w-full caption-bottom text-sm">
           <thead>
-            <tr className="border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 dark:from-slate-700 dark:via-slate-700 dark:to-slate-700">
+            <tr className="border-b border-border bg-muted/60">
               <th 
-                  className="h-12 px-4 text-left align-middle font-semibold tracking-tight text-slate-700 dark:text-slate-100 cursor-pointer hover:bg-slate-200/60 dark:hover:bg-white/10"
+                  className="h-10 cursor-pointer select-none whitespace-nowrap px-4 text-left align-middle text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                 onClick={() => sortData('customerName')}
               >
                 <div className="flex items-center gap-1">
-                  Company Name {getSortIcon('customerName')}
+                  Company {getSortIcon('customerName')}
                 </div>
               </th>
               <th 
-                  className="h-12 px-4 text-left align-middle font-semibold tracking-tight text-slate-700 dark:text-slate-100 cursor-pointer hover:bg-slate-200/60 dark:hover:bg-white/10"
+                  className="h-10 cursor-pointer select-none whitespace-nowrap px-4 text-left align-middle text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                 onClick={() => sortData('store')}
               >
                 <div className="flex items-center gap-1">
-                  Store Name {getSortIcon('store')}
+                  Store {getSortIcon('store')}
                 </div>
               </th>
               <th 
-                  className="h-12 px-4 text-left align-middle font-semibold tracking-tight text-slate-700 dark:text-slate-100 cursor-pointer hover:bg-slate-200/60 dark:hover:bg-white/10"
+                  className="h-10 cursor-pointer select-none whitespace-nowrap px-4 text-left align-middle text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                 onClick={() => sortData('officerName')}
               >
                 <div className="flex items-center gap-1">
-                  Staff Member Name {getSortIcon('officerName')}
+                  Reported by {getSortIcon('officerName')}
                 </div>
               </th>
               <th 
-                  className="h-12 px-4 text-left align-middle font-semibold tracking-tight text-slate-700 dark:text-slate-100 cursor-pointer hover:bg-slate-200/60 dark:hover:bg-white/10"
+                  className="h-10 cursor-pointer select-none whitespace-nowrap px-4 text-left align-middle text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                 onClick={() => sortData('date')}
               >
                 <div className="flex items-center gap-1">
-                  Incident Date / Time {getSortIcon('date')}
+                  Date and time {getSortIcon('date')}
                 </div>
               </th>
               <th 
-                  className="h-12 px-4 text-right align-middle font-semibold tracking-tight text-slate-700 dark:text-slate-100 cursor-pointer hover:bg-slate-200/60 dark:hover:bg-white/10"
+                  className="h-10 cursor-pointer select-none whitespace-nowrap px-4 text-right align-middle text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                 onClick={() => sortData('recoveredValue')}
               >
                 <div className="flex items-center justify-end gap-1">
-                  Recovered Value {getSortIcon('recoveredValue')}
+                  Recovered {getSortIcon('recoveredValue')}
                 </div>
               </th>
               <th 
-                  className="h-12 px-4 text-right align-middle font-semibold tracking-tight text-slate-700 dark:text-slate-100 cursor-pointer hover:bg-slate-200/60 dark:hover:bg-white/10"
+                  className="h-10 cursor-pointer select-none whitespace-nowrap px-4 text-right align-middle text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                 onClick={() => sortData('lostValue')}
               >
                 <div className="flex items-center justify-end gap-1">
-                  Lost Value {getSortIcon('lostValue')}
+                  Lost {getSortIcon('lostValue')}
                 </div>
               </th>
               <th 
-                  className="h-12 px-4 text-left align-middle font-semibold tracking-tight text-slate-700 dark:text-slate-100 cursor-pointer hover:bg-slate-200/60 dark:hover:bg-white/10"
+                  className="h-10 cursor-pointer select-none whitespace-nowrap px-4 text-left align-middle text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                 onClick={() => sortData('incidentType')}
               >
                 <div className="flex items-center gap-1">
-                  Incident Type {getSortIcon('incidentType')}
+                  Type {getSortIcon('incidentType')}
                 </div>
               </th>
-              <th className="h-12 px-4 text-left align-middle font-semibold tracking-tight text-slate-700 dark:text-slate-100">
-                AI Insight
+              <th className="h-10 whitespace-nowrap px-4 text-left align-middle text-xs font-medium text-muted-foreground">
+                AI insight
               </th>
             </tr>
           </thead>
           <tbody className="tracking-normal">
             {filteredAndSortedData.length === 0 && data.length > 0 && (
               <tr>
-                <td colSpan={8} className="h-12 text-center text-sm text-amber-600">
-                  Data available but filtered out: {data.length} records found
+                <td colSpan={8} className="h-12 text-center text-sm text-warning">
+                  None of the {data.length} incidents match your search
                 </td>
               </tr>
             )}
             
             {currentPageData.length > 0 ? (
               currentPageData.map((report) => (
-                <tr key={report.id} className="border-b border-slate-100 dark:border-slate-800 odd:bg-white odd:dark:bg-slate-900 even:bg-slate-50/40 even:dark:bg-slate-800/30 transition-colors hover:bg-blue-50/60 dark:hover:bg-slate-800/70">
-                    <td className="p-4 align-middle font-semibold leading-relaxed text-slate-900 dark:text-slate-100">{report.customerName}</td>
-                    <td className="p-4 align-middle text-slate-700 dark:text-slate-200 leading-relaxed">{report.store || report.siteName}</td>
-                    <td className="p-4 align-middle text-slate-700 dark:text-slate-200 leading-relaxed">{report.officerName}</td>
-                    <td className="p-4 align-middle text-slate-700 dark:text-slate-200 tabular-nums leading-relaxed">
+                <tr key={report.id} className="border-b border-border/70 transition-colors last:border-0 hover:bg-muted/40">
+                    <td className="whitespace-nowrap px-4 py-3 align-middle font-medium text-foreground">{report.customerName}</td>
+                    <td className="whitespace-nowrap px-4 py-3 align-middle text-foreground/80">{report.store || report.siteName}</td>
+                    <td className="whitespace-nowrap px-4 py-3 align-middle text-foreground/80">{report.officerName}</td>
+                    <td className="whitespace-nowrap px-4 py-3 align-middle text-foreground/80">
                     <div className="flex items-center gap-2">
-                      <span>{new Date(report.date).toLocaleDateString()}</span>
-                      <span className="text-blue-600 dark:text-blue-400 text-xs font-semibold bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded-md">
+                      <span>{new Date(report.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                      <span className="text-xs text-muted-foreground">
                         {getDisplayTime(report)}
                       </span>
                     </div>
                   </td>
-                    <td className="p-4 align-middle text-right font-medium tabular-nums leading-relaxed text-green-600 dark:text-green-400">
-                    £{(report.recoveredValue ?? report.amount).toLocaleString(undefined, {
+                    <td className={`whitespace-nowrap px-4 py-3 text-right align-middle ${Number(report.recoveredValue ?? report.amount) > 0 ? 'font-medium text-recovered' : 'text-muted-foreground'}`}>
+                    £{(report.recoveredValue ?? report.amount).toLocaleString('en-GB', {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2
                     })}
                   </td>
-                    <td className="p-4 align-middle text-right font-medium tabular-nums leading-relaxed text-red-600 dark:text-red-400">
-                    £{(report.lostValue ?? 0).toLocaleString(undefined, {
+                    <td className={`whitespace-nowrap px-4 py-3 text-right align-middle ${Number(report.lostValue ?? 0) > 0 ? 'font-medium text-loss' : 'text-muted-foreground'}`}>
+                    £{(report.lostValue ?? 0).toLocaleString('en-GB', {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2
                     })}
                   </td>
-                    <td className="p-4 align-middle leading-relaxed">
-                      <span className="inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-xs font-medium text-slate-700 dark:text-slate-200">
+                    <td className="whitespace-nowrap px-4 py-3 align-middle">
+                      <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-foreground/80">
                         {report.incidentType}
                       </span>
                     </td>
-                    <td className="p-4 align-middle text-xs space-y-1">
+                    <td className="space-y-1 whitespace-nowrap px-4 py-3 align-middle text-xs">
                       {report.incidentCategory && (
-                        <div className="inline-flex items-center rounded-full bg-indigo-50 dark:bg-indigo-900/40 px-2 py-0.5 text-[11px] font-medium text-indigo-700 dark:text-indigo-300">
+                        <div className="mr-1 inline-flex items-center rounded-full bg-info-soft px-2 py-0.5 text-[11px] font-medium text-info">
                           {report.incidentCategory}
                           {typeof report.incidentCategoryConfidence === 'number' && (
-                            <span className="ml-1 text-[10px] text-indigo-500 dark:text-indigo-300/80">
+                            <span className="ml-1 text-[10px] opacity-75">
                               ({Math.round(report.incidentCategoryConfidence * 100)}% conf.)
                             </span>
                           )}
@@ -338,10 +323,10 @@ export function IncidentTable({ data }: DataTableProps) {
                         <div
                           className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${
                             report.riskLevel === 'high'
-                              ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300'
+                              ? 'bg-loss-soft text-loss'
                               : report.riskLevel === 'medium'
-                              ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'
-                              : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
+                              ? 'bg-warning-soft text-warning'
+                              : 'bg-recovered-soft text-recovered'
                           }`}
                         >
                           Risk: {report.riskLevel}
@@ -358,7 +343,7 @@ export function IncidentTable({ data }: DataTableProps) {
             ) : (
               <tr>
                 <td colSpan={8} className="h-24 text-center text-sm text-muted-foreground">
-                  No results found. Data length: {data.length}
+                  No incidents to show yet.
                 </td>
               </tr>
             )}
@@ -369,8 +354,8 @@ export function IncidentTable({ data }: DataTableProps) {
 
       {/* Pagination Controls */}
       {totalPages > 1 && (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-4">
-          <div className="text-xs md:text-sm text-muted-foreground">
+        <div className="flex flex-col items-center justify-between gap-4 border-t border-border px-5 py-3 sm:flex-row">
+          <div className="figures text-xs text-muted-foreground">
             Page {currentPage} of {totalPages}
           </div>
           

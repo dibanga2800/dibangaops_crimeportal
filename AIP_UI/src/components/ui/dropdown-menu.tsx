@@ -83,7 +83,7 @@ export function DropdownMenuContent({
   return (
     <div
       className={cn(
-        "absolute z-50 min-w-[8rem] overflow-hidden rounded-md border border-gray-200 bg-white text-gray-900 p-1 shadow-md dark:border-slate-700 dark:bg-slate-900 dark:text-gray-100",
+        "absolute z-50 min-w-[10rem] overflow-hidden rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-float",
         {
           "right-0": align === "end",
           "left-0": align === "start",
@@ -118,7 +118,7 @@ export function DropdownMenuItem({
   return (
     <div
       className={cn(
-        "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-gray-100 dark:hover:bg-slate-800",
+        "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm text-foreground outline-none transition-colors hover:bg-muted focus-visible:bg-muted [&>svg]:text-muted-foreground",
         className
       )}
       {...props}
@@ -135,7 +135,7 @@ export function DropdownMenuLabel({
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("px-2 py-1.5 text-sm font-semibold text-gray-900 dark:text-gray-100", className)}
+      className={cn("px-2 py-1.5 text-xs font-medium text-muted-foreground", className)}
       {...props}
     >
       {children}
@@ -149,7 +149,7 @@ export function DropdownMenuSeparator({
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("-mx-1 my-1 h-px bg-gray-100 dark:bg-slate-700", className)}
+      className={cn("-mx-1 my-1 h-px bg-border", className)}
       {...props}
     />
   );
@@ -193,8 +193,8 @@ export function DropdownMenuRadioItem({
   return (
     <div
       className={cn(
-        "relative flex cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none hover:bg-gray-100 dark:hover:bg-slate-800",
-        checked && "bg-gray-100 dark:bg-slate-800",
+        "relative flex cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none hover:bg-muted",
+        checked && "bg-muted",
         className
       )}
       {...props}

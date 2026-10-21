@@ -13,10 +13,11 @@ export function TableActions({ searchQuery, onSearchChange, onNewEmployee }: Tab
     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
       <div className="flex flex-1 w-full">
         <div className="relative flex-1 w-full sm:w-[400px]">
-          <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-500" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input 
-            placeholder="Search employees..." 
-            className="pl-10 h-11 text-base bg-white border-2 border-gray-200 hover:border-gray-300 focus:border-[#324053] focus:ring-2 focus:ring-[#324053]/20 rounded-lg shadow-sm" 
+            placeholder="Search employees…" 
+            aria-label="Search employees"
+            className="pl-9" 
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
           />
@@ -24,11 +25,10 @@ export function TableActions({ searchQuery, onSearchChange, onNewEmployee }: Tab
       </div>
       <Button 
         onClick={onNewEmployee} 
-        style={{ backgroundColor: '#324053' }}
-        className="w-full sm:w-auto h-11 px-4 sm:px-6 hover:opacity-90 shadow-sm"
+        className="w-full sm:w-auto"
       >
-        <UserPlus className="mr-2 h-4 w-4" />
-        New Employee
+        <UserPlus className="h-4 w-4" />
+        New employee
       </Button>
     </div>
   )

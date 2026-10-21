@@ -5,10 +5,10 @@ import { ChevronRight } from "lucide-react"
 
 // Sample data
 const equipmentData = [
-  { name: 'Uniforms', value: 150, color: '#3b82f6' },
-  { name: 'Radios', value: 75, color: '#10b981' },
-  { name: 'Body Cameras', value: 100, color: '#f59e0b' },
-  { name: 'Vehicles', value: 25, color: '#ef4444' }
+  { name: 'Uniforms', value: 150, color: '#1F6FA8' },
+  { name: 'Radios', value: 75, color: '#0E7C66' },
+  { name: 'Body Cameras', value: 100, color: '#C4680F' },
+  { name: 'Vehicles', value: 25, color: '#B42318' }
 ]
 
 export const EquipmentStatusChart = () => {

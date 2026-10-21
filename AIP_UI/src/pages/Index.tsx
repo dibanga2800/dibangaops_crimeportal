@@ -138,11 +138,11 @@ const officerStats = [
 
 const TestComponents = () => {
   return (
-    <div className="space-y-6 p-4 border border-gray-200 rounded-md my-4">
+    <div className="space-y-6 p-4 border border-border rounded-md my-4">
       <h2 className="text-xl font-bold">Test Components</h2>
       
       <div>
-        <h3 className="font-medium mb-2">Accordion Test</h3>
+        <h3 className="font-medium mb-2">Accordion test</h3>
         <Accordion type="single">
           <AccordionItem value="item-1">
             <AccordionTrigger>Is this working?</AccordionTrigger>
@@ -154,7 +154,7 @@ const TestComponents = () => {
       </div>
       
       <div>
-        <h3 className="font-medium mb-2">Dropdown Test</h3>
+        <h3 className="font-medium mb-2">Dropdown test</h3>
         <DropdownMenu>
           <DropdownMenuTrigger className="border rounded-md px-4 py-2">
             Click me
@@ -171,13 +171,13 @@ const TestComponents = () => {
       </div>
       
       <div>
-        <h3 className="font-medium mb-2">ScrollArea Test</h3>
+        <h3 className="font-medium mb-2">ScrollArea test</h3>
         <ScrollArea className="h-32 w-full border rounded-md">
           <div className="p-4">
             <h4>Scrollable Content</h4>
             <p>This is a test of the ScrollArea component.</p>
             <p>Scroll down to see more content.</p>
-            <div className="h-64 bg-gray-100 mt-2 p-4">
+            <div className="h-64 bg-muted mt-2 p-4">
               Tall content to enable scrolling
             </div>
           </div>
@@ -209,7 +209,7 @@ const Index = () => {
       <div className="flex items-center justify-center min-h-screen">
         <div className="space-y-4 text-center">
           <div className="text-lg font-medium">Loading Dashboard...</div>
-          <div className="text-sm text-gray-500">Please wait</div>
+          <div className="text-sm text-muted-foreground">Please wait</div>
         </div>
       </div>
     );
@@ -238,7 +238,7 @@ const Index = () => {
         <div className="flex items-center justify-center min-h-screen">
           <div className="space-y-4 text-center">
             <div className="text-lg font-medium">Loading Admin Dashboard...</div>
-            <div className="text-sm text-gray-500">Please wait</div>
+            <div className="text-sm text-muted-foreground">Please wait</div>
           </div>
         </div>
       }>
@@ -253,8 +253,8 @@ const Index = () => {
     <div className="flex items-center justify-center min-h-screen">
       <div className="space-y-4 text-center">
         <div className="text-lg font-medium">Loading...</div>
-        <div className="text-sm text-gray-500">Please wait while we set up your dashboard</div>
-        <div className="text-xs text-gray-400 mt-2">Current role: {effectiveRole || 'Not set'}</div>
+        <div className="text-sm text-muted-foreground">Please wait while we set up your dashboard</div>
+        <div className="text-xs text-muted-foreground/80 mt-2">Current role: {effectiveRole || 'Not set'}</div>
       </div>
     </div>
   );
