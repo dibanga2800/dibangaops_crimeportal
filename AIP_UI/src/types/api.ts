@@ -56,6 +56,8 @@ export interface GetIncidentsParams {
   regionId?: string
   status?: string
   customerId?: string
+  /** false skips the summary totals (pages 2..n already have them from page 1) */
+  includeSummary?: boolean
 }
 
 // Create/Update incident request

@@ -146,7 +146,9 @@ namespace AIPBackend.Services
 				toDate: toDate,
 				createdByUserId: null);
 
-			var summary = await _repository.GetSummaryAsync(
+			var summary = !query.IncludeSummary
+				? new IncidentListSummaryDto()
+				: await _repository.GetSummaryAsync(
 				search: query.Search,
 				customerId: customerId,
 				customerIds: customerIds,

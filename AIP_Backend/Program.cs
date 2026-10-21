@@ -450,6 +450,18 @@ builder.Services.AddCors(options =>
         });
 });
 
+// Compress API responses. Incident lists are large JSON payloads and were
+// sent uncompressed. Fastest level keeps CPU cost low.
+builder.Services.AddResponseCompression(options =>
+{
+	options.EnableForHttps = true;
+	options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProvider>();
+	options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
+	options.MimeTypes = new[] { "application/json", "application/problem+json", "text/plain" };
+});
+builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProviderOptions>(o => o.Level = System.IO.Compression.CompressionLevel.Fastest);
+builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProviderOptions>(o => o.Level = System.IO.Compression.CompressionLevel.Fastest);
+
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
@@ -642,6 +654,11 @@ else
 
 // Use CORS
 app.UseCors("AllowSpecificOrigin");
+
+// Auth responses carry tokens, so they are left uncompressed (BREACH).
+app.UseWhen(
+	context => !context.Request.Path.StartsWithSegments("/api/auth", StringComparison.OrdinalIgnoreCase),
+	branch => branch.UseResponseCompression());
 
 if (enableRateLimiting)
 {

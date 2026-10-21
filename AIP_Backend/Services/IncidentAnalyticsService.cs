@@ -36,10 +36,15 @@ namespace AIPBackend.Services
 			var effectiveFrom = fromDate;
 			var effectiveTo = toDateInclusive.AddDays(1).AddTicks(-1);
 
-			var incidents = await _repository.GetAllForStatsAsync(customerId, customerIds: null, siteId, regionId);
-			var filtered = incidents
-				.Where(i => i.DateOfIncident >= effectiveFrom && i.DateOfIncident <= effectiveTo)
-				.ToList();
+			// Filter dates in SQL. This used to load every incident ever recorded
+			// for the customer and then discard most of them in memory.
+			var filtered = await _repository.GetAllForStatsAsync(
+				customerId,
+				customerIds: null,
+				siteId,
+				regionId,
+				startDate: effectiveFrom,
+				endDate: effectiveTo);
 
 			var totalValue = filtered.Sum(GetIncidentLostValue);
 
