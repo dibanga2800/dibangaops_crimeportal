@@ -420,7 +420,7 @@ const UserSetup = () => {
       <div className="w-full">
       <div className="space-y-6">
         <PageHeader
-          title="User management"
+          title="Users"
           description="People who can sign in to the portal, their role and the companies they can see."
           className="pb-0"
           actions={
@@ -528,7 +528,7 @@ const UserSetup = () => {
 
                   {'assignedCustomerIds' in user && user.assignedCustomerIds && user.assignedCustomerIds.length > 0 && (
                     <div>
-                      <span className="text-muted-foreground block mb-0.5">Assigned Customers</span>
+                      <span className="text-muted-foreground block mb-0.5">Companies</span>
                       <div className="font-medium">
                         {user.assignedCustomerIds.length} customer{user.assignedCustomerIds.length !== 1 ? 's' : ''}
                         {('assignedCustomerNames' in user && user.assignedCustomerNames && user.assignedCustomerNames.length > 0) && (
@@ -586,7 +586,7 @@ const UserSetup = () => {
                   <TableHead className="text-sm">Job Title</TableHead>
                   <TableHead className="text-sm hidden lg:table-cell">User Role</TableHead>
                   <TableHead className="text-sm">Status</TableHead>
-                  <TableHead className="text-sm hidden lg:table-cell">Assigned Customers</TableHead>
+                  <TableHead className="text-sm hidden lg:table-cell">Companies</TableHead>
                   <TableHead className="w-[160px] text-sm">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -828,7 +828,7 @@ const UserSetup = () => {
                       <div className="font-medium text-sm sm:text-base truncate">{viewUser.jobTitle || 'N/A'}</div>
                     </div>
                     <div>
-                      <div className="text-xs text-muted-foreground mb-1">Customer</div>
+                      <div className="text-xs text-muted-foreground mb-1">Company</div>
                       <div className="font-medium text-sm sm:text-base truncate">
                         {viewUser.customerId 
                           ? ((viewUser as any).customerName || customerNameMap.get(viewUser.customerId) || `Customer ID: ${viewUser.customerId}`)

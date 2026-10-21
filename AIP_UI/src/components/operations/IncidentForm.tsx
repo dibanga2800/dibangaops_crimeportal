@@ -1358,7 +1358,7 @@ const IncidentForm: React.FC<IncidentFormProps> = memo(({
                                 </SelectItem>
                               ))}
                               {customers.length === 0 && !isLoadingCustomers && (
-                                <SelectItem value="no-customers" disabled>No customers available</SelectItem>
+                                <SelectItem value="no-customers" disabled>No companies available</SelectItem>
                               )}
                             </SelectContent>
                           </Select>

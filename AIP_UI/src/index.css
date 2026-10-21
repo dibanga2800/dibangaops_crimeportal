@@ -2,55 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
-/* IBM Plex Sans, self-hosted (SIL OFL 1.1, see assets/fonts/IBM-Plex-OFL.txt) so it passes font-src 'self'. */
+/* Inter (UI text and figures) and Plus Jakarta Sans (titles and headline
+ * numbers), self-hosted variable fonts (SIL OFL 1.1, see assets/fonts/*-OFL.txt)
+ * so they pass font-src 'self'. One file each covers every weight. */
 @font-face {
-  font-family: "IBM Plex Sans";
+  font-family: "Inter";
   font-style: normal;
-  font-weight: 400;
+  font-weight: 100 900;
   font-display: swap;
-  src: url("./assets/fonts/ibm-plex-sans-latin-400-normal.woff2") format("woff2");
+  src: url("./assets/fonts/inter-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 @font-face {
-  font-family: "IBM Plex Sans";
+  font-family: "Plus Jakarta Sans";
   font-style: normal;
-  font-weight: 500;
+  font-weight: 200 800;
   font-display: swap;
-  src: url("./assets/fonts/ibm-plex-sans-latin-500-normal.woff2") format("woff2");
-}
-@font-face {
-  font-family: "IBM Plex Sans";
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url("./assets/fonts/ibm-plex-sans-latin-600-normal.woff2") format("woff2");
-}
-@font-face {
-  font-family: "IBM Plex Sans";
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url("./assets/fonts/ibm-plex-sans-latin-700-normal.woff2") format("woff2");
-}
-@font-face {
-  font-family: "IBM Plex Sans Condensed";
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url("./assets/fonts/ibm-plex-sans-condensed-latin-500-normal.woff2") format("woff2");
-}
-@font-face {
-  font-family: "IBM Plex Sans Condensed";
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url("./assets/fonts/ibm-plex-sans-condensed-latin-600-normal.woff2") format("woff2");
-}
-@font-face {
-  font-family: "IBM Plex Sans Condensed";
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url("./assets/fonts/ibm-plex-sans-condensed-latin-700-normal.woff2") format("woff2");
+  src: url("./assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 /*
@@ -114,13 +83,13 @@
     --ink: 224 45% 13%;
 
     /* Sidebar (ink) */
-    --sidebar-background: 224 45% 13%;
-    --sidebar-foreground: 222 18% 78%;
+    --sidebar-background: 224 62% 12%;
+    --sidebar-foreground: 220 40% 98%;
     --sidebar-primary: 43 70% 55%;
     --sidebar-primary-foreground: 224 45% 10%;
-    --sidebar-accent: 224 35% 20%;
+    --sidebar-accent: 222 50% 26%;
     --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 224 30% 21%;
+    --sidebar-border: 222 45% 26%;
     --sidebar-ring: 43 70% 55%;
 
     --header-height: 64px;
@@ -164,10 +133,10 @@
     --info: 210 80% 68%;
     --info-soft: 210 45% 17%;
 
-    --sidebar-background: 224 40% 6%;
-    --sidebar-foreground: 222 14% 72%;
-    --sidebar-accent: 224 30% 13%;
-    --sidebar-border: 224 25% 14%;
+    --sidebar-background: 224 55% 7%;
+    --sidebar-foreground: 220 32% 96%;
+    --sidebar-accent: 222 45% 19%;
+    --sidebar-border: 222 40% 18%;
   }
 
   /* Legacy form defaults — kept only for pages outside the app shell (login). */
@@ -206,8 +175,9 @@
   }
 
   html[data-ui="app"] {
-    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-    font-feature-settings: "ss01" 0;
+    font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    /* cv05: tailed l, cv08: serifed I, so IDs and codes read unambiguously */
+    font-feature-settings: "cv05" 1, "cv08" 1, "calt" 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
@@ -259,10 +229,10 @@
     letter-spacing: -0.012em;
   }
 
-  /* Page titles use the condensed display face: an operations-board voice. */
+  /* Page titles use the display face: geometric, confident, friendly. */
   :where(html[data-ui="app"]) :where(h1) {
-    font-family: "IBM Plex Sans Condensed", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
-    letter-spacing: -0.01em;
+    font-family: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.022em;
   }
 
   :where(html[data-ui="app"]) ::selection {
@@ -369,3 +339,37 @@ html[data-ui="app"] .store-map-popup.maplibregl-popup-anchor-bottom .maplibregl-
 html[data-ui="app"] .store-map-popup.maplibregl-popup-anchor-top .maplibregl-popup-tip { border-bottom-color: hsl(var(--card)); }
 html[data-ui="app"] .maplibregl-ctrl-group { border-radius: 6px; box-shadow: 0 0 0 1px hsl(var(--border)); }
 html[data-ui="app"] .maplibregl-ctrl-group button { padding: 0 !important; justify-content: center !important; }
+
+
+/* ---------------------------------------------------------------------------
+ * Glossy sidebar: a lit navy surface with a soft top sheen and a faint gold
+ * glow, glass-pill hover and active states. Scoped to the app shell.
+ * ------------------------------------------------------------------------- */
+.sidebar-gloss {
+  background-color: hsl(var(--sidebar-background));
+  background-image:
+    linear-gradient(180deg, hsl(0 0% 100% / 0.07), transparent 9rem),
+    radial-gradient(120% 55% at 0% 0%, hsl(220 85% 62% / 0.22), transparent 60%),
+    radial-gradient(90% 40% at 100% 100%, hsl(43 80% 55% / 0.12), transparent 65%),
+    linear-gradient(180deg, hsl(222 62% 18%) 0%, hsl(var(--sidebar-background)) 45%, hsl(225 65% 8%) 100%);
+  box-shadow: inset -1px 0 0 hsl(0 0% 100% / 0.08), 4px 0 24px -12px hsl(224 70% 8% / 0.6);
+}
+.dark .sidebar-gloss {
+  background-image:
+    radial-gradient(120% 55% at 0% 0%, hsl(220 85% 60% / 0.20), transparent 60%),
+    radial-gradient(90% 40% at 100% 100%, hsl(43 80% 55% / 0.08), transparent 65%),
+    linear-gradient(180deg, hsl(222 55% 12%) 0%, hsl(var(--sidebar-background)) 45%, hsl(225 60% 4%) 100%);
+}
+.sidebar-link-active {
+  background-image: linear-gradient(180deg, hsl(0 0% 100% / 0.16), hsl(0 0% 100% / 0.06));
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.20),
+    inset 0 0 0 1px hsl(0 0% 100% / 0.08),
+    0 6px 16px -8px hsl(224 80% 5% / 0.7);
+}
+.sidebar-link-active > svg {
+  filter: drop-shadow(0 0 6px hsl(43 85% 58% / 0.65));
+}
+.sidebar-link-active::before {
+  box-shadow: 0 0 10px 1px hsl(43 85% 58% / 0.7);
+}

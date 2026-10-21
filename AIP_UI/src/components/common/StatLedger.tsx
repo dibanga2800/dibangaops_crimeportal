@@ -208,7 +208,7 @@ export function StatLedger({ items, className, size = 'default', loading = false
 						{item.delta ? (
 							<DeltaText delta={item.delta} />
 						) : item.hint ? (
-							<span className="truncate text-xs text-muted-foreground">{item.hint}</span>
+							<span className="text-xs leading-5 text-muted-foreground">{item.hint}</span>
 						) : null}
 					</Comp>
 				)

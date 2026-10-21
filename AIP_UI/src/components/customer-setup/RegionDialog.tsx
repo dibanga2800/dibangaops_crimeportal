@@ -159,7 +159,7 @@ export function RegionDialog({ open, onOpenChange, region, selectedCustomerId, o
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {region ? "Edit Region" : "New Region"}
+            {region ? "Edit region" : "New region"}
           </DialogTitle>
           <DialogDescription>
             {region ? "Update the region information below." : "Create a new region for the selected customer."}
@@ -180,7 +180,7 @@ export function RegionDialog({ open, onOpenChange, region, selectedCustomerId, o
                 })
                 return (
                   <FormItem>
-                    <FormLabel>Customer</FormLabel>
+                    <FormLabel>Company</FormLabel>
                     <Select 
                       key={`customer-select-${selectedCustomerId || 'none'}`}
                       onValueChange={(value) => {

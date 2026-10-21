@@ -126,7 +126,7 @@ const BarcodeCatalogImportPageInner = () => {
 		<div className="w-full">
 			<div className="space-y-6">
 				<PageHeader
-					title="Barcode catalog import"
+					title="Barcode import"
 					description="Upload a product export to add or update the catalog staff search when recording stolen items."
 					className="pb-0"
 					actions={

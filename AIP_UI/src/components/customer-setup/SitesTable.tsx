@@ -147,7 +147,7 @@ export function SitesTable({ customerId, onEdit, onDataChange, updateTrigger }: 
     return (
       <div className="space-y-4">
         <div className="flex justify-between items-center">
-          <h2 className="text-lg font-semibold">Sites</h2>
+          <h2 className="text-lg font-semibold">Stores</h2>
         </div>
         <div className="text-center py-8 text-muted-foreground">
           Please select a customer to view sites
@@ -163,7 +163,7 @@ export function SitesTable({ customerId, onEdit, onDataChange, updateTrigger }: 
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search sites by name, SIN number, address..."
+            placeholder="Search stores by name, SIN or address"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-8"
@@ -173,7 +173,7 @@ export function SitesTable({ customerId, onEdit, onDataChange, updateTrigger }: 
 
       {safeSites.length === 0 ? (
         <div className="text-center py-8 text-sm text-muted-foreground">
-          No sites found for this company. Click "Add Site" to create one.
+          No stores yet. Use Add store to create one.
         </div>
       ) : filteredSites.length === 0 ? (
         <div className="text-center py-8 text-sm text-muted-foreground">
@@ -377,7 +377,7 @@ export function SitesTable({ customerId, onEdit, onDataChange, updateTrigger }: 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Site</AlertDialogTitle>
+            <AlertDialogTitle>Delete store</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete "{siteToDelete?.locationName}"? This action cannot be undone.
             </AlertDialogDescription>
